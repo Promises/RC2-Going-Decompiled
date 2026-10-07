@@ -4768,11 +4768,55 @@ s32 MapEvictCacheSlot(void) {
  * loop under it is genuine code, not padding, if anyone revisits the carve. */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/191238", func_00296490);
 
-/* MapCompositeThumbnailMask: the real interior body described above.
- * splat only emits an .s for a name it sees in an INCLUDE_ASM, so this
- * reference is what keeps the body in the tree (and promotes its interior
- * alabel to a real glabel). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapCompositeThumbnailMask);
+/*
+ * MapCompositeThumbnailMask(dst, srcOn, srcOff, mask) — composite a level-map
+ * thumbnail through a 1-bit mask: for each of the 0x8000 mask bytes, walk its
+ * 8 bits LSB first and copy one byte per bit into dst, from srcOn when the bit
+ * is set and from srcOff when it is clear. All three byte streams advance by 8
+ * per mask byte (0x40000 bytes each). GalacticMapScreenTick uses it to overlay
+ * the discovered-area bitmap onto the base map. No return value.
+ *
+ * This is the real body behind the interior alabel described above (the
+ * 8-byte func_00296490 stump is glued in front of it). The mask byte is
+ * re-read for every bit, as the ROM does.
+ *
+ * MATCHED on the s136os arm (task #1774): SN 2.95.3 v1.36 -fopt-stack, the
+ * unit's unpinned s136 flags (RULING #9070); verify_match_unit BYTE IDENTICAL
+ * plus image cmp 0. The one spelling lever: the inner loop counts UP
+ * (n = 0; n < 8) and cc1 reverses it into the ROM's 7..0 bgez counter, which
+ * also places `li $3,7` after `addiu $9,$7,1`; spelled as a down-count
+ * (n = 7; n >= 0) the two swap.
+ */
+/* GUARD (task #1774): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_MapCompositeThumbnailMask)
+S136OS_SLOT(MapCompositeThumbnailMask);
+#else
+void MapCompositeThumbnailMask(u8 *dst, u8 *srcOn, u8 *srcOff, u8 *mask) {
+    s32 i;
+
+    for (i = 0; i < 0x8000; i++) {
+        s32 bit;
+        s32 n;
+
+        for (bit = 1, n = 0; n < 8; n++) {
+            if (*mask & bit) {
+                *dst = *srcOn;
+            } else {
+                *dst = *srcOff;
+            }
+            bit <<= 1;
+            srcOn++;
+            srcOff++;
+            dst++;
+        }
+        mask++;
+    }
+}
+#endif
 
 /*
  * MapSetCurrentLevel(level) — set the galactic-map current level
