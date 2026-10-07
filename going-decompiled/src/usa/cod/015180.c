@@ -1042,11 +1042,150 @@ void func_0011BAF0(s32 *arg0) {
 // recovered splat-dropped code (epilogue-stump mis-split): raw words, byte-exact
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011BB30);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011BB38);
+/* The DECI2 TTY channel (protocol 0x210) the SDK's kernel printf writes
+ * through: func_0011BE20 opens it, func_0011BB38 is its event handler and
+ * func_0011BCD0 sends a buffer and waits. The four counters are volatile
+ * because the handler updates them from DECI2 event context while
+ * func_0011BCD0 spins on `busy`. */
+typedef struct Deci2Header {
+    u16 len;         /* whole packet length, header included */
+    u16 reserved;
+    u16 protocol;
+    s8 source;       /* 'E' (EE) */
+    s8 destination;  /* 'H' (host) */
+} Deci2Header;
 
+typedef struct TtyRing {
+    s32 capacity;
+    s32 count;
+    u8 *head;
+    u8 *tail;        /* write cursor, advanced by func_0011BAF0 */
+} TtyRing;
+
+typedef struct TtyChannel {
+    volatile s32 socket;   /* DECI2 socket, negative if the open failed */
+    volatile s32 sendLen;  /* bytes of the send packet still to go */
+    volatile s32 recvLen;  /* bytes of the receive packet read so far */
+    volatile s32 busy;     /* nonzero while a send is in flight */
+    u8 *sendBuf;           /* uncached view of D_0013CB80 */
+    u8 *recvBuf;           /* uncached view of D_0013CCC0 */
+    TtyRing *input;        /* received characters, from func_0011BAC8 */
+} TtyChannel;
+
+extern TtyChannel D_0013CB50;
+extern u8 D_0013CB80[];
+extern u8 D_0013CCC0[];
+extern char D_0013A948[]; /* "TTY: packet size larger than expect\n" */
+extern char D_0013A970[]; /* "TTY: receive error" */
+extern char D_0013A988[]; /* "TTY: send err %d\n" */
+extern char D_0013A9A0[]; /* "TTY: err ti->wlen=%08x\n" */
+
+/**
+ * DECI2 event handler of the TTY channel (registered by func_0011BE20).
+ *
+ * @param event  DECI2 event: 1/2 read, 3 write, 4 write done
+ * @param param  for a read, the byte count to fetch (0: the packet is
+ *               complete); unused otherwise
+ * @param tty    the channel (D_0013CB50, passed back as the open's opt)
+ *
+ * A read appends `param` bytes to the receive packet (func_0011BA20); a
+ * read with 0 copies the packet's payload (after its 12-byte header) into
+ * the input ring. A write pushes the rest of the send packet
+ * (func_0011BA58); write-done clears `busy`. Errors are reported through
+ * the kernel printf and otherwise ignored.
+ *
+ * `param` doubles as the read count and the payload index, and the write
+ * count is its own variable: that is what gives the ROM's allocation
+ * (`tty` in $17, the write count in $a1, where the error printf takes it).
+ */
+void func_0011BB38(s32 event, s32 param, TtyChannel *tty) {
+    Deci2Header *packet;
+
+    switch (event) {
+    case 1:
+    case 2:
+        if (param != 0) {
+            if ((u32)(tty->recvLen + param) > 0x140) {
+                func_0011C7E8(D_0013A948);
+            }
+            param = func_0011BA20(tty->socket, (s32)(tty->recvBuf + tty->recvLen), param);
+            if (param < 0) {
+                func_0011C7E8(D_0013A970);
+            }
+            tty->recvLen += param;
+        } else {
+            packet = (Deci2Header *)tty->recvBuf;
+            for (param = 12; param < packet->len; param++) {
+                *tty->input->tail = tty->recvBuf[param];
+                func_0011BAF0((s32 *)tty->input);
+            }
+            tty->recvLen = 0;
+        }
+        break;
+    case 3: {
+        s32 sent;
+
+        sent = func_0011BA58(tty->socket, (s32)tty->sendBuf, tty->sendLen);
+        if (sent < 0) {
+            func_0011C7E8(D_0013A988, sent);
+            tty->busy = 0;
+        } else {
+            tty->sendBuf += sent;
+            tty->sendLen -= sent;
+        }
+        break;
+    }
+    case 4:
+        if (tty->sendLen != 0) {
+            func_0011C7E8(D_0013A9A0, tty->sendLen);
+        }
+        tty->busy = 0;
+        break;
+    }
+}
+
+/* func_0011BCD0 (send a buffer over the channel, '\n' -> "\r\n", then wait
+ * for write-done) stays asm: cc1 reproduces it except the final wait loop,
+ * where its volatile `socket` load sits before `jal func_0011B9F8`. The SN
+ * assembler left that delay slot empty; GNU as 2.40 moves the load into it,
+ * and asm_unit.sh's volatile-marker pin that undoes this runs only at -G8
+ * (this unit is -G0). 21 of 84 words, all in that loop and the epilogue it
+ * shifts. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011BCD0);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011BE20);
+extern void func_0011AEA0(s32 mode);
+
+/**
+ * Open the TTY channel: flush the data cache (func_0011AEA0 = FlushCache),
+ * open DECI2 protocol 0x210 with func_0011BB38 as the handler, and if that
+ * succeeds, clear the counters, point the send/receive buffers at the
+ * uncached mirrors of D_0013CB80/D_0013CCC0, pre-fill the send packet's
+ * DECI2 header (protocol 0x210, 'E' -> 'H') and create the 0x100-byte input
+ * ring.
+ *
+ * @return 1 if the channel is open, 0 if the DECI2 open failed
+ */
+s32 func_0011BE20(void) {
+    u8 *packet;
+
+    func_0011AEA0(0);
+    D_0013CB50.socket = func_0011B978(0x210, (s32)&D_0013CB50, (s32)func_0011BB38);
+    if (D_0013CB50.socket < 0) {
+        return 0;
+    }
+    D_0013CB50.busy = 0;
+    D_0013CB50.sendLen = 0;
+    D_0013CB50.recvLen = 0;
+    D_0013CB50.recvBuf = (u8 *)((u32)D_0013CCC0 | 0x20000000);
+    D_0013CB50.sendBuf = packet = (u8 *)((u32)D_0013CB80 | 0x20000000);
+    ((Deci2Header *)packet)->protocol = 0x210;
+    ((Deci2Header *)packet)->source = 'E';
+    ((Deci2Header *)packet)->destination = 'H';
+    ((Deci2Header *)packet)->reserved = 0;
+    *(s32 *)(packet + 8) = 0;
+    D_0013CB50.input = (TtyRing *)func_0011BAC8(0x100);
+    return 1;
+}
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011BEDC);
 
@@ -1669,17 +1808,95 @@ void func_0011CBC0(s32 index) {
     *(s32 *)addr = 0;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011CBE8);
+/* SIF command packet header (the SDK's sceSifCmdHdr) and DMA descriptor
+ * (sceSifDmaData). */
+typedef struct SifCmdHeader {
+    u32 packetSize : 8;
+    u32 dataSize : 24;
+    s32 dataDest;   /* IOP address the extra data goes to, 0 if none */
+    s32 command;    /* command id, e.g. 0x80000009 = RPC bind */
+    u32 option;
+} SifCmdHeader;
 
-extern s32 func_0011CBE8(s32 arg0, s32 arg1, s32 arg2, s32 arg3, s32 arg4,
-                         s32 arg5, s32 arg6);
+typedef struct SifDmaDesc {
+    s32 src;
+    s32 dest;
+    s32 size;
+    s32 attr;
+} SifDmaDesc;
+
+extern s32 D_0013CF60; /* IOP-side command buffer address */
+extern void sceSifWriteBackDCache(void *ptr, s32 size);
+extern s32 func_0011AFE0(SifDmaDesc *desc, s32 count); /* sceSifSetDma */
+extern s32 func_0011AFF0(SifDmaDesc *desc, s32 count); /* isceSifSetDma */
+
+/**
+ * Send a SIF command to the IOP (the SDK's _sceSifSendCmd): fill in the
+ * packet's header and DMA it, after an optional extra data block, to the
+ * IOP command buffer D_0013CF60.
+ *
+ * @param command     command id, written to the header
+ * @param mode        bit 0: called from an interrupt handler (use the
+ *                    i-prefixed SetDma); bit 2: write the data block back
+ *                    from the data cache first
+ * @param header      the packet, which starts with its SifCmdHeader
+ * @param packetSize  packet length, 16..112 bytes
+ * @param src, dest, size  optional data block (EE address, IOP address,
+ *                    length); none if size <= 0
+ * @return the DMA id from SetDma, 0 if packetSize is out of range or the
+ *         DMA could not be queued
+ *
+ * The pointer-typed parameters are load-bearing: declared all-s32 (as the
+ * old extern had them) cc1 schedules the stores differently, 20 words off.
+ * So is the data block's statement order, and the 0x44 attr must be stored
+ * after packetSize; the textbook order (header first, then the descriptor)
+ * moves the stores and swaps two registers.
+ */
+s32 func_0011CBE8(s32 command, s32 mode, SifCmdHeader *header, s32 packetSize,
+                  void *src, s32 dest, s32 size) {
+    SifDmaDesc dma[2];
+    s32 count;
+
+    if ((u32)(packetSize - 16) > 96) {
+        return 0;
+    }
+    count = 0;
+    if (size > 0) {
+        header->dataSize = size;
+        dma[0].src = (s32)src;
+        dma[0].dest = dest;
+        header->dataDest = dest;
+        dma[0].size = size;
+        dma[0].attr = 0;
+        count = 1;
+        if (mode & 4) {
+            sceSifWriteBackDCache(src, size);
+        }
+    } else {
+        header->dataSize = 0;
+        header->dataDest = 0;
+    }
+    dma[count].src = (s32)header;
+    dma[count].dest = D_0013CF60;
+    dma[count].size = packetSize;
+    header->command = command;
+    header->packetSize = packetSize;
+    dma[count].attr = 0x44;
+    count++;
+    sceSifWriteBackDCache(header, packetSize);
+    if (mode & 1) {
+        return func_0011AFF0(dma, count);
+    }
+    return func_0011AFE0(dma, count);
+}
 
 /**
  * Thin wrapper around func_0011CBE8 that forces its second argument (the mode
  * flag) to 0 and shifts the caller's arg1..arg5 into arg2..arg6.
  */
 s32 func_0011CD20(s32 arg0, s32 arg1, s32 arg2, s32 arg3, s32 arg4, s32 arg5) {
-    return func_0011CBE8(arg0, 0, arg1, arg2, arg3, arg4, arg5);
+    return func_0011CBE8(arg0, 0, (SifCmdHeader *)arg1, arg2, (void *)arg3, arg4,
+                         arg5);
 }
 
 /**
@@ -1687,7 +1904,8 @@ s32 func_0011CD20(s32 arg0, s32 arg1, s32 arg2, s32 arg3, s32 arg4, s32 arg5) {
  * flag) to 1 and shifts the caller's arg1..arg5 into arg2..arg6.
  */
 s32 func_0011CD60(s32 arg0, s32 arg1, s32 arg2, s32 arg3, s32 arg4, s32 arg5) {
-    return func_0011CBE8(arg0, 1, arg1, arg2, arg3, arg4, arg5);
+    return func_0011CBE8(arg0, 1, (SifCmdHeader *)arg1, arg2, (void *)arg3, arg4,
+                         arg5);
 }
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011CDA0);
@@ -1710,7 +1928,61 @@ void func_0011D118(void) {
     D_001346A0 = 0;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011D140);
+/* A 0x40-byte SIF RPC packet as the packet allocator sees it. */
+typedef struct RpcPacket {
+    s32 header[4];  /* SifCmdHeader */
+    s32 recId;      /* bit 0 set while allocated; slot index in the high half */
+    s32 pktAddr;    /* the packet's own address */
+    s32 rpcId;
+    s32 rest[9];
+} RpcPacket;
+
+/* The SDK's RPC packet table: an id counter and a table of 0x40-byte
+ * packets. */
+typedef struct RpcPacketTable {
+    s32 lastId;
+    RpcPacket *packets;
+    s32 count;
+} RpcPacketTable;
+
+/**
+ * Allocate an RPC packet (the SDK's _rpc_get_packet): with interrupts off
+ * (func_0011F5E0 / func_0011F628), take the first packet whose allocated
+ * bit is clear, and stamp it with (slot << 16) | 5, its own address and a
+ * fresh id from the table's counter. When the incremented counter reads 1
+ * that id is used and the counter is bumped once more, so 2 is never handed
+ * out on that pass.
+ *
+ * @param table  the packet table (D_0013E900)
+ * @return the packet, or 0 if all are in use
+ *
+ * Reading the id back through the else arm is what makes cc1 rematerialise
+ * the constant 1 on the wrap path, as the ROM does.
+ */
+RpcPacket *func_0011D140(RpcPacketTable *table) {
+    RpcPacket *packet;
+    s32 slot, count, id;
+
+    func_0011F5E0();
+    count = table->count;
+    packet = table->packets;
+    for (slot = 0; slot < count; slot++, packet++) {
+        if (!(packet->recId & 1)) {
+            packet->recId = (slot << 16) | 5;
+            if (++table->lastId == 1) {
+                id = table->lastId++;
+            } else {
+                id = table->lastId;
+            }
+            packet->pktAddr = (s32)packet;
+            packet->rpcId = id;
+            func_0011F628();
+            return packet;
+        }
+    }
+    func_0011F628();
+    return 0;
+}
 
 /**
  * Reset object arg0: clear its field_0x18 (arg0[6]) and clear bit 0 of the flag
@@ -2227,10 +2499,55 @@ s32 sceSifFreeSysMemory(void *addr) {
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011E920);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011E938);
-
 extern s32 D_00134748;
 extern u8 D_00140528[4];
+
+/* A 4-byte release tag, copied as a unit (it is not word aligned in the
+ * copy, hence lwl/lwr + swl/swr). */
+typedef struct ReleaseTag {
+    u8 bytes[4];
+} ReleaseTag;
+
+extern IopHeapClient D_00140500; /* client bound to server 0x80000006 */
+extern u8 D_00140300[4];         /* RPC receive buffer */
+
+/**
+ * Bind the RPC client D_00140500 to IOP server 0x80000006 (the module
+ * loader) unless already done (D_00134748 >= 0), retrying after a
+ * ~1M-iteration busy wait until the server answers; then mark it bound
+ * (D_00134748 = 0), call its function 0xFF to fetch the IOP's 4-byte
+ * release tag into D_00140300 and keep a copy in D_00140528.
+ *
+ * @return 0 on success or if already bound; -1 if sceSifBindRpc fails;
+ *         0xFFFEFFFF if the tag query fails
+ *
+ * The bound/already-bound arm wraps the whole body (rather than an early
+ * `return 0`) because the ROM's `return 0` for it is the function's last
+ * block.
+ */
+s32 func_0011E938(void) {
+    s32 spin;
+
+    if (D_00134748 < 0) {
+        while (1) {
+            if (sceSifBindRpc(&D_00140500, 0x80000006, 0) < 0) {
+                return -1;
+            }
+            if (D_00140500.serve != 0) {
+                D_00134748 = 0;
+                if (func_0011D620(&D_00140500, 0xFF, 0, 0, 0, D_00140300, 4,
+                                  0, 0) < 0) {
+                    return -0x10001;
+                }
+                *(ReleaseTag *)D_00140528 = *(ReleaseTag *)D_00140300;
+                return 0;
+            }
+            for (spin = 0x100000; spin != -1; spin--) {
+            }
+        }
+    }
+    return 0;
+}
 extern u8 *D_0013474C;    /* -> "....": the wildcard tag */
 
 /**
