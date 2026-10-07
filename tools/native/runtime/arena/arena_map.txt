@@ -2,7 +2,7 @@
 # storage symbol: g_dataArena  ==  __gamedata_start (linker)
 # seed: memcpy snapshot[rom_addr] -> g_dataArena[rom_addr - base]
 #       for rom_addr in [base, base+span).
-# base 0x133E70  span 0x14AA90  placed 1511  (const 11)
+# base 0x133E70  span 0x14AA90  placed 1516  (const 11)
 # columns: <symbol> <rom_addr> <arena_offset> [const]
 #   'const' tag = static rodata/string literal (see data_const.txt);
 #   NOT mutable state - the tester's effect-diff must EXCLUDE these.
@@ -697,9 +697,13 @@ g_tieDrawTemplate 0x1ACAE0 0x78C70
 D_1AD1A0 0x1AD1A0 0x79330
 D_1AD1F8 0x1AD1F8 0x79388
 D_1AD238 0x1AD238 0x793C8
+g_vendorHasPendingArmor 0x1AD238 0x793C8
 D_1AD23C 0x1AD23C 0x793CC
+g_vendorPendingArmor 0x1AD23C 0x793CC
 D_1AD240 0x1AD240 0x793D0
+g_vendorEntryArmor 0x1AD240 0x793D0
 D_1AD244 0x1AD244 0x793D4
+g_vendorForcedTab 0x1AD244 0x793D4
 D_1AD260 0x1AD260 0x793F0
 D_1AD270 0x1AD270 0x79400
 D_1AD280 0x1AD280 0x79410
@@ -712,6 +716,7 @@ D_1AD2E8 0x1AD2E8 0x79478
 D_1AD300 0x1AD300 0x79490
 g_vendorCaptionFmt 0x1AD338 0x794C8 const
 D_1AD388 0x1AD388 0x79518
+g_armorTierMessageTextId 0x1AD388 0x79518
 D_1AD564 0x1AD564 0x796F4
 D_001AD7C4 0x1AD7C4 0x79954
 g_voiceTrigger 0x1AD7C4 0x79954

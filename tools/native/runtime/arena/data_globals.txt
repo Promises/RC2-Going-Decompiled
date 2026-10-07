@@ -1082,6 +1082,7 @@ g_altGravityPlanar
 g_altGravityPlanarCenter
 g_anAvailableLevelOrder
 g_areaTable
+g_armorTierMessageTextId
 g_audioStereoMode
 g_bCameraUnderwater
 g_bGlobalSceneActive
@@ -1489,7 +1490,11 @@ g_tieVramLruTail
 g_uiTextureCache
 g_uiTextureCount
 g_uiTextureDataBase
+g_vendorEntryArmor
+g_vendorForcedTab
+g_vendorHasPendingArmor
 g_vendorItemList
+g_vendorPendingArmor
 g_vendorQtyRepeatTimers
 g_vendorUi
 g_voiceTrigger
