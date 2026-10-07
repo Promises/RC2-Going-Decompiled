@@ -9,22 +9,64 @@
 extern u8 g_discToc[];
 extern s32 CdReadSync(s32 arg0, s32 arg1, void *arg2);
 
-/* func_001339F0: copy `count` bytes from src to dst via indexed access
- * (dst[i]=src[i]); non-positive count copies nothing. ~88% — the original fills
- * the loop's `bnez` delay slot with the `sb` store while ee-gcc emits the store
- * before the branch and nops the slot (a scheduling choice). Re-probed
- * 2026-06-12 with a do-while shape: worse (71.5%), the delay-slot store does
- * not budge. Left as INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/033970", func_001339F0);
+/* Callees in cod/0321A0, declared with their definitions' types. */
+extern s32 CdStartRead(s32 lbn, s32 sectors, s32 dest, void *rmode);
+extern s32 func_00133230(void);
+extern s32 snd_Pump(void);
+extern s32 snd_CheckLoadInProgress(s32 noWait);
 
-/* CdReadSync(arg0, arg1, arg2): build a 4-byte descriptor {0x20,1,0,0} on the
- * stack and pass it with (arg0,arg1,arg2) to CdStartRead, then run the trio
- * func_00133230 / snd_Pump / snd_CheckLoadInProgress(0). ~54% — the original
- * schedules the `sd $31` save early (before the descriptor stores) and tucks
- * the 4th `sb` into the jal delay slot while keeping `move $7,$sp` outside it;
- * ee-gcc groups the stores and does the opposite delay-slot fill. A
- * scheduling-only shape this cc1 won't reproduce. Left as INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/033970", CdReadSync);
+/**
+ * func_001339F0 - copy `count` bytes from src to dst, one byte at a time by
+ * index (dst[i] = src[i]). A non-positive count copies nothing. LoadLevelToc
+ * runs it over each TOC block it loads.
+ *
+ * Compiled by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, selected in
+ * tools/ee/s136os_functions.txt). That compiler fills the loop's `bnez` delay
+ * slot with the `sb` and aligns the loop head with one nop, as the ROM does;
+ * cc1 2.9 put the store before the branch (~88%).
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_001339F0)
+S136OS_SLOT(func_001339F0);
+#else
+void func_001339F0(u8 *dst, u8 *src, s32 count) {
+    s32 i;
+
+    for (i = 0; i < count; i++) {
+        dst[i] = src[i];
+    }
+}
+#endif
+
+/**
+ * CdReadSync - read `sectors` sectors from disc LBA `lbn` into buf and wait
+ * for the transfer to finish.
+ *
+ * Builds a 4-byte sceCdRMode on the stack (trycount 0x20, spindle control 1,
+ * data pattern 0) and starts the read through CdStartRead, then runs the
+ * 989snd tick (func_00133230), snd_Pump, and snd_CheckLoadInProgress(0),
+ * which blocks until the load is no longer in progress. Returns
+ * snd_CheckLoadInProgress's result.
+ *
+ * Compiled by the s136os arm (SN 2.95.3 v1.36 -fopt-stack). It saves $ra
+ * before the mode-byte stores and puts the fourth `sb` in the jal delay slot,
+ * as the ROM does; cc1 2.9 grouped the stores (~54%).
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_CdReadSync)
+S136OS_SLOT(CdReadSync);
+#else
+s32 CdReadSync(s32 lbn, s32 sectors, void *buf) {
+    u8 mode[4];
+
+    mode[0] = 0x20; /* trycount */
+    mode[1] = 1;    /* spindlctrl */
+    mode[2] = 0;    /* datapattern */
+    mode[3] = 0;
+    CdStartRead(lbn, sectors, (s32)buf, mode);
+    func_00133230();
+    snd_Pump();
+    return snd_CheckLoadInProgress(0);
+}
+#endif
 
 /**
  * LoadDiscToc - synchronously read the global disc TOC: 0xB sectors from LBA

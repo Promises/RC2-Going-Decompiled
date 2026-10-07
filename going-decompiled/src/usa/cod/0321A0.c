@@ -82,23 +82,35 @@ s32 snd_ServiceRpcCompletion(void) {
     return 0;
 }
 
-/* snd_SetupDmaTransfer: body reproduces 1:1 (89%), but the function saves
- * s0+s1+ra and this cc1 reserves a 16-byte stack slot per callee save (frame
- * 0x30, sd at 0/16/32) while the original packs them 8-byte (frame 0x20, sd at
- * 0/8/16). No flag found that packs the slots (2.95.2 even emits sq); this
- * callee-save-layout wall blocks every multi-save function in this unit
- * (near-miss). Portable #else body. */
+/**
+ * snd_SetupDmaTransfer - make `buffer` the in-flight 989snd RPC transfer.
+ * Records buffer and its entry count in D_001A7480/D_001A7484, zeroes the
+ * header word buffer[0] and the terminator word after the `count` entries,
+ * and writes both words back to memory with func_0011B3D0 so the IOP sees
+ * them. snd_ServiceRpcCompletion later waits for the IOP to set both words
+ * to 0xFFFFFFFF.
+ *
+ * Compiled by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, selected in
+ * tools/ee/s136os_functions.txt), which packs the s0/s1/ra saves 8 bytes
+ * apart as the ROM does; cc1 2.9 gives each save a 16-byte slot. The
+ * terminator address is spelled twice on purpose: as a store through
+ * `buffer[count + 1]` (the ROM folds the +4 into the `sw` offset) and as
+ * `buffer += count * 4 + 4` for the second flush (the ROM adds 4 to count*4
+ * first, then the base). One shared expression makes cc1 compute the address
+ * once and drops the s1 save.
+ */
 extern void func_0011B3D0(void *start, void *end); /* writeback/flush a small range */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", snd_SetupDmaTransfer);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_snd_SetupDmaTransfer)
+S136OS_SLOT(snd_SetupDmaTransfer);
 #else
 void snd_SetupDmaTransfer(u8 *buffer, s32 count) {
     D_001A7484 = count;
     D_001A7480 = buffer;
-    *(s32 *)(buffer + count * 4 + 4) = 0; /* terminator slot after the list */
-    *(s32 *)(buffer + 0) = 0;             /* header slot */
+    ((s32 *)buffer)[count + 1] = 0; /* terminator slot after the list */
+    *(s32 *)buffer = 0;             /* header slot */
     func_0011B3D0(buffer, buffer + 3);
-    func_0011B3D0(buffer + count * 4 + 4, buffer + count * 4 + 4 + 3);
+    buffer += count * 4 + 4;
+    func_0011B3D0(buffer, buffer + 3);
 }
 #endif
 
