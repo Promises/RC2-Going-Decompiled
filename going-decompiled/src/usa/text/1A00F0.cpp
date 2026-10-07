@@ -242,30 +242,33 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_0
  * power-of-two bucket for that dimension). When the count is zero both outs are
  * cleared. Used when sizing/allocating the moby's anim working buffer.
  *
- * Byte-exact on the engine96 arm (cc1 2.96-ee-001003 via MATCH_func_002A0480,
- * task #565): unit objdiff 100.00% (objdiff_build.sh + unit_report.sh, clean
- * tree), raw-verified byte-identical. The 2.9 arm differs from the ROM in
- * 6 of its 22 words, in THREE classes (word-by-word audit, task #577):
- *   - callee-save stride/frame, words 0/2/20: the ROM uses a 0x10 frame with
- *     $31 at +0x8; 2.9 uses 0x20 with $31 at +0x10.
- *   - `addu` operand order, word 8: ROM `addu $2,$3,$2`, 2.9 `addu $2,$2,$3`.
- *   - restore order, words 17/18: the ROM restores $16 then $31, 2.9 the
- *     reverse.
- * Fixing the stride alone leaves words 8, 17 and 18 differing, so the stride
- * is NOT the only residual -- an earlier version of this comment claimed it
- * was, and that was measured false. The engine96 arm reproduces all three,
- * which is why it is the arm here: an ARM CHOICE, not a wall.
- * The INCLUDE_ASM below still feeds the 2.9 link in build.sh, which defines
- * no MATCH_.
+ * MATCHED on the s136os arm (task #1791): byte-exact under SN 2.95.3 v1.36
+ * -fopt-stack (build.sh image cmp 0). It was byte-exact on the engine96 arm
+ * before (MATCH_func_002A0480, task #565); SN 1.36 gives the ROM's 0x10 frame
+ * and $16-then-$31 restore order with no device, the two classes cc1 2.9
+ * missed (task #577). The one lever is the record pointer: `set` is formed
+ * first and the dimension read through it. Folding the add into one
+ * expression (`anim + count * 0x10 + 0x2`, or with the operands reordered,
+ * or as an s16 index) gives `addu $2,$2,$3` at 0x2A04A0 where the ROM has
+ * `addu $2,$3,$2` -- one byte, measured on each spelling.
+ */
+/* GUARD (task #1791): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before.
  */
 extern s32 Log2Floor(s32 value);
 
-#if defined(MATCH_func_002A0480) || defined(TARGET_NATIVE)
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002A0480)
+S136OS_SLOT(func_002A0480);
+#else
 void func_002A0480(Moby *moby, s32 *out1, s32 *out2) {
     u8 *anim = *(u8 **)((u8 *)moby + 0x24);
     u8 count = anim[0x2C];
     if (count != 0) {
-        s16 dim = *(s16 *)(anim + count * 0x10 + 0x2);
+        u8 *set = anim + count * 0x10;
+        s16 dim = *(s16 *)(set + 0x2);
         *out1 = dim;
         *out2 = Log2Floor(dim << 1);
     } else {
@@ -273,8 +276,6 @@ void func_002A0480(Moby *moby, s32 *out1, s32 *out2) {
         *out2 = 0;
     }
 }
-#else
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A0480);
 #endif
 
 /* func_002A04D8 — pose and average two collision-mesh keyframe vectors for a
