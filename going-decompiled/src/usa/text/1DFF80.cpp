@@ -216,6 +216,18 @@ char *func_002E0010(char *dst, s32 id) {
 }
 #endif
 
+/* Absolute (lui/lw) like every ROM access; declared ABOVE HideAllMobysAndPushState,
+ * its first user: an `.extern` gas meets only after the access leaves that access
+ * %gp_rel (measured, task #1814: the splice FATALs LENGTH, built 38 vs ROM 40). */
+__asm__(".extern g_sceneActorMobys, 16");
+extern u8 g_sceneActorMobys[]; /* 0x1B894C - current scene cast moby pointers */
+__asm__(".extern g_mobyTableBase, 16");
+extern u8 *g_mobyTableBase;    /* 0x1B1ADC - moby entity array base (stride 0x100) */
+__asm__(".extern g_mobyTableEnd, 16");
+extern u8 *g_mobyTableEnd;     /* 0x1B1AE4 - end of the moby table */
+extern void PopGameState(s32 a, s32 b);
+extern void func_002857C8(s32 a, s32 b, s32 c);
+
 /**
  * HideAllMobysAndPushState — request a transition into game state 7
  * (cinematic-hide) and hide every moby.
@@ -241,7 +253,8 @@ char *func_002E0010(char *dst, s32 id) {
  *   - the guarded do-while the ROM has, with end loaded once, and
  *     R5900_SHORT_LOOP_PAD1 (SCHEDULING DEVICE, RULING #8435) for the ROM's
  *     `sltu; nop; bnel` tail: without it the body is one word short (the nop);
- *   - g_fxHooksPreCount absolute (`.extern …, 16`), as the ROM's lui $1 store. */
+ *   - g_fxHooksPreCount and the moby table bounds absolute (`.extern …, 16`,
+ *     declared before this body), as the ROM's lui-based accesses. */
 extern s32 RequestGameStateChange(s32 stateId, s32 push, s32 argA, s32 argB, s32 outDoneFlag);
 #ifndef TARGET_NATIVE
 __asm__(".extern g_fxHooksPreCount, 16");
@@ -253,10 +266,6 @@ extern s32 g_pendingStateArgB;         /* 0x1ABE04 - stashed state-change argB  
 #if !defined(TARGET_NATIVE) && !defined(S136OS_HideAllMobysAndPushState)
 S136OS_SLOT(HideAllMobysAndPushState);
 #else
-extern u8 *g_mobyTableBase;
-extern u8 *g_mobyTableEnd;
-extern void func_002857C8(s32 a, s32 b, s32 c);
-
 void HideAllMobysAndPushState(s32 argA, s32 argB) {
     u8 *moby;
     u8 *end;
@@ -280,15 +289,6 @@ void HideAllMobysAndPushState(s32 argA, s32 argB) {
     }
 }
 #endif
-
-__asm__(".extern g_sceneActorMobys, 16");
-extern u8 g_sceneActorMobys[]; /* 0x1B894C - current scene cast moby pointers */
-__asm__(".extern g_mobyTableBase, 16");
-extern u8 *g_mobyTableBase;    /* 0x1B1ADC - moby entity array base (stride 0x100) */
-__asm__(".extern g_mobyTableEnd, 16");
-extern u8 *g_mobyTableEnd;     /* 0x1B1AE4 - end of the moby table */
-extern void PopGameState(s32 a, s32 b);
-extern void func_002857C8(s32 a, s32 b, s32 c);
 
 /* Pop the game-state stack and un-hide every moby: clear the "hidden" flag bit
  * (0x80 at moby+0x34) across the whole moby table.  Also re-runs the scene-cast
