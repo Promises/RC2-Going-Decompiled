@@ -204,7 +204,9 @@ void func_002FFCE0(s32 idx) {
  * g_altGravityEnabled / g_altGravityPlanar + D_0018A168 gravity-mode flags), then rotates `dir` by a half-angle
  * quaternion built from the cross/dot of the current and target axes (CosfVu0/
  * SinfVu0 + QuatMultiplyVu0) and rescales back to the original length. No-op for
- * negative idx or when all three attach flags are clear.
+ * negative idx or when all three gravity-mode flags are clear: the ROM runs the
+ * body when g_altGravityEnabled or g_altGravityPlanar is nonzero (bnez at
+ * 0x2FFD38 / 0x2FFD48) or the halfword D_0018A168 is (beqz exit at 0x2FFD58).
  * TODO(hle): dominated by VU0 vector/quaternion intrinsics (Vec3CrossVu0,
  * Vec3DotVu0, QuatMultiplyVu0, ...) — tier-3 hardware math; no byte-exact path. */
 #ifndef TARGET_NATIVE
