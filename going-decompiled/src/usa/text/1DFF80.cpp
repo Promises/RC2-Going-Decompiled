@@ -216,41 +216,67 @@ char *func_002E0010(char *dst, s32 id) {
 }
 #endif
 
-/* Request a transition into game state 7 (cinematic-hide), stashing the two
- * caller args for the deferred state-enter action, clearing the pre-particle
- * hook count, re-arming the scene cast helper, then marking every moby in the
- * table hidden (set bit 0x80 in the u16 mode word at moby+0x34).  `argA`/`argB`
- * are the state-change arguments cached at g_pendingStateArgA/B (read back when
- * state 7 is committed).  Counterpart of UnhideAllMobysAndPopState.
- * NEAR-MISS (~85%, structurally identical).  The table-walk's branch-likely
- * (`bnel` with the moby mode-word load in its delay slot) is NOT a wall: the
- * ROM loop tail `sltu; nop; bnel; lhu` is identical to UnhideAllMobysAndPopState's
- * (ledger-29570), which #1026 closed byte-exact with R5900_SHORT_LOOP_PAD1
- * (FACT #8384, NOTE #8503); that lever is not yet applied here.  What still
- * blocks it is the 2-callee-save (s0,s1, plus $ra) 8-byte-packed prologue this
- * cc1 rounds to 16-byte (sdk29 PACKED-SAVE).  The C is faithful. */
+/**
+ * HideAllMobysAndPushState — request a transition into game state 7
+ * (cinematic-hide) and hide every moby.
+ *
+ * Requests the state change (push), stashes the two caller args at
+ * g_pendingStateArgA/B for the deferred state-enter action (read back when
+ * state 7 is committed), clears the pre-particle hook count, re-arms the scene
+ * cast helper func_002857C8(0, 0, 0), then sets the "hidden" bit 0x80 in the
+ * u16 mode word at moby+0x34 across the whole moby table. No return.
+ * Counterpart of UnhideAllMobysAndPopState.
+ *   argA, argB  state-change arguments cached for state 7
+ *
+ * GUARD (task #1814): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback. On native it is plain C.
+ * The old "packed-save wall" note was a 2.9-arm result; SN 1.36 packs the
+ * saves itself. Byte-exact with:
+ *   - argB stored before argA: in A-then-B order cc1 puts argA in $16, the
+ *     ROM keeps argB there (measured, task #1814);
+ *   - RequestGameStateChange called with its five arguments (the fifth is the
+ *     `move $8,$0` in the jal delay slot);
+ *   - the guarded do-while the ROM has, with end loaded once, and
+ *     R5900_SHORT_LOOP_PAD1 (SCHEDULING DEVICE, RULING #8435) for the ROM's
+ *     `sltu; nop; bnel` tail: without it the body is one word short (the nop);
+ *   - g_fxHooksPreCount absolute (`.extern …, 16`), as the ROM's lui $1 store. */
+extern s32 RequestGameStateChange(s32 stateId, s32 push, s32 argA, s32 argB, s32 outDoneFlag);
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", HideAllMobysAndPushState);
-#else
-extern u8 *g_mobyTableBase;
-extern u8 *g_mobyTableEnd;
-extern void func_002857C8(s32 a, s32 b, s32 c);
-extern void RequestGameStateChange(s32 stateId, s32 push, s32 c, s32 d);
+__asm__(".extern g_fxHooksPreCount, 16");
+#endif
 extern s32 g_fxHooksPreCount;          /* 0x1B1588 - pre-particle hook count   */
 extern s32 g_pendingStateArgA;         /* 0x1ABE00 - stashed state-change argA  */
 extern s32 g_pendingStateArgB;         /* 0x1ABE04 - stashed state-change argB  */
 
+#if !defined(TARGET_NATIVE) && !defined(S136OS_HideAllMobysAndPushState)
+S136OS_SLOT(HideAllMobysAndPushState);
+#else
+extern u8 *g_mobyTableBase;
+extern u8 *g_mobyTableEnd;
+extern void func_002857C8(s32 a, s32 b, s32 c);
+
 void HideAllMobysAndPushState(s32 argA, s32 argB) {
     u8 *moby;
+    u8 *end;
+    s32 more;
 
-    RequestGameStateChange(7, 1, 0, 0);
-    g_pendingStateArgA = argA;
+    RequestGameStateChange(7, 1, 0, 0, 0);
     g_pendingStateArgB = argB;
+    g_pendingStateArgA = argA;
     g_fxHooksPreCount = 0;
     func_002857C8(0, 0, 0);
 
-    for (moby = g_mobyTableBase; moby < g_mobyTableEnd; moby += 0x100) {
-        *(u16 *)(moby + 0x34) |= 0x80;
+    end = g_mobyTableEnd;
+    moby = g_mobyTableBase;
+    if (moby < end) {
+        do {
+            *(u16 *)(moby + 0x34) |= 0x80;
+            moby += 0x100;
+            more = moby < end;
+            R5900_SHORT_LOOP_PAD1(more, moby);
+        } while (more);
     }
 }
 #endif
