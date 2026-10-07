@@ -1447,6 +1447,10 @@ g_sfxVolume
 g_shipCustomization
 g_shipCustomizeCursor
 g_shipModelBufferBase
+g_shipOptionFieldMask
+g_shipOptionFieldValue
+g_shipOptionNameTextId
+g_shipOptionSkillPointsRequired
 g_shrubClassTable
 g_shrubRelightList
 g_shrubTexVramTable

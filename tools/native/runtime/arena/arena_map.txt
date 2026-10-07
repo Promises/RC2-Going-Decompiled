@@ -2,7 +2,7 @@
 # storage symbol: g_dataArena  ==  __gamedata_start (linker)
 # seed: memcpy snapshot[rom_addr] -> g_dataArena[rom_addr - base]
 #       for rom_addr in [base, base+span).
-# base 0x133E70  span 0x14AA90  placed 1506  (const 11)
+# base 0x133E70  span 0x14AA90  placed 1510  (const 11)
 # columns: <symbol> <rom_addr> <arena_offset> [const]
 #   'const' tag = static rodata/string literal (see data_const.txt);
 #   NOT mutable state - the tester's effect-diff must EXCLUDE these.
@@ -1504,11 +1504,15 @@ g_skillPointMetaTable 0x26CF18 0x1390A8
 D_26CFD0 0x26CFD0 0x139160
 D_26CFD8 0x26CFD8 0x139168
 D_26D528 0x26D528 0x1396B8
+g_shipOptionNameTextId 0x26D528 0x1396B8
 D_26D5B8 0x26D5B8 0x139748
 D_26D648 0x26D648 0x1397D8
+g_shipOptionFieldMask 0x26D648 0x1397D8
 D_26D6D8 0x26D6D8 0x139868
+g_shipOptionFieldValue 0x26D6D8 0x139868
 D_26D768 0x26D768 0x1398F8
 D_26D7F8 0x26D7F8 0x139988
+g_shipOptionSkillPointsRequired 0x26D7F8 0x139988
 D_26D890 0x26D890 0x139A20
 g_builtinMobyUpdateBindings 0x26E880 0x13AA10
 g_cameraModeVtbl 0x26E900 0x13AA90
