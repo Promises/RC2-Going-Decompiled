@@ -22,6 +22,9 @@ usa text/248B50 func_00348BD0
 usa text/1A8180 func_002B1BD8
 usa text/1CA080 func_002CE0C8
 usa text/16E980 func_002702D8
+usa text/16E980 DebugPrintStub
+usa text/16E980 func_002701C0
+usa text/16E980 func_002721A8
 usa text/178E88 func_0027FBA8
 usa text/178E88 DrawDebugString
 usa text/178E88 func_00280250

@@ -739,21 +739,22 @@ void func_0026FE58(void) {
 }
 #endif
 
-/* DebugPrintStub: varargs debug-print hook, compiled to a no-op in retail —
- * only the EABI varargs register spill remains, and crucially the ORIGINAL
- * also spills the FP argument registers $f12/$f14/$f16/$f18 (a printf-style
- * float-varargs prologue). The pinned cc1 emits the GPR varargs spill but
- * never the FP spill for a `(char*, ...)` body, so this cannot match from C.
- * WALL: float-varargs register-spill prologue. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", DebugPrintStub);
+/* DebugPrintStub: varargs debug-print hook, compiled to a no-op in retail.
+ * Takes a printf-style format and its arguments, ignores all of them and
+ * returns nothing (callers discard any result). Only the EABI varargs prologue
+ * survives: the seven GPR argument registers $5..$11 and the four FP argument
+ * registers $f12/$f14/$f16/$f18 are spilled to the 0x80-byte frame.
+ * MATCHED on the s136os arm (task #1767): SN 2.95.3 v1.36 cc1 emits the FP
+ * varargs spill that cc1 2.9 never does (the former "float-varargs prologue"
+ * wall was a compiler-revision wall, not a C one).
+ * GUARD: on EE this C is the image's body, compiled alone by SN 2.95.3 v1.36
+ * -fopt-stack (tools/ee/s136os_functions.txt) and spliced over the
+ * S136OS_SLOT line by tools/ee/s136os_splice.sh; the 2.9 compile sees only the
+ * slot. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_DebugPrintStub)
+S136OS_SLOT(DebugPrintStub);
 #else
-/* Retail no-op: the body only spills its varargs registers and returns; no
- * memory writes outside its own frame, no output, return value ignored.
- * (Analysis-confirmed leaf no-op @0x26FEC8.) */
-s32 DebugPrintStub(const char *fmt, ...) {
-    (void)fmt;
-    return 0;
+void DebugPrintStub(const char *fmt, ...) {
 }
 #endif
 
@@ -876,23 +877,32 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", StepCameraFovIn
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/16E980", func_002701B8);
 
-/* func_002701C0: snapshot the active camera. Copies the live 0xA0-byte active
- * camera slot and a following 0x280-byte block into save buffers, then points
- * the save header at the copied block. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_002701C0);
+/* func_002701C0: snapshot the active camera (alias SnapshotCameraState).
+ * Copies the live 0xA0-byte active camera slot into g_cameraSnapshot and the
+ * 0x280-byte camera history block into g_cameraHistorySnapshot, then points
+ * the snapshot's +0x70 word at the saved history copy.
+ * The history source (g_cameraHistory, 0x1B76B0) is spelled as
+ * g_cameraHistorySnapshot - 0x500, and the +0x70 pointer as a field of the
+ * snapshot: the ROM derives both from the destination registers
+ * (`addiu a1,s0,-0x500`, `sw s0,0x70(s1)`), which cc1 does only when the C
+ * names them relative to the same symbol.
+ * MATCHED on the s136os arm (task #1767). GUARD: as DebugPrintStub's — the
+ * s136os splice supplies the EE body; native compiles this C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002701C0)
+S136OS_SLOT(func_002701C0);
 #else
 extern void CopyQwords(void *dst, const void *src, s32 nbytes);
-extern u8 g_cameraSnapshot[0xA0];        /* g_cameraSlots + 0x1E00 (0x1B74D0) */
-extern u8 g_cameraHistory[0x280];        /* live camera history (0x1B76B0) */
-extern u8 g_cameraHistorySnapshot[0x280]; /* saved copy (0x1B7BB0) */
-extern void *g_cameraSnapshotPtr;        /* snapshot header + 0x70 (0x1B7540) */
-/* TODO(match): functional equivalent - not byte-exact; three callee-saves at
-   8-byte slot spacing (the 0x20-vs-0x10 packed-save wall). */
+typedef struct CameraSnapshot {
+    /* 0x00 */ u8 pad0[0x70];
+    /* 0x70 */ u8 *history;           /* -> g_cameraHistorySnapshot */
+    /* 0x74 */ u8 pad74[0x2C];
+} CameraSnapshot;                     /* 0x1B74D0; a copy of one 0xA0-byte Camera */
+extern CameraSnapshot g_cameraSnapshot;
+extern u8 g_cameraHistorySnapshot[0x280]; /* 0x1B7BB0; g_cameraHistory is 0x500 below */
 void func_002701C0(void) {
-    CopyQwords(g_cameraSnapshot, (const void *)g_cameraState.activeCamera.p, 0xA0);
-    CopyQwords(g_cameraHistorySnapshot, g_cameraHistory, 0x280);
-    g_cameraSnapshotPtr = g_cameraHistorySnapshot;
+    CopyQwords(&g_cameraSnapshot, g_cameraState.activeCamera.p, 0xA0);
+    CopyQwords(g_cameraHistorySnapshot, g_cameraHistorySnapshot - 0x500, 0x280);
+    g_cameraSnapshot.history = g_cameraHistorySnapshot;
 }
 #endif
 
@@ -2103,30 +2113,45 @@ void func_00271FE8(void) {
 }
 #endif
 
-/* func_002721A8: start a fade-from-black — fade level forced to 1.0, target 0,
- * rate = 1/duration (g_cameraState +0x268/+0x26C).
- * ENGINE-2.96 MATCH (candidate, fable 2026-07-02): BYTE+RELOC IDENTICAL via
- * the engine pipeline — 2.96 cc1 + split-addresses patch
- * (tools/ee/patch_cc296_splitaddr.py), -O2 -G8 -fno-builtin
- * -fno-strict-aliasing, scheduling ON, mtc1_fixup (the two "SN-as div.s
- * latency" nops are the mtc1->div.s hazard pads the fixup restores — the old
- * wall note was a misdiagnosis). Guard: MATCH_func_002721A8 promotes the real
- * C for the per-function engine build; the regular 2.9 unit build keeps
- * INCLUDE_ASM (two-compiler build). Pending tester's authoritative verify.
- * t512 (2026-09-20): under the tree's engine arm flags (-fno-schedule-insns
- * -fno-strict-aliasing) this row reads 65.83% — the div.s is issued after the
- * g_screenFadeBlack store and lands in fv0 not fa0. With scheduling ON
- * (engine_arm.sh, -O2 -G8 -fno-strict-aliasing, tools/ee/.t512/17_classify96
- * sched.txt) it reads 100.00% (classify.py fuzzy, not raw-verified) while 33
- * other rows of the unit move (19 up, 14 down, none to 100) — a per-UNIT flag
- * choice, i.e. a landing-gate/watcher question, not a body edit; left as is. */
-#if !defined(TARGET_NATIVE) && !defined(MATCH_func_002721A8)
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_002721A8);
+/* func_002721A8: start a fade-from-black. Forces the black fade level to
+ * 1.0, sets the target to 0 and the per-tick rate to 1/duration
+ * (g_cameraState +0x26C/+0x268), which UpdateScreenFadeBlack then eases.
+ * duration: fade length in ticks (must be nonzero).
+ * MATCHED on the s136os arm (task #1767), replacing its former MATCH_ guard
+ * (an engine-2.96 candidate that read 65.83% under the tree's engine flags).
+ * GUARD: as DebugPrintStub's.
+ *
+ * R5900_MTC1_PAD1 / R5900_MTC1_PAD1_PIN: SCHEDULING DEVICE (RULING #8435,
+ * FACT #7918 / #8434), not a statement about the machine. The ROM has two
+ * nops between `li.s $f0,1.0` (lui $at; mtc1 $at,$f0) + the g_cameraState
+ * address and the `div.s` that reads $f0: a pad the ROM's assembler inserted
+ * and GNU as does not (SN 1.36 cc1 already emits every other instruction in
+ * the ROM's order). Each macro is one noreorder `nop` tied by operands: both
+ * take `one` in-out, so they sit after the li.s and before the div.s; the
+ * second also takes `st` in-out, so the address forms before the pad and the
+ * stores through it issue after the div.s, as in the ROM. Two one-nop pads
+ * rather than one two-nop pad: with a single pad tied to both values, cc1
+ * issues the lui before the li.s (measured). EE arm only; nothing on native. */
+#ifndef TARGET_NATIVE
+#define R5900_MTC1_PAD1(f) \
+    __asm__(".set noreorder\n\tnop\n\t.set reorder" : "+f"(f))
+#define R5900_MTC1_PAD1_PIN(f, p) \
+    __asm__(".set noreorder\n\tnop\n\t.set reorder" : "+f"(f), "+r"(p))
+#else
+#define R5900_MTC1_PAD1(f) ((void)0)
+#define R5900_MTC1_PAD1_PIN(f, p) ((void)0)
+#endif
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002721A8)
+S136OS_SLOT(func_002721A8);
 #else
 void func_002721A8(f32 duration) {
-    g_screenFadeBlack = 1.0f;
-    g_cameraState.fadeBlackTarget = 0.0f;
-    g_cameraState.fadeBlackRate = 1.0f / duration;
+    f32 one = 1.0f;
+    CameraSysState *st = &g_cameraState;
+    R5900_MTC1_PAD1(one);
+    R5900_MTC1_PAD1_PIN(one, st);
+    g_screenFadeBlack = one;
+    st->fadeBlackTarget = 0.0f;
+    st->fadeBlackRate = one / duration;
 }
 #endif
 
