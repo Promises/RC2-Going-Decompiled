@@ -1018,50 +1018,84 @@ s32 func_0034A308(GuiWidget *w, s32 v) {
     return old;
 }
 
-/* func_0034A318: write a 4-float record (f13,f14,f15,f16) into the 0x10-stride
- * slot idx at +0x30, and store f12 into the parallel s32-stride slot at +0x70.
- * Best 58%: the original copies the record base into a fresh register before
- * every swc1 (4 daddu copies) and emits the stores in ascending order with the
- * +0x70 store in the jr delay slot; the pinned cc1 folds to one base and stores
- * +0x3C first. WALL: per-store base copy / dual-register slot fill. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A318);
+/* GuiRecord4 — one four-float record of the widget record tables below. */
+typedef struct GuiRecord4 {
+    f32 x, y, z, w;
+} GuiRecord4;
+
+/* GuiSliderTables — the record tables of the slider/animation widget that
+ * func_0034A210 resets, as func_0034A318 / func_0034A350 address them. A view
+ * over the same object as GuiWidget, whose flat layout leaves +0x30..+0x7F as
+ * padding. func_0034A210 fills records 0 and 1, sets entry 0 of the key pair
+ * and stores the record count (2) at +0x84. */
+typedef struct GuiSliderTables {
+    /* 0x00 */ f32 keyA[3];        /* func_0034A350 first value, per entry */
+    /* 0x0C */ f32 keyB[3];        /* func_0034A350 second value, per entry */
+    /* 0x18 */ u8 pad18[0x18];
+    /* 0x30 */ GuiRecord4 record[4];
+    /* 0x70 */ f32 recordLead[4];  /* func_0034A318's leading scalar, per record */
+} GuiSliderTables;
+
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+_Static_assert(__builtin_offsetof(GuiSliderTables, keyB) == 0x0C, "GuiSliderTables.keyB @ +0x0C");
+_Static_assert(__builtin_offsetof(GuiSliderTables, record) == 0x30, "GuiSliderTables.record @ +0x30");
+_Static_assert(__builtin_offsetof(GuiSliderTables, recordLead) == 0x70, "GuiSliderTables.recordLead @ +0x70");
+#endif
+
+/**
+ * func_0034A318: write record `idx` of the widget's record table — the four
+ * floats (b, c, d, e) into the 0x10-stride record at +0x30, and `a` into the
+ * parallel per-record scalar at +0x70.
+ * @param w    the widget (viewed as GuiSliderTables)
+ * @param idx  record index (func_0034A210 writes 0 and 1)
+ *
+ * MATCHED on the s136os arm (task #1769; SN 2.95.3 v1.36 -fopt-stack, FACT
+ * #8810). The ROM copies the record base into a fresh register before each of
+ * the last three stores (`daddu $6/$7/$2,$3,$0`). That copy is what SN 1.36
+ * emits when every store re-indexes the struct array (`t->record[idx].y`); a
+ * hoisted record pointer folds to one base register and is emitted
+ * last-store-first instead (the old 8/10-word residual). Same lever as
+ * func_0034A350 / func_0034A7B0 and 198FA0's func_0029C600.
+ * GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+ * (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0034A318)
+S136OS_SLOT(func_0034A318);
 #else
-/* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
- * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
- * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
- * cc1 2.96-ee-001003-1): sdk29 57.77% / engine96 43.85%.
- * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 8/10 words differ;
- * frozen-.s census: 0 callee GPR saves, 0 fp saves.
- * Residual: no callee saves and no frame/save-slot words in the diff — residual is REGALLOC/SCHED on the 8 differing words; not iterated. */
 void func_0034A318(GuiWidget *w, s32 idx, f32 a, f32 b, f32 c, f32 d, f32 e) {
-    f32 *rec = (f32 *)((char *)w + idx * 0x10);
-    rec[0xC] = b;
-    rec[0xD] = c;
-    rec[0xE] = d;
-    rec[0xF] = e;
-    *(f32 *)((char *)w + idx * 4 + 0x70) = a;
+    GuiSliderTables *t = (GuiSliderTables *)w;
+
+    t->record[idx].x = b;
+    t->record[idx].y = c;
+    t->record[idx].z = d;
+    t->record[idx].w = e;
+    t->recordLead[idx] = a;
 }
 #endif
 
-/* func_0034A350: store the float pair into +0/+0xC of the +0x4-stride index
- * entry idx. Instructions match, but the original copies the entry pointer to a
- * second register and fills the jr slot with the +0 store; the pinned cc1 folds
- * to one register, ascending order. Best 80%. WALL: dual-register + slot fill. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A350);
+/**
+ * func_0034A350: set entry `idx` of the widget's key pair — `a` into keyA[idx]
+ * (+0x0) and `b` into keyB[idx] (+0xC), both 4-byte stride.
+ * @param w    the widget (viewed as GuiSliderTables)
+ * @param idx  entry index (func_0034A210 writes 0)
+ *
+ * MATCHED on the s136os arm (task #1769). The ROM forms the entry address in
+ * $v0, copies it to $a0 and stores through each (+0 first, +0xC in the jr
+ * delay slot); writing each store as its own array access gives that copy and
+ * order, where a shared entry pointer folds to $a0 and stores +0xC first.
+ * GUARD: as func_0034A318 — s136os row, spliced over S136OS_SLOT, no asm
+ * fallback; plain C on native.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0034A350)
+S136OS_SLOT(func_0034A350);
 #else
-/* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
- * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
- * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
- * cc1 2.96-ee-001003-1): sdk29 79.67% / engine96 81.67%.
- * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 5/6 words differ;
- * frozen-.s census: 0 callee GPR saves, 0 fp saves.
- * Residual: no callee saves and no frame/save-slot words in the diff — residual is REGALLOC/SCHED on the 5 differing words; not iterated. */
 void func_0034A350(GuiWidget *w, s32 idx, f32 a, f32 b) {
-    char *entry = (char *)w + (idx << 2);
-    *(f32 *)(entry + 0x0) = a;
-    *(f32 *)(entry + 0xC) = b;
+    GuiSliderTables *t = (GuiSliderTables *)w;
+
+    t->keyA[idx] = a;
+    t->keyB[idx] = b;
 }
 #endif
 
@@ -1391,27 +1425,43 @@ void func_0034A7A0(GuiWidget *w, s32 idx, s32 v) {
     *(s32 *)((char *)w + (idx << 2) + 0x20) = v;
 }
 
-/* func_0034A7B0: write a 4-float record (f12..f15) at +0x2C of the slot indexed
- * by (idx1<<4) + idx2*0x30 in the widget. Same shape as func_0034A318 — the
- * original copies the base before each swc1 and stores ascending with the last
- * in the jr delay slot; the pinned cc1 folds the base. WALL: per-store base
- * copy / dual-register slot fill. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A7B0);
+/* GuiTransformRecords — the 4-float sub-record grid of the 2x2 transform/
+ * animation widget func_0034A6B0 resets, as func_0034A7B0 addresses it: rows
+ * of three 0x10-byte records from +0x2C. A view over the same object as
+ * GuiWidget. func_0034A6B0 writes (row, col) in {0,1}x{0,1}. */
+typedef struct GuiTransformRecords {
+    /* 0x00 */ u8 pad00[0x2C];
+    /* 0x2C */ GuiRecord4 grid[2][3];
+} GuiTransformRecords;
+
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+_Static_assert(__builtin_offsetof(GuiTransformRecords, grid) == 0x2C, "GuiTransformRecords.grid @ +0x2C");
+_Static_assert(sizeof(GuiRecord4) * 3 == 0x30, "GuiTransformRecords row stride 0x30");
+#endif
+
+/**
+ * func_0034A7B0: write sub-record (row idx2, column idx1) of the widget's
+ * record grid — the four floats (a, b, c, d) at +0x2C + idx2*0x30 + idx1*0x10.
+ * @param w     the widget (viewed as GuiTransformRecords)
+ * @param idx1  column (0x10 stride)
+ * @param idx2  row (0x30 stride)
+ *
+ * MATCHED on the s136os arm (task #1769). As func_0034A318: the ROM's
+ * per-store base copies (`daddu $3/$6/$4,$2,$0`) are SN 1.36's code for one
+ * struct-array access per store; a hoisted record pointer folds them.
+ * GUARD: as func_0034A318 — s136os row, spliced over S136OS_SLOT, no asm
+ * fallback; plain C on native.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0034A7B0)
+S136OS_SLOT(func_0034A7B0);
 #else
-/* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
- * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
- * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
- * cc1 2.96-ee-001003-1): sdk29 64.31% / engine96 0.00%.
- * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 9/12 words differ;
- * frozen-.s census: 0 callee GPR saves, 0 fp saves.
- * Residual: no callee saves and no frame/save-slot words in the diff — residual is REGALLOC/SCHED on the 9 differing words; not iterated. */
 void func_0034A7B0(GuiWidget *w, s32 idx1, s32 idx2, f32 a, f32 b, f32 c, f32 d) {
-    f32 *rec = (f32 *)((char *)w + (idx1 << 4) + idx2 * 0x30 + 0x2C);
-    rec[0] = a;
-    rec[1] = b;
-    rec[2] = c;
-    rec[3] = d;
+    GuiTransformRecords *t = (GuiTransformRecords *)w;
+
+    t->grid[idx2][idx1].x = a;
+    t->grid[idx2][idx1].y = b;
+    t->grid[idx2][idx1].z = c;
+    t->grid[idx2][idx1].w = d;
 }
 #endif
 

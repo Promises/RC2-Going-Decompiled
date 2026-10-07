@@ -1904,23 +1904,32 @@ s32 func_003525D8(FmvStream *obj) {
 }
 #endif
 
-#if defined(MATCH_FmvRequestStop) || defined(TARGET_NATIVE)
 /**
- * Request a stop: mark the playback FSM "stop" (state 1) and report accepted.
+ * Request a stop: mark the playback FSM "stop" (state 1).
+ * @param s  the FMV stream
  *
- * Byte-exact on the engine96 arm (cc1 2.96-ee-001003 via MATCH_FmvRequestStop;
- * task #513): unit objdiff 100.00% (objdiff_build.sh + unit_report.sh) — the
- * 2.96 cc1 reuses the one `li v0,1` for both the store and the return value,
- * where the 2.9 arm materialises two (63.33% there, #6521's ARTIFACT class).
- * The INCLUDE_ASM below still feeds the 2.9 link in build.sh, which defines
- * no MATCH_.
+ * Returns nothing. The ROM leaves $v0 = 1 only because $v0 is the register
+ * its store of the constant goes through; the one caller (FmvStreamFeedLoop,
+ * jal at 0x34FEE4) overwrites $v0 with its next call, func_003512F8, on both
+ * paths to 0x34FEEC without reading it. (Earlier C returned 1, which made both
+ * cc1 2.9 and SN 1.36 materialise `li 1` twice, #6521's ARTIFACT class.)
+ *
+ * MATCHED on the s136os arm (task #1769; SN 2.95.3 v1.36 -fopt-stack, FACT
+ * #8810) as `void`: `li $2,1; jr $31; sw $2,0xA8($4)`, the ROM's three words.
+ * Its MATCH_FmvRequestStop engine96 guard (task #513) is retired with this
+ * promotion: the function is image-resident, no longer arm-scored (RULING
+ * #8118), and it was the unit's only MATCH_ member.
+ * GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+ * (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C.
  */
-s32 FmvRequestStop(FmvStream *s) {
-    s->state = 1;
-    return 1;
-}
+#if !defined(TARGET_NATIVE) && !defined(S136OS_FmvRequestStop)
+S136OS_SLOT(FmvRequestStop);
 #else
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", FmvRequestStop);
+void FmvRequestStop(FmvStream *s) {
+    s->state = 1;
+}
 #endif
 
 /**

@@ -467,3 +467,7 @@ usa text/191238 LoadIrxModuleFromBuffer
 usa text/198FA0 func_0029CD18
 usa text/188858 UploadHudBankTextures
 usa text/188858 func_0028AA70
+usa text/248B50 func_0034A318
+usa text/248B50 func_0034A350
+usa text/248B50 func_0034A7B0
+usa text/250080 FmvRequestStop
