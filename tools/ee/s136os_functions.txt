@@ -254,6 +254,7 @@ usa text/248B50 SetPopupItemText
 usa text/1DFF80 PlaySoundFromClassBank
 usa text/1DFF80 PlayMobySound
 usa text/1DFF80 PlayGlobalSound
+usa text/1DFF80 StartLevelMusicStream
 usa text/250080 FmvFrameQueueGetDisplaySlot
 usa text/250080 FmvFrameQueuePush
 usa text/250080 func_00352000

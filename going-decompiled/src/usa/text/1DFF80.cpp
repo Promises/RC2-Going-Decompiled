@@ -1403,17 +1403,40 @@ void InitSoundEmitterSystem(void) {
 }
 #endif
 
-/* Point the IOP streamed-audio engine at the new level's music stream, then
- * log post-reverb free SRAM.  Issues 989snd ring command 0x51 sub-op 2 (start /
- * point stream) via func_00133750(2, levelStreamSector) where the stream sector
- * is g_levelTocHeader+0xC (== 0x1507E4), then queries free SRAM post-reverb with
- * the 0x4A/0x4B snd commands (func_001337F0 / func_00133820) and feeds the result
- * into the retail-noop DebugPrintStub ("*AFTER REVERB* level %d - free sram %d").
- * Sole caller is the per-level audio bring-up (UpdateLevelStagingMachine state 2).
- * NEAR-MISS: WALLED - 2 callee saves (s0,s1) packed 8-byte where this cc1 rounds
- * the frame.  NATIVE SHIM (no byte target). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", StartLevelMusicStream);
+/* g_playerProgress (0x1A79F8) sized non-small so StartLevelMusicStream loads it
+ * absolute (`lui; lw %lo`), as the ROM does; at -G8 an unsized s32 is %gp_rel.
+ * File scope so the 2.9 TU and the s136os TU agree on its class. */
+__asm__(".extern g_playerProgress, 16");
+
+/**
+ * StartLevelMusicStream — point the IOP streamed-audio engine at the new level's
+ * music stream, then log post-reverb free SRAM.
+ *
+ * Issues 989snd ring command 0x51 sub-op 2 (start / point stream) via
+ * func_00133750(2, levelStreamSector), where the stream sector is the word at
+ * g_levelTocHeader+0xC (== 0x1507E4). It then queries free SRAM post-reverb with
+ * the 0x4A/0x4B snd commands (func_001337F0 / func_00133820) and passes both
+ * results to the retail-noop DebugPrintStub ("*AFTER REVERB* level %d - free
+ * sram %d"). Sole caller is the per-level audio bring-up
+ * (UpdateLevelStagingMachine state 2). No params, no return.
+ *
+ * GUARD (task #1768): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C.
+ * Byte-exact on that arm with two source facts:
+ *   - the two SRAM queries are written as DebugPrintStub's own arguments. The
+ *     nested calls make cc1 form the format address before them and keep it in
+ *     $16, with the first result in $17 (3 packed saves, frame 0x20), as the ROM
+ *     does. With the results in named locals the format address is formed after
+ *     the calls and the frame has 2 saves.
+ *   - g_playerProgress is sized 16 (file-scope `.extern` below), so its load is
+ *     the ROM's absolute `lui; lw %lo` and not %gp_rel at -G8.
+ * The earlier "WALLED - packed 8-byte saves" note was a 2.9-arm result; SN 1.36
+ * -fopt-stack packs them. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_StartLevelMusicStream)
+S136OS_SLOT(StartLevelMusicStream);
 #else
 extern u8  g_levelTocHeader[];   /* 0x1507D8 - current-level TOC header        */
 extern s32 g_playerProgress;     /* 0x1A79F8 - player progress / level number  */
@@ -1424,13 +1447,8 @@ extern s32  func_00133820(void);                       /* snd cmd 0x4B          
 extern void DebugPrintStub(const char *fmt, ...);      /* retail no-op          */
 
 void StartLevelMusicStream(void) {
-    s32 sramA;
-    s32 sramB;
-
     func_00133750(2, *(s32 *)(g_levelTocHeader + 0xC));
-    sramA = func_001337F0();
-    sramB = func_00133820();
-    DebugPrintStub(D_1ABE90, g_playerProgress, sramA, sramB);
+    DebugPrintStub(D_1ABE90, g_playerProgress, func_001337F0(), func_00133820());
 }
 #endif
 
