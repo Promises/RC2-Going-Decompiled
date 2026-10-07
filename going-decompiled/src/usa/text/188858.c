@@ -1005,45 +1005,47 @@ s32 UpgradeWeaponToMax(s32 itemId) {
  * then up to `level` forward nextVariantSlot steps — stopping early at a
  * terminal variant) and, when that variant's upgradeLevel matches `level`, copy
  * its full 0xE0-byte WeaponDef into *out. Returns 1 on a successful copy, else 0
- * (also returns 0 immediately when level >= 0xFF).
+ * (also returns 0 when level >= 0xFF).
  *
- * WALL (sq/lq 128-bit): the struct copy is emitted as a 128-bit lq/sq block move
- * the matcher cannot reproduce from C struct assignment. Left INCLUDE_ASM. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", GetWeaponStatsAtLevel);
+ * Matched on the s136os arm at the unit's -O2 default (RULING #9450). The ROM
+ * copies the entry with a 16-byte lq/sq loop, so on the EE it is copied through
+ * a 16-aligned 0xE0-byte block type; the plain WeaponDef assignment is an
+ * unaligned ldl/ldr copy. The forward walk is a plain counted for-loop (its
+ * `count < level` entry test is the ROM's `blez level`, and the counter then
+ * gets $7); the result is set before the copy and returned from one exit. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_GetWeaponStatsAtLevel)
+S136OS_SLOT(GetWeaponStatsAtLevel);
 #else
 s32 GetWeaponStatsAtLevel(WeaponDef *out, s32 itemId, s32 level) {
+#ifndef TARGET_NATIVE
+    typedef struct { u8 bytes[0xE0]; } __attribute__((aligned(16))) WeaponDefBlock;
+#endif
     s32 slot = itemId;
     s32 count;
+    s32 result = 0;
 
-    if (level >= 0xFF) {
-        return 0;
-    }
-    /* walk prevVariantSlot back to the base variant */
-    if (g_weaponTable[slot].prevVariantSlot != 0) {
-        do {
+    if (level < 0xFF) {
+        /* walk prevVariantSlot back to the base variant */
+        while (g_weaponTable[slot].prevVariantSlot != 0) {
             slot = g_weaponTable[slot].prevVariantSlot;
-        } while (g_weaponTable[slot].prevVariantSlot != 0);
-    }
-    /* step up to `level` nextVariantSlot links forward, halting at a terminal */
-    if (level > 0 && g_weaponTable[slot].nextVariantSlot != 0) {
-        count = 0;
-        for (;;) {
-            count++;
-            slot = g_weaponTable[slot].nextVariantSlot;
-            if (count >= level) {
-                break;
-            }
+        }
+        /* step up to `level` nextVariantSlot links forward, halting at a terminal */
+        for (count = 0; count < level; count++) {
             if (g_weaponTable[slot].nextVariantSlot == 0) {
                 break;
             }
+            slot = g_weaponTable[slot].nextVariantSlot;
+        }
+        if ((s32)g_weaponTable[slot].upgradeLevel == level) {
+            result = 1;
+#ifndef TARGET_NATIVE
+            *(WeaponDefBlock *)out = *(WeaponDefBlock *)&g_weaponTable[slot];
+#else
+            *out = g_weaponTable[slot];   /* full 0xE0-byte WeaponDef copy */
+#endif
         }
     }
-    if ((s32)g_weaponTable[slot].upgradeLevel != level) {
-        return 0;
-    }
-    *out = g_weaponTable[slot];   /* full 0xE0-byte WeaponDef copy */
-    return 1;
+    return result;
 }
 #endif
 

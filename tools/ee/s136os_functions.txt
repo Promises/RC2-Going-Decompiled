@@ -436,3 +436,4 @@ usa text/1A8180 func_002AB700
 usa text/1A8180 func_002AA508
 usa text/1A8180 func_002B18D0
 usa text/188858 StartCinematicFromQueue
+usa text/188858 GetWeaponStatsAtLevel
