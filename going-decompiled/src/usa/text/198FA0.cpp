@@ -2229,7 +2229,100 @@ void func_0029CCB8(void) {
     __asm__ __volatile__(""); /* sibling-call suppression (the ROM never sibcalls) */
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029CD18);
+/* func_0029CD18: the GUI draw pump, the draw-side twin of func_0029CA98, called
+ * once per frame from RenderFrame and RenderMenuScreenWidgets. Skipped while
+ * the HUD-busy word (g_hudClutSlots+0x10) is set, and in the menu state when
+ * the overlay mode is 8. With the GUI up it runs the full-screen tint pump
+ * (func_00290EF8) and the popup-poll gate (func_0029CCB8), then offers the
+ * frame to the manager's pre-draw hook (+0x3F9F4) and to the draw half of its
+ * four handler slots and two pending-pair slots (+0x3F9F8/+0x3FA18, the same
+ * slots func_0029CA98 ticks). If any hook drew, it re-runs the FOV-override
+ * projection rebuild (func_0029CC48) on progress levels 8 and 0x13 when
+ * func_0026F7E0(2) allows it, and ends the frame. Otherwise, unless the game is
+ * in state 4 with an overlay mode other than 7, it runs the manager's draw
+ * (+0x3F9D4) and func_0029CC48. No params, no return value. The store has
+ * this address under the former name DrawActiveGuiScreens.
+ *
+ * Built on the s136os arm (task #1745) as plain C at the unit's flags. It is
+ * func_0029CA98's body with the draw hooks: each hook is read through its own
+ * struct access, once to test and once to call, because the ROM forms two
+ * addresses per hook (gui+0x38000+i*8 for the test, i*8+gui+0x3F9F8 for the
+ * call). The repeated `any != 0` test is the ROM's: it re-tests after the
+ * progress-level block (`bnel $19`) instead of threading the jump.
+ * func_0029CC48 is declared here because its own definition sits in its
+ * guarded s136os arm, which this member's s136os TU does not open. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0029CD18)
+S136OS_SLOT(func_0029CD18);
+#else
+typedef struct {
+    s32 (*tick)(void);          /* called by func_0029CA98 */
+    s32 (*draw)(void);          /* called with no arguments; nonzero = drew */
+} GuiDrawHookSlot;
+
+typedef struct {
+    char _unk0[0x3F9D4];
+    void (*draw)(void);         /* 0x3F9D4 per-frame draw */
+    char _unk3F9D8[0x1C];
+    s32 (*preDraw)(void);       /* 0x3F9F4 nonzero result counts as drawn */
+    GuiDrawHookSlot handlers[4]; /* 0x3F9F8 */
+    GuiDrawHookSlot pending[2];  /* 0x3FA18, the GuiPendingPairs table */
+} GuiDrawHooks;
+
+extern s32  GetMenuOverlayMode(void);
+extern s32  GetMenuOverlayModeLive(void);
+extern s32  func_00290EF8(void);
+extern s32  func_0026F7E0(s32 arg);
+extern void func_0029CC48(void);
+
+void func_0029CD18(void) {
+    s32 any;
+    s32 i;
+
+    if (g_hudBusyAbs != 0) {
+        return;
+    }
+    if (g_guiInstance != 0) {
+        if (g_nGameState == 4 && GetMenuOverlayMode() == 8) {
+            return;
+        }
+        any = 0;
+        func_00290EF8();
+        func_0029CCB8();
+        if (((GuiDrawHooks *)g_guiInstance)->preDraw != 0) {
+            any = ((GuiDrawHooks *)g_guiInstance)->preDraw() != 0;
+        }
+        for (i = 0; i < 4; i++) {
+            if (((GuiDrawHooks *)g_guiInstance)->handlers[i].draw != 0) {
+                any |= ((GuiDrawHooks *)g_guiInstance)->handlers[i].draw();
+            }
+        }
+        for (i = 0; i < 2; i++) {
+            if (((GuiDrawHooks *)g_guiInstance)->pending[i].draw != 0) {
+                any |= ((GuiDrawHooks *)g_guiInstance)->pending[i].draw();
+            }
+        }
+        if (any != 0) {
+            if (g_playerProgress == 8 || g_playerProgress == 0x13) {
+                if (func_0026F7E0(2) != 0) {
+                    func_0029CC48();
+                }
+            }
+            if (any != 0) {
+                return;
+            }
+        }
+    }
+    if (g_nGameState != 0 && g_nGameState != 5 && g_nGameState == 4) {
+        if (GetMenuOverlayModeLive() != 7) {
+            return;
+        }
+    }
+    if (g_guiInstance != 0) {
+        ((GuiDrawHooks *)g_guiInstance)->draw();
+        func_0029CC48();
+    }
+}
+#endif
 
 /* func_0029CF08: empty jr-ra stub - installed by GuiManagerCreate as a default no-op GUI callback. */
 void func_0029CF08(void) {
