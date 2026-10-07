@@ -5353,27 +5353,37 @@ void func_0028ECC0(void)
  * slots are allocated. Returns the map index (baseFrame + level) on success,
  * else 0.
  *
- * NEAR-MISS (55%): logic correct, but the original threads the branch-likely
- * (bltzl) clut check and the `movz` result-select tail through a register
- * allocation cc1 doesn't reproduce, plus the two-callee-save 0x20-vs-0x10 frame.
- * Kept as the portable #else body. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028EDF0);
+ * Matched on the s136os arm at the unit's -O2 default (RULING #9450). Each of
+ * these was measured necessary by removing it alone (solo s136os harness, task
+ * #1740; aligned-diff words in brackets). The first four are task #1713's
+ * NOTE #9524:
+ *   - the slot lookup call comes before the header read (0x10 frame, one save);
+ *   - the header is read through g_pHudAssetHeaderAbs, the ROM's one-insn
+ *     `lw` macro [7];
+ *   - both handle tests are `& 0x80000000`, so cse loads the mask once, early,
+ *     as the ROM's `lui $7,0x8000` [3 as `< 0`];
+ *   - the slot and map-entry addresses are integer sums, index first, for the
+ *     ROM's `addu rd, idx, base` [2 as `&ptr[i]`];
+ *   - the two failure tests share one trailing `return 0`, and an empty fence
+ *     (RULING #8483) opens the in-range block. Without the fence, sched1's
+ *     interblock motion hoists the g_hudIconMap load above the level test and
+ *     the return-0 block stays referenced [10]. With early returns instead of
+ *     the shared tail, the level test's return block stays inline [5]. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0028EDF0)
+S136OS_SLOT(func_0028EDF0);
 #else
 s32 func_0028EDF0(s32 name, s32 level) {
-    HudIconSlot *table = (HudIconSlot *)g_pHudAssetHeader[1];
-    HudIconSlot *slot = &table[func_0028B560(name)];
-    if (slot->texId == 0xFFFF) {
-        return 0;
-    }
-    if (level < (s32)slot->maxLevel) {
-        s32 mapIndex = slot->baseFrame + level;
-        HudIconMapEntry *e = &g_hudIconMap[mapIndex];
-        if (g_hudClutSlots[e->clutSlot].handle < 0) {
-            return 0;
-        }
-        if ((g_hudTextureSlots[e->textureSlot].handle & 0x80000000) == 0) {
-            return mapIndex;
+    s32 index = func_0028B560(name);
+    HudIconSlot *slot = (HudIconSlot *)(index * 8 + (s32)g_pHudAssetHeaderAbs[1]);
+    s32 mapIndex;
+    HudIconMapEntry *e;
+
+    if (slot->texId != 0xFFFF && level < (s32)slot->maxLevel) {
+        __asm__ __volatile__("");
+        mapIndex = slot->baseFrame + level;
+        e = (HudIconMapEntry *)(mapIndex * 4 + (s32)g_hudIconMap);
+        if (!(g_hudClutSlots[e->clutSlot].handle & 0x80000000)) {
+            return (g_hudTextureSlots[e->textureSlot].handle & 0x80000000) ? 0 : mapIndex;
         }
     }
     return 0;
