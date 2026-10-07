@@ -269,6 +269,8 @@ extern Rec2552B0 D_2552B0[];   /* 13-entry record table (0x2552B0) */
  *               selected slot index
  *   +0x78 s32   counter: clamped target CONFIRMED (LayoutHudCounterDigits +0x78)
  *               wheel: reset countdown  LIKELY (task #1792; see below)
+ *               wheel: high byte (+0x7B) CONFIRMED (task #1807; see below)
+ *               is an "armed" flag
  *   +0x7C s32   showTimer: display-hold CONFIRMED (task #1770; see below)
  *               countdown, in frames
  * +0x7C showTimer: frames left before the element starts to hide. It is a
@@ -277,7 +279,7 @@ extern Rec2552B0 D_2552B0[];   /* 13-entry record table (0x2552B0) */
  *  and all 12 callbacks registered here or from 1849B0 live in this unit; the
  *  draw callbacks and DrawHudElements never touch +0x7C):
  *    writes  0      RegisterHudElement on re-config, InitHudMobyTable,
- *                   func_0028BF80 (as tag[4] off the +0x6C cursor)
+ *                   func_0028BF80 (as phase[4] off the +0x6C cursor)
  *            0xD2   func_0028C490 (Clank-health init)   0x96 func_0028E7A0 (ammo init)
  *            0xB4   re-armed by func_0028C4C8 when the shown value changes, and
  *                   by the wheel ticks func_0028C840 / func_0028D720
@@ -312,17 +314,31 @@ extern Rec2552B0 D_2552B0[];   /* 13-entry record table (0x2552B0) */
  *      0x28CA18, 0x28D834  func_0028C840, func_0028D720 (ticks): -1 on reset,
  *                          i.e. on a dpad press, a centred stick, or +0x78
  *                          counting down to -1 (+0x78 is then latched to
- *                          0x10000FF, which stops the countdown)
+ *                          0x10000FF, which stops the countdown; see +0x78)
  *      0x28CC08, 0x28CDA0, 0x28CE04 (func_0028C840) and 0x28D8F4, 0x28DA50
  *                          (func_0028D720): the slot picked by stick angle
  *                          or by a dpad / face-button neighbour link
- *  Wheel readers test only the sign (func_0028DC28 draws the cursor when
- *  >= 0; DrawWeaponSelectWheel, func_0028C840 index the 0x1C-stride grid) or
- *  compare it with its value earlier in the frame (func_0028D720 0x28DA58
- *  `beq $2,$7`: a change plays the nav cue). So the init's -2 is a starting
- *  "no selection yet" value that differs from the -1 a reset writes; nothing
- *  tests for -2 itself. The counter draw func_0028E640 reads +0x74 (0x28E6DC)
- *  as the value it scales and draws.
+ *  Wheel readers test its sign (func_0028DC28 draws the cursor when >= 0,
+ *  0x28E124 `bltz`; DrawWeaponSelectWheel, func_0028C840 index the 0x1C-stride
+ *  grid), compare it for equality with the slot index of the item being drawn
+ *  (func_0028DC28 0x28E2FC/0x28E308 `xor` with the loop index $19, and
+ *  DrawWeaponSelectWheel 0x28D290/0x28D294 `bne` with the loop index $17:
+ *  the highlighted item), or compare it with its value earlier in the frame
+ *  (func_0028D720 0x28DA58 `beq $2,$7`: a change plays the nav cue). Every one
+ *  of these reads it as a slot index. So the init's -2 is a starting "no
+ *  selection yet" value that differs from the -1 a reset writes; nothing tests
+ *  for -2 itself. The counter draw func_0028E640 reads +0x74 (0x28E6DC) as
+ *  the value it scales and draws.
+ * +0x78 on the wheel kinds: the low bytes count the reset delay down from the
+ *  init's 0x1E, and the high byte (+0x7B) is an "armed" flag, 0 while the
+ *  countdown runs and 1 once it has latched. Both wheel ticks establish it
+ *  from the asm (task #1807): func_0028C840 reads `lw +0x78; sra $2,$3,24` at
+ *  0x28C9C0/0x28C9C4 and runs the countdown only when that byte is 0, then
+ *  gates its whole selection block on `lb +0x7B` == 1 (0x28CA20); func_0028D720
+ *  does the same at 0x28D7CC/0x28D7D0 (`sra 24`) and 0x28D7E8/0x28D83C
+ *  (`lb +0x7B`, compared with 1 at 0x28D844). The latch value 0x10000FF is
+ *  exactly that byte set to 1 over a low byte of 0xFF. func_0028D720 also
+ *  copies the whole word to g_hudMobyAuxBlockBase+0x18 (0x28DBC8).
  * (Fields +0x4C..+0x57, +0x6C, the +0x42..+0x47 sub-bytes etc. are not yet
  *  pinned and remain inside the blob.) */
 typedef struct HudElement {
@@ -3671,7 +3687,7 @@ void func_0028BF18(HudElement *w) {
  * MATCHED on the s136os arm (task #1696), with no device. The ROM walks two
  * pointers, the record (passed to func_0028BF18) and a second one at the
  * record's +0x6C that both stores go through, each stepped by 0x90; spelling
- * `tag` as its own induction pointer is what gives cc1 the fourth callee-save
+ * `phase` as its own induction pointer is what gives cc1 the fourth callee-save
  * ($16) and the 0x30 frame. One record pointer with both offsets built 3/36
  * different under the same flags.
  *
@@ -3684,16 +3700,16 @@ S136OS_SLOT(func_0028BF80);
 #else
 void func_0028BF80(void) {
     u8 *rec = (u8 *)&D_2552B0[0];
-    s32 *tag = (s32 *)(rec + 0x6C);   /* +0x6C phase; tag[4] is the +0x7C show timer */
+    s32 *phase = (s32 *)(rec + 0x6C); /* +0x6C phase; phase[4] is the +0x7C show timer */
     s32 i;
 
     for (i = 0; i < 0xD; i++) {
         func_0028BE10(i, 0xFFFF, 0, 0, 0, 0, 1);
-        tag[4] = 0;
-        tag[0] = -6;
+        phase[4] = 0;
+        phase[0] = -6;
         func_0028BF18((HudElement *)rec);
         rec += 0x90;
-        tag = (s32 *)((u8 *)tag + 0x90);
+        phase = (s32 *)((u8 *)phase + 0x90);
     }
 }
 #endif
@@ -4291,9 +4307,8 @@ void func_0028C7A8(void) {
 /* Build the weapon-select wheel widget `w`: rebuild its icon list
  * (func_0028C728), then seed the wheel geometry/state (half-extents 0xD2/0xC8
  * at +0x58/+0x5C, selected slot -2 = none yet at +0x74, reset countdown 0x1E
- * at +0x78, cleared +0x70 word and the two +0x48/+0x4A cursor halves). The
- * locals `typeTag` and `mode` below predate task #1792 and are left as they are
- * because this body is matched; see HudElement for what +0x74/+0x78 hold.
+ * at +0x78, cleared +0x70 word and the two +0x48/+0x4A cursor halves). See
+ * HudElement for what +0x74/+0x78 hold.
  *
  * BYTE-EXACT on the s136os arm (task #1329): SN 2.95.3 v1.36 -fopt-stack
  * reproduces all 20 ROM words. Two phrasings carry the match and are not
@@ -4319,16 +4334,16 @@ S136OS_SLOT(func_0028C7F0);
 #else
 void func_0028C7F0(HudElement *w) {
     u8 *b = (u8 *)w;
-    s32 halfW, halfH, typeTag, mode;
+    s32 halfW, halfH, selectedSlot, resetCountdown;
     func_0028C728();
     halfW = 0xD2;
     halfH = 0xC8;
-    typeTag = -2;
-    mode = 0x1E;
+    selectedSlot = -2;
+    resetCountdown = 0x1E;
     *(s32 *)(b + 0x58) = halfW;
     *(s32 *)(b + 0x5C) = halfH;
-    *(s32 *)(b + 0x74) = typeTag;
-    *(s32 *)(b + 0x78) = mode;
+    *(s32 *)(b + 0x74) = selectedSlot;
+    *(s32 *)(b + 0x78) = resetCountdown;
     *(s16 *)(b + 0x48) = 0;
     *(s16 *)(b + 0x4A) = 0;
     *(s32 *)(b + 0x70) = 0;
@@ -4815,8 +4830,8 @@ s32 DrawWeaponSelectWheel(HudElement *w) {
  * callback &D_1A8DD8) in g_hudMobySpawnStart+0x28/+0x2C, set the widget
  * geometry (+0x58 = 0xD2, +0x5C = 0xC8), selected slot (+0x74 = -2, none
  * yet) and reset countdown (+0x78 = 0x1E), clear its two 16-bit cursors
- * (+0x48/+0x4A) and reset the wheel cursor D_1A8D48. (The locals `tag` and
- * `mode` predate task #1792; see HudElement for what +0x74/+0x78 hold.)
+ * (+0x48/+0x4A) and reset the wheel cursor D_1A8D48. See HudElement for what
+ * +0x74/+0x78 hold.
  *
  *   w  the widget record being initialised
  *
@@ -4831,23 +4846,23 @@ void func_0028D6D8(HudElement *w) {
     register s32 count EE_REG("$2");
     register void *callback EE_REG("$3");
     register s32 width EE_REG("$5");
-    register s32 tag EE_REG("$6");
+    register s32 selectedSlot EE_REG("$6");
     register s32 height EE_REG("$3");
-    register s32 mode EE_REG("$2");
+    register s32 resetCountdown EE_REG("$2");
 
     count = 8;
     callback = &D_1A8DD8;
     *(volatile s32 *)((u8 *)&g_hudMobySpawnStart + 0x28) = count;
     width = 0xD2;
     *(void *volatile *)((u8 *)&g_hudMobySpawnStart + 0x2C) = callback;
-    tag = -2;
+    selectedSlot = -2;
     height = 0xC8;
-    mode = 0x1E;
+    resetCountdown = 0x1E;
     __asm__ __volatile__("");
     *(volatile s32 *)(b + 0x58) = width;
-    *(volatile s32 *)(b + 0x78) = mode;
+    *(volatile s32 *)(b + 0x78) = resetCountdown;
     *(volatile s32 *)(b + 0x5C) = height;
-    *(volatile s32 *)(b + 0x74) = tag;
+    *(volatile s32 *)(b + 0x74) = selectedSlot;
     *(volatile s16 *)(b + 0x48) = 0;
     *(volatile s16 *)(b + 0x4A) = 0;
     D_1A8D48 = 0;
