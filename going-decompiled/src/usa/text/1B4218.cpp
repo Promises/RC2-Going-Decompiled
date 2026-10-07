@@ -2429,32 +2429,65 @@ s32 ResolveMobySphereCollision(Moby *moby, MobyMotionController *ctrl) {
  * inactive or disabled. Otherwise projects the moby position (+0x10) onto the edge
  * via func_002CA138; if that reports a hit, stores the (projected - position) delta
  * at +0x60 rescaled to the push length, marks bit 0x10 in +0x94, and returns 1.
- * WALL: save-layout — 3 callee-saves + $ra at 8-byte spacing, with fp/madd; matching
- * arm stays INCLUDE_ASM, portable #else below. */
+ *
+ * params: moby  the moby being constrained (position Vec4 at +0x10)
+ *         ec    the edge-constraint record (layout above)
+ * return: 1 when the edge pushed the moby, else 0.
+ *
+ * MATCHED on the s136os arm (task #1744). The old save-layout WALL was the 2.9
+ * arm's; SN 1.36 packs the 3 callee saves itself. What carries the match:
+ *  - the position is copied to the stack with ONE 128-bit move (lq/sq), as the
+ *    ROM does; a Vec4 struct copy emits ldl/ldr/sdl/sdr (natively a plain copy);
+ *  - two EMPTY tied fences around that copy (RULING #8483). Without the one
+ *    before it the lq folds to 16(moby); without the one after it the call's
+ *    argument setup schedules differently;
+ *  - two register pins (RULING #8598): moby->$6 and pos->$18. Unpinned, cc1
+ *    swaps the ec/pos s-register pair (ec $18 / pos $17; the ROM has ec $17 /
+ *    pos $18) and moby is not staged in $6. Each pin and each fence was dropped
+ *    alone and each drop breaks the match; an edgeId->$4 pin tried on the way
+ *    was dead weight and is not here. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", ResolveMobyEdgeConstraint);
+#define EE_REG(r) __asm__(r)
+#else
+#define EE_REG(r)
+#endif
+#if !defined(TARGET_NATIVE) && !defined(S136OS_ResolveMobyEdgeConstraint)
+S136OS_SLOT(ResolveMobyEdgeConstraint);
 #else
 extern s32 func_002CA138(s32 edgeId, Vec4 *point, Vec4 *pos, f32 pushLen);  /* 0x2CA138 project onto edge */
 extern void Vec4SubVu0(Vec4 *dst, Vec4 *a, Vec4 *b);            /* dst = a - b (VU0) */
 extern void Vec3RescaleToLenVu0(Vec4 *dst, Vec4 *src, f32 len); /* dst = src * (len / |src|) */
-s32 ResolveMobyEdgeConstraint(void *moby, void *ec) {
-    Vec4 *pos = (Vec4 *)((u8 *)moby + 0x10);
-    Vec4 *push = (Vec4 *)((u8 *)ec + 0x60);
+s32 ResolveMobyEdgeConstraint(void *mobyArg, void *ec) {
+    register void *moby EE_REG("$6") = mobyArg;
+    register Vec4 *pos EE_REG("$18");
     Vec4 point;
-
-    if (*(s32 *)((u8 *)ec + 0x3C) == -1)
+    Vec4 *push;
+    s32 edgeId = *(s32 *)((u8 *)ec + 0x3C);
+    if (edgeId == -1) {
         return 0;
-    if (*(s32 *)((u8 *)ec + 0x9C) & 0x1)
+    }
+    if (*(s32 *)((u8 *)ec + 0x9C) & 0x1) {
         return 0;
-
+    }
+    pos = (Vec4 *)((u8 *)moby + 0x10);
+    __asm__("" : : "r"(pos));
+#ifndef TARGET_NATIVE
+    {
+        typedef unsigned int Quad __attribute__((mode(TI)));
+        *(Quad *)&point = *(Quad *)pos;
+    }
+#else
     point = *pos;
-    if (func_002CA138(*(s32 *)((u8 *)ec + 0x3C), &point, pos, *(f32 *)ec) == 0)
-        return 0;
-
-    Vec4SubVu0(push, &point, pos);
-    Vec3RescaleToLenVu0(push, push, *(f32 *)ec);
-    *(s32 *)((u8 *)ec + 0x94) |= 0x10;
-    return 1;
+#endif
+    __asm__("" : : "r"(pos));
+    if (func_002CA138(edgeId, &point, pos, *(f32 *)ec) != 0) {
+        push = (Vec4 *)((u8 *)ec + 0x60);
+        Vec4SubVu0(push, &point, pos);
+        Vec3RescaleToLenVu0(push, push, *(f32 *)ec);
+        *(s32 *)((u8 *)ec + 0x94) |= 0x10;
+        return 1;
+    }
+    return 0;
 }
 #endif
 
