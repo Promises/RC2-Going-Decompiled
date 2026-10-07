@@ -946,28 +946,46 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_0
  * needs the sky-draw wiring traced before a faithful #else. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E43F8);
 
-/* Open a sky draw segment: remember the current DMA cursor as the segment head
- * tag, advance the cursor by one qword, snapshot the dynamic VRAM cursor, reset
- * the texture-upload queue, then zero the 8-byte header of every sky shell piece
- * (stride 0x10) in the piece list at g_pSkyData+0x10.
- * NEAR-MISS (~37%): the prologue matches but cc1 strength-reduces the clear loop
- * to a pointer-walk where the original keeps the index*0x10 + reloaded-base form
- * (re-reading the piece-list pointer each iteration).  The C is faithful. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", BeginSkyDrawSegment);
+/**
+ * BeginSkyDrawSegment — open the frame's sky draw segment.
+ *
+ * Records the DMA cursor as the segment's head tag in g_pSkySegmentOpenTag and
+ * reserves that qword (cursor += 0x10), resets the VRAM bump cursor to the
+ * dynamic base and the texture-upload count to 0, then zeroes the first 8 bytes
+ * of each sky piece (stride 0x10) in the piece list at g_pSkyData+0x10; the
+ * piece count is the s16 at g_pSkyData+0xC. No params, no return.
+ *
+ * GUARD (task #1768): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C.
+ * Byte-exact on that arm with the piece count read into `count` BEFORE the
+ * cursor/VRAM/upload-count stores and the loop written as a guarded do/while that
+ * re-reads the count and the list pointer every pass. That arm compiles without
+ * strict aliasing, so a count read written after the stores (a plain `for`)
+ * cannot be scheduled above them; the ROM reads it between the open-tag store
+ * and the cursor write-back. The earlier "strength-reduced loop" note was a
+ * 2.9-arm result; this arm already keeps the reloads. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_BeginSkyDrawSegment)
+S136OS_SLOT(BeginSkyDrawSegment);
 #else
 void BeginSkyDrawSegment(void) {
     u8 *cursor = g_frameDmaCursor;
+    s32 i = 0;
     u8 *sky = g_pSkyData;
-    s32 i;
+    s32 count;
 
     g_pSkySegmentOpenTag = cursor;
+    count = *(s16 *)(sky + 0xC);
     g_frameDmaCursor = cursor + 0x10;
     g_vramAllocCursor = g_vramDynamicBase;
     g_texUploadCount = 0;
-
-    for (i = 0; i < *(s16 *)(sky + 0xC); i++) {
-        *(s64 *)(*(u8 **)(sky + 0x10) + i * 0x10) = 0;
+    if (count > 0) {
+        do {
+            *(s64 *)(*(u8 **)(sky + 0x10) + i * 0x10) = 0;
+            i++;
+        } while (i < *(s16 *)(sky + 0xC));
     }
 }
 #endif
