@@ -1241,6 +1241,7 @@ g_itemStateFlags
 g_lastMenuScreenId
 g_levelDialogToc
 g_levelSelectEntries
+g_levelSelectRowLineHeight
 g_levelStagingState
 g_levelTocHeader
 g_levelVisitedMarkers

@@ -3493,10 +3493,10 @@ s32 func_002DD450(IntroTextBox *box) {
  * Only renders while the area transition state permits it (area+0x15C < 3,
  * area+0x164 < 0, menuBlock+0x164 >= 0xB, area+0x8 == 2). Derives a level index
  * from the focused screen's area record (areaEntry->0x30 mod 0x1C); index -1 draws
- * the "unknown" placeholder string 0x2DAA centered (y + D_1ABC54/2). Otherwise it
+ * the "unknown" placeholder string 0x2DAA centered (y + g_levelSelectRowLineHeight/2). Otherwise it
  * draws the level label (formatted by func_002E0010) and, when the row carries a
- * value string id (>= 0), a second value line below it (y + D_1ABC54); a row with
- * no value string is drawn as a single centered line (y + D_1ABC54>>1). Returns 2.
+ * value string id (>= 0), a second value line below it (y + g_levelSelectRowLineHeight); a row with
+ * no value string is drawn as a single centered line (y + g_levelSelectRowLineHeight>>1). Returns 2.
  *
  * The matching (INCLUDE_ASM) arm remains the byte-exact source of truth (leading
  * alternate-entry sp adjust + the compiler's div-by-0x1C guard are not modelled).
@@ -3517,7 +3517,7 @@ extern s32 func_002E0010(char *dst, s32 level);
 s32 func_002DD630(void *screenArg) {
     extern u8  g_areaTable[];
     extern u8  g_levelSelectEntries[];  /* (labelStrId, valueStrId) pairs, stride 8 */
-    extern s32 D_1ABC54;                /* row vertical spacing */
+    extern s32 g_levelSelectRowLineHeight;                /* row vertical spacing */
     u8 *obj  = (u8 *)screenArg;
     u8 *area = (u8 *)g_areaTable;
     u8 *mgr  = (u8 *)g_menuScreenBlock;
@@ -3535,16 +3535,16 @@ s32 func_002DD630(void *screenArg) {
         x     = *(s32 *)(obj + 0x18);
         baseY = *(s32 *)(obj + 0x1C);
         if (lvlIdx == -1) {
-            func_002801B8(x, baseY + D_1ABC54 / 2, 0x80F0F0F0,
+            func_002801B8(x, baseY + g_levelSelectRowLineHeight / 2, 0x80F0F0F0,
                           GetLocalizedString(0x2DAA), -1);
         } else {
             s32 valStrId = *(s32 *)(g_levelSelectEntries + lvlIdx * 8 + 4);
-            s32 labelY = (valStrId >= 0) ? baseY : baseY + (D_1ABC54 >> 1);
+            s32 labelY = (valStrId >= 0) ? baseY : baseY + (g_levelSelectRowLineHeight >> 1);
             char buf[64];   /* func_002E0010 formats the level label here */
 
             func_002801B8(x, labelY, 0x80F0F0F0, func_002E0010(buf, lvlIdx), -1);
             if (valStrId >= 0) {
-                func_002801B8(x, baseY + D_1ABC54, 0x80F0F0F0,
+                func_002801B8(x, baseY + g_levelSelectRowLineHeight, 0x80F0F0F0,
                               GetLocalizedString(valStrId), -1);
             }
         }
