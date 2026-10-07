@@ -4384,8 +4384,28 @@ extern s32 func_00283328(void *state); /* tick countdown: ret 0=counting, 1=alre
 
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 77.58%
    -> UNKNOWN-@0: ROM `addiu sp,sp,-64` vs `addiu sp,sp,-48` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC728);
+/* MATCHED on the s136os arm (task #1741): byte-exact under SN 2.95.3 v1.36
+ * -fopt-stack, no device (verify_match_unit; landing_gate cmp 0). Spellings,
+ * measured in a solo s136 harness (cc1 text assembled alone at -G8; aligned
+ * words differing out of 147; rankings, not gates):
+ *   - master's body (one cast per duration use, two sibcall barriers): 151
+ *     words, aligned 18. The ROM calls IntToFloat once per branch and uses
+ *     the result as numerator and denominator; spelled that way, without the
+ *     barriers: 148 words, aligned 8;
+ *   - `return 0` up front becomes `bnez; b; move $2,$0`, and the two
+ *     `return func_002A12C0(...)` calls are cross-jumped into one. With the
+ *     whole body inside `if (counter != 0)`: aligned 3, only the trailing
+ *     `return 0` block left;
+ *   - `result` starts as the loaded counter, so the inactive exit returns that
+ *     zero in $2 as the ROM does (beqz straight to the epilogue): 0. Returning a
+ *     separate `left` local instead still leaves the block (3). */
+/* GUARD (task #1741): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002AC728)
+S136OS_SLOT(func_002AC728);
 #else
 /**
  * Per-frame RGB colour fade / ping-pong applied to a target object.
@@ -4404,53 +4424,43 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC728);
  * reversed (dir clear, counter reloaded from s[0xE]). Otherwise interpolate
  * each enabled channel by frac = (duration - counter)/duration and push the
  * colour to `target` via func_002A12C0, whose result is returned (0 when the
- * fade is inactive).
+ * fade is inactive). The duration is converted once per frame through
+ * IntToFloat and serves as both numerator and denominator.
  */
 s32 func_002AC728(void *target, u8 *s)
 {
-    s32 counter;
-    s32 dir;
+    f32 dur;
     f32 frac;
     s32 r, g, b;
+    s32 result = *(s16 *)(s + 0x0);
 
-    if (*(s16 *)(s + 0x0) == 0) {
-        return 0;
-    }
-
-    if (func_00283328(s) != 0) {
-        /* countdown expired this frame */
-        if (*(s16 *)(s + 0x2) != 0) {
-            /* latch the destination colour and stop */
-            {
-                s32 r = func_002A12C0(target, s[0x4], s[0x5], s[0x6]);
-                __asm__ __volatile__(""); /* cc1 2.96 sibling-call suppression (the ROM never sibcalls) */
-                return r;
+    if (result != 0) {
+        if (func_00283328(s) != 0) {
+            /* countdown expired this frame */
+            if (*(s16 *)(s + 0x2) != 0) {
+                /* latch the destination colour and stop */
+                return func_002A12C0(target, s[0x4], s[0x5], s[0x6]);
             }
+            /* restart the fade running in reverse */
+            *(s16 *)(s + 0x2) = 1;
+            *(s16 *)(s + 0x0) = *(s16 *)(s + 0xE);
         }
-        /* restart the fade running in reverse */
-        *(s16 *)(s + 0x2) = 1;
-        *(s16 *)(s + 0x0) = *(s16 *)(s + 0xE);
+        if (*(s16 *)(s + 0x2) == 0) {
+            dur = IntToFloat(*(s16 *)(s + 0xC));
+            frac = (dur - (f32)*(s16 *)(s + 0x0)) / dur;
+            r = s[0x7] ? FloatToInt((f32)s[0x4] + (f32)(s[0x7] - s[0x4]) * frac) : s[0x4];
+            g = s[0x8] ? FloatToInt((f32)s[0x5] + (f32)(s[0x8] - s[0x5]) * frac) : s[0x5];
+            b = s[0x9] ? FloatToInt((f32)s[0x6] + (f32)(s[0x9] - s[0x6]) * frac) : s[0x6];
+        } else {
+            dur = IntToFloat(*(s16 *)(s + 0xE));
+            frac = (dur - (f32)*(s16 *)(s + 0x0)) / dur;
+            r = s[0x7] ? FloatToInt((f32)s[0x7] + (f32)(s[0x4] - s[0x7]) * frac) : s[0x4];
+            g = s[0x8] ? FloatToInt((f32)s[0x8] + (f32)(s[0x5] - s[0x8]) * frac) : s[0x5];
+            b = s[0x9] ? FloatToInt((f32)s[0x9] + (f32)(s[0x6] - s[0x9]) * frac) : s[0x6];
+        }
+        result = func_002A12C0(target, r, g, b);
     }
-
-    dir = *(s16 *)(s + 0x2);
-    counter = *(s16 *)(s + 0x0);
-
-    if (dir == 0) {
-        frac = ((f32)*(s16 *)(s + 0xC) - (f32)counter) / (f32)*(s16 *)(s + 0xC);
-        r = s[0x7] ? FloatToInt((f32)s[0x4] + (f32)((s32)s[0x7] - (s32)s[0x4]) * frac) : s[0x4];
-        g = s[0x8] ? FloatToInt((f32)s[0x5] + (f32)((s32)s[0x8] - (s32)s[0x5]) * frac) : s[0x5];
-        b = s[0x9] ? FloatToInt((f32)s[0x6] + (f32)((s32)s[0x9] - (s32)s[0x6]) * frac) : s[0x6];
-    } else {
-        frac = ((f32)*(s16 *)(s + 0xE) - (f32)counter) / (f32)*(s16 *)(s + 0xE);
-        r = s[0x7] ? FloatToInt((f32)s[0x7] + (f32)((s32)s[0x4] - (s32)s[0x7]) * frac) : s[0x4];
-        g = s[0x8] ? FloatToInt((f32)s[0x8] + (f32)((s32)s[0x5] - (s32)s[0x8]) * frac) : s[0x5];
-        b = s[0x9] ? FloatToInt((f32)s[0x9] + (f32)((s32)s[0x6] - (s32)s[0x9]) * frac) : s[0x6];
-    }
-    {
-        s32 result = func_002A12C0(target, r, g, b);
-        __asm__ __volatile__(""); /* cc1 2.96 sibling-call suppression (the ROM never sibcalls) */
-        return result;
-    }
+    return result;
 }
 #endif
 
