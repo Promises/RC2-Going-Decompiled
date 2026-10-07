@@ -225,7 +225,7 @@ typedef struct ListenerBlock {
 #define g_soundBankLoadStatus ((s32 *)(g_listenerPosHistory + 0x17A0))
 extern s32 StepMobyMotion(Moby *moby, Vec4 *target, f32 speed);   /* 0x2B6000 returns eventFlags (+0x94) */
 extern s32 StartDialogVoice(s32 a0, s32 a1, s32 a2, s32 a3);      /* 0x2B7878 */
-extern s32 StartAmbientVoice(s32 idx, s32 flags, s32 pan);       /* 0x2B7CA0 */
+extern void StartAmbientVoice(s32 idx, s32 flags, s32 pan);      /* 0x2B7CA0 */
 extern s32 StartSecondaryVoice(s32 idx, s32 flags, s32 pan);     /* 0x2B7D98 */
 extern s32 snd_PlaySample(s64 sampleStart, s64 sampleEnd, s32 a2, s32 a3,
                           s32 pan, s32 a5, s32 a6, s32 a7, s32 a8, s32 a9,
@@ -3339,45 +3339,53 @@ s32 StopDialogVoice(void) {
 /* Start an ambient/secondary-channel voice from sample-table entry `idx`.
  * No-op if the ambient channel is already busy (ambientState != 0) or the entry
  * is empty. Arms the ambient state machine (state -1, flag 1, volume 10, sample
- * rate 48000) and plays the sample pair via snd_PlaySample with
- * OnAmbientVoiceStarted as the start callback.
- * The 12-argument snd_PlaySample marshal (sign-extended s64 sample addresses,
- * the 0/1 sentinels, the callback and context on the stack) is reproduced from
- * C with the real prototype (task #510); flags/pan are word arguments (the ROM
- * stores them with sh and sign-extends pan only for the call), the sample
- * table is reached through a local g_discToc pointer, and the -1 state is the
- * unsigned lui/ori spelling. Residual SCHED-TIEBREAK: the order of the ~30
- * independent arg-setup / state-store instructions (the ROM computes the
- * callback address first, cc1 2.9 last) — sdk29 48.46% / engine96 9.11% (unit
- * objdiff report; order-heavy, the shape is otherwise identical). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", StartAmbientVoice);
+ * rate 48000), records idx/flags/pan, and plays the sample pair
+ * [entry idx, entry idx+1] (each + the global-WAD base) via snd_PlaySample with
+ * OnAmbientVoiceStarted as the start callback and &ambientState as its context.
+ *
+ * params: idx   sample-table index (stride-8 entries at g_discToc + 0x5300)
+ *         flags stashed to ambientArg1
+ *         pan   stashed to ambientArg2 and passed (s16) as the pan argument
+ * return: none. The ROM never sets $2 on any path and neither caller reads it
+ *         (UpdateDialogVoiceManager, OnAmbientVoiceStarted), so it is void.
+ *
+ * MATCHED on the s136os arm (task #1744). Three spellings carry the match:
+ *  - start/end are 64-bit `long` locals narrowed with (s32) at the call. That
+ *    truncation is what makes cc1 emit the ROM's explicit dsll32/dsra32 after
+ *    the addu; an (s64)/(s32) cast on the bare sum folds into the addu and
+ *    emits no extension.
+ *  - the end index is `(idx + 1) << 1`, which keeps the ROM's recomputed
+ *    (idx+1)*8 + table address; `(idx + 1) * 2` folds to idx*8+8 and CSEs.
+ *  - start/end are computed after the state stores, right before the call:
+ *    that order gives the stack-argument temps the ROM's $9/$10/$11. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_StartAmbientVoice)
+S136OS_SLOT(StartAmbientVoice);
 #else
-/* TODO(match): functional equivalent - not byte-exact; SCHED-TIEBREAK, sdk29 48.46% / engine96 9.11%. */
-s32 StartAmbientVoice(s32 idx, s32 flags, s32 pan) {
+void StartAmbientVoice(s32 idx, s32 flags, s32 pan) {
     u8 *toc;
     s32 *sampleTable;
+    long start, end;
     if (g_fileLoadVoiceState.ambientState != 0) {
-        return 0;
+        return;
     }
     toc = g_discToc;
     sampleTable = (s32 *)(toc + 0x5300);
     if (sampleTable[idx * 2] == 0) {
-        return 0;
+        return;
     }
+    g_fileLoadVoiceState.ambientState = 0xFFFFFFFF;
+    g_fileLoadVoiceState.ambientFlag = 1;
     g_fileLoadVoiceState.ambientVolume = 10;
     g_fileLoadVoiceState.ambientSampleRate = 48000;
-    g_fileLoadVoiceState.ambientFlag = 1;
+    g_fileLoadVoiceState.ambientArg1 = flags;
     g_fileLoadVoiceState.ambientArg0 = idx;
     g_fileLoadVoiceState.ambientArg2 = pan;
-    g_fileLoadVoiceState.ambientArg1 = flags;
-    g_fileLoadVoiceState.ambientState = 0xFFFFFFFF;
     g_fileLoadVoiceState.ambientCursor = 0;
-    snd_PlaySample(*(s32 *)(toc + 0x52FC) + sampleTable[idx * 2],
-                   *(s32 *)(toc + 0x52FC) + sampleTable[(idx + 1) * 2],
+    start = sampleTable[idx * 2] + g_dialogSampleBase;
+    end = sampleTable[(idx + 1) << 1] + g_dialogSampleBase;
+    snd_PlaySample((s32)start, (s32)end,
                    0, 0, (s16)pan, 0, 1, 0, 0, 1, (void *)OnAmbientVoiceStarted,
                    (long)(u32)&g_fileLoadVoiceState.ambientState);
-    return 0;
 }
 #endif
 
