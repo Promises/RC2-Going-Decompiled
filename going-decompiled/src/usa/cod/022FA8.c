@@ -559,14 +559,14 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00126DC0);
 
-extern void func_001272A8(void *chan);
+extern u32 func_001272A8(volatile u32 *chcr);  /* defined below */
 extern char D_0013B6F0[];  /* "libdma: sync timeout\n" */
 
 /**
  * libdma channel sync: spin while the STR bit (0x100) of the channel's CHCR
  * register (the first word of the register block `chan`) is set. After 0x1000000
  * polls the countdown goes negative and every further poll prints "libdma: sync
- * timeout" and dumps the channel with func_001272A8; it never gives up.
+ * timeout" and suspends the channel with func_001272A8; it never gives up.
  *
  * Spelled as a pre-decrement from 0x1000000: cc1 then loads the constant with
  * one `lui` and decrements it in the loop preheader, which is the ROM's
@@ -664,7 +664,32 @@ void func_00127220(struct Obj127220 *obj, u32 arg1) {
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00127288);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_001272A8);
+/**
+ * Suspend a DMA channel (libdma, sceDmaPause-shaped; sceDmaSyncChan calls it
+ * on every poll after its timeout). With interrupts disabled (func_0011F5E0),
+ * hold the DMAC (set bit 16 of D_ENABLER 0x1000F520 through D_ENABLEW
+ * 0x1000F590 unless already set), read D_CTRL 0x1000E000 (value unused),
+ * clear the STR bit (0x100) of the channel's CHCR `chcr`, then write the
+ * original D_ENABLER value back and restore interrupts (func_0011F628) if they
+ * were on.
+ * Returns the CHCR value read before STR was cleared.
+ */
+u32 func_001272A8(volatile u32 *chcr) {
+    s32 wasEnabled = func_0011F5E0();
+    u32 enabler = *(volatile u32 *)0x1000F520;
+    u32 old;
+    if (!(enabler & 0x10000)) {
+        *(volatile u32 *)0x1000F590 = enabler | 0x10000;
+    }
+    *(volatile u32 *)0x1000E000;
+    old = *chcr;
+    *chcr = old & 0xFFFFFEFF;
+    *(volatile u32 *)0x1000F590 = enabler;
+    if (wasEnabled) {
+        func_0011F628();
+    }
+    return old;
+}
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00127340);
 
@@ -792,11 +817,44 @@ s32 func_00127720(s32 fd, s32 offset, s32 whence) {
     return r;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_001277F8);
+/* McRead's DMA staging block D_00142000 as func_001277F8 reads it: two byte
+ * runs the IOP returns outside the DMA'd body, each with its length and the
+ * address it belongs at in the caller's buffer. */
+typedef struct {
+    s32 headSize;      /* 0x00: bytes held in head[] */
+    s32 tailSize;      /* 0x04: bytes held in tail[] */
+    u8 *headDst;       /* 0x08: where head[] is copied to */
+    u8 *tailDst;       /* 0x0C: where tail[] is copied to */
+    u8 head[0x40];     /* 0x10 */
+    u8 tail[0x40];     /* 0x50 */
+} McReadFragments;
+
+/**
+ * McRead RPC end-callback (libmc; registered by func_00127888 with the staging
+ * buffer D_00142000 as its argument): read the staging block through the
+ * uncached 0x20000000 mirror and copy its head and tail byte runs, one byte at
+ * a time, to their destinations in the caller's buffer. A zero length skips
+ * that run. The loop bound is re-read from the block on every iteration.
+ */
+void func_001277F8(void *staging) {
+    McReadFragments *frag = (McReadFragments *)((u32)staging | 0x20000000);
+    s32 i;
+    if (frag->headSize != 0) {
+        u8 *dst = frag->headDst;
+        for (i = 0; i < frag->headSize; i++) {
+            *dst++ = frag->head[i];
+        }
+    }
+    if (frag->tailSize != 0) {
+        u8 *dst = frag->tailDst;
+        for (i = 0; i < frag->tailSize; i++) {
+            *dst++ = frag->tail[i];
+        }
+    }
+}
 
 extern void sceSifWriteBackDCache(void *buf, s32 size);  /* cache writeback/invalidate */
 extern u8   D_00142000[];                         /* libmc DMA staging buffer */
-extern void func_001277F8(void);                  /* McRead RPC end-callback */
 
 /** func_00127888 = McRead (libmc): read `size` bytes from fd into `buf`. RPC #5
  *  send buffer carries fd@+0, size@+0xC, buf@+0x18, DMA-staging @+0x1C; flushes
@@ -1386,7 +1444,28 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", IpuSkipBits);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", IpuGetBits);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012C9C8);
+extern void IpuWaitReady(s32 *ipu);
+extern s32 IpuSkipBits(s32 *arg0, s32 arg1);
+extern s32 func_0012C680(s32 *arg0, s32 arg1);
+
+/**
+ * Re-synchronise the IPU bitstream on a start code: wait for the IPU to go idle
+ * (IpuWaitReady), skip the bits up to the next byte boundary (the low 3 bits of
+ * IPU_BP 0x10002020 give the offset; skipped only when non-zero), then step
+ * through the stream a byte at a time (IpuSkipBits(ipu, 8)) until the 24-bit
+ * peek func_0012C680(ipu, 0x18) reads the start-code prefix 0x000001.
+ */
+void func_0012C9C8(s32 *ipu) {
+    s32 pad;
+    IpuWaitReady(ipu);
+    pad = -(*(volatile u32 *)0x10002020 & 7) & 7;
+    if (pad != 0) {
+        IpuSkipBits(ipu, pad);
+    }
+    while (func_0012C680(ipu, 0x18) != 1) {
+        IpuSkipBits(ipu, 8);
+    }
+}
 
 extern s32 IpuSkipBits(s32 *arg0, s32 arg1);
 extern s32 IpuGetBits(s32 *arg0, s32 arg1);
@@ -1485,7 +1564,64 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012D2C0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012D350);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012D420);
+/* The IPU decoder context shared by func_0012D420 and func_00130098 (fields
+ * named only as far as those two show them). frames[] is the 3x4 table of
+ * buffer pointers func_0012FA18 walks: rows at 0x1B8/0x1C8/0x1D8. */
+typedef struct {
+    u8  _pad0[0xF8];
+    s32 state;            /* 0x0F8: 1 is advanced to 2 by func_0012D420 */
+    u8  _padFC[0x118 - 0xFC];
+    s32 count;            /* 0x118 */
+    s32 _pad11C;
+    s32 pending;          /* 0x120: a queued request for func_00130288 */
+    u8  _pad124[0x150 - 0x124];
+    s32 field150;         /* 0x150: 3 selects frame slot 3 instead of slot 0 */
+    u8  _pad154[0x174 - 0x154];
+    s32 mode;             /* 0x174: 3 = single-row path (func_0012DC50) */
+    u8  _pad178[0x1B8 - 0x178];
+    s32 frames[3][4];     /* 0x1B8 */
+} IpuDecoder;
+
+extern void func_0012DC50(IpuDecoder *dec, s32 frame, s32 last);
+extern void func_0012DD60(IpuDecoder *dec, s32 frameA, s32 frameB, s32 last);
+
+/**
+ * When `enable` is set, finish a run of `count` items on decoder `dec`: in
+ * mode 3 through func_0012DC50 with row 0's frame, otherwise through
+ * func_0012DD60 with rows 1 and 2; slot 3 of each row is used when field150
+ * is 3, slot 0 otherwise. Either way the last index (count - 1) is passed.
+ * Then advance state 1 to 2.
+ *
+ * func_0012DD60 takes FOUR arguments here (it ignores the fourth); with three,
+ * cc1 has no use for $a3 and the ROM's `addiu $7,$7,-1` disappears. The slot
+ * is chosen into locals before ONE call per mode: two calls per mode give a
+ * longer body with the calls duplicated.
+ */
+void func_0012D420(IpuDecoder *dec, s32 count, s32 enable) {
+    if (enable != 0) {
+        s32 a, b;
+        if (dec->mode == 3) {
+            if (dec->field150 == 3) {
+                a = dec->frames[0][3];
+            } else {
+                a = dec->frames[0][0];
+            }
+            func_0012DC50(dec, a, count - 1);
+        } else {
+            if (dec->field150 == 3) {
+                a = dec->frames[1][3];
+                b = dec->frames[2][3];
+            } else {
+                a = dec->frames[1][0];
+                b = dec->frames[2][0];
+            }
+            func_0012DD60(dec, a, b, count - 1);
+        }
+    }
+    if (dec->state == 1) {
+        dec->state = 2;
+    }
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012D4B0);
 
@@ -1619,7 +1755,28 @@ s32 func_0012E9D0(u64 *arg0) {
     return bit;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012EA18);
+/**
+ * Skip `bytes` bytes of the bitstream reader `rec` (the record func_0012E890
+ * initialises): clear the bit buffer (field 0x0) and its fill count (0x10),
+ * add bytes*8 to the 64-bit consumed-bit total at 0x18, re-derive the byte
+ * cursor (0xC) as the buffer base (0x8) plus total/8 — wrapping it back by the
+ * span (0x28) once it reaches the end (0x24) — then refill via
+ * func_0012E8E8(rec, 0).
+ *
+ * The two clears must come first in the source: written after the total is
+ * updated, cc1 issues the total's `sd` ahead of them, where the ROM has it
+ * after.
+ */
+void func_0012EA18(struct E890Rec *rec, s32 bytes) {
+    rec->cleared0 = 0;
+    rec->cleared10 = 0;
+    rec->cleared18 += bytes * 8;
+    rec->limit2 = rec->limit + (s32)(rec->cleared18 >> 3);
+    if ((u32)rec->limit2 >= (u32)rec->end) {
+        rec->limit2 -= rec->span;
+    }
+    func_0012E8E8((u64 *)rec, 0);
+}
 
 /**
  * Advance a ring-buffer read/write cursor. arg0 is a buffer descriptor:
@@ -1959,15 +2116,33 @@ void func_00130088(s32 *arg0) {
     func_0012B198(1);
 }
 
-/* func_00130098(obj): advance/finalise a pending transfer and clear the
- * in-progress flag (field_0x120). If a request is queued (field_0x120 != 0)
- * dispatch via func_00130288(obj, &D_0013BDC8); else by mode field_0x174 finish
- * via func_0012DC50(obj, field_0x1BC, field_0x118 - 1) (mode 3) or
- * func_0012DD60(obj, field_0x1CC, field_0x1DC). ~85% — the original tests the
- * mode with a plain `bne` and hoists `count-1` into its delay slot, but ee-gcc
- * picks the branch-likely `bnel` and fills the slot with the next load. A
- * branch-form/scheduling shape this cc1 won't reproduce. Left as INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00130098);
+extern char D_0013BDC8[];
+
+/**
+ * Finalise the decoder's current transfer and clear its pending flag
+ * (0x120). If a request is pending, report it through func_00130288(obj,
+ * D_0013BDC8); otherwise finish the run of `count` (0x118) items with slot 1
+ * of the frame table — in mode 3 via func_0012DC50 (row 0), else via
+ * func_0012DD60 (rows 1 and 2) — passing the last index count - 1.
+ *
+ * Two things the in-tree "won't reproduce" note this replaces had missed:
+ * func_0012DD60 is called with FOUR arguments (count - 1 is the fourth, in
+ * $a3 — the `addiu $7,$6,-1` the ROM hoists into the mode test's delay slot,
+ * which is why that test is a plain `bne`), and `count` is read once, before
+ * the pending test (the ROM loads it in that branch's delay slot).
+ */
+void func_00130098(s32 *obj) {
+    IpuDecoder *dec = (IpuDecoder *)obj;
+    s32 count = dec->count;
+    if (dec->pending != 0) {
+        func_00130288((s32)obj, D_0013BDC8);
+    } else if (dec->mode == 3) {
+        func_0012DC50(dec, dec->frames[0][1], count - 1);
+    } else {
+        func_0012DD60(dec, dec->frames[1][1], dec->frames[2][1], count - 1);
+    }
+    dec->pending = 0;
+}
 
 /**
  * func_00130118: initialise subsystem 1 (func_0012B198(1)), then program the
@@ -2086,16 +2261,40 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00130428);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_001306D0);
 
-/* func_001307B0(obj, cmd, madr): restart the GIF/PATH3 DMA pipeline — tear down
- * sub-object 2 (func_0012FA98), flush (IpuWaitReady) and reset the GIF mode
- * register (0x10002000=0); then with interrupts disabled program channel
- * 0x1000B400 (MADR 0x1000B410 = madr & 0x0FFFFFFF, QWC 0x1000B420 = 4, CHCR
- * 0x1000B400 = 0x101), restoring interrupts if on; finally issue IPU command
- * `cmd` (func_0012C380), flush again and tear down sub-object 3. 99.82% — every
- * instruction matches except the frame size: the original reserves a 0x60 frame
- * (saves parked at +0x20..+0x50) where ee-gcc only needs 0x50. A frame-size-only
- * constant mismatch this cc1 won't reproduce. Left as INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_001307B0);
+/**
+ * func_001307B0(obj, cmd, madr): restart the IPU input DMA — run entry 2 of
+ * the sub-object's table (func_0012FA98 on obj field 0x858, request index 2),
+ * wait for the IPU (IpuWaitReady), reset IPU_CMD 0x10002000 to 0 and wait
+ * again; then with interrupts disabled program channel 0x1000B400 (MADR
+ * 0x1000B410 = madr & 0x0FFFFFFF, QWC 0x1000B420 = 4, CHCR 0x1000B400 =
+ * 0x101), restoring interrupts if they were on; finally issue IPU command
+ * `cmd` (func_0012C380), wait once more and run table entry 3.
+ *
+ * The request is a 0x20-byte buffer (as in func_0012FAE8): that is what
+ * puts the saves at +0x20..+0x50 in the ROM's 0x60 frame. A 0x10-byte request
+ * gives a 0x50 frame and is the "frame size only" residual the in-tree note
+ * this replaces recorded.
+ */
+void func_001307B0(s32 *obj, u32 cmd, u32 madr) {
+    s32 req[8];
+    s32 wasEnabled;
+    req[0] = 2;
+    func_0012FA98((s32 *)obj[0x216], req);
+    IpuWaitReady(obj);
+    *(volatile u32 *)0x10002000 = 0;
+    IpuWaitReady(obj);
+    wasEnabled = func_0011F5E0();
+    *(volatile u32 *)0x1000B410 = madr & 0x0FFFFFFF;
+    *(volatile u32 *)0x1000B420 = 4;
+    *(volatile u32 *)0x1000B400 = 0x101;
+    if (wasEnabled) {
+        func_0011F628();
+    }
+    func_0012C380(obj, cmd);
+    IpuWaitReady(obj);
+    req[0] = 3;
+    func_0012FA98((s32 *)obj[0x216], req);
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00130890);
 
@@ -2250,10 +2449,35 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00131424);
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0013153C);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00131540);
+extern s32 func_0011E0D8(const char *path, s32 mode);
+extern s32 func_0011E4E0(s32 fd, void *buf, s32 size);
+extern s32 func_0011E360(s32 fd);
+extern s8 D_00138158[];    /* ROM version string block */
+extern char D_0013BF50[];  /* path opened read-only */
+extern char D_0013BF60[];  /* open-failure message */
+extern char D_0013BF78[];  /* read-failure message */
 
-extern void func_00131540(void);
-extern s8 D_00138158[];
+/**
+ * Return the ROM version block D_00138158, reading it on first use: when its
+ * first byte is still 0, open D_0013BF50 (mode 1) with func_0011E0D8, read
+ * 0xE bytes into the block with func_0011E4E0 and close it (func_0011E360).
+ * A -1 from the open or the read is only reported through Kprintf; the read
+ * and the close still go ahead.
+ */
+s8 *func_00131540(void) {
+    if (D_00138158[0] == 0) {
+        s32 fd = func_0011E0D8(D_0013BF50, 1);
+        if (fd == -1) {
+            Kprintf(D_0013BF60);
+        }
+        if (func_0011E4E0(fd, D_00138158, 0xE) == -1) {
+            Kprintf(D_0013BF78);
+        }
+        func_0011E360(fd);
+    }
+    return D_00138158;
+}
+
 
 /**
  * Lazily initialise the global block D_00138158 (calling func_00131540() the
@@ -2469,11 +2693,35 @@ void func_001319E0(u8 *arg0) {
     }
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00131A08);
+/**
+ * Add `minutes` to the packed-BCD clock record `clock` (the layout
+ * func_00131780 / func_001317E8 convert): decode it to binary, add to the
+ * minutes byte (+2), carry whole hours into the hour (func_001319B0 forward,
+ * func_001319E0 back) 60 minutes at a time, store the minutes and re-encode.
+ * The forward carry runs only while the total exceeds 60, so a total of
+ * exactly 60 is stored as-is.
+ */
+void func_00131A08(u8 *clock, s32 minutes) {
+    s32 m;
+    func_00131780(clock);
+    m = clock[2] + minutes;
+    if (m >= 0) {
+        while (m > 60) {
+            m -= 60;
+            func_001319B0(clock);
+        }
+    } else {
+        while (m < 0) {
+            m += 60;
+            func_001319E0(clock);
+        }
+    }
+    clock[2] = m;
+    func_001317E8(clock);
+}
 
 extern s32 func_00131670(void);
 extern s32 func_001316C8(void);
-extern void func_00131A08(void *arg0, s32 value);
 
 /**
  * func_00131A98(arg0): combine the two clock/territory getters and dispatch.
