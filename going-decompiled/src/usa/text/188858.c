@@ -362,7 +362,7 @@ s32 func_0028BE10(s32 a, s32 b, s32 c, s32 d, s32 e, s32 f, s32 g); /* returns a
 void func_0029DB10(s32 a, s32 b);
 void func_002B1B48(s32 a, s32 b, s32 c);
 void ResetDebugHeap(void);
-void *DebugMalloc(s32 size);
+void *DebugMalloc(s32 size, s32 arg2, void *file, s32 line);
 void func_0028BF18(HudElement *w);
 s32 DequeueCinematic(CinematicQueue *q, s32 *outId, s32 *outFlags);
 s32 RequestGameStateChange(s32 a, s32 b, s32 c, s32 d, s32 e);
@@ -2947,26 +2947,61 @@ s32 func_0028B560(s32 name) {
 }
 
 extern void func_00283438(void *base, s32 size); /* clear/init a memory block */
+extern char D_1A8E08[]; /* "hud.cpp": DebugMalloc's __FILE__ argument */
 
+/*
+ * g_hudMobySpawnStartGp: an ASSEMBLER alias of g_hudMobySpawnStart sized 4
+ * (#8036 construct, RULING #8620; same shape as g_mobyTableBaseGp). The
+ * file-scope `.extern g_hudMobySpawnStart, 64` makes every access to the real
+ * name absolute; InitHudMobyTable's store in the ROM is %gp_rel (0x28B6B0, in
+ * the jal slot), so that store goes through this alias. The relocation names
+ * g_hudMobySpawnStart.
+ */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", InitHudMobyTable);
+__asm__(".extern g_hudMobySpawnStartGp, 4\n\tg_hudMobySpawnStartGp = g_hudMobySpawnStart");
+extern void *g_hudMobySpawnStartGp;
 #else
+#define g_hudMobySpawnStartGp g_hudMobySpawnStart
+#endif
+
 /**
  * First-time setup of the HUD moby-table context.
  *
- * Rebuilds all 13 D_2552B0 widget records (registering each via func_0028BE10 and
- * seeding its fields: key = -1, +0x20 = 0x10000, +0x6C = -6, +0x7C/field04/field24
- * = 0). Then, if the HUD moby table has not been allocated yet, DebugMalloc's the
- * 0x2800-byte table and the 0x1400-byte aux block. Records the table extent
- * (g_hudMobyTableBase..End, spawn start), clears + initialises it (func_00283438),
- * tags its +0x20 byte 0xFF, rebuilds the weapon-select wheel (func_0028C728) and
- * snaps the bolt counter (ResetBoltCounterHud).
+ * Clears g_pActiveTextTable+0x30/+0x34, then rebuilds all 13 D_2552B0 widget
+ * records (registering each via func_0028BE10 and seeding its fields: key = -1,
+ * +0x20 = 0x10000, +0x6C = -6, +0x7C/field04/field24 = 0). If the HUD moby
+ * table has not been allocated yet, DebugMalloc's the 0x2800-byte table and the
+ * 0x1400-byte aux block, tagged "hud.cpp" lines 0x2AB/0x2AC. Records the table
+ * extent (g_hudMobyTableBase..End, spawn start), clears + initialises it
+ * (func_00283438), tags its +0x20 byte 0xFF, rebuilds the weapon-select wheel
+ * (func_0028C728) and snaps the bolt counter (ResetBoltCounterHud).
+ *
+ * MATCHED byte-exact on the s136os arm at the unit's -O2 default (RULING
+ * #9450; task #1833). Each of these was measured necessary by removing it
+ * alone (solo s136os harness, verify_match_unit words differing / built length
+ * in brackets):
+ *   - DebugMalloc called with its real four arguments (size, 0, __FILE__,
+ *     __LINE__), as the ROM passes them; the one-argument call [72 vs 80
+ *     words];
+ *   - the +0x30/+0x34 clears through g_pActiveTextTableAbs: the ROM stores
+ *     them absolute (`lui $1; sw $0,%lo`), the real name is %gp_rel here
+ *     [78 vs 80 words];
+ *   - the spawn-start store through g_hudMobySpawnStartGp: the ROM's is
+ *     %gp_rel in the jal slot, while the file-scope `.extern ,64` makes the
+ *     real name absolute [19/82].
+ *
+ * GUARD (task #1269): on EE this C is the image's body, compiled alone by SN
+ * 2.95.3 v1.36 -fopt-stack (tools/ee/s136os_functions.txt) and spliced over the
+ * S136OS_SLOT line by tools/ee/s136os_splice.sh. On native it is plain C.
  */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_InitHudMobyTable)
+S136OS_SLOT(InitHudMobyTable);
+#else
 void InitHudMobyTable(void) {
     s32 i;
 
-    *(s32 *)((u8 *)&g_pActiveTextTable + 0x30) = 0;
-    *(s32 *)((u8 *)&g_pActiveTextTable + 0x34) = 0;
+    *(s32 *)((u8 *)&g_pActiveTextTableAbs + 0x30) = 0;
+    *(s32 *)((u8 *)&g_pActiveTextTableAbs + 0x34) = 0;
 
     for (i = 0; i < 13; i++) {
         D_2552B0[i].key = -1;
@@ -2979,12 +3014,12 @@ void InitHudMobyTable(void) {
     }
 
     if (g_hudMobyTableBase == 0) {
-        g_hudMobyTableBase = DebugMalloc(0x2800);
-        g_hudMobyAuxBlockBase = DebugMalloc(0x1400);
+        g_hudMobyTableBase = DebugMalloc(0x2800, 0, D_1A8E08, 0x2AB);
+        g_hudMobyAuxBlockBase = DebugMalloc(0x1400, 0, D_1A8E08, 0x2AC);
     }
 
     g_hudMobyTableEnd = (u8 *)g_hudMobyTableBase + 0x2800;
-    g_hudMobySpawnStart = g_hudMobyTableBase;
+    g_hudMobySpawnStartGp = g_hudMobyTableBase;
     func_00283438(g_hudMobyTableBase, 0x2800);
     *((u8 *)g_hudMobyTableBase + 0x20) = 0xFF;
     func_0028C728();
@@ -3423,6 +3458,9 @@ void ResetDebugHeap(void) {
  * Bump-allocate from the debug pool.
  *
  *   size  bytes requested
+ *   arg2  always 0 at the known call sites; unused
+ *   file  the caller's source-file name (e.g. D_1A8E08 "hud.cpp"); unused
+ *   line  the caller's source line; unused
  *   ->    the old cursor, or 0 when fewer than `size` bytes remain
  *
  * Lazily initialises the pool (ResetDebugHeap) on first use. The fit test uses
@@ -3447,7 +3485,7 @@ void ResetDebugHeap(void) {
 #if !defined(TARGET_NATIVE) && !defined(S136OS_DebugMalloc)
 S136OS_SLOT(DebugMalloc);
 #else
-void *DebugMalloc(s32 size) {
+void *DebugMalloc(s32 size, s32 arg2, void *file, s32 line) {
     u8 *result;
 
     if (g_debugMallocCursor == 0) {
