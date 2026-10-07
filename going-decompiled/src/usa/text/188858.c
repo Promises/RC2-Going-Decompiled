@@ -3328,54 +3328,105 @@ void SwapMobyTableContext(s32 newId) {
     SWAP_VOLATILE(g_hudMobyAuxBlockBase) = aux;
 }
 
-/* func_0028BE10(packed, b, c, d, e, f, g): update HUD widget list slot
- * `packed & 0xF` of the D_2552B0 table (stride 0x90). Compares the slot's stored
- * layout fields (+0x20..+0x38) and the high nibble mask (packed & 0xFFF0)
- * against the new values; when any differ (or while not in gameState 5) it
- * rewrites them, bumps the slot's generation counter (+0x64) and the global
- * generation at g_pActiveTextTable+0x30, marks the slot dirty (+0x68=1, clears
- * +0x70/+0x7C) and, when the mask selects bit 0x20, re-inits it via
- * func_0028BF18. Returns the slot's generation counter.
- *
- * MATCH-WALL: a 7-way field-equality early-out chain (register colouring +
- * gameState-5/slot-2 branch-likely + the +0x30 gp/absolute-mix reload) cc1 won't
- * reproduce, so the #ifndef arm stays INCLUDE_ASM; the #else arm is the faithful
- * functional model (engine 2.96 = no byte-match anyway). */
+/*
+ * RegisterHudElement's addressing aliases (the #8036 construct, RULING #8620 /
+ * #9574):
+ *   - g_nGameStateAbs: the ROM reads g_nGameState with `lui $4; lw $4,%lo`
+ *     (0x28BE30), where the rest of the unit reads it %gp_rel. Sized 16 so gas
+ *     expands cc1's one-insn `lw` absolutely.
+ *   - g_hudElementGeneration = g_pActiveTextTable + 0x30 (0x1B17F0): the
+ *     registry's generation counter. The ROM reads it %gp_rel in the delay slot
+ *     of each of the seven field compares (0x28BE64..0x28BEAC). cc1 only fills
+ *     a delay slot with a one-insn load, and it sizes `g_pActiveTextTable+48`
+ *     (an offset past a 4-byte object) as two, so it emits `nop`s instead. A
+ *     4-byte scalar at that address is what the ROM's TU saw.
+ *   - g_hudElementGenerationAbs: the same address for the ROM's absolute
+ *     store `lui $1; sw $2,%lo(g_pActiveTextTable + 0x30)($1)` (0x28BEE0).
+ * The relocations name g_nGameState and g_pActiveTextTable+0x30, as the ROM's
+ * do. Natively they are the plain objects.
+ */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028BE10);
+__asm__(".extern g_nGameStateAbs, 16\n\tg_nGameStateAbs = g_nGameState");
+extern s32 g_nGameStateAbs;
+__asm__(".extern g_hudElementGeneration, 4\n\tg_hudElementGeneration = g_pActiveTextTable + 0x30");
+extern s32 g_hudElementGeneration;
+__asm__(".extern g_hudElementGenerationAbs, 16\n\tg_hudElementGenerationAbs = g_pActiveTextTable + 0x30");
+extern s32 g_hudElementGenerationAbs;
 #else
-s32 func_0028BE10(s32 typeAndSlot, s32 a2, s32 a3, s32 a4, s32 a5, s32 a6, s32 a7) {
+#define g_nGameStateAbs g_nGameState
+#define g_hudElementGeneration (*(s32 *)((u8 *)&g_pActiveTextTable + 0x30))
+#define g_hudElementGenerationAbs g_hudElementGeneration
+#endif
+
+/**
+ * RegisterHudElement (USA 0x0028BE10): stage a widget's layout in one slot of
+ * the 13-entry HUD element registry D_2552B0 (stride 0x90).
+ *
+ *   typeAndSlot  low nibble = registry slot; bits 4..15 = the widget's flag
+ *                mask, staged at +0x24
+ *   iconId       staged at +0x20
+ *   initFn       staged at +0x30
+ *   tickFn       staged at +0x34
+ *   drawFn       staged at +0x38
+ *   valuePtr     staged at +0x2C
+ *   value        staged at +0x28
+ *   ->           the slot's generation id (+0x64); 0 when refused
+ *
+ * In game state 5 only slots 0 and 2 may register; any other slot returns 0
+ * without touching the registry. If the slot already holds exactly these seven
+ * values, nothing is written and its current generation is returned. Otherwise
+ * the slot takes the next global generation (g_hudElementGeneration, which is
+ * then bumped), the seven values are staged, the slot is marked dirty (+0x68 = 1)
+ * and +0x70/+0x7C are cleared. When the new flag mask and the slot's live flags
+ * (+0x04) share bit 0x20, the widget is activated at once (ActivateHudElement).
+ *
+ * MATCHED byte-exact on the s136os arm at the unit's -O2 default (RULING #9450;
+ * task #1751). Each of these was measured necessary by removing it alone (solo
+ * s136os harness, verify_match_unit words differing in brackets):
+ *   - the g_nGameStateAbs read [58/66, built one word short];
+ *   - `slot != 2` tested before `slot != 0`, the ROM's branch order [53/66];
+ *   - the store through g_hudElementGenerationAbs rather than the gp alias
+ *     [16/66];
+ *   - the generation incremented in place (`generation++`) and stored after the
+ *     seven field stores, so one register carries it [52/68 as `+ 1`].
+ * Without g_hudElementGeneration (reading `g_pActiveTextTable + 0x30`
+ * directly) the compare chain's delay slots stay `nop` [37/68].
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0028BE10)
+S136OS_SLOT(func_0028BE10);
+#else
+s32 func_0028BE10(s32 typeAndSlot, s32 iconId, s32 initFn, s32 tickFn, s32 drawFn,
+                  s32 valuePtr, s32 value) {
     s32 slot = typeAndSlot & 0xF;
     s32 mask = typeAndSlot & 0xFFF0;
     u8 *e = (u8 *)&D_2552B0[slot];
-    s32 counter;
+    s32 generation;
 
-    if (g_nGameState == 5 && slot != 0 && slot != 2) {
+    if (g_nGameStateAbs == 5 && slot != 2 && slot != 0) {
         return 0;
     }
 
-    if (*(s32 *)(e + 0x2C) == a6 && *(s32 *)(e + 0x28) == a7 &&
-        *(s32 *)(e + 0x20) == a2 && *(s32 *)(e + 0x24) == mask &&
-        *(s32 *)(e + 0x30) == a3 && *(s32 *)(e + 0x34) == a4 &&
-        *(s32 *)(e + 0x38) == a5) {
-        return *(s32 *)(e + 0x64);   /* already registered — return its generation */
-    }
-
-    counter = *(s32 *)((u8 *)&g_pActiveTextTable + 0x30);
-    *(s32 *)(e + 0x64) = counter;
-    *(s32 *)((u8 *)&g_pActiveTextTable + 0x30) = counter + 1;
-    *(s32 *)(e + 0x2C) = a6;
-    *(s32 *)(e + 0x28) = a7;
-    *(s32 *)(e + 0x20) = a2;
-    *(s32 *)(e + 0x24) = mask;
-    *(s32 *)(e + 0x30) = a3;
-    *(s32 *)(e + 0x34) = a4;
-    *(s32 *)(e + 0x38) = a5;
-    *(s32 *)(e + 0x68) = 1;
-    *(s32 *)(e + 0x7C) = 0;
-    *(s32 *)(e + 0x70) = 0;
-    if ((mask & *(s32 *)(e + 0x4) & 0x20) != 0) {
-        func_0028BF18((HudElement *)e);
+    if (*(s32 *)(e + 0x2C) != valuePtr || *(s32 *)(e + 0x28) != value ||
+        *(s32 *)(e + 0x20) != iconId || *(s32 *)(e + 0x24) != mask ||
+        *(s32 *)(e + 0x30) != initFn || *(s32 *)(e + 0x34) != tickFn ||
+        *(s32 *)(e + 0x38) != drawFn) {
+        generation = g_hudElementGeneration;
+        *(s32 *)(e + 0x64) = generation;
+        generation++;
+        *(s32 *)(e + 0x2C) = valuePtr;
+        *(s32 *)(e + 0x28) = value;
+        *(s32 *)(e + 0x20) = iconId;
+        *(s32 *)(e + 0x30) = initFn;
+        *(s32 *)(e + 0x34) = tickFn;
+        *(s32 *)(e + 0x38) = drawFn;
+        g_hudElementGenerationAbs = generation;
+        *(s32 *)(e + 0x68) = 1;
+        *(s32 *)(e + 0x24) = mask;
+        *(s32 *)(e + 0x7C) = 0;
+        *(s32 *)(e + 0x70) = 0;
+        if ((mask & *(s32 *)(e + 0x4) & 0x20) != 0) {
+            func_0028BF18((HudElement *)e);
+        }
     }
     return *(s32 *)(e + 0x64);
 }
@@ -5091,80 +5142,92 @@ s32 func_0028E7E8(void *slot) {
 }
 #endif
 
-/* func_0028E9A0(runTickCallbacks): per-frame update pass over the 13-entry HUD
- * element registry D_2552B0 (stride 0x90). After a one-shot (re)bind pass
- * (func_0028EB10), for each record it:
- *   - clamps the +0x7C per-frame countdown up to 0xA when the record's +0x04
- *     live-flags has bit 0x10 set OR the global text gate (g_pActiveTextTable+0x34)
- *     is active;
- *   - if that countdown is >= 2, decrements it and (while the +0x6C phase < 0x1E)
- *     bumps the phase, counting the record as "active" in the return value;
- *   - otherwise (countdown <= 1, still decremented toward 0) counts the +0x6C phase
- *     DOWN, floored at -6;
- *   - when the record is dirty (+0x68 != 0) and its phase has reached the -6 floor,
- *     re-activates it via func_0028BF18;
- *   - when runTickCallbacks is set and the record has a +0x14 tick callback, invokes
- *     it with the record.
- * Returns the count of records whose countdown was still running (>= 2).
- *
- * NOTE: +0x14/+0x6C/+0x7C are unnamed in Rec2552B0 and reached by raw offset here.
- * This function mutates +0x7C as a per-frame countdown, which conflicts with the
- * "+0x7C = element type tag" note in the HudElement field map above — flagged for a
- * Track-B revisit; the #else body faithfully mirrors the asm regardless.
- *
- * Matching build stays INCLUDE_ASM (callee-saves + gp/absolute-mix + a jalr callback
- * and peeled likely-branch scan cc1 won't reproduce); #else is the portable body. */
 extern void func_0028EB10(void); /* text/188858, defined below (gp-gated rebind) */
+
+/*
+ * g_hudTextGateAbs = g_pActiveTextTable + 0x34 (0x1B17F4): a global gate that
+ * holds every HUD widget's countdown up, read with the ROM's absolute
+ * `lui $2; lw $2,%lo(g_pActiveTextTable + 0x34)($2)` (0x28E9F4). The #8036
+ * construct (RULING #8620 / #9574); the relocation names g_pActiveTextTable+0x34.
+ */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028E9A0);
+__asm__(".extern g_hudTextGateAbs, 16\n\tg_hudTextGateAbs = g_pActiveTextTable + 0x34");
+extern s32 g_hudTextGateAbs;
+#else
+#define g_hudTextGateAbs (*(s32 *)((u8 *)&g_pActiveTextTable + 0x34))
+#endif
+
+/**
+ * TickHudElements (USA 0x0028E9A0): the per-frame pass over the 13-entry HUD
+ * element registry D_2552B0 (stride 0x90).
+ *
+ *   runTickCallbacks  when non-zero, each widget's tick callback (+0x14) runs
+ *   ->                the number of widgets whose countdown was still >= 2
+ *
+ * Re-binds the registry first (func_0028EB10). Then, for each widget:
+ *   - +0x7C is a per-frame countdown (it is not the type tag the HudElement
+ *     field map describes; that map needs revisiting). It is raised to 0xA when
+ *     the widget's live flags (+0x04) have bit 0x10 or g_hudTextGateAbs is set,
+ *     and then decremented toward 0;
+ *   - while the countdown is still running (>= 2 before the decrement) the
+ *     phase at +0x6C counts up to 0x1E and the widget is counted; otherwise the
+ *     phase counts down to a floor of -6;
+ *   - a dirty widget (+0x68) whose phase has reached -6 is activated
+ *     (ActivateHudElement), which promotes its staged layout;
+ *   - the tick callback runs last.
+ *
+ * MATCHED byte-exact on the s136os arm at the unit's -O2 default (RULING #9450;
+ * task #1751), first rewrite. The shape that matters: one record pointer
+ * stepped by 0x90 against `end = base + 0x750`, compared SIGNED (the ROM's `slt`,
+ * hence the s32 casts), and the countdown decrement folded into the running
+ * test so the ROM's two `blez` share one target. Measured by removing each
+ * alone (solo s136os harness, verify_match_unit words differing): the
+ * g_hudTextGateAbs read [54/74, built one word short]; the signed compare
+ * [1/74, the `sltu`].
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0028E9A0)
+S136OS_SLOT(func_0028E9A0);
 #else
 s32 func_0028E9A0(s32 runTickCallbacks) {
-    Rec2552B0 *rec = &D_2552B0[0];
-    Rec2552B0 *end = (Rec2552B0 *)((u8 *)&D_2552B0[0] + 0x750);
     s32 activeCount = 0;
+    u8 *rec;
+    u8 *end;
+    s32 countdown;
+    s32 phase;
 
     func_0028EB10();
-
+    rec = (u8 *)D_2552B0;
+    end = rec + 0x750;
     do {
-        u8  *r = (u8 *)rec;
-        s32 *countdown = (s32 *)(r + 0x7C); /* per-frame countdown */
-        s32 *phase = (s32 *)(r + 0x6C);     /* animation phase, floored at -6 */
-        s32  t;
-
-        if ((rec->field04 & 0x10) ||
-            (*(s32 *)((u8 *)&g_pActiveTextTable + 0x34) != 0)) {
-            if (*countdown < 0xA) {
-                *countdown = 0xA;
+        if ((*(s32 *)(rec + 0x4) & 0x10) || g_hudTextGateAbs != 0) {
+            if (*(s32 *)(rec + 0x7C) < 0xA) {
+                *(s32 *)(rec + 0x7C) = 0xA;
             }
         }
-
-        t = *countdown;
-        if (t >= 1) {
-            *countdown = t - 1;
-        }
-        if (t >= 2) {
+        countdown = *(s32 *)(rec + 0x7C);
+        if (countdown > 0 && (countdown--, *(s32 *)(rec + 0x7C) = countdown, countdown > 0)) {
             activeCount++;
-            if (*phase < 0x1E) {
-                *phase += 1;
+            phase = *(s32 *)(rec + 0x6C);
+            if (phase < 0x1E) {
+                *(s32 *)(rec + 0x6C) = phase + 1;
             }
-        } else if (*phase >= -5) {
-            *phase -= 1;
+        } else {
+            phase = *(s32 *)(rec + 0x6C);
+            if (phase >= -5) {
+                *(s32 *)(rec + 0x6C) = phase - 1;
+            }
         }
-
-        if (rec->field68 != 0 && *phase == -6) {
+        if (*(s32 *)(rec + 0x68) != 0 && *(s32 *)(rec + 0x6C) == -6) {
             func_0028BF18((HudElement *)rec);
         }
-
         if (runTickCallbacks != 0) {
-            void (*tickFn)(HudElement *) = *(void (**)(HudElement *))(r + 0x14);
+            void (*tickFn)(HudElement *) = *(void (**)(HudElement *))(rec + 0x14);
             if (tickFn != 0) {
                 tickFn((HudElement *)rec);
             }
         }
-
-        rec++;
-    } while (rec < end);
-
+        rec += 0x90;
+    } while ((s32)rec < (s32)end);
     return activeCount;
 }
 #endif
@@ -5290,64 +5353,137 @@ void func_0028ECA8(void) {
     }
 }
 
-/* func_0028ECC0(): per-frame HUD tick (0x28ECC0). Bails (clearing the HUD CLUT
- * slot) if that slot is already busy or the screen is mid white-fade. Otherwise
- * runs each of the 13 D_2552B0 widget records' +0x18 init callback (via jalr,
- * passing the record), then advances the nanotech-orb HUD counters:
- *   - orb+0xC = 0x64 when both orb counters are idle OR we're not in gameplay
- *     (g_nGameState != 0);
- *   - in gameplay (g_nGameState == 0) with a counter active: ramp orb+0x8 toward
- *     0x80 (when orb+0x4 is running) or back to 0, tick orb+0x4 down, and reset
- *     it from the 0x3E8 sentinel.
- *
- * WALL (matching build): callee-saves + the indirect-call (jalr) callback loop
- * over gp/absolute-mixed globals cc1 does not reproduce — stays INCLUDE_ASM.
- * This #else is faithful COVERAGE only. */
+/*
+ * DrawHudElements' addressing aliases (the #8036 construct, RULING #8620 /
+ * #9574). The ROM addresses each of these words both ways: %gp_rel where the
+ * access sits in a branch delay slot, absolute (`lui; op %lo`) everywhere else.
+ * cc1 fills a delay slot only with a one-insn access, so each word that needs
+ * both forms has a 4-byte gp alias and a 16-sized absolute alias:
+ *   g_hudClutBusyAbs          g_hudClutSlots + 0x10      (0x1B1828)
+ *   g_screenFadeWhiteLevelAbs g_screenFadeWhite + 0x4    (0x1B1528)
+ *   g_hudTextColourAbs        g_pActiveTextTable + 0x3C  (0x1B17FC)
+ *   g_hudFadeTimer[Abs]       g_pActiveNanotechOrb + 0x4 (0x1B1730)
+ *   g_hudFadeAlpha[Abs]       g_pActiveNanotechOrb + 0x8 (0x1B1734)
+ *   g_hudFadeIdleAbs          g_pActiveNanotechOrb + 0xC (0x1B1738)
+ * (0x1B1730..0x1B1738 are three words of their own that splat names off
+ * g_pActiveNanotechOrb; only this function references them, FACT #5652.)
+ * The three absolute aliases at offsets +0x4/+0x8 are equated AFTER the function
+ * (bottom of this block). Equated before their use, gas resolves the equate and
+ * takes the 1..8 offset as a small-data size, so it picks %gp_rel whatever the
+ * alias's own `.extern` says. Undefined at the use, gas takes the alias's 16 and
+ * expands absolute. This is 1EFFC0.cpp's g_hudClutSlot4Abs case. Measured here:
+ * all three came out %gp_rel when equated first. The relocations name the real
+ * symbol plus the offset, as the ROM's do. Natively they are the words
+ * themselves.
+ */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028ECC0);
+__asm__(".extern g_hudClutBusyAbs, 16\n\tg_hudClutBusyAbs = g_hudClutSlots + 0x10");
+extern s32 g_hudClutBusyAbs;
+__asm__(".extern g_screenFadeWhiteLevelAbs, 16");
+extern s32 g_screenFadeWhiteLevelAbs;
+__asm__(".extern g_hudTextColourAbs, 16\n\tg_hudTextColourAbs = g_pActiveTextTable + 0x3C");
+extern s32 g_hudTextColourAbs;
+__asm__(".extern g_hudFadeTimer, 4\n\tg_hudFadeTimer = g_pActiveNanotechOrb + 0x4");
+extern s32 g_hudFadeTimer;
+__asm__(".extern g_hudFadeTimerAbs, 16");
+extern s32 g_hudFadeTimerAbs;
+__asm__(".extern g_hudFadeAlpha, 4\n\tg_hudFadeAlpha = g_pActiveNanotechOrb + 0x8");
+extern s32 g_hudFadeAlpha;
+__asm__(".extern g_hudFadeAlphaAbs, 16");
+extern s32 g_hudFadeAlphaAbs;
+__asm__(".extern g_hudFadeIdleAbs, 16\n\tg_hudFadeIdleAbs = g_pActiveNanotechOrb + 0xC");
+extern s32 g_hudFadeIdleAbs;
 #else
 extern u8 g_screenFadeWhite[];      /* +0x4 = white-fade level (0 = no fade) */
-extern u8 g_pActiveNanotechOrb[];   /* nanotech-orb HUD counters at +0x4/+0x8/+0xC */
+extern u8 g_pActiveNanotechOrb[];   /* the three HUD fade words at +0x4/+0x8/+0xC */
+#define g_hudClutBusyAbs (*(s32 *)((u8 *)&g_hudClutSlots + 0x10))
+#define g_screenFadeWhiteLevelAbs (*(s32 *)(g_screenFadeWhite + 0x4))
+#define g_hudTextColourAbs (*(s32 *)((u8 *)&g_pActiveTextTable + 0x3C))
+#define g_hudFadeTimer (*(s32 *)(g_pActiveNanotechOrb + 0x4))
+#define g_hudFadeTimerAbs g_hudFadeTimer
+#define g_hudFadeAlpha (*(s32 *)(g_pActiveNanotechOrb + 0x8))
+#define g_hudFadeAlphaAbs g_hudFadeAlpha
+#define g_hudFadeIdleAbs (*(s32 *)(g_pActiveNanotechOrb + 0xC))
+#endif
 
-void func_0028ECC0(void)
-{
-    s32 *hudClut = (s32 *)((u8 *)&g_hudClutSlots + 0x10);
-    s32 *orb4 = (s32 *)(g_pActiveNanotechOrb + 0x4);
-    s32 *orb8 = (s32 *)(g_pActiveNanotechOrb + 0x8);
-    s32 *orbC = (s32 *)(g_pActiveNanotechOrb + 0xC);
+/**
+ * DrawHudElements (USA 0x0028ECC0): the per-frame HUD draw pass.
+ *
+ * Params: none. Return: none.
+ *
+ * If the HUD CLUT slot is busy (g_hudClutBusyAbs) or the screen is mid
+ * white-fade, it clears the busy word and draws nothing. Otherwise it sets the
+ * HUD text colour word (0xFFFFF0), calls each of the 13 registry widgets' draw
+ * callback (+0x18) with the widget, and then steps the HUD fade:
+ *   - outside gameplay (g_nGameState != 0), or with both the timer and the
+ *     alpha at 0, the idle word is set to 100;
+ *   - otherwise the alpha ramps by 0x10 toward 0x80 while the timer runs and
+ *     toward 0 once it has stopped, and the timer counts down. A timer at the
+ *     0x3E8 sentinel is reset to 0.
+ *
+ * MATCHED byte-exact on the s136os arm at the unit's -O2 default (RULING #9450;
+ * task #1751). Measured, solo s136os harness (verify_match_unit words
+ * differing in brackets):
+ *   - the fade arm is an if/else with the idle store as the else, so it lands
+ *     last as in the ROM [38/76 with the early-return shape];
+ *   - the fade words are read and written through their aliases, not cached in
+ *     locals, so the timer and alpha land in the ROM's $3 and $2 [18/76 with
+ *     `timer`/`alpha` locals];
+ *   - the empty fence (RULING #8483) after the busy-word clear is a SCHEDULING
+ *     DEVICE. Without it, reorg moves that two-insn store into the delay slot of
+ *     the `b` to the epilogue. cc1 sizes the store as one insn, gas expands it to
+ *     two, and the slot ends up `nop` where the ROM has the epilogue's
+ *     `ld $16` [2/76]. A volatile store does the same job; the fence is the
+ *     lighter device.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0028ECC0)
+S136OS_SLOT(func_0028ECC0);
+#else
+void func_0028ECC0(void) {
+    u8 *rec;
     s32 i;
 
-    if (*hudClut != 0 || *(s32 *)(g_screenFadeWhite + 0x4) != 0) {
-        *hudClut = 0;
+    if (g_hudClutBusyAbs != 0 || g_screenFadeWhiteLevelAbs != 0) {
+        g_hudClutBusyAbs = 0;
+        __asm__ __volatile__("");
         return;
     }
-
-    *(s32 *)((u8 *)&g_pActiveTextTable + 0x3C) = 0xFFFFF0;
-    for (i = 0; i < 13; i++) {
-        void (*cb)(Rec2552B0 *) = *(void (**)(Rec2552B0 *))((u8 *)&D_2552B0[i] + 0x18);
-        if (cb != 0) {
-            cb(&D_2552B0[i]);
+    g_hudTextColourAbs = 0xFFFFF0;
+    rec = (u8 *)D_2552B0;
+    for (i = 12; i >= 0; i--) {
+        void (*drawFn)(HudElement *) = *(void (**)(HudElement *))(rec + 0x18);
+        if (drawFn != 0) {
+            drawFn((HudElement *)rec);
         }
+        rec += 0x90;
     }
-
-    if ((*orb4 == 0 && *orb8 == 0) || g_nGameState != 0) {
-        *orbC = 0x64;
-    } else {
-        if (*orb4 != 0) {
-            s32 v = *orb8 + 0x10;
-            *orb8 = (v < 0x81) ? v : 0x80;   /* ramp up, clamp to 0x80 */
+    if ((g_hudFadeTimerAbs != 0 || g_hudFadeAlphaAbs != 0) && g_nGameState == 0) {
+        if (g_hudFadeTimerAbs != 0) {
+            g_hudFadeAlpha += 0x10;
+            if (g_hudFadeAlpha >= 0x81) {
+                g_hudFadeAlpha = 0x80;
+            }
         } else {
-            s32 v = *orb8 - 0x10;
-            *orb8 = (v >= 0) ? v : 0;        /* ramp down, clamp to 0 */
+            g_hudFadeAlpha -= 0x10;
+            if (g_hudFadeAlpha < 0) {
+                g_hudFadeAlphaAbs = 0;
+            }
         }
-        if (*orb4 != 0) {
-            *orb4 = *orb4 - 1;
+        if (g_hudFadeTimerAbs != 0) {
+            g_hudFadeTimerAbs = g_hudFadeTimerAbs - 1;
         }
-        if (*orb4 == 0x3E8) {
-            *orb4 = 0;
+        if (g_hudFadeTimerAbs == 0x3E8) {
+            g_hudFadeTimer = 0;
         }
+    } else {
+        g_hudFadeIdleAbs = 0x64;
     }
 }
+#endif
+#ifndef TARGET_NATIVE
+__asm__("g_screenFadeWhiteLevelAbs = g_screenFadeWhite + 0x4");
+__asm__("g_hudFadeTimerAbs = g_pActiveNanotechOrb + 0x4");
+__asm__("g_hudFadeAlphaAbs = g_pActiveNanotechOrb + 0x8");
 #endif
 
 /* Resolve the live HUD icon-map index for icon `name` at upgrade `level`.
