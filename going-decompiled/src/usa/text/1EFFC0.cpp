@@ -1757,20 +1757,21 @@ void BuildVendorItemList(s32 arg) {
 #endif
 
 /* func_002F8038 globals (declared for the TARGET_NATIVE #else only). */
-extern s32 D_1AD240;   /* start-index seed: (D_1AD240 != 0) ? +1 : 1 */
-extern s32 D_1AD238;   /* companion latch, cleared to 0 on reset */
-extern s32 D_1AD2E8[]; /* 5 source value words copied into the built entries */
+extern s32 g_vendorEntryArmor;      /* armor tier latched by EnterVendorMenu */
+extern s32 g_vendorHasPendingArmor; /* pending-armor flag; this clear is its only write */
+extern s32 D_1AD2E8[];              /* 5 source value words copied into the built entries */
 extern u8  D_1395B8[]; /* story-flag block; per-slot upgrade bitmask byte @+0x8D */
 extern s32 IsVendorUpgradesUnlocked(void);
 
 /** func_002F8038 — rebuild the vendor upgrade-slot entry list. Starting from
- *  slot (D_1AD240 ? D_1AD240+1 : 1), walk slots [start,5) and append an entry for
+ *  slot g_vendorEntryArmor+1 (both arms of the ROM's movn give that: the armor
+ *  tiers above the one worn on entry), walk slots [start,5) and append an entry for
  *  each slot that is EITHER flagged in the per-slot upgrade bitmask
  *  (D_1395B8[0x8D] bit i, only for i<8) OR — when not flagged — permitted by
  *  IsVendorUpgradesUnlocked(). Each appended entry (stride 0xC at g_vendorUi+0x140)
  *  stores (i + 0xEA92) at +0x0, the slot's source word D_1AD2E8[i] at +0x4, and the
  *  slot index i at +0x8; the running count lives at +0x740. Resets the count and
- *  the D_1AD238 latch first. Note the flagged path SKIPS the unlock call. */
+ *  the g_vendorHasPendingArmor flag first. Note the flagged path SKIPS the unlock call. */
 /* RESIDUAL CLASS (task #576): UNDIAGNOSED
  *   Both arms measured at unit objdiff (objdiff_build.sh + unit_report.sh,
  *   whole-unit blanket screen, clean tree): sdk29 42.54%, engine96 48.78%
@@ -1785,9 +1786,9 @@ void func_002F8038(void) {
     s32 srcVals[5];
     s32 i, k, count, emit;
 
-    i = (D_1AD240 != 0) ? D_1AD240 + 1 : 1;
+    i = (g_vendorEntryArmor != 0) ? g_vendorEntryArmor + 1 : 1;
     *(s32 *)((char *)&g_vendorUi + 0x740) = 0;
-    D_1AD238 = 0;
+    g_vendorHasPendingArmor = 0;
 
     for (k = 0; k < 5; k++) {
         srcVals[k] = D_1AD2E8[k];
@@ -2082,7 +2083,7 @@ void func_002F85B8(void) {
  *
  * Zeroes the whole g_vendorUi block (FillMemory32), sets the panel vertical-scale
  * (g_nVendorBuyQuantity+0x38) to 1.0 (NTSC) or 0x3F89D89D (PAL), and latches the
- * current armor (D_1AD240 = g_equippedArmor). Then:
+ * current armor (g_vendorEntryArmor = g_equippedArmor). Then:
  *   - spawn mode (arg < 4): SpawnMoby(0xB) a preview moby, seed its transform
  *     (+0x10) from the D_1AD260/D_1AD270 template plus g_cameraPos (z negated),
  *     zero its scratch quad (+0xF0), face it (+0xF8 = pi), register it
@@ -2092,7 +2093,7 @@ void func_002F85B8(void) {
  *   - reuse mode (arg is a moby p): pick the tab from the moby class (+0xAA) and,
  *     for class 0xB, its controller sub-state (*(p+0x68)+0x94); classes 0x1309/
  *     0xDDC store the moby into +0x28.
- * A forced tab override (D_1AD244, -1 = none) wins if set. Then initialise the rest
+ * A forced tab override (g_vendorForcedTab, -1 = none) wins if set. Then initialise the rest
  * of the shop: language-derived +0x44, camera/zoom scratch (g_nVendorBuyQuantity
  * +0x3C..+0x50, D_1AD2B0/B4/B8), retune music (func_00132AF8) and max the dialog
  * voices; build the item list for the chosen tab (BuildVendorItemList / func_002F8038
@@ -2135,10 +2136,10 @@ extern u8    D_1AD260[16];            /* preview transform template A */
 extern u8    D_1AD270[16];            /* preview transform template B (widescreen) */
 extern u8    D_1AD290[16];            /* light-matrix transform template */
 extern u8    D_1AD2A0[16];            /* light-matrix fill template */
-extern s32   D_1AD244;                /* forced initial tab (-1 = none) */
-extern s32   D_1AD2B0;                /* zoom/lerp scratch (cleared) */
-extern f32   D_1AD2B4;                /* zoom rate (0.8) */
-extern f32   D_1AD2B8;                /* zoom rate (1.0) */
+extern s32   g_vendorForcedTab;       /* forced initial tab (-1 = none); never written */
+extern s32   D_1AD2B0;                /* written 0 here and in ExitVendorMenu; no reader */
+extern f32   D_1AD2B4;                /* written 0.8 here, 1.0 on exit; no reader */
+extern f32   D_1AD2B8;                /* written 1.0 here, 1.1 on exit; no reader */
 extern u8    g_cameraPos[];           /* camera world position vec4 */
 extern u8    g_dirLightMatrices[];    /* directional light matrix block */
 extern u8    g_soundBankHandlesBlk[]; /* sound-bank handle block base */
@@ -2190,7 +2191,7 @@ void EnterVendorMenu(s32 arg) {
     }
 
     *(s32 *)(ui + 0x60) = 0;
-    D_1AD240 = g_equippedArmor;
+    g_vendorEntryArmor = g_equippedArmor;
 
     if ((u32)arg < 4) {
         s32 mode = arg;
@@ -2261,7 +2262,7 @@ void EnterVendorMenu(s32 arg) {
 
     /* forced-tab override wins if latched */
     {
-        s32 forced = D_1AD244;
+        s32 forced = g_vendorForcedTab;
         if (forced != -1) {
             *(s32 *)(ui + 0x50) = forced;
         }
@@ -2894,10 +2895,12 @@ void VendorPurchaseStateMachine(s32 *pConfirm, s32 *pAdjustable) {
  * status word (|= 0x100), sets the UI phase (+0x0 = 2), and resets the vendor
  * buy-quantity/zoom scratch (g_nVendorBuyQuantity +0x3C/+0x40/+0x44 and D_1AD2B0/B4/B8).
  * Then, per the active tab (+0x50):
- *   - tab 3 (armor): pick the armor id (D_1AD238 ? D_1AD23C : D_1AD240), equip and
- *     reload the player model (LoadPlayerDisplayModel); if a selection was latched
- *     (D_1AD238 != 0) refresh the armor's caption (GetLocalizedString/func_0029DAD0
- *     over the D_1AD388 string-id table).
+ *   - tab 3 (armor): pick the armor tier (g_vendorHasPendingArmor ?
+ *     g_vendorPendingArmor : g_vendorEntryArmor), equip it and reload the player
+ *     model (LoadPlayerDisplayModel); if the pending flag is set, show the tier's
+ *     message (GetLocalizedString/func_0029DAD0 over g_armorTierMessageTextId).
+ *     Nothing in the ROM sets the flag or writes g_vendorPendingArmor (task #1771),
+ *     so in retail this path re-equips the armor worn on entry and shows nothing.
  *   - tab 2 (ship): if the ship-customization id changed, reload the ship model
  *     (LoadShipDisplayModel) and fix up its display record; reload the ship texture
  *     when the palette id (D_1A7AFA & 0x1F) changed; then func_002E6FB0(0).
@@ -2917,11 +2920,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", ExitVendorMenu)
 #else
 extern u8   g_cameraRot[];           /* saved world-camera transform block */
 extern u8   g_nVendorBuyQuantity[];  /* vendor buy-quantity + camera param scratch */
-extern s32  D_1AD2B0;                /* zoom/lerp scratch (cleared) */
-extern f32  D_1AD2B4;                /* zoom rate (1.0) */
-extern f32  D_1AD2B8;                /* zoom rate (1.1) */
-extern u16  D_1AD23C;                /* armor id when a selection is latched */
-extern s32  D_1AD388[5];             /* per-armor caption string-id table */
+extern s32  D_1AD2B0;                /* written 0 here and in EnterVendorMenu; no reader */
+extern f32  D_1AD2B4;                /* written 1.0 here, 0.8 on entry; no reader */
+extern f32  D_1AD2B8;                /* written 1.1 here, 1.0 on entry; no reader */
+extern u16  g_vendorPendingArmor;    /* armor tier equipped when the pending flag is set */
+extern s32  g_armorTierMessageTextId[5]; /* text id per armor tier, [0] = 0 */
 extern s16  g_equippedArmor;         /* current player armor tier */
 extern u8   g_levelDialogToc[];      /* +0x13B0 = ship display record */
 extern s32  g_shipCustomization;     /* selected ship-customization id */
@@ -2962,13 +2965,14 @@ void ExitVendorMenu(void) {
     *(s32 *)(g_nVendorBuyQuantity + 0x3C) = 0x60;
 
     if (*(s32 *)(ui + 0x50) == 3) {
-        s32 armorSel = (D_1AD238 != 0) ? (s32)D_1AD23C : (s32)(u16)D_1AD240;
+        s32 armorSel = (g_vendorHasPendingArmor != 0) ? (s32)g_vendorPendingArmor
+                                                      : (s32)(u16)g_vendorEntryArmor;
         s32 nameTable[5];
 
         g_equippedArmor = (s16)armorSel;
         LoadPlayerDisplayModel(g_equippedArmor);
-        memcpy(nameTable, D_1AD388, sizeof(nameTable));
-        if (D_1AD238 != 0) {
+        memcpy(nameTable, g_armorTierMessageTextId, sizeof(nameTable));
+        if (g_vendorHasPendingArmor != 0) {
             void *str = GetLocalizedString(nameTable[g_equippedArmor]);
             func_0029DAD0(str, -1);
         }
