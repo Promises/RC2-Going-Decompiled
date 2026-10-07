@@ -264,8 +264,11 @@ extern Rec2552B0 D_2552B0[];   /* 13-entry record table (0x2552B0) */
  *   +0x64 s32   element handle id (key) CONFIRMED (RegisterHudElement +0x64)
  *   +0x68 s32   dirty flag              CONFIRMED (RegisterHudElement=1 / Activate=0)
  *   +0x70 s32   (cleared on register)   PROBABLE (RegisterHudElement +0x70=0)
- *   +0x74 s32   smoothed display value  CONFIRMED (LayoutHudCounterDigits +0x74)
- *   +0x78 s32   clamped display / mode  CONFIRMED (LayoutHudCounterDigits +0x78)
+ *   +0x74 s32   current value: counter  CONFIRMED (task #1792; see below)
+ *               shown value / wheel
+ *               selected slot index
+ *   +0x78 s32   counter: clamped target CONFIRMED (LayoutHudCounterDigits +0x78)
+ *               wheel: reset countdown  LIKELY (task #1792; see below)
  *   +0x7C s32   showTimer: display-hold CONFIRMED (task #1770; see below)
  *               countdown, in frames
  * +0x7C showTimer: frames left before the element starts to hide. It is a
@@ -293,6 +296,33 @@ extern Rec2552B0 D_2552B0[];   /* 13-entry record table (0x2552B0) */
  *  0xA->0x8, 5->4, read from asm/eu 188748), which a frame count needs and a
  *  type id would not. (The "-2 wheel" value once cited here is stored at +0x74
  *  by the wheel inits func_0028C7F0 / func_0028D6D8, not at +0x7C.)
+ * +0x74: the element's current value, whose meaning belongs to the element
+ *  KIND (each kind's init/tick/draw callbacks own it). It is not a type tag:
+ *  no instruction in this unit compares it with -2 or with any other id
+ *  constant. Every ROM writer, from the asm (task #1792):
+ *    counter kinds -- the value on screen, chasing the +0x78 target:
+ *      0x28C3C8, 0x28C3D4  func_0028C390 (setup): = +0x78, i.e. *valuePtr
+ *                          capped at +0x8; 0x1869F if +0xC is null/unaligned
+ *      0x28C5EC            func_0028C4C8 (tick): steps it toward +0x78 by an
+ *                          eased amount -- the "smoothed display value"
+ *      0x2907D8/E0/E8      func_002907C0 (ammo tick): = *valuePtr clamped to
+ *                          [0, +0x8], no easing
+ *    wheel kinds -- the selected slot index, negative = nothing selected:
+ *      0x28C81C, 0x28D70C  func_0028C7F0, func_0028D6D8 (inits): -2
+ *      0x28CA18, 0x28D834  func_0028C840, func_0028D720 (ticks): -1 on reset,
+ *                          i.e. on a dpad press, a centred stick, or +0x78
+ *                          counting down to -1 (+0x78 is then latched to
+ *                          0x10000FF, which stops the countdown)
+ *      0x28CC08, 0x28CDA0, 0x28CE04 (func_0028C840) and 0x28D8F4, 0x28DA50
+ *                          (func_0028D720): the slot picked by stick angle
+ *                          or by a dpad / face-button neighbour link
+ *  Wheel readers test only the sign (func_0028DC28 draws the cursor when
+ *  >= 0; DrawWeaponSelectWheel, func_0028C840 index the 0x1C-stride grid) or
+ *  compare it with its value earlier in the frame (func_0028D720 0x28DA58
+ *  `beq $2,$7`: a change plays the nav cue). So the init's -2 is a starting
+ *  "no selection yet" value that differs from the -1 a reset writes; nothing
+ *  tests for -2 itself. The counter draw func_0028E640 reads +0x74 (0x28E6DC)
+ *  as the value it scales and draws.
  * (Fields +0x4C..+0x57, +0x6C, the +0x42..+0x47 sub-bytes etc. are not yet
  *  pinned and remain inside the blob.) */
 typedef struct HudElement {
@@ -4031,7 +4061,7 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/188858", func_0
 
 /* func_0028C4C8(w): per-frame smooth-roll update for a HUD counter widget.
  *
- * (1) Re-clamps the smoothed target (+0x78) from the live value pointer (+0xC):
+ * (1) Re-clamps the target (+0x78) from the live value pointer (+0xC):
  *     max(*valPtr, 0), bounded above by the raw value (+0x8).
  * (2) When the displayed value (+0x74) has not yet reached the target (+0x78)
  *     and the widget is "settled" (+0x6C >= 0x18), eases +0x74 toward +0x78:
@@ -4062,7 +4092,7 @@ void func_0028C4C8(HudElement *w) {
     s32 *valPtr = *(s32 **)(b + 0xC);
     s32  cur, target, showTimer;
 
-    /* (1) clamp the smoothed target from the live value pointer */
+    /* (1) clamp the target from the live value pointer */
     if (valPtr != 0) {
         s32 v   = *valPtr;
         s32 raw = *(s32 *)(b + 0x8);
@@ -4260,8 +4290,10 @@ void func_0028C7A8(void) {
 
 /* Build the weapon-select wheel widget `w`: rebuild its icon list
  * (func_0028C728), then seed the wheel geometry/state (half-extents 0xD2/0xC8
- * at +0x58/+0x5C, type tag -2 at +0x74, mode 0x1E at +0x78, cleared +0x70 word
- * and the two +0x48/+0x4A cursor halves).
+ * at +0x58/+0x5C, selected slot -2 = none yet at +0x74, reset countdown 0x1E
+ * at +0x78, cleared +0x70 word and the two +0x48/+0x4A cursor halves). The
+ * locals `typeTag` and `mode` below predate task #1792 and are left as they are
+ * because this body is matched; see HudElement for what +0x74/+0x78 hold.
  *
  * BYTE-EXACT on the s136os arm (task #1329): SN 2.95.3 v1.36 -fopt-stack
  * reproduces all 20 ROM words. Two phrasings carry the match and are not
@@ -4781,9 +4813,10 @@ s32 DrawWeaponSelectWheel(HudElement *w) {
 /**
  * Seed a HUD list widget `w`: register the list descriptor (8 entries,
  * callback &D_1A8DD8) in g_hudMobySpawnStart+0x28/+0x2C, set the widget
- * geometry (+0x58 = 0xD2, +0x5C = 0xC8), type tag (+0x74 = -2) and mode
- * (+0x78 = 0x1E), clear its two 16-bit cursors (+0x48/+0x4A) and reset the
- * wheel cursor D_1A8D48.
+ * geometry (+0x58 = 0xD2, +0x5C = 0xC8), selected slot (+0x74 = -2, none
+ * yet) and reset countdown (+0x78 = 0x1E), clear its two 16-bit cursors
+ * (+0x48/+0x4A) and reset the wheel cursor D_1A8D48. (The locals `tag` and
+ * `mode` predate task #1792; see HudElement for what +0x74/+0x78 hold.)
  *
  *   w  the widget record being initialised
  *
