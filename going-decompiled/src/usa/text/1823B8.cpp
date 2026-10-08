@@ -249,17 +249,121 @@ void func_00282A50(void) {
 void func_00282A78(void) {
 }
 
-/* Billboard/quad sprite packet builder: transforms a position against the
- * camera (Vec4SubVu0 / Vec3CrossVu0 / Vec3RescaleToLenVu0 / Vec4ScaleVu0 /
- * Vec4AddVu0 VU0 ops), clamps the projected corner coords to [0,1], and emits a
- * UI sprite primitive via func_00282798 + func_00281540. One lq/sq Vec4 copy;
- * $16..$23, $30, $31 saved 8 bytes apart from 0xE0 plus $f20..$f23 over a
- * 0x150 frame. Left as INCLUDE_ASM because no byte-exact C has been written,
- * NOT because it is hardware code: the body has 0 COP2/VU0-macro and 0 MMI ops
- * and the packed saves are the s136os arm's (FACT #9771) — the VU0 work is in
- * the helper functions it calls. Only the NATIVE port needs the platform
- * render backend (parked, RULING #9559). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1823B8", func_00282A80);
+extern void func_0027CDC8(void *worldPos, f32 *outX, f32 *outY);
+
+/**
+ * func_00282A80 (DrawScreenProjectedDecalSprite) — draw a camera-facing quad
+ * twice: once textured, once sampling the frame buffer behind it.
+ * @param size       corner scale (the unit quad D_1A9FD0 is scaled by it)
+ * @param jitter     screen-UV offset for the second pass when no UVs are given
+ *                   (corner i moves by -jitter in S when i >> 1, in T when
+ *                   i & 1, else by +jitter)
+ * @param towardCam  distance the quad is pulled toward the camera
+ * @param pos        world position (copied; the caller's vector is not written)
+ * @param alpha      alpha byte; the colour is (alpha << 24) | 0x808080
+ * @param uvs        four pointers to (S, T) pairs for the second pass, or NULL
+ *                   to take each corner's projected screen position
+ * The basis and corners are func_00282868's, without the roll. Pass 1:
+ * texture 0x3B, blend row 5, STs (0,0) (0,1) (1,0) (1,1). Pass 2: texture -1
+ * (the frame buffer, FACT #9771), blend row 6, STs from `uvs` or from
+ * func_0027CDC8 (WorldPointToScreenUv) plus the jitter, each clamped to
+ * [0, 1]. Between the passes it rescales the pull-toward-camera vector by
+ * towardCam + 0.01 and never reads the result.
+ *
+ * Compiled on the s136os arm (SN 1.36 -fopt-stack: $16..$23/$30/$31 saved
+ * 8 bytes apart, FACT #8810). `origin` must stay the local right after
+ * `basis`: func_00283A70 reads it as the matrix's fourth row (sp+0xC0).
+ * Two empty asm fences (RULING #8483) that emit nothing; task #1850 removed
+ * each ALONE and counted differing words of the 244 (solo s136 compile,
+ * assembled through the build's li.s expansion, relocations masked):
+ *  - `o` tied before the copy (1/244): the copy stores through $18
+ *    (`sq $2,0($18)`) instead of cse folding it to `192($sp)`;
+ *  - `pos` tied after the copy (4/244): keeps `sq` directly under `lq`.
+ * Also load-bearing (removing each alone): `keep` as a second pointer to
+ * `offset` while `off` walks the corners (191/244), `mtx = view` after the
+ * add (215/244), the walking `s`/`t` pointers instead of quad.st[i][k]
+ * (228/244: they make the ROM's reload after each store), `lo` for the
+ * zero compares only, the stores writing 0.0f directly (109/244), the
+ * `+= cond ? -jitter : jitter` form (65/244), `origin` as its own local
+ * (28/244) and the chained colour assignment (4/244).
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00282A80)
+S136OS_SLOT(func_00282A80);
+#else
+void func_00282A80(f32 size, f32 jitter, f32 towardCam, Vec4 *pos, s32 alpha,
+                   f32 **uvs) {
+    UiSpritePacket quad;
+    Vec4 basis[3];
+    Vec4 origin;
+    Vec4 offset;
+    Vec4 *view;
+    Vec4 *off;
+    Vec4 *mtx;
+    Vec4 *o;
+    Vec4 *keep;
+    f32 *s;
+    f32 *t;
+    s32 i;
+    u32 colour;
+
+    o = &origin;
+    __asm__ __volatile__("" : "+r"(o));
+    *o = *pos;
+    __asm__ __volatile__("" : "+r"(pos));
+    view = &basis[0];
+    Vec4SubVu0(view, &g_cameraPos, o);
+    Vec3RescaleToLenVu0(view, 1.0f, view);
+    Vec3CrossVu0(&basis[1], view, &g_heroFacingDir);
+    Vec3RescaleToLenVu0(&basis[1], 1.0f, &basis[1]);
+    Vec3CrossVu0(&basis[2], &basis[1], view);
+    off = &offset;
+    Vec4ScaleVu0(off, towardCam, view);
+    Vec4AddVu0(o, o, off);
+    mtx = view;
+    keep = off;
+    s = &quad.st[0][0];
+    t = &quad.st[0][1];
+    off = quad.corner;
+    for (i = 0; i < 4; i++) {
+        Vec4ScaleVu0(off, size, &D_1A9FD0[i]);
+        func_00283A70(off, off, mtx);
+        off++;
+    }
+    func_00282798(&quad, 0x3B, 5, 0x80);
+    colour = (alpha << 24) | 0x808080;
+    quad.colour[0] = quad.colour[1] = quad.colour[2] = quad.colour[3] = colour;
+    quad.st[0][0] = 0.0f; quad.st[0][1] = 0.0f;
+    quad.st[1][0] = 0.0f; quad.st[1][1] = 1.0f;
+    quad.st[2][0] = 1.0f; quad.st[2][1] = 0.0f;
+    quad.st[3][0] = 1.0f; quad.st[3][1] = 1.0f;
+    func_00281540(&quad, 0, 0);
+    func_00282798(&quad, -1, 6, 0x80);
+    Vec4ScaleVu0(keep, towardCam + 0.01f, mtx);
+    if (uvs != 0) {
+        f32 lo = 0.0f;
+        for (i = 0; i < 4; i++) {
+            s[i * 2] = uvs[i][0];
+            t[i * 2] = uvs[i][1];
+            if (1.0f < s[i * 2]) s[i * 2] = 1.0f;
+            else if (s[i * 2] < lo) s[i * 2] = 0.0f;
+            if (1.0f < t[i * 2]) t[i * 2] = 1.0f;
+            else if (t[i * 2] < lo) t[i * 2] = 0.0f;
+        }
+    } else {
+        f32 lo = 0.0f;
+        for (i = 0; i < 4; i++) {
+            func_0027CDC8(&quad.corner[i], &quad.st[i][0], &quad.st[i][1]);
+            s[i * 2] += (i >> 1) ? -jitter : jitter;
+            t[i * 2] += (i & 1) ? -jitter : jitter;
+            if (1.0f < s[i * 2]) s[i * 2] = 1.0f;
+            else if (s[i * 2] < lo) s[i * 2] = 0.0f;
+            if (1.0f < t[i * 2]) t[i * 2] = 1.0f;
+            else if (t[i * 2] < lo) t[i * 2] = 0.0f;
+        }
+    }
+    func_00281540(&quad, 0, 0);
+}
+#endif
 
 /* MIS-SPLIT fragment: three bare `addiu $sp` /nop stack-restore tails (0x150,
  * 0x30, 0x20) — alignment/epilogue debris, not a real function entry. Leave as
