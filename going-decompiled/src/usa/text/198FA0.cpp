@@ -4,10 +4,13 @@
  * text/198FA0 — save-game + GUI-manager wrapper unit (pilot c-carve out of the
  * text/16E980 asm segment).
  *
- * The matcher builds THIS unit at -O2 -G8 -fno-gcse (see the per-unit GFLAG/
- * CC1EXTRA override in tools/ee/objdiff_build.sh / diff.sh / build.sh): the
- * gameplay-text TUs were built by a later SN cc1 without the load-PRE pass
- * (-fno-gcse reproduces it), and the g_guiInstance forwarding wrappers need
+ * The matcher builds THIS unit's 2.9 compile at -O2 -G8 -fno-gcse (see the
+ * per-unit GFLAG/CC1EXTRA override in tools/ee/objdiff_build.sh / diff.sh /
+ * build.sh / unit_flags.sh): that model holds the gameplay-text TUs were built
+ * by a later SN cc1 without the load-PRE pass (-fno-gcse reproduces it). The
+ * s136os splice compile is NOT pinned: it runs at the -O2 default (S136EXTRA="",
+ * RULING #9910), because under -fno-gcse five members cannot match and with
+ * gcse on every s136os row does (FACT #9896). The g_guiInstance forwarding wrappers need
  * the cc1-small / assembler-absolute extern model below to reproduce the
  * original prologue scheduling (addiu $sp BEFORE the adjacent lui/lw pair).
  *

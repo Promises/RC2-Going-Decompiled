@@ -99,7 +99,7 @@ if [ -d "$SRC" ]; then
       */usa/text/188858.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse"; S136EXTRA="";; # Tier-1-A carve (.text mid 2). S136EXTRA: the s136os arm compiles at the -O2 default (RULING #9450, FACTs #9441/#9449); the 2.9 compile keeps -fno-gcse
       */usa/text/1907F0.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # level-init/screen-fade sub-TU
       */usa/text/191238.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse"; S136EXTRA="";; # Tier-1-B carve (.text mid 3). S136EXTRA: the s136os arm compiles at the -O2 default (RULING #9070, FACT #9069); the 2.9 compile keeps -fno-gcse
-      */usa/text/198FA0.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse" S136EXTRA="";; # PENDING RULING (task #1918): s136os arm unpinned, 2.9 arm keeps -fno-gcse # save/GUI-wrapper unit
+      */usa/text/198FA0.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse"; S136EXTRA="";; # S136EXTRA: the s136os arm compiles at the -O2 default (RULING #9910, FACT #9896); the 2.9 compile keeps -fno-gcse. # save/GUI-wrapper unit
       */usa/text/1A00F0.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # Tier-1-C carve (.text tail head)
       */usa/text/1A8180.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse -fno-strict-aliasing"; S136EXTRA="-fno-strict-aliasing";; # game-state cluster sub-TU. S136EXTRA: the s136os arm drops -fno-gcse only and keeps -fno-strict-aliasing (RULING #9336, FACTs #9333/#9334); the 2.9 compile keeps both
       */usa/text/250080.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # segment-tail FMV/debug-stub sub-TU
