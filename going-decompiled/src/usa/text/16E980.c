@@ -1449,26 +1449,63 @@ void func_00270D60(void) {
 }
 #endif
 
+/* EE_REG: pin a live local to a register on the EE arm only (RULING #8598,
+ * REGISTER-PIN DEVICE); empty on native. Used by func_00270E40 and
+ * func_00270EB8 below. */
+#ifndef TARGET_NATIVE
+#define EE_REG(r) __asm__(r)
+#else
+#define EE_REG(r)
+#endif
+
 /* func_00270E40: when no transition is pending (kind == 0), seed the saved
  * source pair from the current pair: src0 = cur0, src1 = cur1. If the
  * transition mode byte (+0x3) is 2, src0 is first offset by the hero-relative
- * delta (g_heroPos + 0xD0) before being saved. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00270E40);
+ * delta (g_heroPos + 0xD0) before being saved. No params, no return.
+ * MATCHED on the s136os arm (task #1970). The ROM copies each qword through
+ * address registers (`addiu a1,s0,0xc0; addiu v1,s0,0x50; lq v0,0(v1);
+ * sq v0,0(a1)`), the 16-byte block-move shape func_00270EB8 documents; SN 1.36
+ * cc1 folds the addresses into offset-form lq/sq instead. Devices, each
+ * priced by removing it ALONE in a solo s136 compile (positional word
+ * differences of 29, relocations masked):
+ *   - EMPTY asm fences (RULING #8483; emit nothing) on dst/src (4 words) and
+ *     on src1/dst1 (removing it: 27 words, 11 differences) keep each address
+ *     in its own register;
+ *   - the untied volatile barrier taking `src` as an input (5 words) holds the
+ *     pendingKind test below the first sq: without it cc1 schedules the
+ *     `li $2,2` into the lq->sq slot and every later register shifts;
+ *   - `src1` pinned to $4 (RULING #8598; 5 words), the ROM's register for the
+ *     second pair's source (a $3 pin on dst1 instead is equivalent; one pin
+ *     suffices);
+ *   - dst1 is formed before src1 in the source (3 words).
+ * GUARD: on EE this C is compiled alone by SN 2.95.3 v1.36 -fopt-stack
+ * (tools/ee/s136os_functions.txt) and spliced over the S136OS_SLOT line by
+ * tools/ee/s136os_splice.sh; native compiles it, EE_REG empty and the fences
+ * emitting nothing, as the plain two-qword copy. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00270E40)
+S136OS_SLOT(func_00270E40);
 #else
 extern void Vec4AddVu0(Vec4 *dst, const Vec4 *a, const Vec4 *b);
 extern Vec4 g_heroPos_D0;   /* g_heroPos + 0xD0 */
-/* TODO(match): functional equivalent - not byte-exact; two callee-saves at
-   8-byte slot spacing (the 0x20-vs-0x10 packed-save wall). */
 void func_00270E40(void) {
     CameraTransitionState *t = &g_cameraTransitionState;
 
     if (t->kind == 0) {
-        t->src0 = t->cur0;
+        Vec4 *dst = &t->src0;
+        Vec4 *src = &t->cur0;
+        register Vec4 *src1 EE_REG("$4");
+        Vec4 *dst1;
+        __asm__("" : "+r"(dst), "+r"(src));
+        *dst = *src;
+        __asm__ __volatile__("" : : "r"(src));
         if (t->pendingKind == 2) {
-            Vec4AddVu0(&t->src0, &g_heroPos_D0, &t->src0);  /* asm arg order: a=delta (its .w is kept), b=src0 */
+            /* asm arg order: a = delta (its .w is kept), b = src0 */
+            Vec4AddVu0(dst, &g_heroPos_D0, dst);
         }
-        t->src1 = t->cur1;
+        dst1 = &t->src1;
+        src1 = &t->cur1;
+        __asm__("" : "+r"(src1), "+r"(dst1));
+        *dst1 = *src1;
     }
 }
 #endif
@@ -1495,11 +1532,6 @@ void func_00270E40(void) {
  *     and are not here.
  * GUARD: as DebugPrintStub's. Native: EE_REG is empty, the fences emit
  * nothing, and the body is the plain two-qword copy. */
-#ifndef TARGET_NATIVE
-#define EE_REG(r) __asm__(r)
-#else
-#define EE_REG(r)
-#endif
 #if !defined(TARGET_NATIVE) && !defined(S136OS_func_00270EB8)
 S136OS_SLOT(func_00270EB8);
 #else
@@ -1837,36 +1869,80 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_002712E8);
 
 /* ApplyCameraTransition: advance the active camera blend into `out`. With no
  * transition pending (kind == 0) it forwards to func_00271140 (start/instant
- * settle); while one is running it forwards to func_002712E8 (interpolate). On
- * the running path, once the blend reports complete it copies the resulting
- * 4-row matrix into g_cameraMatrix and clears the transition (kind = 0, +0x0
- * halfword = 0). */
-#ifdef TARGET_NATIVE
+ * settle); while one is running it forwards to func_002712E8 (interpolate).
+ * Once the call reports complete it copies the resulting 4-row matrix out:
+ * rows 0-2 into g_cameraMatrix and row 3 into g_cameraPos (0x230 below the
+ * matrix, addressed from the same base register as the ROM does), then clears
+ * the transition (+0x0 halfword = 0, kind = 0).
+ *   out: the 4-row (Vec4) camera matrix the blend writes.
+ * MATCHED on the s136os arm (task #1970). The row copies are the 16-byte
+ * block-move shape (each address in its own register, offset-0 lq/sq; see
+ * func_00270EB8), which SN 1.36 cc1 otherwise folds into offset-form lq/sq.
+ * Devices, each priced by removing it ALONE in a solo s136 compile
+ * (positional word differences of 40, relocations masked):
+ *   - EMPTY tied asm fences (RULING #8483; emit nothing) on each row copy's
+ *     dst/src pair: rows 1, 2 and 3 cost 19 (39 words), 15 (39) and 12 (38);
+ *   - volatile empty fences, all emitting nothing: on `m` before the row-0
+ *     copy (2; keeps its lq below the %lo add), untied after the row-0 copy
+ *     (3), and taking `src` as an input after rows 1 and 2 (4 each) — each
+ *     holds the next row's address setup below the previous sq;
+ *   - row 1's and row 2's destinations pinned to $5 and $6 (RULING #8598;
+ *     14 each): the ROM gives each row's destination its own register, and
+ *     no pin-free spelling measured (shared or distinct locals, operand and
+ *     statement order) reproduced that without moving `m` off $3. A $3 pin
+ *     on `m` measured dead weight and is not here;
+ *   - the +0x0 halfword is cleared before kind in the source (2): cc1 issues
+ *     the last of the two stores first.
+ * GUARD: on EE this C is compiled alone by SN 2.95.3 v1.36 -fopt-stack
+ * (tools/ee/s136os_functions.txt) and spliced over the S136OS_SLOT line by
+ * tools/ee/s136os_splice.sh; native compiles it, the fences emitting nothing
+ * and EE_REG empty. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_ApplyCameraTransition)
+S136OS_SLOT(ApplyCameraTransition);
+#else
 extern s32 func_00271140(Vec4 *out, void *state);
 extern s32 func_002712E8(Vec4 *out, void *state);
 extern Vec4 g_cameraMatrix;   /* 3-row rotation matrix at 0x1B54F0 */
-extern Vec4 g_cameraPos;      /* 0x1B52C0 = g_cameraMatrix - 0x230 */
 void ApplyCameraTransition(Vec4 *out) {
+    CameraTransitionState *t = &g_cameraTransitionState;
     s32 done;
 
     /* The matrix copy gates on the INTERPOLATOR'S RETURN value (not kind),
      * and the 4th row goes to g_cameraPos, NOT g_cameraMatrix[3]. */
-    if (g_cameraTransitionState.kind == 0) {
-        done = func_00271140(out, (u8 *)&g_cameraTransitionState + 0x10);
+    if (t->kind == 0) {
+        done = func_00271140(out, t->blendA);
     } else {
-        done = func_002712E8(out, (u8 *)&g_cameraTransitionState + 0x70);
+        done = func_002712E8(out, &t->sphYaw);
     }
     if (done != 0) {
-        (&g_cameraMatrix)[0] = out[0];
-        (&g_cameraMatrix)[1] = out[1];
-        (&g_cameraMatrix)[2] = out[2];
-        g_cameraPos = out[3];
-        g_cameraTransitionState.kind = 0;
-        g_cameraTransitionState.state = 0;
+        Vec4 *m = &g_cameraMatrix;
+        Vec4 *src, *pos;
+
+        __asm__ __volatile__("" : "+r"(m));
+        m[0] = out[0];
+        __asm__ __volatile__("");
+        {
+            register Vec4 *row1 EE_REG("$5") = m + 1;
+            src = out + 1;
+            __asm__("" : "+r"(row1), "+r"(src));
+            *row1 = *src;
+        }
+        __asm__ __volatile__("" : : "r"(src));
+        {
+            register Vec4 *row2 EE_REG("$6") = m + 2;
+            src = out + 2;
+            __asm__("" : "+r"(row2), "+r"(src));
+            *row2 = *src;
+        }
+        __asm__ __volatile__("" : : "r"(src));
+        pos = m - 0x23;      /* g_cameraPos, 0x230 below the matrix */
+        src = out + 3;
+        __asm__("" : "+r"(pos), "+r"(src));
+        *pos = *src;
+        t->state = 0;
+        t->kind = 0;
     }
 }
-#else
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", ApplyCameraTransition);
 #endif
 
 /* One camera-shake channel (three instances driven per frame). +0x0 base
