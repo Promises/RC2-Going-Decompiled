@@ -2604,6 +2604,10 @@ void func_0028AB70(s32 event) {
  *   - the loop and the voice slot re-read head (and count) rather than reuse
  *     the locals; that gives the ROM's hoisted `move $6,$7` copy and its tail
  *     reloads, including the dead `li $7,7`.
+ *   - the two ring bases are formed through g_pActiveTextTableAbs (the
+ *     existing size-16 alias, RULING #8620): through the 4-byte
+ *     g_pActiveTextTable gas expands `la` gp-relative, one word short
+ *     (s136os_splice: built 59 words, ROM 60).
  * The SubtitleRing struct view is byte-neutral (raw s16 casts: same words).
  * The divide traps come out as `break 7` and tools/ee/move_fixup.sed spells
  * them `break 0,7`, the ROM's encoding.
@@ -2625,7 +2629,8 @@ extern u8 g_subtitleRingHead;
 #if !defined(TARGET_NATIVE) && !defined(S136OS_func_0028ABC0)
 S136OS_SLOT(func_0028ABC0);
 #else
-/* The subtitle request ring, viewed over the data block at &g_pActiveTextTable. */
+/* The subtitle request ring, viewed over the data block at &g_pActiveTextTable
+ * (addressed through its absolute alias, see above). */
 typedef struct {
     u8  _pad0[0x8];
     s16 id[7];          /* +0x08 queued line ids */
@@ -2634,7 +2639,7 @@ typedef struct {
     u8  count;          /* +0x26 (read through g_subtitleRingCount) */
     u8  head;           /* +0x27 (read through g_subtitleRingHead) */
 } SubtitleRing;
-#define SUBTITLE_RING ((SubtitleRing *)&g_pActiveTextTable)
+#define SUBTITLE_RING ((SubtitleRing *)&g_pActiveTextTableAbs)
 void func_0028ABC0(s32 id, s32 voice) {
     s32 count, head, i, k;
 
