@@ -39,10 +39,31 @@
  *     a `$at` store = cc1-small model, a compiler-register store or a hoisted
  *     lui = ABSOLUTE_GLOBAL).
  *
- * SAVE-LAYOUT WALL: this TU was built by the later SN cc1 that packs callee-save
- * slots 8-byte; the pinned cc1 reserves 16 bytes per save. Every function below
- * that saves two or more GPRs (incl. $ra) is blocked on that wall and stays
- * INCLUDE_ASM (check the prologue: two+ sd of s-regs/$ra at 8-byte spacing).
+ * SAVE-LAYOUT WALL, A cc1 2.9 PROPERTY: this TU was built by the later SN cc1
+ * that packs callee-save slots 8-byte; the pinned cc1 2.9 reserves 16 bytes per
+ * save. Every function below that saves two or more GPRs (incl. $ra) was taken
+ * as blocked on that wall on the 2.9 arm and left INCLUDE_ASM (check the
+ * prologue: two+ sd of s-regs/$ra at 8-byte spacing). On the s136os arm (SN
+ * 1.36 -fopt-stack) the wall does not hold. Read from the ROM prologues at
+ * master 77207b5b7, the sentence covers 37 members here: 13 are now MATCHED on
+ * that arm (CheckTargetInRangeBand DriveMobyTowardPoint CheckMobyGroundMover
+ * ResolveMobyEdgeConstraint DriveMobyAlongWaypoints SetMobyWaypointPath
+ * CheckMobyPathBlocked StopDialogVoice StopFileLoad StartFileLoad
+ * StartFileLoadWithCallback StartFileLoadPumpingVoice PumpDialogVoiceSystem),
+ * and 24 are still INCLUDE_ASM. Of those 24, AcquireMobyAutoTarget and
+ * StartDialogVoice were in FACT #9873's census (C arm does not compile solo),
+ * CheckMobyOverWater's residual is the assembler hazard-nop (FACT #9545), and
+ * for the other 21 (UpdateMobyThreatFlashAndBurst ClassifyTargetProximity
+ * BindMobyToParent CalcMobyTargetThreatDist FindTargetInGroup
+ * ApplyMobyLocalTransformDelta InitMobySpringFollowState StepMobySpringFollow
+ * RequestGameStateChange UpdateGameState StepMobyMotion
+ * UpdateMobyMotionVelocity ResolveMobyMotionCollision ApplyMobyGroundAndEvents
+ * ProbeMobyGroundLine ResolveMobySphereCollision UpdateMobyLeanFromTurn
+ * UpdateActiveMobys ResetDialogVoiceChannels StepDialogVoiceChannel
+ * UpdateDialogVoiceManager) the save stride is NOT re-measured on the s136os
+ * arm and the residual is UNMEASURED: tree-wide, 0 of the 111 labeled members
+ * that were run reproduce the 16-byte stride there (FACT #9873). A per-member
+ * "WALL (matching build): save-layout" below describes the cc1 2.9 arm.
  * The two switch functions (UpdateGameState 0x2B5B38, StepDialogVoiceChannel
  * 0x2B82A0) also stay INCLUDE_ASM behind the splat jtbl reloc-identity gap.
  *
@@ -3591,11 +3612,17 @@ s32 StartTertiaryVoice(s32 a0, s32 a1, s32 a2, s32 a3) {
  * NATIVE SHIM (no byte target; matching build uses INCLUDE_ASM above). Derived
  * register-exact from ResetDialogVoiceChannels.s @0x2B8090.
  *
- * WALL (matching build): save-layout — 3 callee-saves + $ra at 8-byte spacing. */
+ * WALL (matching build, cc1 2.9 arm): save-layout — 3 callee-saves + $ra at
+ * 8-byte spacing.
+ * Save stride NOT re-measured for this member on the s136os arm (SN 1.36
+ * -fopt-stack): NOTE #9871's census vocabulary did not match this label, so
+ * FACT #9873's re-screen never ran it. Of the 111 labeled members that were
+ * run, 0 reproduce the 16-byte save stride there, so the stride is not
+ * evidence that this member is walled. Residual: UNMEASURED. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", ResetDialogVoiceChannels);
 #else
-/* TODO(match): functional equivalent - not byte-exact; save-layout wall. */
+/* TODO(match): functional equivalent - not byte-exact; save-layout wall on cc1 2.9 (s136os unmeasured, see above). */
 extern void func_00133230(void);   /* 0x133230 snd RPC tick */
 extern s32  snd_Pump(void);        /* 0x133280 snd queue pump (returns busy count) */
 extern void func_00133310(void);   /* 0x133310 flush snd command queue */
@@ -3842,12 +3869,17 @@ finalize:
  * verbatim (symbols resolve per-region via symbol_addrs).
  *
  * NATIVE #else for coverage — the matching arm stays INCLUDE_ASM (byte-frozen).
- * WALL (matching build): switch dispatch (the state-2 jtbl) + save-layout
- * (3 callee-saves + $ra at 8-byte spacing). */
+ * WALL (matching build, cc1 2.9 arm): switch dispatch (the state-2 jtbl) +
+ * save-layout (3 callee-saves + $ra at 8-byte spacing).
+ * Save stride NOT re-measured for this member on the s136os arm (SN 1.36
+ * -fopt-stack): NOTE #9871's census vocabulary did not match this label, so
+ * FACT #9873's re-screen never ran it. Of the 111 labeled members that were
+ * run, 0 reproduce the 16-byte save stride there, so the stride is not
+ * evidence that this member is walled. Residual: UNMEASURED. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", UpdateDialogVoiceManager);
 #else
-/* TODO(match): functional equivalent - not byte-exact; switch-dispatch + save-layout wall. */
+/* TODO(match): functional equivalent - not byte-exact; switch-dispatch + save-layout wall on cc1 2.9 (s136os unmeasured, see above). */
 extern s32  StartTertiaryVoice(s32 a0, s32 a1, s32 a2, s32 a3);        /* 0x2B7FA8 (INCLUDE_ASM above) */
 extern void func_00132BC0(s32 handle, s32 cmd, s32 sampleCount, s32 a3,
                           s32 a4, s32 a5, void *startCb, void *ctx);   /* 0x132BC0 989snd play command */

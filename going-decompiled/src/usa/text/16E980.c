@@ -2225,9 +2225,15 @@ void TrackHeroMotionForCamera(void) {
  * volatile activeCamera deref emits lhu+sll+sra vs the original lh (castable),
  * (b) 2.96 splits the Vec4 copies into ld/sd pairs vs the original lq/sq,
  * (c) decisive: the original fills the beq delay slot with a 1-insn %gp_rel
- * g_nGameState load (extern class 9..15), which conflicts with this unit's
- * established incomplete-array/absolute model for that symbol (changing it
- * ripples through every matched fn's assembly). Portable #else below;
+ * g_nGameState load (extern class 9..15; ROM 0x271EC8 `lw $2,
+ * %gp_rel(g_nGameState)($28)`). When this was written it conflicted with the
+ * unit's incomplete-array/absolute model for that symbol. That model is gone:
+ * task #1986 (commit 22e931945) declares g_nGameState a complete `s32` behind
+ * the unit-level `.extern g_nGameState, 16` (AddScreenSpriteFx's ROM form,
+ * gas's two-insn `lui`/`lw %lo`), and the image stayed byte-exact. Under it
+ * this arm read 44.67 -> 42.93 on engine96 (#1997, taken on trust, not
+ * re-measured here). What the arm now emits for the load, and whether any
+ * spelling reaches the ROM's 1-insn %gp_rel form, is UNMEASURED. Portable #else below;
  * cmp-oracle queued (mocked CollLine/GetCollHitMaterial/water-height). */
 #if defined(MATCH_CheckCameraUnderwater) || defined(TARGET_NATIVE)
 extern s32 CollLine(Vec4 *from, Vec4 *to, s32 mask, void *a, void *b);

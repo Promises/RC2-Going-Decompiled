@@ -906,8 +906,15 @@ GuiInstance *func_0034F300(GuiInstance *mgr) {
  * gui+0x38000+0x79D0.., and finally zeroes two small tables. Returns gui.
  *
  * Purely integer/pointer construction (no float, no GS/DMA). The matching build
- * keeps the asm (engine save-layout wall); the #else is a faithful op-for-op
- * transcription. GuiManagerInitListRows/GuiManagerInitHudLists live in this unit
+ * keeps the asm (engine save-layout wall on the cc1 2.9 arm: the ROM saves ten
+ * GPRs at 8-byte stride, 0x70..0xB8); the #else is a faithful op-for-op
+ * transcription.
+ * Save stride NOT re-measured for this member on the s136os arm (SN 1.36
+ * -fopt-stack): NOTE #9871's census vocabulary did not match this label, so
+ * FACT #9873's re-screen never ran it. Of the 111 labeled members that were
+ * run, 0 reproduce the 16-byte save stride there, so the stride is not
+ * evidence that this member is walled. Residual: UNMEASURED.
+ * GuiManagerInitListRows/GuiManagerInitHudLists live in this unit
  * as INCLUDE_ASM; the ~50 per-screen constructors live in neighbouring units.
  */
 #ifdef TARGET_NATIVE

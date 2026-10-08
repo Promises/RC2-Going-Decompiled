@@ -30,11 +30,22 @@
  *     func_002AC9E0 / func_002A9468; asm_unit.sh's delay-slot rule keys on
  *     this size band).
  *
- * SAVE-LAYOUT WALL (same as text/1907F0): this TU was built by the later SN
- * cc1 that packs callee-save slots 8-byte; the pinned cc1 reserves 16 bytes
- * per save. Every function below that saves two or more GPRs (incl. $ra)
- * is blocked on that wall and stays INCLUDE_ASM (not annotated per
- * function - check the prologue: two+ sd of s-regs/$ra at 8-byte spacing).
+ * SAVE-LAYOUT WALL (same as text/1907F0), A cc1 2.9 PROPERTY: this TU was
+ * built by the later SN cc1 that packs callee-save slots 8-byte; the pinned
+ * cc1 2.9 reserves 16 bytes per save. Every function below that saves two or
+ * more GPRs (incl. $ra) was taken as blocked on that wall on the 2.9 arm and
+ * left INCLUDE_ASM (not annotated per function - check the prologue: two+ sd
+ * of s-regs/$ra at 8-byte spacing). On the s136os arm (SN 1.36 -fopt-stack)
+ * the wall does not hold: of the 111 labeled members tree-wide that compile
+ * there and save >= 2 GPRs, 0 reproduce the 16-byte stride (FACT #9873). Read
+ * from the ROM prologues at master 77207b5b7, this sentence covers 96 members
+ * here: 82 are now MATCHED on that arm, and 14 are still INCLUDE_ASM
+ * (func_002A8D08 func_002A90A8 GetWaterSurfaceHeight func_002AA808
+ * func_002ABAE8 func_002AC1E0 MatrixToEulerAngles func_002ACA20 func_002AD590
+ * func_002AE9E0 func_002AF598 func_002B03E8 func_002B1A90 func_002B1DF0).
+ * This header is not itself evidence that any member is walled; for a member
+ * without its own re-measurement the save stride is NOT re-measured and the
+ * residual is UNMEASURED.
  *
  * ENGINE-2.96 ARM SWEEP (task #467, 2026-09-19): every `#else` arm below was
  * promoted once through the MATCH_ engine96 arm (objdiff_build.sh: cc1
@@ -2307,9 +2318,14 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_0
  * pool centre is within the radius. Returns the pool surface z when inside,
  * else the point's own z. When outNormal is non-null it gets a unit +Z normal.
  *
- * Walled: saves $16/$17/$31 (save-layout wall, see unit header). The VU0
+ * Walled on cc1 2.9: saves $16/$17/$31 (save-layout wall, see unit header). The VU0
  * reductions DistXYVu0/GetFloatAbs and SampleWaterHeightfield all return f32 in
- * $f0 / via the out-pointer; declared accordingly so this body is faithful. */
+ * $f0 / via the out-pointer; declared accordingly so this body is faithful.
+ * Save stride NOT re-measured for this member on the s136os arm (SN 1.36
+ * -fopt-stack): NOTE #9871's census vocabulary did not match this label, so
+ * FACT #9873's re-screen never ran it. Of the 111 labeled members that were
+ * run, 0 reproduce the 16-byte save stride there, so the stride is not
+ * evidence that this member is walled. Residual: UNMEASURED. */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 65.23%
    -> UNKNOWN-@0: ROM `(none)` vs `lw v0,0(gp)  [GPREL16 0x001B2258]` */
 #ifndef TARGET_NATIVE
@@ -2896,7 +2912,13 @@ void func_002AA6B8(Moby *self, const Vec4 *refPos, Moby **list, s32 count,
  * floating-point drift makes the draw exceed the running sum; reproduced
  * verbatim so a tester sees the same (out-of-range) pick the ROM makes.
  *
- * Faithful coverage body — the matching build keeps the asm (save-layout wall).
+ * Faithful coverage body — the matching build keeps the asm (save-layout wall,
+ * a cc1 2.9 property: the ROM saves ten GPRs at 8-byte stride, 0x120..0x168).
+ * Save stride NOT re-measured for this member on the s136os arm (SN 1.36
+ * -fopt-stack): NOTE #9871's census vocabulary did not match this label, so
+ * FACT #9873's re-screen never ran it. Of the 111 labeled members that were
+ * run, 0 reproduce the 16-byte save stride there, so the stride is not
+ * evidence that this member is walled. Residual: UNMEASURED.
  */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 33.92%
    -> UNKNOWN-@0: ROM `addiu sp,sp,-416` vs `addiu sp,sp,-384` */
