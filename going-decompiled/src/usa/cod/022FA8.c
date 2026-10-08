@@ -384,7 +384,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", WaitGsPathsIdle)
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00124540);
 
 extern void func_0011A9A0(s32 id, void *handler, s32 obj);
-extern void func_0011AC30(s32 obj);
+extern s32 func_0011AC30(s32 obj);  /* syscall 0x41 DeleteSema */
 extern void func_00124540(void);
 
 /**

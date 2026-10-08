@@ -545,9 +545,12 @@ s32 func_0011AC20(s32 *desc) {
 /**
  * func_0011AC30 = EE kernel syscall 0x41 (DeleteSema).
  * SCE library syscall stub (see func_0011AA20): load the syscall number into
- * $v1 and trap; the kernel deletes the semaphore identified by $a0.
+ * $v1 and trap; the kernel deletes the semaphore identified by $a0 and returns
+ * its id (or a negative error) in $v0. Value-returning as the SDK declares it
+ * (`int DeleteSema(int)`, include/rtl/ee/eekernel.h); a caller that sees it
+ * declared `void` frees $v0 and schedules differently (func_00124818, #1840).
  */
-void func_0011AC30(s32 obj) {
+s32 func_0011AC30(s32 obj) {
 #ifndef TARGET_NATIVE
     __asm__ volatile("addiu $3, $0, 0x41\n\tsyscall 0" ::: "$3", "memory");
 #else  /* EE kernel syscall - not executable on the native host */

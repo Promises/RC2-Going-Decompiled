@@ -205,7 +205,7 @@ extern s32 DebugPrintStub(char *fmt, ...);
 extern void func_0011F5E0(void);   /* disable interrupts (DI) */
 extern void func_0011F628(void);   /* enable interrupts (EI) */
 extern void func_00351550(u32 chcrCmd); /* DMAC ch4 (IPU_TO) CHCR suspend write */
-extern void func_0011AC30(s32 sema);   /* DeleteSema */
+extern s32 func_0011AC30(s32 sema);    /* DeleteSema */
 extern s32 func_00351F58(u8 *obj);
 extern void func_0012F940(u8 *obj);
 
