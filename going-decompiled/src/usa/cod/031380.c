@@ -7,7 +7,9 @@
  */
 #include "common.h"
 
-extern s32 func_00123028(s64 a, s64 b);
+/* 0x123028 is libgcc dp-bit.o's dpcmp, which the build links as the libgcc.a
+ * member dp-bit.o (task #1837); symbol_addrs names the address so. */
+extern s32 dpcmp(s64 a, s64 b);
 
 /**
  * libm.a s_matherr.o's matherr(struct exception *x): the default error hook
@@ -17,12 +19,14 @@ extern s32 func_00123028(s64 a, s64 b);
  *
  * arg0 is the struct exception; arg0[1] is its arg1 field (offset 0x8).
  * newlib's libm/common/s_matherr.c tests `x->arg1 != x->arg1` (a NaN check)
- * and returns 0 on both paths, so the soft-float compare func_00123028 (dpcmp)
- * is called and its result discarded.
+ * and returns 0 on both paths, so the soft-float compare dpcmp (libgcc
+ * dp-bit.o, 0x123028) is called and its result discarded. It is called by its
+ * libgcc name because the address is the linked libgcc.a member, which
+ * defines dpcmp.
  */
 s32 func_00131400(s64 *arg0) {
     s64 v = arg0[1];
-    func_00123028(v, v);
+    dpcmp(v, v);
     return 0;
 }
 
