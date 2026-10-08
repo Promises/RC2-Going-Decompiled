@@ -3547,9 +3547,8 @@ void *SpawnMoby(s32 classId) {
 #endif
 
 /* Canonical Moby entity record (full field layout in include/moby.h, sizeof
- * 0x100). InitMobyFromClass zero-fills and stamps it; the body does its own
- * (u8*)moby offset arithmetic, so a full-size opaque view suffices. Byte-neutral
- * (a struct typedef emits no code; the matching arm is INCLUDE_ASM regardless). */
+ * 0x100). Opaque here: InitMobyFromClass reads and writes it through its own
+ * field view (MobyInitView, below). A typedef emits no code. */
 typedef struct Moby { u8 _bytes[0x100]; } Moby;
 #if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
 _Static_assert(sizeof(Moby) == 0x100, "Moby must be 0x100 under ILP32");
@@ -3565,127 +3564,185 @@ extern void *g_mobyClassHeaders[];              /* 0x1CDB00 per-slot class-heade
 extern u8   *g_mobyTableBase;                   /* 0x1B1ADC base of the 0x100-stride table */
 extern void  ResolveMobyAnimFramePtrs(void *moby);
 
-/* InitMobyFromClass: zero-fills a moby's 0x100-byte state (FillMemory32) and
- * binds it to a class. Stamps the defaults the spawn path expects - classSlot
- * (+0x22) = g_mobyClassSlotRemap[classId], alpha (+0x23)=0x80, default tint
- * qword (+0x38), uid (+0xAC) = (tableIndex<<16), classId (+0xAA), the 0x7F/0x80
- * colour-channel bytes, and the 1.0 anim rates (+0x48/+0x4C). It then validates
- * the slot through the reverse map g_mobyClassSlotToId: if it does NOT round-trip
- * back to classId the class has no loaded header, so it takes the headerless
- * path (flags |= 5, pUpdate from g_mobyClassUpdateFuncsNoHeader, flags |= 2 when
- * none) and returns. Otherwise it binds the header: pClass (+0x24), pUpdate from
- * g_mobyClassUpdateFuncs, scale (+0x2C) and flag bits from the header, optional
- * collision mesh (+0x78), then resolves anim-frame pointers when the class has
- * an animation set. The matching build keeps the asm (multi callee-save, 8-byte-
- * packed save-slot frame wall - see func_0029C678). */
-/* DLI lever MEASURED (task #1220; unit objdiff report, objdiff_build.sh, this #else body promoted
- * SOLO, sdk29 arm, colima-ee-x86; every other row in the unit unchanged). cc1 emits
- * `dli $6,0x40404000000000`; the ROM holds Ps2EeAs's expansion of that value at 0x29FF40 ($7), but
- * in a different register. No allowlist row applies to the body AS COMPILED: a row must carry the
- * ROM's words for cc1's register. A #8598 pin + row is UNTRIED. Solo score 67.40%. Residual class:
- * REGALLOC at the dli site, plus PACKED-SAVE (the 8-byte-packed save-slot frame wall named above;
- * NOTE #8777). */
+/* ADDRESSING-MODEL DEVICE (RULING #8620): InitMobyFromClass reads
+ * g_mobyTableBase absolutely (0x29FF80 `lui $2,%hi(g_mobyTableBase)`; lw) while
+ * the 4-byte pointer is -G8 small, so the name is sized 16 for the assembler.
+ * It is the only reference in this unit (ROM census of the unit's splat files:
+ * 1 %hi, 0 %gp_rel), so no other function moves. Without it the load is
+ * `lw $2,%gp_rel(g_mobyTableBase)($28)`, one word short. Nothing is emitted. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", InitMobyFromClass);
+__asm__(".extern g_mobyTableBase, 16");
+#endif
+
+/** Zero a moby slot and bind it to a class.
+ *
+ *  FillMemory32 clears the 0x100-byte record, then it stamps the spawn defaults:
+ *  classSlot (+0x22) = g_mobyClassSlotRemap[classId], alpha 0x80, the tint qword
+ *  0x0040404000000000 (+0x38), the 0x7F/0x80/0xFF channel bytes, classId (+0xAA)
+ *  and the uid (+0xAC) = table index << 16 (index = (moby - g_mobyTableBase) >> 8).
+ *  If g_mobyClassSlotToId[classSlot] does not map back to classId the class has
+ *  no loaded header: flags |= 5, no class pointer, pUpdate from
+ *  g_mobyClassUpdateFuncsNoHeader (flags |= 2 when there is none). Otherwise it
+ *  binds pUpdate from g_mobyClassUpdateFuncs, the class header (+0x24), its byte
+ *  +0x0E, flag bits +0x44, word +0x10, scale (+0x2C) and the optional collision
+ *  mesh (+0x78, flags |= 0x10), sets 1.0 anim rates, applies the header's +0x0F
+ *  (flags |= 0x400 and +0x6F = 0x18) and +0x06 (+0x63 = 0x18) switches, and when
+ *  the class has an animation set resolves its frame pointers: two or more
+ *  frames clear flags bit 2; a single-frame set on a class whose +0x0C is 1 zeroes
+ *  anim rate +0x48 and sets flags bit 0x40 when the set's +0x11 is negative.
+ *  @param moby     the 0x100-byte slot to initialise
+ *  @param classId  moby class id
+ *
+ *  Built on the s136os arm (task #1918), byte-identical under the unit's
+ *  -fno-gcse and with gcse on. The bytes need:
+ *   - the tint constant's dli to use Ps2EeAs's 4-word expansion: a RULING #8549
+ *     row in tools/ee/ps2eeas_dli_sites.txt (GNU as emits 3 words, so the
+ *     function is one word short without it);
+ *   - the slot read from g_mobyClassSlotRemap BEFORE the alpha store (the ROM
+ *     loads it first; the store may alias the table);
+ *   - slot as an s32 local, and the SlotToId and UpdateFuncs indices read back
+ *     through m->classSlot: cse turns both into the one `andi $10` the ROM
+ *     keeps, while the headerless path re-reads the field (`lbu $2,0x22($17)`).
+ *     Indexing UpdateFuncs by (u8)slot instead is 5/156 words different.
+ *   - the table index computed as its own statement after the +0x62 store and
+ *     before the tint store (the ROM's g_mobyTableBase load sits there);
+ *   - the stores in this source order. SN 1.36 cc1 issues the last store of each
+ *     constant register first (FACT #9254's store-order rule), so the source puts
+ *     +0x6D/+0xA5/+0xA7 last to get the ROM's order. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_InitMobyFromClass)
+S136OS_SLOT(InitMobyFromClass);
 #else
-/* t511 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 67.40% -> PACKED-SAVE, first differing row @0: ROM `addiu sp, sp, -0x20` vs `addiu sp, sp, -0x30`;
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing, MATCH_ guard) 65.70% -> SCHED-PROEPI, first differing row @3: ROM `sd s1, 0x8(sp)` vs `(nothing)`. */
+typedef struct {
+    u8  _p0[0x10];
+    u8  numFrames;          /* +0x10 */
+    s8  flags11;            /* +0x11 */
+} MobyAnimSetHdr;
+typedef struct {
+    u8  _p0[6];
+    u8  b06;                /* +0x06 nonzero: +0x63 = 0x18 */
+    u8  _p7[5];
+    u8  b0C;                /* +0x0C */
+    u8  _pD;
+    u8  b0E;                /* +0x0E copied to moby +0x62 */
+    u8  b0F;                /* +0x0F nonzero: flags |= 0x400 */
+    s32 w10;                /* +0x10 copied to moby +0x98 */
+    u8  _p14[0x10];
+    f32 scale;              /* +0x24 default scale */
+    u8  _p28[0x18];
+    void *collMesh;         /* +0x40 */
+    u16 flags44;            /* +0x44 flag bits OR'd into moby +0x34 */
+    u16 _p46;
+    MobyAnimSetHdr *animSet; /* +0x48 */
+} MobyClassHdr;
+typedef struct {
+    u8  _p0[0x21];
+    u8  b21;                /* +0x21 */
+    u8  classSlot;          /* +0x22 */
+    u8  alpha;              /* +0x23 */
+    MobyClassHdr *pClass;   /* +0x24 */
+    u8  _p28[4];
+    f32 scale;              /* +0x2C */
+    u8  _p30[4];
+    u16 flags;              /* +0x34 */
+    s16 h36;                /* +0x36 */
+    u64 tint;               /* +0x38 */
+    u8  _p40[8];
+    f32 animRate0;          /* +0x48 */
+    f32 animRate1;          /* +0x4C */
+    u8  _p50[0x11];
+    u8  b61;                /* +0x61 */
+    u8  b62;                /* +0x62 */
+    u8  b63;                /* +0x63 */
+    void *pUpdate;          /* +0x64 */
+    u8  _p68[4];
+    u8  b6C;                /* +0x6C */
+    u8  b6D;                /* +0x6D */
+    u8  b6E;                /* +0x6E */
+    u8  b6F;                /* +0x6F */
+    s32 w70;                /* +0x70 */
+    s32 w74;                /* +0x74 */
+    void *collMesh;         /* +0x78 */
+    u8  _p7C[0x1C];
+    s32 w98;                /* +0x98 */
+    u8  _p9C[8];
+    u8  bA4, bA5, bA6, bA7, bA8; /* +0xA4..+0xA8 colour-channel bytes */
+    u8  _pA9;
+    s16 classId;            /* +0xAA */
+    s32 uid;                /* +0xAC */
+    u8  _pB0[0xD];
+    u8  bBD;                /* +0xBD */
+} MobyInitView;
+
 void InitMobyFromClass(Moby *moby, s32 classId) {
-    u8 *m = (u8 *)moby;
-    u8 slot;
+    MobyInitView *m = (MobyInitView *)moby;
+    s32 slot;
     s32 index;
-    u8 *pc;
-    void *animSet;
 
     FillMemory32(m, 0, 0x100);
 
     slot = g_mobyClassSlotRemap[classId];
-    m[0x23] = 0x80;                 /* alpha */
-    m[0x22] = slot;                 /* class slot */
-    m[0xA8] = 0xFF;
-    m[0x21] = 0xFF;
-    m[0x61] = 0xFF;
-    m[0x62] = 0xFF;
-    *(u64 *)(m + 0x38) = 0x0040404000000000ULL; /* default tint qword */
-    *(s16 *)(m + 0x36) = 0x7F80;
-    index = (s32)(m - g_mobyTableBase) >> 8;     /* slot index in the 0x100 table */
-    *(s32 *)(m + 0xAC) = index << 16;            /* uid */
-    m[0x6D] = 0xFF;
-    m[0xA5] = 0x7F;
-    m[0xA7] = 0x80;
-    *(s16 *)(m + 0xAA) = (s16)classId;
-    m[0x6E] = 0;
-    m[0x6C] = 0xFF;
-    m[0xA4] = 0x7F;
-    m[0xA6] = 0x80;
+    m->alpha = 0x80;
+    m->classSlot = slot;
+    m->bA8 = 0xFF;
+    m->b21 = 0xFF;
+    m->b61 = 0xFF;
+    m->b62 = 0xFF;
+    index = (s32)((u8 *)m - g_mobyTableBase) >> 8;
+    m->tint = 0x0040404000000000ULL;
+    m->h36 = 0x7F80;
+    m->uid = index << 16;
+    m->classId = classId;
+    m->b6E = 0;
+    m->b6C = 0xFF;
+    m->bA4 = 0x7F;
+    m->bA6 = 0x80;
+    m->b6D = 0xFF;
+    m->bA5 = 0x7F;
+    m->bA7 = 0x80;
 
-    if (g_mobyClassSlotToId[slot] != classId) {
-        /* headerless class - no loaded header for this slot */
-        u16 flags = (u16)(*(u16 *)(m + 0x34) | 0x5);
-        void *upd = g_mobyClassUpdateFuncsNoHeader[slot];
-        *(s32 *)(m + 0x24) = 0;
-        *(s32 *)(m + 0x98) = 0;
-        *(void **)(m + 0x64) = upd;
-        if (upd == 0) {
-            flags |= 0x2;
+    if (g_mobyClassSlotToId[m->classSlot] != classId) {
+        m->flags |= 5;
+        m->pClass = 0;
+        m->w98 = 0;
+        m->pUpdate = g_mobyClassUpdateFuncsNoHeader[m->classSlot];
+        if (m->pUpdate == 0) {
+            m->flags |= 2;
         }
-        *(u16 *)(m + 0x34) = flags;
-        return;
-    }
-
-    /* header class */
-    {
-        void *upd = g_mobyClassUpdateFuncs[slot];
-        *(void **)(m + 0x64) = upd;
-        if (upd == 0) {
-            *(u16 *)(m + 0x34) |= 0x2;
+    } else {
+        m->pUpdate = g_mobyClassUpdateFuncs[m->classSlot];
+        if (m->pUpdate == 0) {
+            m->flags |= 2;
         }
-    }
-    pc = (u8 *)g_mobyClassHeaders[slot];
-    *(void **)(m + 0x24) = pc;
-    m[0x62] = pc[0x0E];
-    *(u16 *)(m + 0x34) |= *(u16 *)(pc + 0x44);
-    *(s32 *)(m + 0x98) = *(s32 *)(pc + 0x10);
-    *(f32 *)(m + 0x4C) = 1.0f;
-    *(f32 *)(m + 0x2C) = *(f32 *)(pc + 0x24);    /* default scale */
-    *(f32 *)(m + 0x48) = 1.0f;
-    if (*(s32 *)(pc + 0x40) != 0) {
-        *(u16 *)(m + 0x34) |= 0x10;
-        *(s32 *)(m + 0x78) = *(s32 *)(pc + 0x40); /* collision mesh */
-    }
-
-    pc = *(u8 **)(m + 0x24);
-    if (pc[0x0F] != 0) {
-        m[0x6F] = 0x18;
-        *(s32 *)(m + 0x70) = 0;
-        *(u16 *)(m + 0x34) |= 0x400;
-        *(s32 *)(m + 0x74) = 0;
-        m[0xBD] = 0;
-    }
-
-    pc = *(u8 **)(m + 0x24);
-    if (pc[0x06] != 0) {
-        m[0x63] = 0x18;
-    }
-
-    pc = *(u8 **)(m + 0x24);
-    animSet = *(void **)(pc + 0x48);
-    if (animSet != 0) {
-        ResolveMobyAnimFramePtrs(m);
-        pc = *(u8 **)(m + 0x24);
-        animSet = *(void **)(pc + 0x48);
-        if (*(u8 *)((u8 *)animSet + 0x10) >= 2) {
-            *(u16 *)(m + 0x34) &= 0xFFFD;
+        m->pClass = (MobyClassHdr *)g_mobyClassHeaders[m->classSlot];
+        m->b62 = m->pClass->b0E;
+        m->flags |= m->pClass->flags44;
+        m->w98 = m->pClass->w10;
+        m->scale = m->pClass->scale;
+        m->animRate0 = 1.0f;
+        m->animRate1 = 1.0f;
+        if (m->pClass->collMesh != 0) {
+            m->flags |= 0x10;
+            m->collMesh = m->pClass->collMesh;
         }
-        pc = *(u8 **)(m + 0x24);
-        if (pc[0x0C] == 1) {
-            animSet = *(void **)(pc + 0x48);
-            if (*(u8 *)((u8 *)animSet + 0x10) < 2) {
-                *(s32 *)(m + 0x48) = 0;
-                animSet = *(void **)(pc + 0x48);
-                if (*(s8 *)((u8 *)animSet + 0x11) < 0) {
-                    *(u16 *)(m + 0x34) |= 0x40;
+        if (m->pClass->b0F != 0) {
+            m->b6F = 0x18;
+            m->flags |= 0x400;
+            m->w70 = 0;
+            m->w74 = 0;
+            m->bBD = 0;
+        }
+        if (m->pClass->b06 != 0) {
+            m->b63 = 0x18;
+        }
+        if (m->pClass->animSet != 0) {
+            ResolveMobyAnimFramePtrs(m);
+            if (m->pClass->animSet->numFrames >= 2) {
+                m->flags &= ~2;
+            }
+            if (m->pClass->b0C == 1 && m->pClass->animSet->numFrames < 2) {
+                m->animRate0 = 0.0f;
+                if (m->pClass->animSet->flags11 < 0) {
+                    m->flags |= 0x40;
                 }
             }
         }
