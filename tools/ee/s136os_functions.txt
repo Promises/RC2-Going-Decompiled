@@ -602,6 +602,8 @@ usa text/235FE8 func_00343E80
 usa text/235FE8 func_00343888
 usa text/235FE8 GuiTextElementDraw
 usa text/235FE8 func_0033FAB0
+usa text/235FE8 GuiTitledSpriteScreenInit
+usa text/235FE8 GuiIconScreenInit
 usa text/191238 func_00297E80
 usa text/191238 DrawSkyShellsScaledSpin
 usa text/191238 MapBeginUpload

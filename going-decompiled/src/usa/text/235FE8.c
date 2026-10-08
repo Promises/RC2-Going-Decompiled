@@ -8009,27 +8009,38 @@ void *func_003420D0(void *w) {
  * the sprite (+0x17C/D_1AE098), and the sub-block (+0x238) via func_00348BF8(pool).
  * Colour all seven, alpha three buttons (+0x0/+0x4C/+0xE4) to 1.0, assign glyphs
  * 0x91/0x94/0x92/0x93/0x95, scale the label 1.0x1.05, set its text (localized
- * 0x2BEB), texture the sprite (0xEA9D) scaled 32x32, and clear the +0x1B8 block. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiIconScreenInit);
+ * 0x2BEB), texture the sprite (0xEA9D) scaled 32x32, and clear the +0x1B8 block.
+ * Params: w = the screen; pool = the GUI pool (may be 0). No return value.
+ * MATCHED byte-exact on the s136os arm (task #2012), device-free, by three
+ * cumulative re-spellings of master's #else (solo s136os harness, words
+ * differing / built words, ROM 200):
+ *  - master's #else as written: 199 / 202;
+ *  - element pointers assigned after the pool block, not at the top (the ROM
+ *    forms them after the record is seeded): 177 / 201;
+ *  - the record zeroed as [1],[2],[3],[0] (cc1 issues the last store of a
+ *    group first, giving the ROM's 0,4,8,C) and each seed float stored through
+ *    a fresh read of +0x228: 146 / 202;
+ *  - the +0x238 sub-block passed inline to func_00348BF8 instead of held in a
+ *    local, which had taken $s6 where the ROM keeps the sprite: 0 / 200. */
+/* GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+ * (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in tools/ee/s136os_functions.txt)
+ * and spliced over S136OS_SLOT by tools/ee/s136os_splice.sh. There is no asm
+ * fallback. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_GuiIconScreenInit)
+S136OS_SLOT(GuiIconScreenInit);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiIconScreenInit, unit objdiff): 61.77%,
-   148/228 insns differ. Residual: UNKNOWN-addiu + gp/abs-mixed symbol (first differing insn: 'addiu sp, sp, -0x70' vs 'addiu sp, sp, -0x60').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
 extern void func_00348BF8(void *w, void *pool);
 extern char *g_guiInstance;
 extern u8 D_1ADBE8[], D_1ADBF0[], D_1ADBF8[], D_1ADC00[], D_1ADF98[];
 extern u8 D_1ADC08[], D_1AE098[];
 void GuiIconScreenInit(void *w, GuiPool *pool) {
-    GuiElement *e0 = (GuiElement *)((char *)w + 0x0);
-    GuiElement *e1 = (GuiElement *)((char *)w + 0x98);
-    GuiElement *e2 = (GuiElement *)((char *)w + 0x4C);
-    GuiElement *e3 = (GuiElement *)((char *)w + 0xE4);
-    GuiElement *e4 = (GuiElement *)((char *)w + 0x130);
-    GuiElement *text = (GuiElement *)((char *)w + 0x1D0);
-    GuiElement *sprite = (GuiElement *)((char *)w + 0x17C);
-    void *sub = (char *)w + 0x238;
+    GuiElement *e0;
+    GuiElement *e1;
+    GuiElement *e2;
+    GuiElement *e3;
+    GuiElement *e4;
+    GuiElement *text;
+    GuiElement *sprite;
     void *rec;
 
     /* +0x22C = pool is stored unconditionally (beqz delay slot). */
@@ -8037,16 +8048,22 @@ void GuiIconScreenInit(void *w, GuiPool *pool) {
     if (pool != 0) {
         rec = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
         *(void **)((char *)w + 0x228) = rec;
-        *(s32 *)((char *)rec + 0x0) = 0;
         *(s32 *)((char *)rec + 0x4) = 0;
         *(s32 *)((char *)rec + 0x8) = 0;
         *(s32 *)((char *)rec + 0xC) = 0;
+        *(s32 *)((char *)rec + 0x0) = 0;
     }
+    e0 = (GuiElement *)((char *)w + 0x0);
+    e1 = (GuiElement *)((char *)w + 0x98);
+    e2 = (GuiElement *)((char *)w + 0x4C);
+    e3 = (GuiElement *)((char *)w + 0xE4);
+    e4 = (GuiElement *)((char *)w + 0x130);
+    text = (GuiElement *)((char *)w + 0x1D0);
+    sprite = (GuiElement *)((char *)w + 0x17C);
 
     *(s32 *)((char *)w + 0x230) = 1;
-    rec = *(void **)((char *)w + 0x228);
-    *(f32 *)((char *)rec + 0x0) = 251.0f;
-    *(f32 *)((char *)rec + 0x4) = 170.0f;
+    (*(f32 **)((char *)w + 0x228))[0] = 251.0f;
+    (*(f32 **)((char *)w + 0x228))[1] = 170.0f;
 
     GuiElementInit(e0, (s32)D_1ADBE8, pool);
     GuiElementInit(e1, (s32)D_1ADBF0, pool);
@@ -8055,7 +8072,7 @@ void GuiIconScreenInit(void *w, GuiPool *pool) {
     GuiElementInit(e4, (s32)D_1ADF98, pool);
     GuiTextElementInit(text, (s32)D_1ADC08, pool);
     GuiSpriteElementInit(sprite, (s32)D_1AE098, pool);
-    func_00348BF8(sub, pool);
+    func_00348BF8((char *)w + 0x238, pool);
 
     *GuiElementGetColor(e0) = 0x60442D00;
     *GuiElementGetColor(e1) = (s32)0x80FFDE8D;
@@ -9464,32 +9481,30 @@ S136OS_SLOT(func_00344110);
  * (right-aligned via text flag 2). func_003444D0(w,0), scale the sprite 32x32,
  * then build the sub-widget at +0x2C8 (func_003437F0 + place 0,40 + scale 32),
  * clear +0x360, and run func_003446B8(w,0). */
-/* task #1522 (s136os arm, verify_match_unit vs ROM; not promoted): #else fixed
- * to re-read the record pointer (+0x2B8) before the second float store and to
- * zero the block in the ROM's store order. Residual 178/184: the ROM reads
- * g_guiInstance absolute (`lui $5; lw $5,%lo`) and this unit declares it
- * gp-relative, so every later word shifts; it needs a per-symbol addressing
- * device, which task #1520's branch also adds for this symbol. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiTitledSpriteScreenInit);
+/* MATCHED byte-exact on the s136os arm (task #2012), device-free. The lever
+ * was WHERE the element pointers are formed: the ROM computes them after the
+ * pool record is built and seeded (`addiu s4..s6` around the first
+ * GuiElementInit), so they are assigned there; initialised at the top they
+ * live across the pool block and every callee-saved register shifts (182/186
+ * words, solo s136os harness). Task #1522's record re-read and 4,8,C,0 store
+ * order stand; g_guiInstance reads absolute through the unit's
+ * `.extern g_guiInstance, 12` pin, so the per-symbol device #1522 expected
+ * was not needed.
+ * Params: w = the screen; pool = the GUI pool (may be 0). No return value. */
+/* GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+ * (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in tools/ee/s136os_functions.txt)
+ * and spliced over S136OS_SLOT by tools/ee/s136os_splice.sh. There is no asm
+ * fallback. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_GuiTitledSpriteScreenInit)
+S136OS_SLOT(GuiTitledSpriteScreenInit);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiTitledSpriteScreenInit, unit objdiff): 59.83%,
-   128/214 insns differ. Residual: UNKNOWN-sd + gp/abs-mixed symbol (first differing insn: 'sd s7, 0x48(sp)' vs 'sd s1, 0x18(sp)').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
 void func_003444D0(void *p, u32 idx);
 extern void func_003446B8(void *w, s32 flag);
 extern char *g_guiInstance;
 extern u8 D_1ADBE8[], D_1ADBF0[], D_1ADBF8[], D_1ADC08[], D_1ADC60[], D_1AE098[];
 void GuiTitledSpriteScreenInit(void *w, GuiPool *pool) {
-    GuiElement *btn0 = (GuiElement *)((char *)w + 0x0);
-    GuiElement *btn1 = (GuiElement *)((char *)w + 0x4C);
-    GuiElement *btn2 = (GuiElement *)((char *)w + 0x98);
-    GuiElement *txt0 = (GuiElement *)((char *)w + 0x1B0);
-    GuiElement *txt1 = (GuiElement *)((char *)w + 0x208);
-    GuiElement *txt2 = (GuiElement *)((char *)w + 0x260);
-    GuiElement *sprite = (GuiElement *)((char *)w + 0xE4);
-    void *sub = (char *)w + 0x2C8;
+    GuiElement *btn0, *btn1, *btn2, *txt0, *txt1, *txt2, *sprite;
+    void *sub;
     void *rec;
 
     /* +0x2BC = pool is stored unconditionally (beqz delay slot). */
@@ -9505,6 +9520,14 @@ void GuiTitledSpriteScreenInit(void *w, GuiPool *pool) {
         *(s32 *)((char *)rec + 0x0) = 0;
     }
 
+    btn0 = (GuiElement *)((char *)w + 0x0);
+    btn1 = (GuiElement *)((char *)w + 0x4C);
+    btn2 = (GuiElement *)((char *)w + 0x98);
+    txt0 = (GuiElement *)((char *)w + 0x1B0);
+    txt1 = (GuiElement *)((char *)w + 0x208);
+    txt2 = (GuiElement *)((char *)w + 0x260);
+    sprite = (GuiElement *)((char *)w + 0xE4);
+    sub = (char *)w + 0x2C8;
     *(s32 *)((char *)w + 0x2C0) = 1;
     (*(f32 **)((char *)w + 0x2B8))[0] = 251.0f;
     (*(f32 **)((char *)w + 0x2B8))[1] = 210.0f;
