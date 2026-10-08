@@ -930,41 +930,85 @@ extern s32 g_cinematicFmvFlagGp;
 #define g_cinematicFmvFlagGp g_cinematicFmvFlag
 #endif
 
-/* RESIDUAL CLASS (task #576): UNDIAGNOSED
- *   Both arms measured at unit objdiff (objdiff_build.sh + unit_report.sh,
- *   whole-unit blanket screen, clean tree): sdk29 38.21%, engine96 19.39%
- *   (better arm: sdk29). Neither reaches 100.00%, so this stays INCLUDE_ASM
- *   and the #else below remains the portable impl.
- *   SCREENED ONLY. Both arms were measured; the residual was not diagnosed to a
- *   mechanism. This is an open arm, not a wall -- do not read it as one. */
+/* Queue a cinematic for playback. A negative id disarms the pending FMV
+ * (g_cinematicFmvSize = 0). Otherwise: map the id to its disc-TOC entry
+ * (MapCinematicIdToIndex), mark it watched in g_cinematicUnlockedFlags (ids
+ * below 0xB1 only; word cinId>>2, bit cinId&0x1F - an overlapping, non-standard
+ * bitfield), reset the cinematic queue (func_00289560), and arm the scene via
+ * func_002F6C78 with the entry's FMV offset (entry +0x10 plus the TOC base word
+ * at g_discToc+4), its FMV size (entry +0x14), the entry +0x8 pointer, the
+ * language (0 when the queue's first word is already non-zero, else
+ * g_currentLanguage), and a flag that is 1 only for cinematic id 0xBF.
+ * cinId: cinematic id. No return.
+ *
+ * GUARD (task #1948): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback. On native it is plain C.
+ * What it took, each item priced by removing it ALONE (solo s136 screen,
+ * relocated fields masked, words differing of 56):
+ *   - DEVICE: the disarm store goes through g_cinematicFmvSizeGp, a size-4
+ *     equate of g_cinematicFmvSize (RULING #8620, as g_cinematicFmvFlagGp
+ *     above): the ROM's one %gp_rel reference, `sw $0` in the `b` delay slot at
+ *     0x2F6BB8, with a single exit: 52/56;
+ *   - DEVICE: the language byte is read through g_currentLanguageAbs, a size-16
+ *     offset-0 equate (RULING #8620 / FACT #8036; the ROM's `lui $7; lbu $7,%lo`
+ *     at 0x2F6C48): 13/56;
+ *   - the flag as a conditional expression with BOTH arms locals (`zero`, `one`):
+ *     the ROM's `li $5,1; move $17,$5; movn $17,$0,(cinId^0xBF)`, `$5` reused as
+ *     the sllv operand. Constant arms give xori/sltiu: 46/56; `zero` alone back to
+ *     a literal 0 gives movz with the init the other way round: 12/56;
+ *   - the flag word through a pointer local (`word`): 9/56;
+ *   - the TOC through pointer locals `toc` / `entries = toc + 8` (26/56 and
+ *     18/56 without them), indexed by the byte offset `(idx * 4 + 2) << 2`, which
+ *     cc1 forms as the ROM's `(idx << 4) | 8` (ori) beside a separate `sll` for
+ *     the entry pointer; `idx * 16 + 8` instead: 26/56;
+ *   - the size read from g_discToc itself rather than `toc` (the ROM's
+ *     `addu $10,$3,$2`, base first): 1/56;
+ *   - the language computed AFTER the two TOC reads: 13/56. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F6B98);
+__asm__(".extern g_cinematicFmvSizeGp, 4\n\tg_cinematicFmvSizeGp = g_cinematicFmvSize");
+extern s32 g_cinematicFmvSizeGp;
+__asm__(".extern g_currentLanguageAbs, 16\n\tg_currentLanguageAbs = g_currentLanguage");
+extern u8 g_currentLanguageAbs;
+#else
+#define g_cinematicFmvSizeGp g_cinematicFmvSize
+#define g_currentLanguageAbs g_currentLanguage
+#endif
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002F6B98)
+S136OS_SLOT(func_002F6B98);
 #else
 void func_002F6B98(s32 cinId) {
-    s32 idx;
-    s32 flag;
-    s32 lang;
-    u8 *entry;
+    s32  idx;
+    s32  flag;
+    s32  lang;
+    u32  one;
+    s32  zero;
+    s32  fmvOffset;
+    s32  fmvSize;
+    u8  *toc;
+    u8  *entries;   /* 16-byte TOC entries start at g_discToc + 8 */
+    u32 *word;
 
     if (cinId < 0) {
-        g_cinematicFmvSize = 0;
-        return;
+        g_cinematicFmvSizeGp = 0;
+    } else {
+        idx = MapCinematicIdToIndex(cinId);
+        one = 1;
+        zero = 0;
+        flag = (cinId != 0xBF) ? zero : one;
+        if ((u32)cinId < 0xB1) {
+            word = &g_cinematicUnlockedFlags[(u32)cinId >> 2];
+            *word |= one << (cinId & 0x1F);
+        }
+        func_00289560(g_cinematicQueue);
+        toc = g_discToc;
+        entries = toc + 8;
+        fmvOffset = *(s32 *)(entries + ((idx * 4 + 2) << 2)) + *(s32 *)(toc + 4);
+        fmvSize = *(s32 *)(g_discToc + ((idx * 4 + 2) << 2) + 0xC);
+        lang = (*(s32 *)g_cinematicQueue != 0) ? 0 : g_currentLanguageAbs;
+        func_002F6C78(fmvOffset, fmvSize, (s32)(entries + (idx << 4)), lang, flag);
     }
-    idx = MapCinematicIdToIndex(cinId);
-    flag = (cinId == 0xBF) ? 1 : 0;
-    if ((u32)cinId < 0xB1) {
-        /* asm: srl 2 / sll 2 -> word index cinId>>2 (NOT >>5; non-standard
-         * overlapping bitfield), bit cinId & 0x1F (sllv). */
-        g_cinematicUnlockedFlags[cinId >> 2] |= 1u << (cinId & 0x1F);
-    }
-    func_00289560(g_cinematicQueue);
-    entry = g_discToc + idx * 0x10;
-    lang = (*(s32 *)g_cinematicQueue != 0) ? 0 : g_currentLanguage;
-    func_002F6C78(*(s32 *)(entry + 0x10) + *(s32 *)(g_discToc + 4),
-                  *(s32 *)(entry + 0x14),
-                  (s32)(entry + 8),
-                  lang,
-                  flag);
 }
 #endif
 
