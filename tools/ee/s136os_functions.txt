@@ -19,6 +19,7 @@
 # Add a row only with the image cmp 0 that proves it.
 
 usa text/248B50 func_00348BD0
+usa text/248B50 GuiMenuListHandleInput
 usa text/1A8180 func_002B1BD8
 usa text/1CA080 func_002CE0C8
 usa text/16E980 func_002702D8

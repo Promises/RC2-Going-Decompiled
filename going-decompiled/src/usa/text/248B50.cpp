@@ -268,68 +268,80 @@ void func_00348BF8(void *w, void *pool) {
  * candidate to +0x60, until a selectable row is found or the scan returns to the
  * starting row. Returns 0 from every nav path; 1 only from the confirm-hit path.
  *
- * WALL: 4 callee saves ($16,$17,$18,$31) — frame-layout divergence. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", GuiMenuListHandleInput);
+ * The second clamp writes a NEW variable (`cand`) from `next`, and the row
+ * count is re-read as `w->rowCount - 1` in each clamp rather than held in a
+ * local: loop.c hoists that load/subtract into the pre-header (the ROM's
+ * `lw 0xC0` after the jal), and only after loop does jump.c turn the two
+ * clamps into movn selects — which is why the ROM rematerialises the `-1`
+ * of `next > -1` inside the loop and builds `cand` as a copy of `last`
+ * replaced by `next` (that mechanism is ASSERTED from the output, not traced
+ * in cc1 dumps). Measured on the s136os solo screen (task #1936, NOTE
+ * #9762's harness shape): with `last` held in a local the body reads 22/56
+ * (NOTE #9762's best); `last` inline but the second clamp in place
+ * (`if (cand < 0) cand = rowCount - 1`) 33/56, 55 built; as a ternary into
+ * `cand` 9/56; the if/else below 0/56. No device.
+ *
+ * GUARD (task #1936): on EE the #else body below is the image's
+ * GuiMenuListHandleInput, compiled alone by the s136os arm (SN 2.95.3 v1.36
+ * -fopt-stack, FACT #8810; row in tools/ee/s136os_functions.txt) and spliced
+ * over S136OS_SLOT by tools/ee/s136os_splice.sh. There is no asm fallback: a
+ * build that skips the splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_GuiMenuListHandleInput)
+S136OS_SLOT(GuiMenuListHandleInput);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern void PlayGlobalSound(s32 id, s32 a, s32 b);
 /* (end of this body's declarations) */
-/* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
- * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
- * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
- * cc1 2.96-ee-001003-1): sdk29 37.52% / engine96 63.52%.
- * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 49/56 words differ;
- * frozen-.s census: 4 callee GPR saves, 0 fp saves.
- * Residual: PACKED-SAVE (4 callee GPR saves) — 5 of the 49 differing words are frame/save-slot; remainder REGALLOC/SCHED, not iterated. */
-s32 GuiMenuListHandleInput(GuiWidget *w, u32 inputMask) {
-    s32 *curIdx = (s32 *)((char *)w + 0x60);
-    s32 *rowEnable = (s32 *)((char *)w + 0x6C);   /* rowEnable[idx] != 0 => selectable */
-    s32 count = *(s32 *)((char *)w + 0xC0);
+
+/* The GuiMenuList fields this body touches (include/gui.h's GuiWidget
+ * GuiMenuList variant, same offsets). */
+typedef struct GuiMenuListNav {
+    /* 0x00 */ u8 pad00[0x60];
+    /* 0x60 */ s32 selectedRow;
+    /* 0x64 */ u8 pad64[0x8];
+    /* 0x6C */ s32 rowEnabled[16];
+    /* 0xAC */ u8 padAC[0x14];
+    /* 0xC0 */ s32 rowCount;
+} GuiMenuListNav;
+
+s32 GuiMenuListHandleInput(GuiMenuListNav *w, u32 inputMask) {
     s32 dir;
     s32 start;
+    s32 next;
     s32 cand;
 
+    dir = 0;
     if (inputMask & 0x1000) {
         dir = -1;
     } else if (inputMask & 0x4000) {
         dir = 1;
-    } else {
-        dir = 0;
-        if (inputMask & 0x40) {
-            /* confirm: a selectable current row returns 1 immediately; an
-             * unselectable one leaves dir 0 and falls to the no-nav return. */
-            if (rowEnable[*curIdx] != 0) {
-                return 1;
-            }
+    } else if (inputMask & 0x40) {
+        if (w->rowEnabled[w->selectedRow] != 0) {
+            return 1;
         }
     }
-
-    /* no nav direction (no nav bit, or confirm-miss): return without sound. */
     if (dir == 0) {
         return 0;
     }
-
+    start = w->selectedRow;
     PlayGlobalSound(3, 0, 0);
-
-    start = *curIdx;
-    for (;;) {
-        cand = *curIdx + dir;
-        if ((count - 1) < cand) {
-            cand = 0;            /* wrapped past the last row */
+    do {
+        next = w->selectedRow + dir;
+        if (next > w->rowCount - 1) {
+            next = 0;              /* wrapped past the last row */
         }
-        if (cand < 0) {
-            cand = count - 1;    /* wrapped before the first row */
+        if (next < 0) {
+            cand = w->rowCount - 1; /* wrapped before the first row */
+        } else {
+            cand = next;
         }
-        *curIdx = cand;
-        if (rowEnable[cand] != 0) {
-            return 0;            /* landed on a selectable row */
+        w->selectedRow = cand;
+        if (w->rowEnabled[cand] != 0) {
+            return 0;              /* landed on a selectable row */
         }
-        if (start == cand) {
-            return 0;            /* scanned every row, none selectable */
-        }
-    }
+    } while (start != cand);      /* scanned every row, none selectable */
+    return 0;
 }
 #endif
 
