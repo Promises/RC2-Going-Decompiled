@@ -919,55 +919,78 @@ s32 FindWeaponSlotByName(s32 icon) {
  * {itemId, textId} pair-list D_1A8B40[level] (-1 terminated); the item's textId is
  * found by linear search of that list. Item 0xA overrides the search result with a
  * level-based id (0x1296/0x1297, alternating for upgrade level >= 2). Finally it
- * dispatches the resolved text id (or 0 when none was found) via func_002B1880.
+ * dispatches the resolved text id (or 0 when none was found) via func_002B1880
+ * and returns its result.
  *
- * The matching build keeps the asm (callee-save + jal gate with a 0xA-bounded scan
- * whose register colouring cc1 does not reproduce). The #else below is the
- * functionally-equivalent portable body (the original's unaligned ldl/ldr copy of
- * D_1A8B40 into a stack buffer before indexing is just a compiler artifact of
- * copy-then-index; a direct index is equivalent). */
+ * MATCHED on the s136os arm (task #1878) at the unit's -O2 default
+ * (S136EXTRA="", RULING #9450). Priced by reverting each alone in the solo
+ * s136os harness (words differing / ROM 111):
+ *   - the 7-pointer list table is struct-copied to the stack and indexed there
+ *     (the ROM's ldl/ldr x3 + lw/sw copy); indexing D_1A8B40 directly: 77/111.
+ *   - the flag is read through g_tutorialHealthFlagAbs, an offset-0 assembler
+ *     alias of D_18C964 (= g_health+0x678) declared 16 bytes so cc1 splits it
+ *     (`lui` in the branch delay slot); the g_health+0x678 expression: 9/111,
+ *     a scalar (gas-macro) alias: 10/111.
+ *   - textId is set to -1 after the announcement calls, not at its declaration
+ *     (else it is held in a callee save: 111/111).
+ *   - the upgrade level is re-read for the index, not cached (43/111).
+ *   - the search indexes the list (i += 2), not a walking pointer (61/111).
+ *   - the dispatch is two calls in a ?:, as the ROM's two jal sites;
+ *     one call on a ?: argument: 34/111.
+ */
 extern s32 func_00289840(s32 textIndex, s32 voiceHandle); /* defined below, this unit */
 extern s32 func_002B1880(s32 stringId, s32 arg);          /* text/1A8180 */
 extern s32 D_1A8B40[]; /* [upgradeLevel 0..5] -> ptr to {itemId,textId,...,-1} list */
+typedef struct AnnounceLists {
+    s32 *list[7];      /* the D_1A8B40 table as one 0x1C-byte copyable block */
+} AnnounceLists;
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_00288F30);
+__asm__(".extern g_tutorialHealthFlagAbs, 16\n\tg_tutorialHealthFlagAbs = D_18C964");
+extern u16 g_tutorialHealthFlagAbs[8];
+#else
+#define g_tutorialHealthFlagAbs ((u16 *)((u8 *)&g_health + 0x678))
+#endif
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00288F30)
+S136OS_SLOT(func_00288F30);
 #else
 s32 func_00288F30(s32 itemId) {
+    AnnounceLists lists;
     s32 *list;
-    s32 textId = -1;
-    u8 slot, level;
+    s32 textId;
+    s32 i;
 
     if (itemId == 0xA) {
         func_00289840(0x9F8, 0x4F);
     } else if (itemId == 0x1B) {
         func_00289840(0x9F7, 0x4E);
-    } else if (*(u16 *)((u8 *)&g_health + 0x678) == 0) {
+    } else if (g_tutorialHealthFlagAbs[0] == 0) {
         func_00289840(0x9AA, 0x1);
     }
 
-    slot = g_itemEquippedSlot[itemId];
-    level = g_weaponTable[slot].upgradeLevel;
-    list = (level < 6) ? (s32 *)D_1A8B40[level] : (s32 *)0;
+    lists = *(AnnounceLists *)D_1A8B40;
+    textId = -1;
+    list = 0;
+    if (g_weaponTable[g_itemEquippedSlot[itemId]].upgradeLevel < 6) {
+        list = lists.list[g_weaponTable[g_itemEquippedSlot[itemId]].upgradeLevel];
+    }
     if (list != 0) {
-        s32 *p = list;
-        while (*p != -1) {
-            if (*p == itemId) {
-                textId = p[1];
+        for (i = 0; list[i] != -1; i += 2) {
+            if (list[i] == itemId) {
+                textId = list[i + 1];
                 break;
             }
-            p += 2;
         }
     }
 
     if (itemId == 0xA) {
-        level = g_weaponTable[g_itemEquippedSlot[0xA]].upgradeLevel;
+        s32 level = g_weaponTable[g_itemEquippedSlot[0xA]].upgradeLevel;
         if (level >= 2) textId = 0x1296;
         if (level >= 3) textId = 0x1297;
         if (level >= 4) textId = 0x1296;
         if (level >= 5) textId = 0x1297;
     }
 
-    return func_002B1880(textId < 0 ? 0 : textId, -1);
+    return (textId >= 0) ? func_002B1880(textId, -1) : func_002B1880(0, -1);
 }
 #endif
 
