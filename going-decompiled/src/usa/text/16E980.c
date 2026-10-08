@@ -37,7 +37,7 @@
  * 05_all29_report.txt, 07_all96_report.txt, classes 08/09_classify*.txt). None
  * reached 100 on either arm; sdk29 >= engine96 on 31 of 40, but 32 of those are
  * PACKED-SAVE-walled there. The wall is a property of the 2.9 arm only: the
- * s136os arm (SN 1.36 -fopt-stack) has the ROM's 8-byte slots, and sixteen of
+ * s136os arm (SN 1.36 -fopt-stack) has the ROM's 8-byte slots, and seventeen of
  * these arms are matched there (FACTs #8830, #9658, #9707, #9856, #10000; the
  * s136os re-screen of the remaining arms is NOTE #9857, with func_00270D60 and
  * func_00273D20 taken further in NOTEs #9994 and #9998). Table figures below are the
@@ -101,14 +101,14 @@ __asm__(".extern g_vramTextureBase_28, 16");  /* func_0026FE58 */
 __asm__(".extern g_bRawReadFellBack_34, 16"); /* func_0026FE58 */
 __asm__(".extern g_cameraCallbackCount, 16"); /* func_00270220 */
 __asm__(".extern g_vramFrameBufB, 16");       /* ShowSplashImage, func_0026EAC8 */
+__asm__(".extern g_nGameState, 16");          /* AddScreenSpriteFx */
 
 /* True small data (complete <=8-byte externs, %gp_rel). */
 extern s32 D_1A8630;             /* screen-sprite-FX alpha cap (set by the HUD fade) */
 
 /* Large / ordinary-absolute globals. */
-extern s32 g_nGameState[];       /* incomplete-array decl: keeps the 4-byte int
-                                  * out of cc1 small data (two-insn absolute
-                                  * access like the original) */
+extern s32 g_nGameState;         /* cc1-small, assembler-absolute: the
+                                  * `.extern g_nGameState, 16` above */
 extern f32 g_screenFadeBlack;    /* black screen fade level 0..1 */
 extern f32 g_screenFadeWhite;    /* white screen flash level 0..1 */
 
@@ -2210,7 +2210,7 @@ void CheckCameraUnderwater(void) {
     Vec4 bottom; /* probe segment end (camera z - 0.75) */
     s32 i;
 
-    if (g_cameraState.activeCamera.p->type == 6 || g_nGameState[0] != 0) {
+    if (g_cameraState.activeCamera.p->type == 6 || g_nGameState != 0) {
         g_cameraState.underwater = 0;
         return;
     }
@@ -2569,69 +2569,98 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00272CC0);
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00273320);
 
-/* AddScreenSpriteFx(owner, color, worldPos, texId, mode, x, y, angle): queue a
- * screen-space sprite effect (cap 6 per frame; drawn by
- * DrawScreenSpriteFxQueue), skipped in cutscene state (g_nGameState==2).
- * Anchors at *worldPos when given (hasWorldPos=1) else at direct screen x/y;
- * the color alpha is capped by D_1A8630. mode -1 = derive: UI texture ids 0xD
- * and 0x1F..0x27 default to single-quad mode 2 at a fixed pi/2 angle; any
- * other explicit mode stores the caller's mode/angle (drawFlags=4).
- *
- * Best 83%, three independent structural deltas: (1) the original uses the
- * branch-LIKELY form (beqzl) on the worldPos==NULL test, which cc1 only emits
- * for the inverted block layout we can't drive from C; (2) it keeps a CSE
- * copy of the queue base in a second temp (move t4,v0) where cc1 rematerialises
- * the %lo; (3) the pi/2 immediate is the SDK PR_PI/2 macro value 0x3FC90FDC,
- * which the nearest float literal (0x3FC90FDB) misses by 1 ULP. WALL:
- * branch-likely layout + CSE-temp + macro-constant ULP. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", AddScreenSpriteFx);
+/* AddScreenSpriteFx(size, angle, angleStep, owner, color, worldPos, texId,
+ * mode): queue one screen-space sprite effect for DrawScreenSpriteFxQueue
+ * (cap 6 per frame); nothing is queued in cutscene state (g_nGameState == 2).
+ *   size, angle, angleStep: stored at +0x10, +0x1C and +0x28. The drawer reads
+ *       them as sprite size, rotation and per-copy angle step (NOTE #5502), so
+ *       the struct's `x`/`y` field names are historical, not screen x/y.
+ *   owner:    the owner moby (+0x20); the drawer skips the entry once it dies.
+ *   color:    RGBA; its alpha is capped at D_1A8630.
+ *   worldPos: world anchor, copied with hasWorldPos = 1; NULL leaves the entry
+ *             unanchored (hasWorldPos = 0), drawn at the screen centre.
+ *   texId:    UI texture id.
+ *   mode:     draw mode stored as given with drawFlags = 4 and angleStep; -1
+ *             derives it: texIds 0xD and 0x1F..0x27 get mode 2 with a pi/2
+ *             step (0x3FC90FDC, one ulp above the nearest float to pi/2) and
+ *             drawFlags 0; any other texId leaves mode/angleStep/drawFlags as
+ *             the slot's previous occupant wrote them (the ROM does too).
+ * No return value.
+ * MATCHED on the s136os arm (task #1986). Every item below was priced by
+ * undoing it ALONE in a solo s136 compile (positional word differences
+ * against the ROM's 64, relocations masked, li.s expanded as asm_unit.sh
+ * does; the full body is 0):
+ *   - the derive test is a `switch` with a `case 0x1F ... 0x27` range: cc1
+ *     emits the ROM's ==0xD / <0xD / <0x28 / <0x1F decision tree for it,
+ *     where the && chain folds into one subtract-and-compare (60 words, 29);
+ *   - D_1A8630 is read after the early return, as the ROM loads it after the
+ *     count test (read at its declaration: 15);
+ *   - the explicit-mode branch stores mode, angleStep, drawFlags in that
+ *     order (mode, drawFlags, angleStep: 3);
+ *   - g_nGameState is a complete `s32` with the unit-level `.extern
+ *     g_nGameState, 16` (the 1907F0/1CA080 model), so it loads as gas's
+ *     `lui $3 / lw $3,%lo($3)` (the old incomplete array: 2);
+ *   - DEVICE: the EMPTY volatile barrier between the anchor copy and the
+ *     flag store (RULING #8483; emits nothing) keeps `li 1 / sh` below the
+ *     `lq / sq`, so the NULL test fills its slot from the NULL arm as the
+ *     ROM's `beqzl` + `sh $0` instead of hoisting the `li` (66 words, 38);
+ *   - DEVICE: `one` pinned to $3 (RULING #8598): behind the barrier the
+ *     constant otherwise reuses the copy's $2 where the ROM has $3 (2).
+ * GUARD: on EE this C is compiled alone by SN 2.95.3 v1.36 -fopt-stack
+ * (tools/ee/s136os_functions.txt) and spliced over the S136OS_SLOT line by
+ * tools/ee/s136os_splice.sh; native compiles it with EE_REG empty and the
+ * barrier emitting nothing. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_AddScreenSpriteFx)
+S136OS_SLOT(AddScreenSpriteFx);
 #else
-/* TODO(match): functional equivalent - not byte-exact; branch-likely block
-   layout + a CSE copy of the queue base + the PR_PI/2 macro 0x3FC90FDC differing
-   from the nearest float literal by 1 ULP (see header note above). */
-void AddScreenSpriteFx(f32 x, f32 y, f32 angle, void *owner, u32 color,
-                       const u_long128 *worldPos, s32 texId, s32 mode) {
-    s32 alphaCap = D_1A8630;
+void AddScreenSpriteFx(f32 size, f32 angle, f32 angleStep, void *owner,
+                       u32 color, const u_long128 *worldPos, s32 texId,
+                       s32 mode) {
+    ScreenSpriteFx *fx;
+    s32 alphaCap;
 
-    if (g_nGameState[0] == 2 || g_screenSpriteFxQueue.count >= 6) {
+    if (g_nGameState == 2 || g_screenSpriteFxQueue.count >= 6) {
         return;
     }
 
-    {
-        ScreenSpriteFx *fx = &g_screenSpriteFxQueue.entries[g_screenSpriteFxQueue.count];
-
-        fx->owner = owner;
-        fx->x = x;
-        fx->y = y;
-        fx->color = color;
-        fx->texId = texId;
-        if ((s32)(color >> 24) > alphaCap) {
-            fx->color = (color & 0xFFFFFF) | (alphaCap << 24);
-        }
-
-        if (worldPos == NULL) {
-            fx->hasWorldPos = 0;
-        } else {
-            fx->worldPos = *worldPos;
-            fx->hasWorldPos = 1;
-        }
-
-        if (mode == -1) {
-            if (texId == 0xD || (texId > 0xC && texId < 0x28 && texId > 0x1E)) {
-                fx->mode = 2;
-                /* PR_PI/2 (0x3FC90FDC) */
-                *(u32 *)&fx->angle = 0x3FC90FDC;
-                fx->drawFlags = 0;
-            }
-        } else {
-            fx->mode = mode;
-            fx->drawFlags = 4;
-            fx->angle = angle;
-        }
-
-        g_screenSpriteFxQueue.count++;
+    alphaCap = D_1A8630;
+    fx = &g_screenSpriteFxQueue.entries[g_screenSpriteFxQueue.count];
+    fx->owner = owner;
+    fx->x = size;
+    fx->y = angle;
+    fx->color = color;
+    fx->texId = texId;
+    if ((s32)(color >> 24) > alphaCap) {
+        fx->color = (color & 0xFFFFFF) | (alphaCap << 24);
     }
+
+    if (worldPos != NULL) {
+        fx->worldPos = *worldPos;
+        __asm__ __volatile__("");
+        {
+            register s32 one EE_REG("$3") = 1;
+            fx->hasWorldPos = one;
+        }
+    } else {
+        fx->hasWorldPos = 0;
+    }
+
+    if (mode == -1) {
+        switch (texId) {
+        case 0xD:
+        case 0x1F ... 0x27:
+            fx->mode = 2;
+            fx->angle = 1.57079649f;   /* 0x3FC90FDC */
+            fx->drawFlags = 0;
+            break;
+        }
+    } else {
+        fx->mode = mode;
+        fx->angle = angleStep;
+        fx->drawFlags = 4;
+    }
+
+    g_screenSpriteFxQueue.count++;
 }
 #endif
 
