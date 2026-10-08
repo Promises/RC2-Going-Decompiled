@@ -1245,7 +1245,73 @@ s32 func_00128440(s32 arg0) {
     return D_00143180[0];
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_001284B0);
+struct ResSubObj;  /* the DMA'd device-frame pair, defined below */
+extern char D_0013B888[];  /* "sceDbcCreateSocket: rpc error\n" */
+
+/* A libdbc socket's 16-byte device name, wrapped so it copies as one block. */
+typedef struct DbcName {
+    u8 b[16];
+} DbcName;
+
+/* What sceDbcCreateSocket sends: the caller's socket parameters with the
+ * library's own `type` word inserted after `option` (sceDbcPortOpen sets it). */
+typedef struct DbcSocketParam {
+    u32 option;
+    s32 type;
+    s32 port;
+    s32 slot;
+    s32 number;
+    DbcName name;
+} DbcSocketParam;
+
+/* The socket-creation view of the shared RPC buffer D_00143180: the parameter
+ * block, the server's result (the socket index) at +0x24, then the two
+ * receive buffers the IOP DMAs device frames into. */
+typedef struct DbcSocketRequest {
+    u32 option;
+    s32 type;
+    s32 port;
+    s32 slot;
+    s32 number;
+    DbcName name;
+    s32 result;
+    struct ResSubObj *buf0;
+    struct ResSubObj *buf1;
+} DbcSocketRequest;
+
+/**
+ * libdbc sceDbcCreateSocket (named by its ROM error string, D_0013B888): copy
+ * `param` into the RPC buffer together with the two DMA receive buffers and
+ * ask the IOP server for a socket (RPC 0x80000901, blocking, client
+ * D_00143108). Returns the socket index from the reply, or 0 after printing
+ * the error on an RPC failure. The name is copied a byte at a time, as the ROM
+ * does.
+ *
+ * The buffer arguments are pointers: typed `s32` they change the copy loop's
+ * register allocation (9 of 50 words); field names and declaration order are
+ * inert.
+ */
+s32 func_001284B0(DbcSocketParam *param, struct ResSubObj *buf0,
+                  struct ResSubObj *buf1) {
+    DbcSocketRequest *req = (DbcSocketRequest *)D_00143180;
+    s32 i;
+    req->buf0 = buf0;
+    req->buf1 = buf1;
+    req->option = param->option;
+    req->type = param->type;
+    req->port = param->port;
+    req->slot = param->slot;
+    req->number = param->number;
+    for (i = 0; i < 16; i++) {
+        req->name.b[i] = param->name.b[i];
+    }
+    if (func_0011D620(&D_00143108, 0x80000901, 0, D_00143180, 0x400,
+                      D_00143180, 0x400, 0, 0) < 0) {
+        func_00128898(D_0013B888);
+        return 0;
+    }
+    return req->result;
+}
 
 extern void func_0011B3D0(void *arg0, void *arg1);
 extern char D_0013B8C8[];  /* "sceDbcGetDepNumber: rpc error\n" */
@@ -1448,7 +1514,71 @@ s32 func_001288C0(void) {
     return 1;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", sceDbcPortOpen);
+/* The caller's socket parameters: the layout of the vendored libpad2.h
+ * scePad2SocketParam {option, port, slot, number, name[16]} (FACT #5893). */
+typedef struct Pad2SocketParam {
+    u32 option;
+    s32 port;
+    s32 slot;
+    s32 number;
+    DbcName name;
+} Pad2SocketParam;
+
+/**
+ * Open a controller socket (the shape of libpad2's scePad2CreateSocket,
+ * FACT #5893): `buf` must be 64-byte aligned (else -1) and holds the two
+ * 0x80-byte frame instances the IOP DMAs into. Copies `param` (or zeroes when
+ * it is NULL) into a libdbc socket request with `type` 1 and option bit 0 set,
+ * creates the socket with func_001284B0 (a negative result is returned as
+ * is), records `buf` in the socket's table slot and marks the slot used, then
+ * clears both instances (header bytes, `valid`, the selection key, and the
+ * first 0x20 payload bytes to 0xFF). Returns the socket index.
+ *
+ * The slot's `unk0` is written before `obj` in source; the other order swaps
+ * the ROM's two stores (6 of 82 words).
+ */
+s32 sceDbcPortOpen(Pad2SocketParam *param, ResSubObj *buf) {
+    DbcSocketParam sp;
+    ResSubObj *obj;
+    s32 h;
+    s32 i;
+    if ((u32)buf & 0x3F) {
+        return -1;
+    }
+    if (param != 0) {
+        sp.option = param->option;
+        sp.port = param->port;
+        sp.slot = param->slot;
+        sp.number = param->number;
+        sp.name = param->name;
+    } else {
+        sp.option = 0;
+        sp.port = 0;
+        sp.slot = 0;
+        sp.number = 0;
+        sp.name.b[0] = 0;
+    }
+    sp.type = 1;
+    sp.option |= 1;
+    h = func_001284B0(&sp, buf, buf + 1);
+    if (h < 0) {
+        return h;
+    }
+    D_00143640[h].unk0 = 1;
+    D_00143640[h].obj = buf;
+    obj = buf;
+    for (i = 0; i < 2; i++) {
+        obj->state = 0;
+        obj->unk7C = 0;
+        obj->pad1 = 0;
+        obj->pad3 = 0;
+        obj->length = 0;
+        obj->valid = 0;
+        memset(obj->data, 0xFF, 0x20);
+        obj++;
+    }
+    return h;
+}
 
 /* func_00128A48: 0x8 bytes of inter-function padding split off by symbol_addrs
  * size:0x8; the real function begins at func_00128A50. Pure padding, no C. */
