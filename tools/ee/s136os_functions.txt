@@ -568,3 +568,4 @@ usa text/198FA0 CommitProgressCheckpoint
 usa text/1D54C0 func_002D8E60
 usa text/1D54C0 func_002D8270
 usa text/1D54C0 func_002D9C18
+usa text/1D54C0 func_002DC520

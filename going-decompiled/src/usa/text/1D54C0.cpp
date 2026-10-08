@@ -11,6 +11,16 @@
 #define ROM_DATA_ADDR(sym, addr) (addr)
 #endif
 
+/* EE_REG(r) binds a local register variable to EE register `r` where the
+ * compiler colours a value differently from the ROM (REGISTER-PIN DEVICE,
+ * RULING #8598: cc1 still emits every instruction, the pin only steers
+ * allocation); natively a plain local, as "$3" is not a register name there. */
+#ifndef TARGET_NATIVE
+#define EE_REG(r) __asm__(r)
+#else
+#define EE_REG(r)
+#endif
+
 /*
  * text/1D54C0 — front-end / pause-menu screens band, part B (vaddr
  * 0x2D5540..0x2DFFFF). Carved out of the big text/1B21E8 asm tile as
@@ -2972,47 +2982,119 @@ s32 func_002DC378(MenuWidget *obj) {
 
 /* Draw an options list (rows of stride 0x18): each row is a left label plus a
  * right-justified value picked by the row's current option byte. The selected
- * row (obj->0x38) is highlighted. Rows are spaced evenly. Returns 2. */
+ * row (obj->0x38) is highlighted. Rows are spaced evenly. Returns 2.
+ *
+ * obj: the options widget. +0x20 width, +0x24 height, +0x34 the row table
+ * (6 words per row, a zero first word ends it), +0x38 the selected row.
+ * Each row: word 0 the label's string id, word 1 a pointer to the row's
+ * current option byte, words 2.. the value string ids per option. Rows are
+ * counted first; their pitch is height / (count + 1), the first row 8 px
+ * above it. Labels go at x 12 in the highlight colour 0x8020FFFF when
+ * selected, else 0x80FFA888; values right-justified at width - 12 in
+ * 0x80FFA888.
+ *
+ * MATCHED on the s136os arm (SN 2.95.3 v1.36 -fopt-stack, task #1929). What
+ * each piece is worth, measured by removing it alone (solo s136 compile,
+ * relocated fields masked, words differing of 101):
+ *   - R5900_SHORT_LOOP_PAD3 (below): the row-count loop is four instructions
+ *     and the ROM's assembler padded it with three nops before the backward
+ *     branch. Without it: 78/101 at 97 words. Its "r"(next) operand on the
+ *     count keeps the increment after the pad, for reorg to put it in the
+ *     delay slot (80/101 at 103 words without it); a "memory" clobber is not
+ *     needed here.
+ *   - step pinned to $23 (EE_REG, RULING #8598): the quotient is mflo'd
+ *     straight into the long-lived register in the ROM, while cc1 gives it a
+ *     temporary and copies it, which shifts the other callee saves. 14/101
+ *     without it. About fifteen pin-free spellings (a separate quotient
+ *     local, `step /= `, `n++` before the divide, tied empty fences on step
+ *     or y) reached 14/101 at best.
+ *   - the numerator pinned to $3: with step pinned, the numerator would
+ *     otherwise share $23 (it dies at the div). 2/101 without it.
+ *   - y formed before the row-table test: 10/101 inside the if.
+ *   - the row pointer stepped by the option byte (row += opt, then row[2])
+ *     rather than indexed: the ROM adds into the pointer register. 2/101.
+ *   - the label colour is a signed 32-bit value (lui/ori, picked by movn),
+ *     the value colour a u64 constant (ori/dsll/ori), so the EE arm calls
+ *     the ROM symbols with their 64-bit-colour signatures, as 1CA080.cpp and
+ *     func_002D6028's arm declare them. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DC520);
+/* R5900 SHORT-LOOP PAD (SCHEDULING DEVICE, RULING #8435; the same device and
+ * rationale as 191238.cpp's R5900_SHORT_LOOP_PAD3): "+r"(v) pins it between
+ * the load and the branch that tests it, "r"(next) keeps the next
+ * instruction after it. Emits only nops; empty on native. */
+#define R5900_SHORT_LOOP_PAD3(v, next) \
+    __asm__(".set noreorder\n\tnop\n\tnop\n\tnop\n\t.set reorder" : "+r"(v) : "r"(next))
+#else
+#define R5900_SHORT_LOOP_PAD3(v, next) ((void)0)
+#endif
+/* GUARD (task #1929): on EE the #else body below is the image's func_002DC520,
+ * compiled alone by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810;
+ * row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002DC520)
+S136OS_SLOT(func_002DC520);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern void AppendGsRegPacket(s32 regId, u64 value);
 extern s32 GetLocalizedString(s32 id);
+#ifndef TARGET_NATIVE
+/* The ROM symbols, with their ROM signatures (as 1CA080.cpp declares them):
+ * the colour is a 64-bit value. EE has no definition under the
+ * DrawStringFont1 / DrawFont1RightJustifiedLabel names. */
+extern void func_0027FBA8(s32 x, s32 y, u64 color, s32 str, s64 wrap);
+extern void func_00280090(s32 x, s32 y, u64 color, s32 str, s64 wrap);
+#define DRAW_LABEL       func_0027FBA8
+#define DRAW_RIGHT_LABEL func_00280090
+#else
 extern void DrawStringFont1(s32 x, s32 y, u32 color, s32 str, s32 wrap);
 extern void DrawFont1RightJustifiedLabel(s32 x, s32 y, u32 color, s32 str, s32 wrap);
+#define DRAW_LABEL       DrawStringFont1
+#define DRAW_RIGHT_LABEL DrawFont1RightJustifiedLabel
+#endif
 /* (end of this body's declarations) */
-/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
- * objdiff): sdk29 60.70% / engine96 59.09%; better arm sdk29; 99 differing
- * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
- * insn: ROM `addiu sp,sp,-80` vs `addiu sp,sp,-160`. Not iterated in t495. */
-    /* TODO(match): functional equivalent - not byte-exact. */
 s32 func_002DC520(MenuWidget *obj) {
     u8 *o = (u8 *)obj;
-    s32 *rows = *(s32 **)(o + 0x34);
-    s32 n = 0;
-    s32 step, y, i;
-    AppendGsRegPacket(0x47, 0x2004b);
+    s32 *p;
+    s32 count, row, y, word;
+    register s32 step EE_REG("$23");
+
+    AppendGsRegPacket(0x47, 0x2004B);
     Begin2dDrawBatch(0);
-    while (rows[n * 6] != 0) n++;
-    step = *(s32 *)(o + 0x24) / (n + 1);
-    if (rows[0] != 0) {
-        y = step - 8;
-        for (i = 0; ; i++) {
-            s32 *row = (s32 *)((u8 *)*(s32 **)(o + 0x34) + i * 0x18);
-            s32 col = (i == *(s32 *)(o + 0x38)) ? 0x8020ffff : 0x80ffa888;
-            u8 *optByte = *(u8 **)(row + 1);
-            DrawStringFont1(0xc, y, col, GetLocalizedString(row[0]), -1);
-            DrawFont1RightJustifiedLabel(*(s32 *)(o + 0x20) - 0xc, y, 0x80ffa888,
-                                         GetLocalizedString(row[*optByte + 2]), -1);
-            if (*(s32 *)((u8 *)*(s32 **)(o + 0x34) + (i + 1) * 0x18) == 0) break;
+    p = *(s32 **)(o + 0x34);
+    count = 0;
+    if (*p != 0) {
+        do {
+            p += 6;
+            word = *p;
+            R5900_SHORT_LOOP_PAD3(word, count);
+            count++;
+        } while (word != 0);
+    }
+    {
+        register s32 height EE_REG("$3") = *(s32 *)(o + 0x24);
+        step = height / (count + 1);
+    }
+    row = 0;
+    y = step - 8;
+    if (**(s32 **)(o + 0x34) != 0) {
+        do {
+            s32 *entry = (s32 *)(*(u8 **)(o + 0x34) + row * 0x18);
+            s32 color = (row == *(s32 *)(o + 0x38)) ? 0x8020FFFF : 0x80FFA888;
+            DRAW_LABEL(0xC, y, color, GetLocalizedString(entry[0]), -1);
+            entry += **(u8 **)(entry + 1);
+            DRAW_RIGHT_LABEL(*(s32 *)(o + 0x20) - 0xC, y, 0x80FFA888,
+                             GetLocalizedString(entry[2]), -1);
             y += step;
-        }
+            row++;
+        } while (*(s32 *)(*(u8 **)(o + 0x34) + row * 0x18) != 0);
     }
     End2dDrawBatch();
     return 2;
 }
+#undef DRAW_LABEL
+#undef DRAW_RIGHT_LABEL
 #endif
 
 /* Build the galactic-map level-select list: for each available level (from
@@ -3873,15 +3955,12 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_0
  * so the macro expands absolutely. The ROM reads those three tables as adjacent
  * lui/addiu pairs; as a two-word macro the address cannot go into a delay slot,
  * which is what makes the skill-point path's branches fill as the ROM's do.
- * EE_REG(r) binds a local register variable to EE GPR `r` where cc1 2.9's
- * allocator colours a value differently from the ROM; natively a plain local.
  */
 extern u8  D_138180[];
 extern s32 g_cheatInputCount;
 extern u8  g_cheatCodeSymbols[];
 extern u8  D_1395B8[];
 #ifndef TARGET_NATIVE
-#define EE_REG(r) __asm__(r)
 __asm__(".extern D_1A8CEC, 16");
 __asm__(".extern g_inventoryNewFlagAbs, 16\n\tg_inventoryNewFlagAbs = g_inventoryNewFlag");
 __asm__(".extern g_inventoryOwnedAbs, 16\n\tg_inventoryOwnedAbs = g_inventoryOwned");
@@ -3890,7 +3969,6 @@ extern u8 g_inventoryNewFlagAbs[8];
 extern u8 g_inventoryOwnedAbs[8];
 extern u8 g_skillPointFlagsAbs[8];
 #else
-#define EE_REG(r)
 extern u8 g_inventoryNewFlag[];
 #define g_inventoryNewFlagAbs g_inventoryNewFlag
 #define g_inventoryOwnedAbs   g_inventoryOwned
