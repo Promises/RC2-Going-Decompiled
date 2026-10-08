@@ -489,10 +489,16 @@ fi
 # length is rom_size's. Fails closed: rc 3, <unit.s> untouched, every
 # offender named with both lengths.
 ROMSZ="$TMP/rom_sizes"; : > "$ROMSZ"; BADO=""
+# A missing .s is tested first: under `set -eu` a bare `v="$(rom_size …)"`
+# exits with awk's rc 2 before the case below can name the file (FACT #9814).
+# splat emits the leaf from the unit's S136OS_SLOT (tools/splat_ext/run_splat.py,
+# task #1882); a tree without it was split without that spelling.
 for f in $ROWS; do
-  v="$(rom_size "going-decompiled/asm/$REGION/nonmatchings/$UNIT/$f.s" "$f" 2>&1)"
+  p="going-decompiled/asm/$REGION/nonmatchings/$UNIT/$f.s"
+  if [ ! -f "$p" ]; then v="no ROM .s at $p (splat emits it from S136OS_SLOT($f) via tools/splat_ext/run_splat.py; re-split with scripts/configure.py --region $REGION)"
+  else v="$(rom_size "$p" "$f" 2>&1)" || v="ORACLE rom_size failed on $p: $v"; fi
   case "$v" in ''|*[!0-9]*) BADO="$BADO
-$f: ${v:-no ROM .s at going-decompiled/asm/$REGION/nonmatchings/$UNIT/$f.s}" ;; *) echo "$f $v" >> "$ROMSZ" ;; esac
+$f: ${v:-no ROM length read from $p}" ;; *) echo "$f $v" >> "$ROMSZ" ;; esac
 done
 BADO="$(printf '%s' "$BADO" | sed '/^$/d')"
 [ -z "$BADO" ] || { echo "s136os_splice: FATAL [$REGION/$UNIT] — the ROM length of a row cannot be read from its splat .s, so its spliced length cannot be checked (task #1531). Nothing was written to $UNIT_S." >&2; printf '%s\n' "$BADO" | sed 's/^/    /' >&2; exit 3; }
