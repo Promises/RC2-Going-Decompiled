@@ -2419,7 +2419,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012B8B0);
  * padding. frames[] is the 3x4 table of buffer pointers func_0012FA18 walks:
  * rows at 0x1B8/0x1C8/0x1D8. */
 typedef struct {
-    u8  _pad0[0xDC];
+    u8  _pad0[0xD4];
+    s32 firstPictureStructure; /* 0x0D4: the first picture_structure since the
+                                  last sequence header */
+    s32 _padD8;
     s32 maxWidth;              /* 0x0DC: widest picture the buffers allow */
     s32 maxHeight;             /* 0x0E0: tallest picture; 0 = check bufferSize */
     s32 bufferSize;            /* 0x0E4 */
@@ -2430,20 +2433,26 @@ typedef struct {
     s32 count;                 /* 0x118 */
     s32 _pad11C;
     s32 pending;               /* 0x120: an unpaired field picture */
-    u8  _pad124[0x13C - 0x124];
+    s32 horizontalSize;        /* 0x124 */
+    s32 verticalSize;          /* 0x128 */
+    u8  _pad12C[0x134 - 0x12C];
+    s32 bitRateValue;          /* 0x134 */
+    s32 vbvBufferSize;         /* 0x138 */
     s32 progressiveSequence;   /* 0x13C */
-    u8  _pad140[0x150 - 0x140];
+    s32 chromaFormat;          /* 0x140: 1 = 4:2:0, the only one supported */
+    u8  _pad144[0x150 - 0x144];
     s32 pictureCodingType;     /* 0x150: 1 I, 2 P, 3 B */
     s32 fullPelForward;        /* 0x154 */
     s32 forwardFCode;          /* 0x158 */
     s32 fullPelBackward;       /* 0x15C */
     s32 backwardFCode;         /* 0x160 */
-    u8  _pad164[0x174 - 0x164];
+    s32 fCode[2][2];           /* 0x164: f_code[forward/backward][h/v] */
     s32 pictureStructure;      /* 0x174: 1 top field, 2 bottom field, 3 frame */
     s32 topFieldFirst;         /* 0x178 */
-    u8  _pad17C[0x184 - 0x17C];
+    s32 framePredFrameDct;     /* 0x17C */
+    s32 concealmentMotionVectors; /* 0x180 */
     s32 repeatFirstField;      /* 0x184 */
-    s32 _pad188;
+    s32 progressiveFrame;      /* 0x188 */
     s32 frameCentreHOffset[3]; /* 0x18C */
     s32 frameCentreVOffset[3]; /* 0x198 */
     s32 closedGop;             /* 0x1A4 */
@@ -2456,12 +2465,14 @@ typedef struct {
     s32 mbSlot;                /* 0x810: selects a 0x140-byte record (see func_0012BAA0) */
     s32 _pad814;
     s32 lastCmdFlag;           /* 0x818: D_00137F10[opcode] of the last IPU command */
-    u8  _pad81C[0x838 - 0x81C];
+    u8  _pad81C[0x828 - 0x81C];
+    s64 pictureInfo[2];        /* 0x828: the two values callback request 5
+                                  returns for each picture */
     s32 bitBuffer;             /* 0x838: the 32 stream bits FDEC last returned */
     s32 bitsValid;             /* 0x83C: 32 after each FDEC */
     s32 loadIntraQuant;        /* 0x840 */
     s32 loadNonIntraQuant;     /* 0x844 */
-    s32 _pad848;
+    s32 mpeg2;                 /* 0x848: 1 once a sequence_extension is seen */
     s32 gopBasePicture;        /* 0x84C: lastPicture + 1 at each GOP header */
     s32 lastPicture;           /* 0x850 */
     s32 newGop;                /* 0x854: set by each GOP header */
@@ -2610,7 +2621,26 @@ s64 IpuWaitCmdResult(s32 *ipu) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012C508);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012C680);
+/**
+ * Peek at the next `n` bits of the IPU bitstream without consuming them
+ * (mpeg2decode's Show_Bits): when the last command issued was not one that
+ * leaves the look-ahead valid (lastCmdFlag) or fewer than `n` bits remain,
+ * wait for the IPU, issue FDEC 0 and reload the 32-bit look-ahead from its
+ * result. Returns the top `n` bits of the look-ahead.
+ *
+ * The wait and the command issue are IpuWaitIdle / IpuIssueCommand inlined,
+ * as in IpuSkipBits.
+ */
+s32 func_0012C680(s32 *ipu, s32 n) {
+    IpuDecoder *dec = (IpuDecoder *)ipu;
+    if (dec->lastCmdFlag != 0 || dec->bitsValid < n) {
+        IpuWaitIdle(dec);
+        IpuIssueCommand(dec, 0x40000000);
+        dec->bitBuffer = IpuWaitCmdResult(ipu);
+        dec->bitsValid = 32;
+    }
+    return (u32)dec->bitBuffer >> (32 - n);
+}
 
 /**
  * Skip `n` bits of the IPU bitstream: wait for the IPU, issue FDEC with the
@@ -2675,9 +2705,60 @@ s32 func_0012CA48(s32 *arg0) {
     return 0;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", IpuParseVideoStartCodes);
+extern void func_00130300(s32 *ipu);
+extern void IpuParseGopHeader(s32 *ipu);
+extern void func_0012CBC0(s32 *ipu);
+extern s32 func_0012FA98(s32 *obj, s32 *req);
 
-extern s32 func_0012CC88(s32 *ipu);
+/* A request for the decoder's callback dispatcher (func_0012FA98): the entry
+ * index, then two 64-bit values the entry may overwrite. 0x20 bytes, as the
+ * other requests in this unit. */
+typedef struct {
+    s32 index;
+    s32 _pad4;
+    s64 arg[2];
+    s64 _pad18;
+} IpuCallbackRequest;
+
+/**
+ * Read MPEG-2 headers up to the next picture (mpeg2decode's Get_Hdr): align
+ * to each start code (func_0012C9C8) and dispatch on it — a sequence header
+ * (0x1B3, func_00130300), a GOP header (0x1B8, IpuParseGopHeader), a picture
+ * header (0x100, func_0012CBC0) or the sequence end code (0x1B7). Any other
+ * code is skipped. After a picture header, ask callback entry 5 for the
+ * picture's two 64-bit values (both seeded -1) into pictureInfo[].
+ *
+ * Returns the picture's picture_coding_type (1 I, 2 P, 3 B), or 0 at the end
+ * of the sequence.
+ */
+s32 IpuParseVideoStartCodes(s32 *ipu) {
+    IpuDecoder *dec = (IpuDecoder *)ipu;
+    IpuCallbackRequest req;
+    for (;;) {
+        func_0012C9C8(ipu);
+        switch ((u32)IpuGetBits(ipu, 32)) {
+        case 0x1B3:
+            func_00130300(ipu);
+            break;
+        case 0x1B8:
+            IpuParseGopHeader(ipu);
+            break;
+        case 0x100:
+            func_0012CBC0(ipu);
+            req.index = 5;
+            req.arg[0] = -1;
+            req.arg[1] = -1;
+            func_0012FA98(dec->callbacks, (s32 *)&req);
+            dec->pictureInfo[0] = req.arg[0];
+            dec->pictureInfo[1] = req.arg[1];
+            return dec->pictureCodingType;
+        case 0x1B7:
+            return 0;
+        }
+    }
+}
+
+extern void func_0012CC88(s32 *ipu);
 struct ScrollObj;
 extern void func_0012CFE8(struct ScrollObj *obj, s32 delta);
 
@@ -2707,9 +2788,87 @@ void func_0012CBC0(s32 *ipu) {
     func_0012CFE8((struct ScrollObj *)ipu, temporalRef);
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012CC88);
+/* The extension_and_user_data dispatch table: one handler per 4-bit
+ * extension_start_code_identifier 0..10 (D_0013BBC8, copied to the stack by
+ * each call). */
+typedef struct {
+    void (*handler[11])(s32 *ipu);
+} IpuExtHandlerTable;
+extern IpuExtHandlerTable D_0013BBC8;
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012CDB0);
+/**
+ * Consume the extension and user data that follow a header (mpeg2decode's
+ * extension_and_user_data): align to the next start code, and while it peeks
+ * as an extension (0x1B5) or user data (0x1B2) start code, skip the code.
+ * For an extension, read its 4-bit identifier and run that entry of the
+ * handler table (an identifier above 10 runs entry 0); user data is skipped
+ * to the next start code.
+ *
+ * The clamp is a conditional expression: as an `if` (or `>= 11`), cc1 tests
+ * `id < 11` with an immediate, where the ROM compares against 10 kept in a
+ * register.
+ */
+void func_0012CC88(s32 *ipu) {
+    IpuExtHandlerTable table = D_0013BBC8;
+    s32 code;
+    u32 id;
+    func_0012C9C8(ipu);
+    while ((code = func_0012C680(ipu, 32)) == 0x1B5 || code == 0x1B2) {
+        if (code == 0x1B5) {
+            IpuSkipBits(ipu, 32);
+            id = IpuGetBits(ipu, 4);
+            id = id > 10 ? 0 : id;
+            table.handler[id](ipu);
+            func_0012C9C8(ipu);
+        } else {
+            IpuSkipBits(ipu, 32);
+            func_0012C9C8(ipu);
+        }
+    }
+}
+
+/**
+ * Parse an MPEG-2 picture coding extension (mpeg2decode's
+ * picture_coding_extension): the four f_codes, then the fields the IPU
+ * decodes with go straight into IPU_CTRL (0x10002010) — intra_dc_precision
+ * (bits 16-17), q_scale_type (bit 22), intra_vlc_format (bit 21) and
+ * alternate_scan (bit 20) — and the rest into the decoder. The first
+ * picture_structure after a sequence header is also kept in
+ * firstPictureStructure. chroma_420_type and the composite display fields
+ * are read and dropped.
+ */
+void func_0012CDB0(s32 *ipu) {
+    IpuDecoder *dec = (IpuDecoder *)ipu;
+    dec->fCode[0][0] = IpuGetBits(ipu, 4);
+    dec->fCode[0][1] = IpuGetBits(ipu, 4);
+    dec->fCode[1][0] = IpuGetBits(ipu, 4);
+    dec->fCode[1][1] = IpuGetBits(ipu, 4);
+    *(volatile u32 *)0x10002010 =
+        (*(volatile u32 *)0x10002010 & ~0x30000) | (IpuGetBits(ipu, 2) << 16);
+    dec->pictureStructure = IpuGetBits(ipu, 2);
+    if (dec->firstPictureStructure == 0) {
+        dec->firstPictureStructure = dec->pictureStructure;
+    }
+    dec->topFieldFirst = IpuGetBits(ipu, 1);
+    dec->framePredFrameDct = IpuGetBits(ipu, 1);
+    dec->concealmentMotionVectors = IpuGetBits(ipu, 1);
+    *(volatile u32 *)0x10002010 =
+        (*(volatile u32 *)0x10002010 & ~0x400000) | (IpuGetBits(ipu, 1) << 22);
+    *(volatile u32 *)0x10002010 =
+        (*(volatile u32 *)0x10002010 & ~0x200000) | (IpuGetBits(ipu, 1) << 21);
+    *(volatile u32 *)0x10002010 =
+        (*(volatile u32 *)0x10002010 & ~0x100000) | (IpuGetBits(ipu, 1) << 20);
+    dec->repeatFirstField = IpuGetBits(ipu, 1);
+    IpuGetBits(ipu, 1);
+    dec->progressiveFrame = IpuGetBits(ipu, 1);
+    if (IpuGetBits(ipu, 1)) {
+        IpuGetBits(ipu, 1);
+        IpuGetBits(ipu, 3);
+        IpuGetBits(ipu, 1);
+        IpuGetBits(ipu, 7);
+        IpuGetBits(ipu, 8);
+    }
+}
 
 /**
  * Drain object arg0: while channel 1 still reports work
@@ -3632,7 +3791,53 @@ s32 func_001302E0(s32 *arg0, s32 arg1, s32 arg2) {
     return 1;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00130300);
+extern char D_0013BDF8[];
+extern u8 D_00138040[];
+extern u8 D_00138080[];
+extern void func_001307B0(s32 *obj, u32 cmd, u32 madr);
+extern void func_00130428(s32 *callbacks);
+
+/**
+ * Parse an MPEG-2 sequence header (mpeg2decode's sequence_header) onto the
+ * IPU: reset firstPictureStructure, take horizontal_size and vertical_size
+ * (a height above 2800 is reported through func_00130288; aspect ratio and
+ * frame rate are dropped), bit_rate_value and vbv_buffer_size. For each of
+ * the intra and non-intra quantiser matrices, issue SETIQ (0x50000000 /
+ * 0x58000000) to load it from the bitstream when the header carries one,
+ * else feed the default matrix (D_00138040 / D_00138080) through
+ * func_001307B0. Then finish with the extensions (func_0012CC88) and pass
+ * the callbacks to func_00130428.
+ */
+void func_00130300(s32 *ipu) {
+    IpuDecoder *dec = (IpuDecoder *)ipu;
+    u32 bits;
+    dec->firstPictureStructure = 0;
+    bits = IpuGetBits(ipu, 32);
+    dec->horizontalSize = bits >> 20;
+    dec->verticalSize = (bits >> 8) & 0xFFF;
+    if (dec->verticalSize > 0xAF0) {
+        func_00130288((s32)dec, D_0013BDF8);
+    }
+    bits = IpuGetBits(ipu, 30);
+    dec->bitRateValue = bits >> 12;
+    dec->vbvBufferSize = (bits >> 1) & 0x3FF;
+    if ((dec->loadIntraQuant = IpuGetBits(ipu, 1)) != 0) {
+        IpuWaitReady(ipu);
+        func_0012C380(ipu, 0x50000000);
+        IpuWaitReady(ipu);
+    } else {
+        func_001307B0(ipu, 0x50000000, (u32)D_00138040);
+    }
+    if ((dec->loadNonIntraQuant = IpuGetBits(ipu, 1)) != 0) {
+        IpuWaitReady(ipu);
+        func_0012C380(ipu, 0x58000000);
+        IpuWaitReady(ipu);
+    } else {
+        func_001307B0(ipu, 0x58000000, (u32)D_00138080);
+    }
+    func_0012CC88(ipu);
+    func_00130428(dec->callbacks);
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00130428);
 
@@ -3673,7 +3878,50 @@ void func_001307B0(s32 *obj, u32 cmd, u32 madr) {
     func_0012FA98((s32 *)obj[0x216], req);
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00130890);
+extern char D_0013BE10[];
+extern char D_0013BE38[];
+
+/**
+ * Parse an MPEG-2 sequence extension (mpeg2decode's sequence_extension):
+ * mark the stream MPEG-2 (mpeg2 = 1, IPU_CTRL's MPEG-1 bit cleared through
+ * func_0012B198), then take progressive_sequence and chroma_format (anything
+ * but 4:2:0 is reported) and widen the sequence header's sizes, bit rate and
+ * VBV buffer size by their extension bits. A profile_and_level_indication
+ * other than 0x48 (MP@ML), 0x58 (SP@ML) or 0x44 (MP@HL) is reported too.
+ *
+ * The three extension fields are extracted bit rate, vertical, horizontal:
+ * that order gives the ROM's register assignment ($21, $20, $19); the other
+ * five orders leave 4 to 7 words different.
+ */
+void func_00130890(s32 *ipu) {
+    IpuDecoder *dec = (IpuDecoder *)ipu;
+    u32 bits;
+    s32 profileAndLevel;
+    s32 horizontalExt;
+    s32 verticalExt;
+    s32 bitRateExt;
+    s32 vbvBufferExt;
+    dec->mpeg2 = 1;
+    func_0012B198(0);
+    bits = IpuGetBits(ipu, 28);
+    dec->chromaFormat = (bits >> 17) & 3;
+    bitRateExt = (bits >> 1) & 0xFFF;
+    verticalExt = (bits >> 13) & 3;
+    horizontalExt = (bits >> 15) & 3;
+    if (dec->chromaFormat != 1) {
+        func_00130288((s32)dec, D_0013BE10);
+    }
+    dec->progressiveSequence = (bits >> 19) & 1;
+    profileAndLevel = bits >> 20;
+    vbvBufferExt = (u32)IpuGetBits(ipu, 16) >> 8;
+    if (profileAndLevel != 0x48 && profileAndLevel != 0x58 && profileAndLevel != 0x44) {
+        func_00130288((s32)dec, D_0013BE38);
+    }
+    dec->horizontalSize = (horizontalExt << 12) | (dec->horizontalSize & 0xFFF);
+    dec->verticalSize = (verticalExt << 12) | (dec->verticalSize & 0xFFF);
+    dec->bitRateValue += bitRateExt << 18;
+    dec->vbvBufferSize += vbvBufferExt << 10;
+}
 
 /**
  * Query a batch of channel/register states via IpuGetBits(obj, selector):
