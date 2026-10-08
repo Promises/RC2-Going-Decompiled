@@ -249,7 +249,7 @@ extern void SetupMemoryArenaTable(void);
 /* Phase 1-5 HW/IOP/subsystem callees (declared below BootSystemInit in-unit or
  * in sibling TUs; block-scope externs keep the #else self-contained). */
 extern void func_00124418(void);                 /* ResetVif1AndGif */
-extern void ResetDmacChannels(s32 mode);
+extern s32 ResetDmacChannels(s32 mode);  /* returns the old DMAC enable bit (libdma.h: int sceDmaReset(int)) */
 extern void SetVideoMode(void);
 extern void EnableDmacChannels(void);
 extern void SetupGsDisplayBuffers(s32 mode);

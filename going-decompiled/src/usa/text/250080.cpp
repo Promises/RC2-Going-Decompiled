@@ -191,7 +191,7 @@ extern s32 func_00350910(void);
 void func_00350910(s32 *st);
 #endif
 extern s32 func_001338C8(void);
-extern s32 func_0012EE28(void);
+extern s32 func_0012EE28(void); /* DECL-LEVER(#2011): defined (obj, index, value, a3, a4) in cod/022FA8; func_00352570 below forwards its own incoming argument registers through a bare `jal` (the ROM sets none), which this argument-less declaration reproduces */
 #ifndef TARGET_NATIVE
 extern s32 func_003517C0(void *stream);
 #endif
