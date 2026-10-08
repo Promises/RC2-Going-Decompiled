@@ -1015,37 +1015,46 @@ s32 func_003510C0(u8 *unused, u8 *desc, u8 *ringBase) {
 }
 #endif
 
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003511A8);
+/**
+ * Scatter two source spans into a two-segment ring destination.
+ * The destination is dst0 (len0d bytes) followed by its wrap segment dst1
+ * (cap bytes); the sources are src0 (len1d bytes) then src1 (tail bytes).
+ * Copies them in order, splitting at the dst0/dst1 boundary.
+ * @return the bytes written (len1d + tail), or 0 if they do not fit
+ *
+ * The overflow test is an early return, and the len1d >= len0d and
+ * tail >= gap cases are written first: that is the ROM's block order. The
+ * split offsets are spelled `p + a - b` (the ROM adds, then subtracts).
+ * GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+ * (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in tools/ee/s136os_functions.txt)
+ * and spliced over S136OS_SLOT by tools/ee/s136os_splice.sh (task #1834). There
+ * is no asm fallback: a build that skips the splice drops the function. On
+ * native it is plain C.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_003511A8)
+S136OS_SLOT(func_003511A8);
 #else
-/* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 66.32% / engine96 51.71%. Residual: PACKED-SAVE (9 callee saves) + 50 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
-/* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
-   saves (s0..s7/ra). Revisit with the gameplay-TU compiler.
-
-   Scatter two source spans (src0/len0, src1/len1) into a two-segment ring
-   destination (dst0 with capacity len0d, wrapping into dst1) given the leading
-   write offset; returns the total bytes written (0 if it would overflow). */
 s32 func_003511A8(u8 *dst0, s32 len0d, u8 *dst1, s32 cap, u8 *src0, s32 len1d,
                   u8 *src1, s32 tail) {
-    if (len1d + tail <= len0d + cap) {
-        if (len1d < len0d) {
-            s32 gap = len0d - len1d;
-            if (tail < gap) {
-                memcpy(dst0, src0, len1d);
-                memcpy(dst0 + len1d, src1, tail);
-            } else {
-                memcpy(dst0, src0, len1d);
-                memcpy(dst0 + len1d, src1, gap);
-                memcpy(dst1, src1 + (len0d - len1d), tail - gap);
-            }
-        } else {
-            memcpy(dst0, src0, len0d);
-            memcpy(dst1, src0 + len0d, len1d - len0d);
-            memcpy(dst1 + (len1d - len0d), src1, tail);
-        }
-        return len1d + tail;
+    if (len1d + tail > len0d + cap) {
+        return 0;
     }
-    return 0;
+    if (len1d >= len0d) {
+        memcpy(dst0, src0, len0d);
+        memcpy(dst1, src0 + len0d, len1d - len0d);
+        memcpy(dst1 + len1d - len0d, src1, tail);
+    } else {
+        s32 gap = len0d - len1d;
+        if (tail >= gap) {
+            memcpy(dst0, src0, len1d);
+            memcpy(dst0 + len1d, src1, gap);
+            memcpy(dst1, src1 + len0d - len1d, tail - gap);
+        } else {
+            memcpy(dst0, src0, len1d);
+            memcpy(dst0 + len1d, src1, tail);
+        }
+    }
+    return len1d + tail;
 }
 #endif
 
