@@ -107,16 +107,12 @@ extern u8  *g_shrubClassTable[];       /* 0x2125D0 - shrub class record ptr arra
 extern s16  g_shrubTexVramTable[];     /* 0x213AD0 - texId -> {tbp_lo,tbp_hi}, stride 4 */
 extern u8  *g_pShrubInstanceArray;     /* 0x1B2018 - shrub instance array base, stride 0x20 */
 extern u8   g_gsScreenContext[];       /* 0x1A6480 - GS screen context; dims at +0x150/+0x152 */
-/* 0x2FD3F0 - append a GIF A+D reg-write. The DATA is a 64-bit GS register value.
- * The only in-unit caller is #else-arm (func_002E0650 / EmitMobyGlowPackets), so
- * the matching-build decl is byte-irrelevant; keep it s32 (untouched) and widen
- * the value to u64 for the native/#else build only, so EmitMobyGlowPackets can
- * pack bits >=32 (0x8000<<22/<<24) without truncation. */
-#ifdef TARGET_NATIVE
+/* 0x2FD3F0 - append a GIF A+D reg-write. The DATA is a 64-bit GS register value,
+ * as its definition (1EFFC0) and every other unit declare it. func_002E43F8 is
+ * the first EE-compiled caller in this unit and needs the u64: with an s32
+ * value cc1 schedules the reg-id load into the jal delay slot ahead of the
+ * value's `ori`, the reverse of the ROM (task #1902). */
 extern void AppendGsRegPacket(s32 regId, u64 value);
-#else
-extern void AppendGsRegPacket(s32 regId, s32 value);
-#endif
 __asm__(".extern g_vramDynamicBase, 16");
 extern s32 g_vramDynamicBase;      /* 0x1A72D4 - VRAM dynamic region base */
 __asm__(".extern g_vramAllocCursor, 16");
@@ -999,10 +995,100 @@ void DrawSkyShellsFixedSpin(void) {
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E43E8);
 
-/* func_002E43F8: PARKED #70 (#else not confident) — sky-shell render driver (BeginSkyDrawSegment,
- * DrawSkyShell, CloseSkyDrawSegment, AppendGsRegPacket + FP). GS draw-segment + FP class;
- * needs the sky-draw wiring traced before a faithful #else. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E43F8);
+extern void BeginSkyDrawSegment(void);
+extern void CloseSkyDrawSegment(void);
+extern void func_00283638(void *dst); /* zero a 16-byte quadword */
+extern f32 D_1ABE54;                  /* 0x1ABE54 - sky spin angle (gp_rel) */
+#ifndef TARGET_NATIVE
+__asm__(".extern g_vramZBuffer, 16");
+#endif
+extern s32 g_vramZBuffer;             /* 0x1A72E0 - VRAM Z buffer base */
+/* The .sdata alias of g_skyShellMatrix, as DrawSkyShellsFixedSpin's arm
+ * declares it (that declaration is inside its own guarded arm, so the 2.9 TU
+ * and this member's s136os TU do not see it). ADDRESSING-MODEL DEVICE (RULING
+ * #8620): same assembler symbol, moves no data, emits nothing of its own; the
+ * native arm already has the #define above. */
+#ifndef TARGET_NATIVE
+extern u8 g_skyShellMatrixSmall[] __asm__("g_skyShellMatrix") __attribute__((section(".sdata")));
+#endif
+
+/**
+ * func_002E43F8 — draw the sky shells with hard-wired per-shell spins (a sky
+ * mode beside DrawSkyShellsFixedSpin / the scaled-spin driver; caller not traced).
+ *
+ * Opens the sky draw segment, clears the s16 at g_pSkyData+0x4, resets the shared
+ * shell matrix to identity and zeroes the {x,y,z,w} Euler vector. Then for each
+ * shell (count = s16 at g_pSkyData+0x6, re-read every pass) it sets that vector
+ * from the spin angle D_1ABE54 — shells 0/1 spin about z only, shell 2 adds a
+ * -0.075 y tilt and a -0.15 z offset, shell 3 a {-0.06, 0.05} x/y tilt and a
+ * +0.125 z offset (each z wrapped by WrapAnglePiSum); shells 4+ keep the last
+ * vector — rebuilds the matrix from it, copies the 16 bytes at 0x1B2050 (just
+ * past g_pSkyData) into the matrix's translation row, and draws the shell.
+ * Finally closes the segment and appends SCANMSK (0x47) = 0x5360B and ZBUF_1
+ * (0x4E) = 0x1000000 | (g_vramZBuffer >> 13), as RenderSky does. No params,
+ * no return.
+ * Case 0 falls through into case 1 in the ROM (0x2E44E0 stores y/z, then runs
+ * case 1's code), so the first z store is dead; kept for the bytes.
+ *
+ * GUARD (task #1902): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback. On native it is plain C.
+ * Byte-exact with these devices; each priced by removing it ALONE (solo s136os
+ * compile, positional words differing of 116):
+ *   - g_skyShellMatrixSmall as func_00283DE0's matrix argument (81/116): a plain
+ *     reference is hoisted out of the loop into a saved register; the ROM forms
+ *     the address at the call (lui/addiu, 0x2E4524);
+ *   - g_skyShellMatrixSmall + 0x30 as the row-copy target (9/116): the ROM
+ *     hoists it last, into $18, behind the constants 1/2/3 in $21/$20/$19;
+ *   - the EMPTY volatile asm before DrawSkyShell (RULING #8483, emits nothing;
+ *     4/116): without it cc1 issues the argument copy and i++ between the lq and
+ *     the sq, and the sq lands in the jal delay slot; the ROM has lq, sq, jal,
+ *     move a0, then i++ (0x2E4534..0x2E4544). -fno-schedule-insns and
+ *     -fno-schedule-insns2 alone each leave that order (diagnostic only);
+ *   - g_vramZBuffer absolute (`.extern …, 16`; 20/116 as gp_rel);
+ *   - AppendGsRegPacket's u64 value (3/116 with s32; see its declaration).
+ * Measured inert and dropped: the .sdata alias on MatrixIdentityVu0's argument. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002E43F8)
+S136OS_SLOT(func_002E43F8);
+#else
+void func_002E43F8(void) {
+    s32 i;
+    f32 rot[4];
+
+    BeginSkyDrawSegment();
+    *(s16 *)(g_pSkyData + 0x4) = 0;
+    MatrixIdentityVu0(g_skyShellMatrix);
+    func_00283638(rot);
+    for (i = 0; i < *(s16 *)(g_pSkyData + 0x6); i++) {
+        switch (i) {
+        case 0:
+            rot[1] = 0.0f;
+            rot[2] = D_1ABE54;
+        case 1:
+            rot[1] = 0.0f;
+            rot[2] = WrapAnglePiSum(D_1ABE54, 0.0f);
+            break;
+        case 2:
+            rot[1] = -0.075f;
+            rot[2] = WrapAnglePiSum(D_1ABE54, -0.15f);
+            break;
+        case 3:
+            rot[0] = -0.06f;
+            rot[1] = 0.05f;
+            rot[2] = WrapAnglePiSum(D_1ABE54, 0.125f);
+            break;
+        }
+        func_00283DE0(g_skyShellMatrixSmall, rot);
+        *(u_long128 *)(g_skyShellMatrixSmall + 0x30) = *(u_long128 *)((u8 *)&g_pSkyData + 0x10);
+        __asm__ __volatile__("");
+        DrawSkyShell(i);
+    }
+    CloseSkyDrawSegment();
+    AppendGsRegPacket(0x47, 0x5360B);
+    AppendGsRegPacket(0x4E, (g_vramZBuffer >> 13) | 0x1000000);
+}
+#endif
 
 /**
  * BeginSkyDrawSegment — open the frame's sky draw segment.

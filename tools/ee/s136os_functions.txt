@@ -275,6 +275,7 @@ usa text/1DFF80 BeginSkyDrawSegment
 usa text/1DFF80 func_002E5698
 usa text/1DFF80 func_002E05C0
 usa text/1DFF80 HideAllMobysAndPushState
+usa text/1DFF80 func_002E43F8
 usa text/250080 FmvFrameQueueGetDisplaySlot
 usa text/250080 FmvFrameQueuePush
 usa text/250080 func_00352000
