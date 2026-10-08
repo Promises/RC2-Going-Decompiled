@@ -4796,7 +4796,7 @@ S136OS_SLOT(func_0033D3C0);
    (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
    tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
    splice drops the function. On native it is plain C. */
-extern s32 func_002801B8(s32 x, s32 y, u32 color, const char *text, s32 flag);
+extern s32 func_002801B8(s32 x, s32 y, u64 color, const char *text, s32 flag); /* DECL-LEVER(#1877): defined s32 colour; declared u32 here, func_0033D3C0 measured 14/45 words different (built 44) on the s136os arm — the u64 is load-bearing, the s32 return is not */
 extern u8 D_1ADDB0[], D_1A7BB9;
 void func_0033D3C0(void *e) {
     char buf[128];
@@ -5875,7 +5875,7 @@ S136OS_SLOT(func_0033ED18);
    (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
    tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
    splice drops the function. On native it is plain C. */
-extern s32 func_002801B8(s32 x, s32 y, u32 color, const char *text, s32 flag);
+extern s32 func_002801B8(s32 x, s32 y, u64 color, const char *text, s32 flag); /* DECL-LEVER(#1877): defined s32 colour; declared u32 here, func_0033ED18 measured 14/45 words different (built 44) on the s136os arm — the u64 is load-bearing, the s32 return is not */
 extern u8 D_1ADDB0[];
 void func_0033ED18(void *e) {
     char buf[128];
