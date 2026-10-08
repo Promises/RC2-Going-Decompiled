@@ -253,37 +253,55 @@ void func_00278F90(void) {
  * branch/state-heavy to model confidently; a careful multi-pass Ghidra decomposition job. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00278FD0);
 
-/* func_00279CF0 - store a 0x28-byte (10-word) record into the camera-slot
- * record table at g_cameraSlotActive+0x458, indexed by `slot` (ignored when
- * >= 0x20). The ten fields arrive as the first eight register args plus two
- * stack args; `slot` is the trailing stack arg.
- * Near-miss: the original accesses the ten fields as ten separate parallel
- * globals (stride 0x28), which makes cc1 spread the record base across several
- * aliased registers and store through them in a rotating pattern; the single
- * struct-array access here keeps one base register. Correct C preserved as the
- * portable body. */
-/* TODO(match) t493: sdk29 61.45% / engine96 63.97% (unit objdiff, objdiff_build.sh +
- * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
- * every other remaining arm). Residual on the better arm (engine96): CONST-MULT (first differing
- * insn: ROM `lw t7,16(sp)` vs built `lw t4,16(sp)`). Levers: engine96 with sched1 MEASURED (flag
- * not landed): 40.86%. */
+/* The text-run table at g_cameraSlotActive+0x458: 32 0x28-byte run records
+ * (f[0] group id, f[1] run start, f[2] run end) followed by the live count. */
+typedef struct {
+    CamSlotRecord runs[32];
+    s32 count;              /* +0x500 */
+} TextRunTable;
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00279CF0);
+/* ADDRESSING-MODEL DEVICE (RULING #8620 / #9574): a non-zero-offset equate,
+ * g_textRunTable = g_cameraSlotActive + 0x458, sized as the struct (0x504).
+ * It emits nothing; the relocations name g_cameraSlotActive+0x458, as the
+ * ROM's `lui $3,%hi(g_cameraSlotActive+0x458)` at 0x279E28 does. As a distinct
+ * symbol cc1 forms the table base in its own `lui/addiu` after the first
+ * index test instead of deriving it from the directory base at +0xD0
+ * (spelled as a cast of g_cameraSlotActive+0x458: 13/57 for func_00279E00;
+ * func_00279CF0 compiles the same either way). */
+__asm__(".extern g_textRunTable, 1284\n\tg_textRunTable = g_cameraSlotActive + 0x458");
+extern TextRunTable g_textRunTable;
+#else
+#define g_textRunTable (*(TextRunTable *)(g_cameraSlotActive + 0x458))
+#endif
+
+/** func_00279CF0 — store a 10-word run record into g_textRunTable.runs[slot]
+ *  (ignored when slot >= 0x20).
+ *  @param a..h  fields 0..7, the eight register arguments
+ *  @param i, j  fields 8 and 9, the first two stack arguments
+ *  @param slot  record index, the third stack argument
+ *  MATCHED (task #2026): s136os arm (SN 1.36 -fopt-stack, -O2 -G8 -fno-gcse),
+ *  spliced. No devices. Every field is stored through the table global
+ *  itself; cc1 then forms base+offset twice and threads the stores through
+ *  register copies of it, which is the ROM's rotating $2/$4/$5/$6 pattern.
+ *  Through a local record pointer (master's body) one base register serves
+ *  every store: 29/29, built 22 (solo s136os compile of this unit, word
+ *  compare against the ROM .s, relocated fields masked). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00279CF0)
+S136OS_SLOT(func_00279CF0);
 #else
 void func_00279CF0(s32 a, s32 b, s32 c, s32 d, s32 e, s32 f, s32 g, s32 h,
                    s32 i, s32 j, u32 slot) {
-    CamSlotRecord *recs = (CamSlotRecord *)(g_cameraSlotActive + 0x458);
     if (slot < 0x20) {
-        recs[slot].f[0] = a;
-        recs[slot].f[1] = b;
-        recs[slot].f[2] = c;
-        recs[slot].f[3] = d;
-        recs[slot].f[4] = e;
-        recs[slot].f[5] = f;
-        recs[slot].f[6] = g;
-        recs[slot].f[7] = h;
-        recs[slot].f[8] = i;
-        recs[slot].f[9] = j;
+        g_textRunTable.runs[slot].f[0] = a;
+        g_textRunTable.runs[slot].f[1] = b;
+        g_textRunTable.runs[slot].f[2] = c;
+        g_textRunTable.runs[slot].f[3] = d;
+        g_textRunTable.runs[slot].f[4] = e;
+        g_textRunTable.runs[slot].f[5] = f;
+        g_textRunTable.runs[slot].f[6] = g;
+        g_textRunTable.runs[slot].f[7] = h;
+        g_textRunTable.runs[slot].f[8] = i;
+        g_textRunTable.runs[slot].f[9] = j;
     }
 }
 #endif
@@ -336,26 +354,6 @@ void func_00279D88(void) {
         *rec = offset + (s32)base;
     }
 }
-#endif
-
-/* The text-run table at g_cameraSlotActive+0x458: 32 0x28-byte run records
- * (f[0] group id, f[1] run start, f[2] run end) followed by the live count. */
-typedef struct {
-    CamSlotRecord runs[32];
-    s32 count;              /* +0x500 */
-} TextRunTable;
-#ifndef TARGET_NATIVE
-/* ADDRESSING-MODEL DEVICE (RULING #8620 / #9574): a non-zero-offset equate,
- * g_textRunTable = g_cameraSlotActive + 0x458, sized as the struct (0x504).
- * It emits nothing; the relocations name g_cameraSlotActive+0x458, as the
- * ROM's `lui $3,%hi(g_cameraSlotActive+0x458)` at 0x279E28 does. As a distinct
- * symbol cc1 forms the table base in its own `lui/addiu` after the first
- * index test instead of deriving it from the directory base at +0xD0
- * (spelled as a cast of g_cameraSlotActive+0x458: 13/57). */
-__asm__(".extern g_textRunTable, 1284\n\tg_textRunTable = g_cameraSlotActive + 0x458");
-extern TextRunTable g_textRunTable;
-#else
-#define g_textRunTable (*(TextRunTable *)(g_cameraSlotActive + 0x458))
 #endif
 
 /** func_00279E00 — advance a horizontally-scrolling text cursor across the
