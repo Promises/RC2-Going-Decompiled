@@ -15,3 +15,8 @@
 __ieee754_sqrt  e_sqrt
 matherr  func_00131400
 __errno  func_00115200
+# strncpy's old address name (task #1884). The s136os-compiled bodies in
+# text/235FE8 still call it as func_00115AC0, and its definition left
+# cod/015180 with the body, which now comes from the library. Row form here
+# is <old name> <library symbol>.
+func_00115AC0  strncpy
