@@ -1236,7 +1236,9 @@ void func_002A1058(void) {
  *
  * No params, no return. Appends the VIF code-ref tag (D_10FFC0, D_10FFB0
  * qwords), selects VU1 program 6, kicks the VIF0 chain (D_100080) and appends
- * the segment's GS reg packet (reg 0x47 = SCISSOR, value 0x5360B). Then it
+ * the segment's GS reg packet (reg 0x47 = TEST_1, SCE_GS_TEST_1 in eestruct.h:
+ * value 0x5360B = alpha test on, GEQUAL 0x60, AFAIL RGB_ONLY; depth test on,
+ * GEQUAL). Then it
  * opens the DMA segment: remembers the current g_frameDmaCursor as the open
  * tag, resets the VRAM bump cursor to g_vramDynamicBase, reserves a qword,
  * points the frame-DMA scratch word (g_frameDmaCursor+4) at
@@ -1264,7 +1266,7 @@ void func_002A1058(void) {
  *    g_deferredSegment2Tag use the unit's existing equates
  *    (g_mobySegmentOpenTagAbs, g_deferredSegment2TagAbs16; plain symbols:
  *    42/19 and 42/4).
- *  - Empty tied volatile fence (RULING #8483) on the GS data: it keeps
+ *  - Empty tied volatile fence (RULING #8483) on the TEST_1 data: it keeps
  *    `li $5,0x5360B` ahead of the `0x47` argument, which lands in the jal
  *    delay slot (0x2A10C8) as in the ROM. Removed, or non-volatile: 2 words
  *    differ (the `ori` and `addiu $4,0x47` swap places).
@@ -1311,9 +1313,9 @@ void BeginMobyDrawSegment(void) {
     g_activeVu1ProgramAbs = 6;
     KickVif0Chain(D_100080);
     {
-        u64 scissor = 0x5360B;
-        __asm__ __volatile__("" : "+r"(scissor));
-        AppendGsRegPacket(0x47, scissor);
+        u64 alphaDepthTest = 0x5360B;
+        __asm__ __volatile__("" : "+r"(alphaDepthTest));
+        AppendGsRegPacket(0x47, alphaDepthTest);
     }
 
     cursor = g_frameDmaCursor;
@@ -1329,7 +1331,7 @@ void BeginMobyDrawSegment(void) {
 #endif
 
 /* func_002A1138 — build the moby VU1 render chain for one moby table. Appends
- * the segment's GS SCISSOR reg packet (0x47 / 0x5360B), flushes the pending RPC
+ * the segment's GS TEST_1 reg packet (0x47 / 0x5360B), flushes the pending RPC
  * (func_0011AEA0(0)), swaps in the procedural-anim bounds scratch
  * (func_002A1058), then extends the VU chain (BuildMobyVuChain over the current
  * g_mobyVuChainCursor), saves the scratch back (func_002A1028) and rewinds the
