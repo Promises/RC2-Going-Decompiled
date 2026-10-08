@@ -9683,17 +9683,21 @@ void func_00344F18(void *w, s32 flags) {
  * flat index row + col*2 directly at +0x4B4 (no table). Note the LEFT/col==0/row>=2
  * path faithfully leaves +0x4B0 at -1 (the original reuses the just-stored col-1
  * for the index rather than re-clamping). */
-/* task #1522 (s136os arm, verify_match_unit vs ROM; not promoted): mask taken as an
- * s32 parameter. Residual 48/78: the RIGHT-wrap compare is emitted as
- * `slti/movz` where the ROM has `li 1; slt; movn`; no spelling tried (> 1,
- * >= 2, 1 <) changes it. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00345080);
+/* Params: w = the weapon-select screen; flags = the D-pad mask. No return value.
+ * MATCHED byte-exact on the s136os arm (task #1957), device-free. #1522 had it
+ * at 48/78 (mask taken as an s32 parameter): the RIGHT-wrap compare came out as
+ * `slti/movz` where the ROM has `li 1; slt; movn`, and no literal spelling
+ * (> 1, >= 2, 1 <) moves it because the front end canonicalises the constant
+ * into the immediate. Holding the limit in a local (`lim = 1; if (lim < col)`)
+ * keeps the 1 in a register, which is the ROM's shape: 43 -> 0 of 78 in a solo
+ * s136os compile against the frozen .s (PROCEDURE #9863's harness).
+ * GUARD (task #1957): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00345080)
+S136OS_SLOT(func_00345080);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00345080, unit objdiff): 69.62%,
-   54/91 insns differ. Residual: UNKNOWN-sd + movn/movz (first differing insn: 'sd ra, 0x8(sp)' vs '').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
 void func_00345080(void *w, s32 flags) {
     if (flags & 0x1000) {            /* LEFT: col-- */
         PlayGlobalSound(3, 0, 0);
@@ -9710,9 +9714,11 @@ void func_00345080(void *w, s32 flags) {
         }
     } else if (flags & 0x4000) {     /* RIGHT: col++ wrap 0<->1 */
         s32 col;
+        s32 lim;
         PlayGlobalSound(3, 0, 0);
+        lim = 1;
         col = *(s32 *)((char *)w + 0x4B0) + 1;
-        if (col > 1) col = 0;
+        if (lim < col) col = 0;
         *(s32 *)((char *)w + 0x4B0) = col;
     } else if (flags & 0x8000) {     /* UP: row-- */
         PlayGlobalSound(3, 0, 0);
@@ -10772,60 +10778,78 @@ _Static_assert(sizeof(GuiScreenDesc2) == 0x5C, "GuiScreenDesc2 must be 0x5C unde
 #endif
 
 /*
- * func_00347228 — screen builder, family-2 variant. Same GuiScreenDesc2 shape as
- * func_00347348/450 but: (1) screen-type index 0, so typeActive = (obj[0x508]==0);
- * (2) it uses the D_1AE428 global block (cfg0/cfg1 by value, layout0..4 = the five
- * &D_1AE430..450 addresses) and label const D_259CC0; (3) the distinguishing trait
- * — desc[0x50] carries a pointer to a local 8-byte copy of the D_1AE088 scratch
- * buffer (the original does an unaligned ldl/ldr -> sdl/sdr 8-byte copy onto the
- * frame, then stores its address into the descriptor). Save-wall blocked for
- * matching (frame 0xB0, six callee-saves at 8-byte spacing); TARGET_NATIVE #else
- * arm, cmp-oracle'd via cmp_GuiScreenBuilders2 (the scratch ptr is a stack address,
- * volatile across asm-vs-C — func_003380B8 dereferences the pointed-to bytes, so the
- * downstream effect is identical as long as those 8 bytes equal D_1AE088's).
+ * func_00347228 — screen builder, family-2 variant, screen-type index 0 (label
+ * D_259CC0, layout block D_1AE428..D_1AE450). Same GuiScreenDesc2 shape as
+ * func_00347348/450, plus desc[0x50] carries a pointer to an on-frame 8-byte
+ * copy of the D_1AE088 scratch pair (the ROM copies it with ldl/ldr -> sdl/sdr,
+ * which is cc1's block copy of an unaligned 8-byte struct). func_003380B8
+ * dereferences the pointed-to bytes, so only those 8 bytes need to equal
+ * D_1AE088's. Param: obj = the owning screen object. No return value.
+ * Non-obvious: the ROM stores desc[0x50] = 0 and desc[0x54] = 1 first and then
+ * overwrites both (desc[0x54] with obj[0x508] == 0, desc[0x50] with the scratch
+ * pointer). The 1 is stored through the descriptor pointer that is also the
+ * call's argument (`sw $20,0x54($4)`), which is why `p` exists: a store through
+ * &d's own address would be a dead store that flow deletes.
+ * MATCHED byte-exact on the s136os arm (task #1957), device-free, by statement
+ * order (the #1895 lever, FACT #9862). Priced in a solo s136os compile compared
+ * word by word with the frozen .s (PROCEDURE #9863's harness):
+ *   - the old #else (byte loop, d declared first, no default stores): 76/72,
+ *     built 77 words (scratch and d swap frame slots, both defaults deleted);
+ *   - ROM store order as statements, scratch declared first, defaults via p: 54/72;
+ *   - after a statement-order climb of the s-reg-bound stores: 13/72, the
+ *     residual pure issue order of `addiu $4,$sp,0x10`;
+ *   - `p = &d;` moved to the first statement: 0/72.
+ * GUARD (task #1957): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback. On native it is plain C.
  */
 extern u8 D_1AE088[];               /* 8-byte scratch source */
 extern u8 D_259CC0[];               /* family-2 label const for the index-0 screen */
 extern s32 D_1AE428, D_1AE42C;      /* cfg0, cfg1 (read by value) */
 extern u8 D_1AE430[8], D_1AE438[8], D_1AE440[8], D_1AE448[8], D_1AE450[8];  /* layout0..4 */
 
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00347228);
+/* the D_1AE088 scratch pair, copied whole (8 bytes, unaligned access in the ROM) */
+typedef struct { s32 w[2]; } GuiScratch8;
+
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00347228)
+S136OS_SLOT(func_00347228);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00347228, unit objdiff): 0.00%,
-   103/105 insns differ. Residual: UNKNOWN-addiu + gp/abs-mixed symbol (first differing insn: 'addiu sp, sp, -0xb0' vs 'addiu sp, sp, -0x80').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
-void func_00347228(void *obj_) {
-    u8 *obj = (u8 *)obj_;
+void func_00347228(void *obj) {
+    GuiScratch8 scratch;
     GuiScreenDesc2 d;
-    u8 scratch[8];
-    s32 i;
-
-    /* unaligned 8-byte copy of D_1AE088 (the original uses ldl/ldr -> sdl/sdr) */
-    for (i = 0; i < 8; i++) scratch[i] = D_1AE088[i];
-
-    d.label = D_259CC0;
+    GuiScreenDesc2 *p;
+    u8 *o = (u8 *)obj;
+    s32 enable;
+    p = &d;
+    enable = 1;
+    scratch = *(GuiScratch8 *)D_1AE088;
+    d._z50 = 0;
+    p->typeActive = enable;
+    d.objCfg504 = *(s32 *)(o + 0x504);
+    d.typeActive = (*(s32 *)(o + 0x508) == 0);
+    d.objCfg4FC = *(s32 *)(o + 0x4FC);
+    d.objCfg500 = *(s32 *)(o + 0x500);
+    d.child4B8 = o + 0x4B8;
+    d.layout4 = D_1AE450;
     d.cfg0 = D_1AE428;
     d.cfg1 = D_1AE42C;
-    d.objCfg4FC = *(s32 *)(obj + 0x4FC);
-    d.objCfg500 = *(s32 *)(obj + 0x500);
-    d.layout0 = D_1AE430; d.layout1 = D_1AE438; d.layout2 = D_1AE440;
-    d.layout3 = D_1AE448; d.layout4 = D_1AE450;
-    d.child130 = obj + 0x130;
-    d._z2C = 0;
-    d.child17C = obj + 0x17C;
-    d._z34 = 0;
+    d.label = D_259CC0;
+    d.child220 = o + 0x220;
+    d.child130 = o + 0x130;
+    d.child17C = o + 0x17C;
+    d.child278 = o + 0x278;
     d.typeIndex = 0;
-    d.child278 = obj + 0x278;
-    d.child4B8 = obj + 0x4B8;
-    d.child220 = obj + 0x220;
-    d.objCfg470 = *(s32 *)(obj + 0x470);
-    d.objCfg504 = *(s32 *)(obj + 0x504);
-    d._z50 = (s32)scratch;                      /* desc[0x50] = ptr to the local scratch copy (ILP32) */
-    d.typeActive = (*(s32 *)(obj + 0x508) == 0);
-    d.enable = 1;
-    func_003380B8(&d);
+    d._z2C = 0;
+    d._z34 = 0;
+    d._z50 = (s32)&scratch;                     /* desc[0x50] = ptr to the local scratch copy (ILP32) */
+    d.objCfg470 = *(s32 *)(o + 0x470);
+    d.layout3 = D_1AE448;
+    d.layout2 = D_1AE440;
+    d.layout1 = D_1AE438;
+    d.layout0 = D_1AE430;
+    d.enable = enable;
+    func_003380B8(p);
 }
 #endif
 
@@ -10836,9 +10860,8 @@ void func_00347228(void *obj_) {
  * block plus a screen-type index, then hands it to func_003380B8. The index
  * appears literally at desc[0x38] AND drives the desc[0x54] match flag
  * (obj[0x508] == index): 348 -> 3, 450 -> 1. (func_00347228 is the same family
- * but routes a pointed-to local D_1AE088 scratch buffer through desc[0x50]; left
- * INCLUDE_ASM for a separate pass.) Save-wall blocked for matching; provided as
- * TARGET_NATIVE #else arms, cmp-oracle'd (cmp_GuiScreenBuilders2). The
+ * but routes a pointed-to local D_1AE088 scratch buffer through desc[0x50].)
+ * All three are matched on the s136os arm (tasks #1895, #1957). The
  * GuiScreenDesc2 layout is defined above func_00347228.
  */
 
@@ -10846,43 +10869,6 @@ void func_00347228(void *obj_) {
 extern u8 D_1AA7F8[], D_1AA8B8[];
 extern s32 D_1AE458, D_1AE45C; extern u8 D_1AE460[8], D_1AE468[8], D_1AE470[8], D_1AE478[8], D_1AE480[8];
 extern s32 D_1AE488, D_1AE48C; extern u8 D_1AE490[8], D_1AE498[8], D_1AE4A0[8], D_1AE4A8[8], D_1AE4B0[8];
-
-/* task #1522: native-only, so on EE func_00347348/450's #else bodies call an
- * undefined symbol. With it visible as a static inline on EE they measured 41/66
- * and 37/64 words differ (register allocation). (The family-1 four above closed
- * once written out without a helper, in a measured statement order, task #1895.) */
-#ifdef TARGET_NATIVE
-static void GuiBuildScreenDesc2(u8 *obj, void *label, s32 cfg0, s32 cfg1,
-                                void *l0, void *l1, void *l2, void *l3, void *l4,
-                                s32 typeIndex) {
-    GuiScreenDesc2 d;
-    /* Field order is the ROM's store order (task #1522), not offset order. */
-    d.objCfg504 = *(s32 *)(obj + 0x504);
-    d.cfg0 = cfg0;
-    d.cfg1 = cfg1;
-    d.objCfg470 = *(s32 *)(obj + 0x470);
-    d.layout1 = l1;
-    d.layout0 = l0;
-    d.typeActive = (*(s32 *)(obj + 0x508) == typeIndex);
-    d.objCfg4FC = *(s32 *)(obj + 0x4FC);
-    d.objCfg500 = *(s32 *)(obj + 0x500);
-    d.child4B8 = obj + 0x4B8;
-    d.layout4 = l4;
-    d.typeIndex = typeIndex;
-    d.label = label;
-    d.child220 = obj + 0x220;
-    d.child130 = obj + 0x130;
-    d.child17C = obj + 0x17C;
-    d.child278 = obj + 0x278;
-    d.layout3 = l3;
-    d.layout2 = l2;
-    d.enable = 1;
-    d._z50 = 0;
-    d._z2C = 0;
-    d._z34 = 0;
-    func_003380B8(&d);
-}
-#endif
 
 /* func_00347348: family-2 builder, screen type 3 (label table D_1AA7F8, layout
  * block D_1AE458..D_1AE480); the index is also stored literally at +0x38.
@@ -10892,8 +10878,8 @@ static void GuiBuildScreenDesc2(u8 *obj, void *label, s32 cfg0, s32 cfg1,
  * solo s136os compile compared word by word with the frozen .s): the ROM's
  * store order written as statements 41/66 (task #1522 measured 41/66 for its
  * helper), a literal 1 for `enable` 16/66, cfg0 back in its ROM store slot
- * 12/66, this body 0/66. (func_00347450 is not the same shape: its index is 1,
- * so cc1 shares one register for the index and `enable`; left INCLUDE_ASM.)
+ * 12/66, this body 0/66. (func_00347450 needed a different order: its index is 1,
+ * so cc1 shares one register for the index and `enable`; task #1957.)
  * GUARD (task #1895): on EE this C is the image's body, compiled alone by the
  * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
  * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
@@ -10933,16 +10919,53 @@ void func_00347348(void *obj) {
 }
 #endif
 
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00347450);
+/* func_00347450: family-2 builder, screen type 1 (label table D_1AA8B8, layout
+ * block D_1AE488..D_1AE4B0); the index is also stored literally at +0x38.
+ * Param: obj = the owning screen object. No return value.
+ * MATCHED byte-exact on the s136os arm (task #1957), device-free, by statement
+ * order. Its index is 1, so cc1 keeps one register ($18) for both the index
+ * and `enable`, and func_00347348's order does not transfer (#1895 reached
+ * 19/64 by hand). A statement-order climb in a solo s136os compile compared
+ * word by word with the frozen .s (PROCEDURE #9863's harness) found it: the
+ * #1895 shape (19 words in the extent from the #1895 starting order) with
+ * `d._z50 = 0` moved to the top and obj[0x470] read just before layout3
+ * gives 0 in the 63-word extent. The ROM's 64th word is a trailing pad nop.
+ * GUARD (task #1957): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00347450)
+S136OS_SLOT(func_00347450);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00347450, unit objdiff): 23.95%,
-   61/63 insns differ. Residual: UNKNOWN-addiu (first differing insn: 'addiu sp, sp, -0x90' vs 'lw a2, %gp_rel(D_1AE488)(gp)').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
 void func_00347450(void *obj) {
-    GuiBuildScreenDesc2((u8 *)obj, D_1AA8B8, D_1AE488, D_1AE48C,
-                        D_1AE490, D_1AE498, D_1AE4A0, D_1AE4A8, D_1AE4B0, 1);
+    GuiScreenDesc2 d;
+    u8 *o = (u8 *)obj;
+    s32 enable;
+    enable = 1;
+    d._z50 = 0;
+    d.objCfg504 = *(s32 *)(o + 0x504);
+    d.typeActive = (*(s32 *)(o + 0x508) == 1);
+    d.objCfg4FC = *(s32 *)(o + 0x4FC);
+    d.objCfg500 = *(s32 *)(o + 0x500);
+    d.cfg0 = D_1AE488;
+    d.child4B8 = o + 0x4B8;
+    d.layout4 = D_1AE4B0;
+    d.typeIndex = 1;
+    d.cfg1 = D_1AE48C;
+    d.label = D_1AA8B8;
+    d.child220 = o + 0x220;
+    d.child130 = o + 0x130;
+    d.child17C = o + 0x17C;
+    d.child278 = o + 0x278;
+    d.objCfg470 = *(s32 *)(o + 0x470);
+    d.layout3 = D_1AE4A8;
+    d.layout2 = D_1AE4A0;
+    d.layout1 = D_1AE498;
+    d.layout0 = D_1AE490;
+    d.enable = enable;
+    d._z2C = 0;
+    d._z34 = 0;
+    func_003380B8(&d);
 }
 #endif
 

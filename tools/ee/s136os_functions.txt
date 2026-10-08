@@ -559,6 +559,9 @@ usa text/235FE8 func_00345FF0
 usa text/235FE8 func_003460E0
 usa text/235FE8 func_003461D0
 usa text/235FE8 func_00347348
+usa text/235FE8 func_00345080
+usa text/235FE8 func_00347228
+usa text/235FE8 func_00347450
 usa text/191238 func_00293B68
 usa text/191238 func_002980D8
 usa text/191238 ParseLoadedSegment
