@@ -2988,7 +2988,7 @@ void UpdateActiveMobys(void) {
 }
 #endif
 
-extern void func_0011D620(s32 a, s32 b, s32 c, s32 d, s32 e, s32 f, s32 g, s32 h, s32 i);
+extern void sceSifCallRpc(s32 a, s32 b, s32 c, s32 d, s32 e, s32 f, s32 g, s32 h, s32 i);
 extern s32  func_00133250(s32 a, s32 b, s32 c, s32 d);
 extern u8 D_001A7210[];                     /* dialog sound-channel config block */
 
@@ -3009,9 +3009,9 @@ __asm__(".extern D_1A7248, 16");
 /* Set up the dialog sound channel: issue RPC 3 on the IOP-ring SIF RPC client
  * (0x1A7248) twice, around func_00133250(7, 0xA000, 0, 1).
  *
- * func_0011D620 takes nine args (client, fno, then seven zeros), the
- * sceSifCallRpc shape. That reading comes from the call shape and the
- * InitIopUploadRing binding, not from a trace of the callee.
+ * sceSifCallRpc takes nine args (client, fno, then seven zeros). Its identity
+ * is now read from its own body (byte-exact in cod/015180 since task #2029),
+ * not only from this call shape and the InitIopUploadRing binding.
  *
  * GUARD: on EE this C is the image's body, compiled alone by the s136os arm
  * (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
@@ -3026,9 +3026,9 @@ __asm__(".extern D_1A7248, 16");
 S136OS_SLOT(InitDialogSoundChannel);
 #else
 void InitDialogSoundChannel(void) {
-    func_0011D620(DIALOG_RPC_CLIENT, 3, 0, 0, 0, 0, 0, 0, 0);
+    sceSifCallRpc(DIALOG_RPC_CLIENT, 3, 0, 0, 0, 0, 0, 0, 0);
     func_00133250(7, 0xA000, 0, 1);
-    func_0011D620(DIALOG_RPC_CLIENT, 3, 0, 0, 0, 0, 0, 0, 0);
+    sceSifCallRpc(DIALOG_RPC_CLIENT, 3, 0, 0, 0, 0, 0, 0, 0);
 }
 #endif
 

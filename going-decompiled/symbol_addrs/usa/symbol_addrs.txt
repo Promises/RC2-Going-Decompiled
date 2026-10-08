@@ -1212,6 +1212,7 @@ sceSifResetIop = 0x0011ED60; // type:func
 sceSifInitRpc = 0x0011CF78; // type:func
 sceSifFreeSysMemory = 0x0011E8A8; // type:func
 sceSifBindRpc = 0x0011D450; // type:func
+sceSifCallRpc = 0x0011D620; // type:func - SCE SDK sceSifCallRpc (task #2029, RULING #10083) - sends SIF cmd 0x8000000A (RPC call, the command whose EE-side handler func_0011D590 sceSifInitRpc registers) with the SDK nine-argument shape (client, rpc number, mode, send and size, receive and size, end function and parameter) - every caller passes a client bound by sceSifBindRpc
 sceSifCheckStatRpc = 0x0011D810; // type:func
 sceSifWriteBackDCache = 0x0011CEC8; // type:func
 strncpy = 0x00115AC0; // CONFIRMED - SDK strncpy(dst,src,n) - 128-bit SIMD body (pcpyld/psubb/pand null-byte detection, lq/sq bulk copy) with a scalar tail, does NOT guarantee termination, so callers such as McGetDir store their own terminator. SOURCE is newlib's hand-written libc/machine/r5900/strncpy.S, vendored verbatim in going-decompiled/libc and LINKED from it (task 1884, RULING 9817). Assembled by the SN Ps2EeAs it reproduces the ROM byte-exact in USA and EU (FACT 9816). The 95 of 111 words that differ from the vendored libc.a strncpy.o are real but are an ASSEMBLER difference, not a revision skew. The same .S through EE gas gives that object, because the two assemblers expand its dli mask constants differently (Ps2EeAs ends in dsll 9 then ori 0x101, one word longer per site)

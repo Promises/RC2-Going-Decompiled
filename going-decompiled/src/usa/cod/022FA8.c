@@ -569,7 +569,7 @@ extern u32 D_00136400[];  /* RPC receive buffer */
 /**
  * libcdvd N-command query: func_00124980(2) first (0 means the call cannot
  * proceed: return 0), then issue RPC #0xE on the client D_00137550 with no send
- * data and a 4-byte reply into D_00136400 (func_0011D620 = sceSifCallRpc),
+ * data and a 4-byte reply into D_00136400 (sceSifCallRpc),
  * release the semaphore D_001363A8 and return the reply word, read through the
  * uncached 0x20000000 mirror. A failed RPC (negative) releases and returns 0.
  */
@@ -578,7 +578,7 @@ u32 func_00124AF0(void) {
     if (func_00124980(2) == 0) {
         return 0;
     }
-    if (func_0011D620(D_00137550, 0xE, 0, 0, 0, D_00136400, 4, 0, 0) < 0) {
+    if (sceSifCallRpc(D_00137550, 0xE, 0, 0, 0, D_00136400, 4, 0, 0) < 0) {
         func_0011AC40(D_001363A8);
         return 0;
     }
@@ -672,7 +672,7 @@ s32 sceCdMmode(s32 media) {
     }
     *buf = media;
     sceSifWriteBackDCache(buf, 4);
-    if (func_0011D620(D_00137DC8, 0x22, 0, buf, 4, D_00137580, 4, 0, 0) < 0) {
+    if (sceSifCallRpc(D_00137DC8, 0x22, 0, buf, 4, D_00137580, 4, 0, 0) < 0) {
         func_0011AC40(D_001363AC);
         return 0;
     }
@@ -794,7 +794,7 @@ s32 sceCdRead(u32 lbn, u32 sectors, void *buf, CdReadMode *mode) {
 /**
  * libcdvd S-command 4 with no send data: take the S-command lock with
  * func_00124C98(3) (0 = busy: return -1), call RPC #4 on the S-command client
- * D_00137DC8 with a 4-byte reply into D_00137580 (func_0011D620 =
+ * D_00137DC8 with a 4-byte reply into D_00137580 (sceSifCallRpc =
  * sceSifCallRpc), release the semaphore D_001363AC and return the reply word,
  * read through the uncached 0x20000000 mirror. A failed RPC releases and
  * returns -1.
@@ -804,7 +804,7 @@ s32 QueryCdStatusOverRpc(void) {
     if (func_00124C98(3) == 0) {
         return -1;
     }
-    if (func_0011D620(D_00137DC8, 4, 0, 0, 0, D_00137580, 4, 0, 0) < 0) {
+    if (sceSifCallRpc(D_00137DC8, 4, 0, 0, 0, D_00137580, 4, 0, 0) < 0) {
         func_0011AC40(D_001363AC);
         return -1;
     }
@@ -838,7 +838,7 @@ s32 func_00125620(void) {
         return 0;
     }
     D_001363D4 = 8;
-    if (func_0011D620(D_00137DC8, 0x16, 0, 0, 0, D_00137580, 4, 0, 0) < 0) {
+    if (sceSifCallRpc(D_00137DC8, 0x16, 0, 0, 0, D_00137580, 4, 0, 0) < 0) {
         func_0011AC40(*(volatile s32 *)&D_001363AC);
         D_001363D4 = 0;
         return 0;
@@ -875,7 +875,7 @@ s32 sceCdReadClock(CdClock *clock) {
     if (D_00136390 > 0) {
         Kprintf(D_0013B308);
     }
-    if (func_0011D620(D_00137DC8, 1, 0, 0, 0, D_00137580, 0x10, 0, 0) < 0) {
+    if (sceSifCallRpc(D_00137DC8, 1, 0, 0, 0, D_00137580, 0x10, 0, 0) < 0) {
         func_0011AC40(D_001363AC);
         return 0;
     }
@@ -1504,7 +1504,7 @@ s32 McOpen(s32 port, s32 slot, const char *name, s32 mode) {
     D_00141BB0.mode = mode;
     D_00141BB0.slot = slot;
     D_00141BB0.name[0x3FF] = 0;
-    r = func_0011D620(client, 2, 1, &D_00141BB0, 0x414, &g_mcRpcResult, 4, 0, 0);
+    r = sceSifCallRpc(client, 2, 1, &D_00141BB0, 0x414, &g_mcRpcResult, 4, 0, 0);
     if (r == 0) {
         g_mcPendingCmd = 2;
     } else {
@@ -1531,7 +1531,7 @@ s32 func_00127630(s32 arg0, s32 arg1, s32 arg2) {
  * func_00127668 = McClose (libmc): close the memory-card file descriptor `fd`.
  * Guards on the RPC client being initialised (returns -0x64 / -100 if not), takes
  * the libmc mutex (returns -0xC8 / -200 if that fails), marshals fd into the send
- * buffer and issues RPC #3 (func_0011D620, sceSifCallRpc-style). On RPC success
+ * buffer and issues RPC #3 (sceSifCallRpc). On RPC success
  * records status 3 in D_00137E68; on RPC failure releases the mutex. Returns the
  * RPC result.
  */
@@ -1545,7 +1545,7 @@ s32 func_00127668(s32 fd) {
         return -0xC8;
     }
     D_00141B80 = fd;
-    r = func_0011D620(client, 3, 1, &D_00141B80, 0x30, &g_mcRpcResult, 4, 0, 0);
+    r = sceSifCallRpc(client, 3, 1, &D_00141B80, 0x30, &g_mcRpcResult, 4, 0, 0);
     if (r == 0) {
         D_00137E68 = 3;
     } else {
@@ -1569,7 +1569,7 @@ s32 func_00127720(s32 fd, s32 offset, s32 whence) {
     D_00141B80 = fd;
     *(s32 *)((char *)&D_00141B80 + 0x10) = offset;
     *(s32 *)((char *)&D_00141B80 + 0x14) = whence;
-    r = func_0011D620(client, 4, 1, &D_00141B80, 0x30, &g_mcRpcResult, 4, 0, 0);
+    r = sceSifCallRpc(client, 4, 1, &D_00141B80, 0x30, &g_mcRpcResult, 4, 0, 0);
     if (r == 0) {
         D_00137E68 = 4;
     } else {
@@ -1636,7 +1636,7 @@ s32 func_00127888(s32 fd, void *buf, s32 size) {
     *(s32 *)((char *)&D_00141B80 + 0xC) = size;
     sceSifWriteBackDCache(buf, size);
     sceSifWriteBackDCache(D_00142000, 0xC0);
-    r = func_0011D620(client, 5, 1, &D_00141B80, 0x30, &g_mcRpcResult, 4,
+    r = sceSifCallRpc(client, 5, 1, &D_00141B80, 0x30, &g_mcRpcResult, 4,
                       (s32)func_001277F8, (s32)D_00142000);
     if (r == 0) {
         D_00137E68 = 5;
@@ -1783,7 +1783,7 @@ s32 func_00127E48(s32 port, s32 slot, const char *name, s32 mode,
         sceSifWriteBackDCache(table, maxent << 6);
     }
 
-    r = func_0011D620(client, 13, 1, req, 0x414, &g_mcRpcResult, 4, 0, 0);
+    r = sceSifCallRpc(client, 13, 1, req, 0x414, &g_mcRpcResult, 4, 0, 0);
     if (r == 0) {
         D_00137E68 = 13;
     } else {
@@ -1841,7 +1841,7 @@ extern s32 g_mcPendingCmd;
 
 extern s32 func_0011AC70(s32 sema);   /* syscall 0x45 PollSema   */
 extern s32 func_0011AC40(s32 sema);  /* syscall 0x42 SignalSema */
-/* func_0011D620 (sceSifCallRpc-shaped) is already declared at file scope earlier in
+/* sceSifCallRpc is already declared at file scope earlier in
  * this unit; NOT redeclared here. My first draft did redeclare it with `void *` for the
  * trailing end-function/end-param pair and the native gate rejected it as a conflicting
  * type — the existing declaration spells those two as s32. Reusing the unit's own
@@ -1860,7 +1860,7 @@ s32 McChdir(s32 arg0, s32 arg1) {
     *(s32 *)(g_mcRpcRequest + 4) = arg0;
     *(s32 *)(g_mcRpcRequest + 8) = arg1;
 
-    rc = func_0011D620(g_mcRpcClient, 16, 1,
+    rc = sceSifCallRpc(g_mcRpcClient, 16, 1,
                        g_mcRpcRequest, 48, &g_mcRpcResult, 4, 0, 0);
     if (rc != 0) {
         func_0011AC40(g_mcMutexSema);      /* no completion is coming — release */
@@ -1899,7 +1899,7 @@ s32 McMkDir(s32 port, s32 slot, const char *name) {
     D_00141BB0.slot = slot;
     D_00141BB0.name[0x3FF] = 0;
     D_00141BB0.mode = 0;
-    r = func_0011D620(client, 0xF, 1, &D_00141BB0, 0x414, &g_mcRpcResult, 4, 0, 0);
+    r = sceSifCallRpc(client, 0xF, 1, &D_00141BB0, 0x414, &g_mcRpcResult, 4, 0, 0);
     if (r == 0) {
         g_mcPendingCmd = 0xF;
     } else {
@@ -1949,7 +1949,7 @@ s32 McGetEntSpace(s32 port, s32 slot) {
     req = (McPortSlotRequest *)g_mcRpcRequest;
     req->port = port;
     req->slot = slot;
-    r = func_0011D620(client, 0x11, 1, req, 0x30, &g_mcRpcResult, 4, 0, 0);
+    r = sceSifCallRpc(client, 0x11, 1, req, 0x30, &g_mcRpcResult, 4, 0, 0);
     if (r == 0) {
         g_mcPendingCmd = 0x11;
     } else {
@@ -1966,13 +1966,13 @@ extern s32 D_00143108;
 extern s32 D_00143180[];
 
 /**
- * Initialise the D_00143180 subsystem by calling func_0011D620 with the config
+ * Initialise the D_00143180 subsystem by calling sceSifCallRpc with the config
  * block at &D_00143108, mode 0x80000963, two 0x400-sized buffers both pointing
  * at D_00143180, and zeroed trailing arguments; returns the resulting handle
  * stored in D_00143180[0].
  */
 s32 func_00128250(void) {
-    func_0011D620(&D_00143108, 0x80000963, 0, D_00143180, 0x400,
+    sceSifCallRpc(&D_00143108, 0x80000963, 0, D_00143180, 0x400,
                   D_00143180, 0x400, 0, 0);
     return D_00143180[0];
 }
@@ -1984,7 +1984,7 @@ extern void func_00128898(const char *fmt, ...);
 
 /**
  * func_00128440(arg0): open the D_00143180 subsystem in mode 0x80000904 with
- * arg0 stored at D_00143180[1], via func_0011D620; on failure log D_0013B868
+ * arg0 stored at D_00143180[1], via sceSifCallRpc; on failure log D_0013B868
  * (func_00128898) and return 0, else return the handle D_00143180[0].
  *
  * Match note: the ARRAY extern (not the scalar (&D)[1] idiom) is what lets the
@@ -1993,7 +1993,7 @@ extern void func_00128898(const char *fmt, ...);
  */
 s32 func_00128440(s32 arg0) {
     D_00143180[1] = arg0;
-    if (func_0011D620(&D_00143108, 0x80000904, 0, D_00143180, 0x400,
+    if (sceSifCallRpc(&D_00143108, 0x80000904, 0, D_00143180, 0x400,
                       D_00143180, 0x400, 0, 0) < 0) {
         func_00128898(D_0013B868);
         return 0;
@@ -2061,7 +2061,7 @@ s32 func_001284B0(DbcSocketParam *param, struct ResSubObj *buf0,
     for (i = 0; i < 16; i++) {
         req->name.b[i] = param->name.b[i];
     }
-    if (func_0011D620(&D_00143108, 0x80000901, 0, D_00143180, 0x400,
+    if (sceSifCallRpc(&D_00143108, 0x80000901, 0, D_00143180, 0x400,
                       D_00143180, 0x400, 0, 0) < 0) {
         func_00128898(D_0013B888);
         return 0;
@@ -2102,7 +2102,7 @@ s32 func_00128578(s32 port) {
         return -12;
     }
     D_00143180[0] = port;
-    if (func_0011D620(&D_00143108, 0x80000903, 0, D_00143180, 0x400,
+    if (sceSifCallRpc(&D_00143108, 0x80000903, 0, D_00143180, 0x400,
                       D_00143180, 0x400, 0, 0) < 0) {
         func_00128898(D_0013B8C8);
         return 0;
@@ -2157,7 +2157,7 @@ s32 func_001286C8(port, cmd, size, data)
     if (sceSifCheckStatRpc(&D_00143130) == 1) {
         return 0;
     }
-    if (func_0011D620(&D_00143130, 0x8000091B, 1, D_00143180, 0x400,
+    if (sceSifCallRpc(&D_00143130, 0x8000091B, 1, D_00143180, 0x400,
                       D_00143180, 0x400, 0, 0) < 0) {
         func_00128898(D_0013B990);
         return 0;
@@ -2194,7 +2194,7 @@ s32 func_001287A8(port, cmd, size, data)
     req->port = port;
     req->cmd = cmd;
     req->size = *size;
-    if (func_0011D620(&D_00143108, 0x8000091A, 0, req, 0x400,
+    if (sceSifCallRpc(&D_00143108, 0x8000091A, 0, req, 0x400,
                       req, 0x400, 0, 0) < 0) {
         func_00128898(D_0013B9B0);
         return 0;

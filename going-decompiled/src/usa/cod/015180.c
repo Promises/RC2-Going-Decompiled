@@ -2295,7 +2295,7 @@ typedef struct SifRpcCallPacket {
  *    after them as in the ROM; read as the field's own pointer type it is
  *    hoisted to the top (10 words).
  */
-s32 func_0011D620(void *client, s32 rpcNumber, s32 mode, void *send, s32 sendSize,
+s32 sceSifCallRpc(void *client, s32 rpcNumber, s32 mode, void *send, s32 sendSize,
                   void *recv, s32 recvSize, s32 endFunc, s32 endParam) {
     SifRpcClient *cd = client;
     struct SemaParam sema;
@@ -2548,7 +2548,7 @@ s32 func_0011E0A0(void) {
     return 0;
 }
 
-extern s32 func_0011D620(void *a0, s32 a1, s32 a2, void *a3, s32 a4,
+extern s32 sceSifCallRpc(void *a0, s32 a1, s32 a2, void *a3, s32 a4,
                          void *a5, s32 a6, s32 a7, s32 a8);
 extern void sceSifWriteBackDCache(void *ptr, s32 size);
 
@@ -2658,7 +2658,7 @@ s32 func_0011E0D8(const char *path, s32 flags, ...) {
     req->result = &result;
     req->sema = sema;
     req->resultSize = 4;
-    if (func_0011D620(D_00140080, 0, 0, &D_0013E980, 0x418, D_0013F5C0, 4, 0, 0) < 0) {
+    if (sceSifCallRpc(D_00140080, 0, 0, &D_0013E980, 0x418, D_0013F5C0, 4, 0, 0) < 0) {
         func_0011AC30(sema);
         func_0011DDC8();
         return -11;
@@ -2719,7 +2719,7 @@ s32 func_0011E360(s32 fd) {
     D_0013E980.sema = sema;
     req->result = &result;
     req->resultSize = 4;
-    if (func_0011D620(D_00140080, 1, 0, req, 0x14, D_0013F5C0, 4, 0, 0) < 0) {
+    if (sceSifCallRpc(D_00140080, 1, 0, req, 0x14, D_0013F5C0, 4, 0, 0) < 0) {
         func_0011AC30(sema);
         func_0011DDC8();
         return -11;
@@ -2827,7 +2827,7 @@ s32 func_0011E4E0(s32 fd, void *buf, s32 size) {
         sceSifWriteBackDCache(buf, size);
     }
     sceSifWriteBackDCache(req, 0x20);
-    if (func_0011D620(D_00140080, 2, 0, &D_0013E980, 0x20, D_0013F5C0, 4, 0, 0) < 0) {
+    if (sceSifCallRpc(D_00140080, 2, 0, &D_0013E980, 0x20, D_0013F5C0, 4, 0, 0) < 0) {
         func_0011AC30(sema);
         func_0011DDC8();
         return -11;
@@ -2852,7 +2852,7 @@ s32 func_0011E4E0(s32 fd, void *buf, s32 size) {
  * sceSifInitIopHeap. Pure padding, no C. */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011E740);
 
-extern s32 func_0011D620(void *a0, s32 a1, s32 a2, void *a3, s32 a4,
+extern s32 sceSifCallRpc(void *a0, s32 a1, s32 a2, void *a3, s32 a4,
                          void *a5, s32 a6, s32 a7, s32 a8);
 extern s32 D_00134744;
 
@@ -2896,7 +2896,7 @@ extern s32 D_00140180;
  * Register a request with the D_00140180 service: bail out returning 0 if the
  * service slot D_00134744 is inactive (negative); otherwise stash the request
  * parameters (arg1, arg0, arg2) into the D_001401C0 descriptor and submit it via
- * func_0011D620. Returns the resulting handle D_00140180 on success, 0 on
+ * sceSifCallRpc. Returns the resulting handle D_00140180 on success, 0 on
  * failure.
  */
 s32 func_0011E828(s32 arg0, s32 arg1, s32 arg2) {
@@ -2906,7 +2906,7 @@ s32 func_0011E828(s32 arg0, s32 arg1, s32 arg2) {
     (&D_001401C0)[0] = arg1;
     (&D_001401C0)[1] = arg0;
     (&D_001401C0)[2] = arg2;
-    if (func_0011D620(&D_00140140, 4, 0, &D_001401C0, 0xC,
+    if (sceSifCallRpc(&D_00140140, 4, 0, &D_001401C0, 0xC,
                       &D_00140180, 4, 0, 0) >= 0) {
         return D_00140180;
     }
@@ -2927,7 +2927,7 @@ s32 sceSifFreeSysMemory(void *addr) {
         return 0;
     }
     (&D_001401C0)[0] = (s32)addr;
-    if (func_0011D620(&D_00140140, 2, 0, &D_001401C0, 4,
+    if (sceSifCallRpc(&D_00140140, 2, 0, &D_001401C0, 4,
                       &D_00140180, 4, 0, 0) >= 0) {
         return D_00140180;
     }
@@ -2983,7 +2983,7 @@ s32 func_0011E938(void) {
             }
             if (D_00140500.serve != 0) {
                 D_00134748 = 0;
-                if (func_0011D620(&D_00140500, 0xFF, 0, 0, 0, &D_00140300, 4,
+                if (sceSifCallRpc(&D_00140500, 0xFF, 0, 0, 0, &D_00140300, 4,
                                   0, 0) < 0) {
                     return -0x10001;
                 }
@@ -3070,7 +3070,7 @@ s32 func_0011EB00(s32 id, s32 argLen, const void *args, s32 *result) {
     } else {
         D_00140300.argLen = 0;
     }
-    if (func_0011D620(&D_00140500, 6, 0, &D_00140300, 0x200, &D_00140300, 8,
+    if (sceSifCallRpc(&D_00140500, 6, 0, &D_00140300, 0x200, &D_00140300, 8,
                       0, 0) < 0) {
         return -0x10001;
     }

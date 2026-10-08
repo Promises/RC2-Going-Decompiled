@@ -16,9 +16,9 @@
 
 extern s32 snd_QueueCommandToRing(s32 sel, s32 count, void *data, s32 arg3, s32 arg4);
 extern s32 snd_SendCommandSync(s32 arg0, s32 arg1, void *arg2);
-/* sceSifCallRpc-shaped SIF RPC primitive: client, fn, mode, send buf/size,
+/* The SDK SIF RPC call (sceSifCallRpc): client, fn, mode, send buf/size,
  * recv buf/size, end callback/param. Shared by the 989snd RPC senders below. */
-extern s32 func_0011D620(void *rpc, s32 fno, s32 mode, void *sbuf, s32 ssize,
+extern s32 sceSifCallRpc(void *rpc, s32 fno, s32 mode, void *sbuf, s32 ssize,
                          void *rbuf, s32 rsize, void *endfn, s32 endpar);
 extern s32 snd_Pump(void);
 extern s32 func_00125588(void);
@@ -228,7 +228,7 @@ s32 snd_BankLoadByLoc(s32 arg0, s32 arg1) {
     }
 
     /* issue the bank-load RPC (function 3); a negative return means it failed */
-    if (func_0011D620(D_001A7140, 3, 1, &D_001A71C0, 8, &D_001A7180, 4, 0, 0) < 0) {
+    if (sceSifCallRpc(D_001A7140, 3, 1, &D_001A71C0, 8, &D_001A7180, 4, 0, 0) < 0) {
         if (D_001A74F8 == 0) {
             snd_PrintError(D_001A7650);
         }
@@ -325,7 +325,7 @@ void snd_BankLoadAsync(s32 arg0, s32 arg1, s32 arg2, s32 arg3) {
 
     /* mark a load pending and issue the RPC without blocking on the result */
     D_001A74C8 = 1;
-    func_0011D620(D_001A7140, 3, 1, &D_001A71C0, 8, &D_001A7180, 4, 0, 0);
+    sceSifCallRpc(D_001A7140, 3, 1, &D_001A71C0, 8, &D_001A7180, 4, 0, 0);
 }
 #endif
 
@@ -392,7 +392,7 @@ s32 snd_BankLoadFromIOP(s32 arg0) {
     }
 
     /* issue the IOP-side bank-load RPC (function 0x59); negative means failure */
-    if (func_0011D620(D_001A7140, 0x59, 1, &D_001A71C0, 4, &D_001A7180, 4, 0, 0) < 0) {
+    if (sceSifCallRpc(D_001A7140, 0x59, 1, &D_001A71C0, 4, &D_001A7180, 4, 0, 0) < 0) {
         if (D_001A74F8 == 0) {
             snd_PrintError(D_001A7760);
         }
@@ -659,8 +659,8 @@ extern void snd_FlushCommandRing(void);
  * until the channel is idle, issues the RPC and spins until
  * snd_ServiceRpcCompletion confirms the reply. Before returning it flushes the
  * active command ring when that ring holds entries and no service is pending.
- * func_0011D620 is the sceSifCallRpc-shaped primitive (client, fno, mode, send
- * buf/size, recv buf/size, end callback/param).
+ * sceSifCallRpc is the SDK SIF RPC call (client, fno, mode, send buf/size,
+ * recv buf/size, end callback/param).
  *
  * Compiled by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, selected in
  * tools/ee/s136os_functions.txt). Devices: the declarations above,
@@ -698,9 +698,9 @@ s32 snd_SendCommandSync(s32 fno, s32 count, void *cmdBytes) {
 
     /* issue the synchronous RPC (mode 1); a zero-length command sends no buffer */
     if (count != 0) {
-        func_0011D620(D_001A7040, fno, 1, D_001A70C0, count, D_001A7080, 0xC, 0, 0);
+        sceSifCallRpc(D_001A7040, fno, 1, D_001A70C0, count, D_001A7080, 0xC, 0, 0);
     } else {
-        func_0011D620(D_001A7040, fno, 1, 0, 0, D_001A7080, 0xC, 0, 0);
+        sceSifCallRpc(D_001A7040, fno, 1, 0, 0, D_001A7080, 0xC, 0, 0);
     }
 
     /* spin until the completion service confirms the reply landed */
@@ -776,7 +776,7 @@ s32 snd_QueueCommandToRing(s32 sel, s32 count, void *data, s32 arg3, s32 arg4) {
             snd_Pump();
             func_0011AEA0(0);
         }
-        return func_0011D620(D_001A7040, sel, 1, 0, 0, D_001A7080, 0xC, 0, 0);
+        return sceSifCallRpc(D_001A7040, sel, 1, 0, 0, D_001A7080, 0xC, 0, 0);
     }
 
     /* bytes this command occupies: payload rounded up to a multiple of 4, plus
@@ -859,7 +859,7 @@ s32 snd_CommitRingEntry(void) {
  * 0xFFC). Waits for the command channel D_001A7040 to go idle (reporting
  * D_001A7578 unless D_001A74F8 silences it), then fires RPC function 0x4D in
  * mode 1 (NOWAIT): send the used part of the buffer, receive into the DMA
- * area, (count * 4) + 8 bytes, no end callback. func_0011D620 is the
+ * area, (count * 4) + 8 bytes, no end callback. sceSifCallRpc is the
  * sceSifCallRpc-shaped primitive (client, fno, mode, send buf/size, recv
  * buf/size, end callback/param). No parameters, no return value.
  *
@@ -874,7 +874,7 @@ s32 snd_CommitRingEntry(void) {
  * member is 67 words, not 69. No device in the body.
  */
 extern u8  *D_001A74B8[2]; /* per-buffer DMA/receive buffers */
-/* D_001A74A8, D_001A7578 and func_0011D620 are declared above. */
+/* D_001A74A8, D_001A7578 and sceSifCallRpc are declared above. */
 #if !defined(TARGET_NATIVE) && !defined(S136OS_snd_FlushCommandRing)
 S136OS_SLOT(snd_FlushCommandRing);
 #else
@@ -894,7 +894,7 @@ void snd_FlushCommandRing(void) {
 
     /* fire the ring-flush RPC (function 0x4D) for the active buffer */
     idx = D_001A74C0;
-    func_0011D620(D_001A7040, 0x4D, 1,
+    sceSifCallRpc(D_001A7040, 0x4D, 1,
                   D_001A74A0[idx],              /* send buffer    */
                   0x1000 - D_001A74A8[idx],     /* send size      */
                   D_001A74B8[idx],              /* receive buffer */
