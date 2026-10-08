@@ -1595,33 +1595,54 @@ s32 func_002D7AE0(void) {
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", GalacticMapScreenTick);
 
 /* Refresh the objectives screen: recompute objective states, gather the active
- * objective list into scratch buffers, store the count in obj->0xA0, and (when
- * the current map level has a valid entry) seed the preview record globals.
- * Returns 0. Wall: scratch-buffer absolute addresses + 2-GPR save. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D8270);
+ * objective list into the scratchpad, and seed the preview record for the current
+ * map level.
+ *
+ * obj: the screen's menu widget. Calls UpdateLevelObjectiveStates, then stores
+ * GatherActiveObjectives(0x70000000, 0, 0x70000100, 1) (ids and values written to
+ * scratchpad 0x70000000 / 0x70000100) as the count at obj+0xA0. If the widget's
+ * per-level slot (obj+0x30 + 4 * g_mapCurrentLevel) is not -1, the preview record
+ * D_0025A6C0 gets +0x3C = -576 and +0x34 = the slot's scratchpad id, and D_25A600
+ * gets its scratchpad value. Clears obj+0xA4. Returns 0.
+ *
+ * MATCHED on the s136os arm (SN 2.95.3 v1.36 -fopt-stack, task #1917), no device.
+ * Each lever's cost when removed alone (solo s136 compile, positional
+ * relocation-masked words against the ROM):
+ *   - g_mapCurrentLevel is declared as an array, so cc1 addresses it absolutely
+ *     (lui/lw) as the ROM does. Read through the gp-relative g_nMapCurrentLevel
+ *     alias: 32/44, 43 words.
+ *   - The two preview stores go through one `rec` base (the ROM forms
+ *     la D_0025A6C0 once and stores at +0x3C and +0x34). As two indexed stores
+ *     off the array: 6/44.
+ *   - `slots` (obj+0x30) is its own variable: the ROM forms obj+0x30 first and
+ *     then adds level*4. Folded into one expression, cc1 reassociates it into
+ *     obj + (level*4 + 0x30): 6/44.
+ * The data symbols are the ROM's own labels (D_0025A6C0, D_25A600); the native
+ * build resolves them through the arena (RULING #9542). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002D8270)
+S136OS_SLOT(func_002D8270);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern s32  UpdateLevelObjectiveStates(void);
 extern s32 GatherActiveObjectives(s32 outIds, s32 outMask, s32 outVals, s32 wantValues);
 /* (end of this body's declarations) */
-/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
- * objdiff): sdk29 83.52% / engine96 65.66%; better arm sdk29; 30 differing
- * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
- * insn: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. Not iterated in t495. */
-    /* TODO(match): functional equivalent - not byte-exact. */
 s32 func_002D8270(MenuWidget *obj) {
-    extern s32 D_0025A6FC, D_0025A6F4, D_0025A600;
+    extern s32 g_mapCurrentLevel[];
+    extern u8 D_0025A6C0[];
+    extern s32 D_25A600[];
     u8 *o = (u8 *)obj;
+    s32 *slots;
     s32 *pLevel;
     UpdateLevelObjectiveStates();
     *(s32 *)(o + 0xA0) = GatherActiveObjectives(0x70000000, 0, 0x70000100, 1);
-    pLevel = (s32 *)(o + 0x30 + g_nMapCurrentLevel * 4);
+    slots = (s32 *)(o + 0x30);
+    pLevel = slots + g_mapCurrentLevel[0];
     if (*pLevel != -1) {
-        D_0025A6FC = 0xfffffdc0;
-        D_0025A6F4 = *(s32 *)(*pLevel * 4 + 0x70000000);
-        D_0025A600 = *(s32 *)(0x70000100 + *pLevel * 4);
+        u8 *rec = D_0025A6C0;
+        *(s32 *)(rec + 0x3C) = 0xfffffdc0;
+        *(s32 *)(rec + 0x34) = *(s32 *)(*pLevel * 4 + 0x70000000);
+        D_25A600[0] = *(s32 *)(0x70000100 + *pLevel * 4);
     }
     *(s32 *)(o + 0xA4) = 0;
     return 0;
@@ -1880,28 +1901,39 @@ s32 func_002D8E58(void) {
     return 0;
 }
 
-/* Begin a galactic-map text-table swap: reset the screen object's +0x54/+0x38
- * pointers, then for each of the 5 map slots whose id is set and below the
- * second-bank base, OR the in-use bit (2) into its flags; finally clear +0x50
- * and request a reload (obj +0x10 bit 4). Returns 0.
- * Wall: 2-GPR callee-save + pointer-stride loop. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D8E60);
+/* Begin a galactic-map text-table swap: release the map slots that hold first-bank
+ * text, then ask the screen to reload.
+ *
+ * obj: the screen's menu widget. Calls func_002DF1B8(1), clears obj+0x54 and
+ * obj+0x38 (the saved text-table base and count, see RestorePrevTextTable), then for
+ * each of the 5 map slots in D_001B1E90 (id at +0x40, flags at +0x44, stride 8)
+ * whose id is nonzero and below the text table's second-bank base
+ * (g_menuScreenBlock+0x11C), ORs the in-use bit 2 into its flags. Finally clears
+ * obj+0x50 and sets bit 4 of obj+0x10 (reload request). Returns 0.
+ *
+ * MATCHED on the s136os arm (SN 2.95.3 v1.36 -fopt-stack, task #1917): two
+ * phrasing levers, no device. Each one's cost when removed alone (solo s136
+ * compile, positional relocation-masked words against the ROM):
+ *   - The bound is read as a field of g_menuScreenBlock through a base pointer.
+ *     The ROM holds the block address in a register and reloads +0x11C inside the
+ *     loop after the id test. Read through the gp-relative D_001F28DC alias of the
+ *     same word, cc1 hoists the load out of the loop: 33/39.
+ *   - `blk` is assigned after the call. Assigned at its declaration, it is live
+ *     across func_002DF1B8 and costs a callee-saved $17: 18/39, 40 words. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002D8E60)
+S136OS_SLOT(func_002D8E60);
 #else
-/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
- * objdiff): sdk29 67.00% / engine96 45.69%; better arm sdk29; 33 differing
- * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
- * insn: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-48`. Not iterated in t495. */
-    /* TODO(match): functional equivalent - not byte-exact. */
 s32 func_002D8E60(MenuWidget *obj) {
     s32 *ids   = (s32 *)(D_001B1E90 + 0x40);
     s32 *flags = (s32 *)(D_001B1E90 + 0x44);
+    u8 *blk;
     s32 i;
     func_002DF1B8(1);
+    blk = g_menuScreenBlock;
     *(s32 *)((u8 *)obj + 0x54) = 0;
     *(s32 *)((u8 *)obj + 0x38) = 0;
     for (i = 0; i <= 4; i++) {
-        if (ids[i * 2] != 0 && (u32)ids[i * 2] < (u32)D_001F28DC) {
+        if (ids[i * 2] != 0 && (u32)ids[i * 2] < *(u32 *)(blk + 0x11C)) {
             flags[i * 2] |= 2;
         }
     }
