@@ -3503,60 +3503,111 @@ void func_002949E0(s32 *rec, s32 enable) {
     rec[0] = -1;
 }
 
-/* func_00294A30(rec, flag): one step of a chained disc-load, used as the load
- * callback. On flag==0 it ends the chain (rec[0] = -1). Otherwise it looks up the
- * disc-TOC entry for rec[0] and, if that entry's prep field (+0x4B50) is set,
- * primes the destination buffer (rec[2]): writes 0xC000 to dest +0x14/+0x40/+0x44,
- * flushes cache, kicks a DMA transfer via func_0011AFE0 (src = D_001A7210[+0x68] +
- * rec[1]*0xC800, size = prep<<11) and spins on func_0011AFC0 until it drains. Then
- * it kicks the next chunk's read (StartFileLoadWithCallback → func_002949E0
- * callback, rec as state). Sibling of func_00294B50 (the dispatcher that starts
- * this chain) / func_002949E0 (the alternate callback).
- *
- * TODO(match): functional equivalent - not byte-exact. Matching arm stays
- * INCLUDE_ASM; #else byte-neutral. NEEDS-ORACLE. */
+/* ADDRESSING-MODEL DEVICE (RULING #8620 / #9574, the non-zero-offset equate):
+ * func_00294A30 reads the IOP staging base D_001A7210+0x68 (ROM symbol D_1A7278)
+ * as one `lui $6` / `lw $6,0($6)` pair at 0x294A8C (a one-insn `lw` macro). A
+ * small extern equated at size 16 gives exactly that; the relocations name
+ * D_001A7210+0x68, the same address. Emits nothing. Top level, so the s136os TU
+ * and the unit's 2.9 TU see the same lines. Native reads the field directly. */
 #ifndef TARGET_NATIVE
-/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
- * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 58.83% PACKED-SAVE /
- * engine96 58.18% CONST-MULT; best arm sdk29, first differing insn there: 'addiu sp, sp,
- * -0x40' vs 'addiu sp, sp, -0x50' */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00294A30);
+__asm__(".extern g_iopStagingBaseAbs, 16\n\tg_iopStagingBaseAbs = D_001A7210 + 0x68");
+extern s32 g_iopStagingBaseAbs;
+#else
+extern u8 D_001A7210[];
+#define g_iopStagingBaseAbs (*(s32 *)(D_001A7210 + 0x68))
+#endif
+
+/* func_00294A30(rec, flag): one step of a chained disc-load, used as the load
+ * callback. rec = {level, slot, buffer}. On flag==0 it ends the chain
+ * (rec[0] = -1). Otherwise it looks up the level's disc-TOC entry and, if the
+ * entry has a pre-span (preSectors, g_discToc +0x4B50), sends the just-loaded
+ * buffer to the IOP: writes 0xC000 to buffer +0x14/+0x40/+0x44, flushes the
+ * cache (func_0011AEA0(0)), queues one EE->IOP transfer via func_0011AFE0
+ * (sceSifSetDma: source rec[2], IOP address = staging base + slot*0xC800, size
+ * preSectors*2048) and polls func_0011AFC0 (sceSifDmaStat) until it completes.
+ * Then it starts the main span's read into the same buffer
+ * (StartFileLoadWithCallback, LBN = baseLbn + lbn, with func_002949E0 as the
+ * callback and rec as its state). Returns nothing. Sibling of func_00294B50
+ * (the dispatcher that starts this chain) / func_002949E0 (the alternate callback).
+ *
+ * Byte-exact on the s136os arm (task #1962). The ROM's five callee saves at
+ * 8-byte stride are what SN 1.36 -fopt-stack emits; the old t496 "PACKED-SAVE"
+ * label described the 2.9 arm. Each lever priced by removing it alone (solo s136
+ * compile, relocated fields masked; N/72 words differ):
+ *  - the TOC entry is re-derived from rec[0] at every use, never held in a
+ *    pointer: the ROM re-reads rec[0] and re-multiplies after the calls
+ *    (0x294B44): 59/72;
+ *  - the TOC is read through a struct (LevelDiscTocT), so the entry address
+ *    is formed first and the field offset sits in the load (`lw $4,19280($2)`
+ *    at 0x294A68): byte-offset reads fold 0x4B50 into the %lo, 12/72;
+ *  - the IOP staging base is read through g_iopStagingBaseAbs (the equate
+ *    above): 20/72;
+ *  - dest+0x40/+0x44 are stored through `hdr = dest + 0x18`, which the ROM
+ *    keeps in $7 (`addiu $7,$2,24` at 0x294AB4): 15/72; and +0x40 is
+ *    written before +0x44, which the ROM stores in the opposite order: 2/72.
+ * One SCHEDULING DEVICE (RULING #8435; this unit's R5900_SHORT_LOOP_PAD3_TIED,
+ * as in LoadIrxModuleFromBuffer): the sceSifDmaStat poll loop is jal + slot +
+ * bgez, and the ROM's assembler padded it with 3 nops before the `bgez` to the
+ * R5900 short-loop minimum. Without it: 27/72, 69 words. Emits only nops;
+ * empty on native.
+ */
+/* GUARD (task #1962): on EE this C is the image's body, compiled alone by SN
+ * 2.95.3 v1.36 -fopt-stack (tools/ee/s136os_functions.txt) and spliced over the
+ * S136OS_SLOT line by tools/ee/s136os_splice.sh; the 2.9 compile sees only the
+ * slot, so a build that skips the splice loses the function. On native it is
+ * plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00294A30)
+S136OS_SLOT(func_00294A30);
 #else
 /* Prototypes this body needs whose declarations sit in other guarded arms:
  * the s136os arm compiles this arm alone, so it must see them here. */
 extern void func_0011AEA0(s32 a);
 extern s32 StartFileLoadWithCallback(void *dest, s32 startSector, s32 count,
                                      void *callback, void *state);
-extern u8  D_001A7210[];                          /* +0x68 = IOP DMA source base */
-void func_00294A30(s32 *rec, s32 flag) {
-    u8 *toc;
+/* The level-asset directory inside g_discToc (func_00294B50 starts the load). */
+typedef struct {
+    s32 lbn;          /* +0x0  main span, LBN offset from baseLbn */
+    s32 sectors;      /* +0x4  main span length; 0 = no entry */
+    s32 preLbn;       /* +0x8  pre-span loaded first (func_00294B50) */
+    s32 preSectors;   /* +0xC  nonzero: the pre-span is DMA'd to the IOP first */
+    s32 _unk10;
+} LevelTocEntryT;
+typedef struct {
+    u8 _pad0[0x4B3C];
+    s32 baseLbn;                /* +0x4B3C */
+    s32 _unk4B40;
+    LevelTocEntryT levels[1];   /* +0x4B44, stride 0x14 */
+} LevelDiscTocT;
 
+void func_00294A30(s32 *rec, s32 flag) {
     if (flag == 0) {
         rec[0] = -1;
         return;
     }
-    toc = (u8 *)g_discToc + rec[0] * 0x14;
-    if (*(s32 *)(toc + 0x4B50) != 0) {
+    if (((LevelDiscTocT *)g_discToc)->levels[rec[0]].preSectors != 0) {
+        s32 block[4];   /* sceSifDmaData: EE source, IOP address, size, mode */
+        s32 handle;
+        s32 st;
         u8  *dest = (u8 *)rec[2];
-        s32  src  = *(s32 *)(D_001A7210 + 0x68) + rec[1] * 0xC800;
-        s32  block[4];
-        s32   handle;
+        s32 *hdr  = (s32 *)(dest + 0x18);   /* own register ($7): see above */
 
-        block[0] = rec[2];
-        block[1] = src;
-        block[2] = *(s32 *)(toc + 0x4B50) << 11;
+        block[0] = (s32)dest;
+        block[1] = g_iopStagingBaseAbs + rec[1] * 0xC800;
+        block[2] = ((LevelDiscTocT *)g_discToc)->levels[rec[0]].preSectors << 11;
         block[3] = 0;
         *(s32 *)(dest + 0x14) = 0xC000;
-        *(s32 *)(dest + 0x44) = 0xC000;
-        *(s32 *)(dest + 0x40) = 0xC000;
+        hdr[10] = 0xC000;   /* dest + 0x40 */
+        hdr[11] = 0xC000;   /* dest + 0x44 */
         func_0011AEA0(0);
         handle = func_0011AFE0(block, 1);
         do {
-        } while (func_0011AFC0(handle) >= 0);
+            st = func_0011AFC0(handle);
+            R5900_SHORT_LOOP_PAD3_TIED(st);
+        } while (st >= 0);
     }
     StartFileLoadWithCallback((void *)rec[2],
-        *(s32 *)(toc + 0x4B44) + g_discToc[0x4B3C / 4],
-        *(s32 *)(toc + 0x4B48), (void *)func_002949E0, rec);
+        ((LevelDiscTocT *)g_discToc)->levels[rec[0]].lbn + ((LevelDiscTocT *)g_discToc)->baseLbn,
+        ((LevelDiscTocT *)g_discToc)->levels[rec[0]].sectors, (void *)func_002949E0, rec);
 }
 #endif
 
