@@ -1840,9 +1840,9 @@ extern s32 func_001157AC(const char *s); /* SDK strlen */
  * would clip the bottom margin.
  *
  * MATCHED byte-exact on the s136os arm at the unit's -O2 default (RULING
- * #9450; task #1833), with no pin, fence or pad. Each of these was measured necessary by
- * reverting it alone (solo s136os harness, verify_match_unit words differing /
- * built length in brackets):
+ * #9450; task #1833), with no pin, fence or pad. Each of these was measured
+ * necessary by reverting it alone (solo s136os harness, verify_match_unit
+ * words differing / built length in brackets):
  *   - layout is 0x20 bytes: the ROM frame is 0x50 [frame 0x70, 8/86];
  *   - func_00280BB8's colour is u64 (DrawFont2TextBox, as 191238.cpp declares
  *     it), so 0x80FFA888 is built zero-extended (`ori; dsll 16; ori`) [85 vs
@@ -3060,9 +3060,10 @@ void InitHudMobyTable(void) {
 }
 #endif
 
-/* func_002EFD28(dest, src, a, count, b): stage `count` (compressed size / 16)
- * units of the wad at `src` into the scratch buffer `dest`. Defined elsewhere. */
-extern void func_002EFD28(void *dest, void *src, s32 a, s32 count, s32 b);
+/* TransferIopRingData (0x2EFD28): copy `qwordCount` qwords of IOP-DMA ring
+ * entry `ringIndex` into `dest` (symbol_addrs.txt; returns 0 ok, -1 overrun, -3
+ * bad index). Defined elsewhere. */
+extern s32 TransferIopRingData(void *dest, s32 ringIndex, s32 qwordOffset, s32 qwordCount, s32 arg4);
 /* DecompressWad(src, dest): decompress the staged wad `src` into `dest` (writes
  * its output to the 2nd arg — see text/191238.c). Defined in text/198FA0. */
 extern void DecompressWad(void *src, void *dest);
@@ -3077,14 +3078,14 @@ extern u8 g_menuScreenBlock[];                /* 0x menu-screen scratch/VRAM sta
  *         0 or 2; bank 3 for mode 1 or 2
  *
  * The header (g_pHudAssetHeader[0]) holds, per bank, a decompressed size
- * (+0x54/+0x5C/+0x60/+0x64) and a compressed-source pointer (+0x94/+0x9C/+0xA0/
- * +0xA4); the matching compressed sizes are words 2/4/5/6 of the
- * g_hudMobySpawnStart record (+0x8/+0x10/+0x14/+0x18). Each present bank
- * (size != 0) is staged into the menu-screen scratch buffer (the pointer at
- * g_menuScreenBlock+0x20) via func_002EFD28 (compressed size / 16 qwords),
- * decompressed by DecompressWad to the running VRAM address (starting at
- * g_menuScreenBlock+0x114 and advanced by each bank's size), then registered
- * with RelocateHudBankGsSlots. The relocation slot ids are 0, 2, 3, 4 for banks
+ * (+0x54/+0x5C/+0x60/+0x64) and the IOP-ring index holding its compressed
+ * data (+0x94/+0x9C/+0xA0/+0xA4); the matching compressed sizes are words
+ * 2/4/5/6 of the g_hudMobySpawnStart record (+0x8/+0x10/+0x14/+0x18). Each
+ * present bank (size != 0) is staged into the menu-screen scratch buffer (the
+ * pointer at g_menuScreenBlock+0x20) by TransferIopRingData (compressed size /
+ * 16 qwords), decompressed by DecompressWad to the running VRAM address
+ * (starting at g_menuScreenBlock+0x114 and advanced by each bank's size), then
+ * registered with RelocateHudBankGsSlots. The relocation slot ids are 0, 2, 3, 4 for banks
  * 0..3 (the ROM passes 2 for bank 1, at 0x28B7C8).
  *
  * MATCHED byte-exact on the s136os arm at the unit's -O2 default (RULING
@@ -3137,7 +3138,7 @@ void ReloadAllHudBankTextures(s32 mode) {
     /* bank 0 - always */
     size0 = *(s32 *)((u8 *)g_pHudAssetHeaderAbs[0] + 0x54);
     if (size0 != 0) {
-        func_002EFD28(dest, *(void **)((u8 *)g_pHudAssetHeaderAbs[0] + 0x94), 0,
+        TransferIopRingData(dest, *(s32 *)((u8 *)g_pHudAssetHeaderAbs[0] + 0x94), 0,
                       g_hudMobySpawnRec[2] / 16, 0);
         DecompressWad(dest, (void *)vram);
         RelocateHudBankGsSlots(0, vram);
@@ -3146,7 +3147,7 @@ void ReloadAllHudBankTextures(s32 mode) {
     /* bank 1 - always */
     size1 = *(s32 *)((u8 *)g_pHudAssetHeaderAbs[0] + 0x5C);
     if (size1 != 0) {
-        func_002EFD28(dest, *(void **)((u8 *)g_pHudAssetHeaderAbs[0] + 0x9C), 0,
+        TransferIopRingData(dest, *(s32 *)((u8 *)g_pHudAssetHeaderAbs[0] + 0x9C), 0,
                       g_hudMobySpawnRec[4] / 16, 0);
         DecompressWad(dest, (void *)vram);
         RelocateHudBankGsSlots(2, vram);
@@ -3156,7 +3157,7 @@ void ReloadAllHudBankTextures(s32 mode) {
     if (mode == 0 || mode == 2) {
         size2 = *(s32 *)((u8 *)g_pHudAssetHeaderAbs[0] + 0x60);
         if (size2 != 0) {
-            func_002EFD28(dest, *(void **)((u8 *)g_pHudAssetHeaderAbs[0] + 0xA0), 0,
+            TransferIopRingData(dest, *(s32 *)((u8 *)g_pHudAssetHeaderAbs[0] + 0xA0), 0,
                           g_hudMobySpawnRec[5] / 16, 0);
             DecompressWad(dest, (void *)vram);
             RelocateHudBankGsSlots(3, vram);
@@ -3168,7 +3169,7 @@ void ReloadAllHudBankTextures(s32 mode) {
         u8 *hdr = HUD_BANK3_HEADER;
         size3 = *(s32 *)(hdr + 0x64);
         if (size3 != 0) {
-            func_002EFD28(dest, *(void **)(hdr + 0xA4), 0,
+            TransferIopRingData(dest, *(s32 *)(hdr + 0xA4), 0,
                           g_hudMobySpawnRec[6] / 16, 0);
             DecompressWad(dest, (void *)vram);
             RelocateHudBankGsSlots(4, vram);
