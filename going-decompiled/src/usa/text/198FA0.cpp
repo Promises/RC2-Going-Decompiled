@@ -154,7 +154,7 @@ extern s32 McInit(void);
  * plain `j` (the original uses jal + return). func_0029CA98's own definition
  * is void in the ROM (task #1738, see it), so its s136os TU must not see this
  * declaration. */
-extern s32 DebugPrintStub(char *msg);
+extern s32 DebugPrintStub(const char *fmt, ...); /* as defined (16E980.c) */
 extern void func_0028E9A0(s32 arg);
 #if !defined(S136OS_func_0029CA98)
 extern s32 func_0029CA98(void);
@@ -3585,7 +3585,7 @@ void *SpawnMoby(s32 classId) {
             m += 0x100;
         } while (m < g_mobyTableEnd);
     }
-    ((s32 (*)(char *, s32))DebugPrintStub)(D_1A9DC8, g_gameTime);
+    DebugPrintStub(D_1A9DC8, g_gameTime);
     return 0;
 }
 #endif
