@@ -870,16 +870,38 @@ s32 func_00133230(void) {
     return snd_Pump();
 }
 
-/* func_00133250: waits for IOP readiness then sends sync command 0x2A with a
- * 4-word record, storing the result back into g_sndIopReady. Blocked twice
- * over: a spin loop whose body is `jal snd_Pump` followed by THREE literal
- * nops (cc1 never pads like that), plus the multi-callee-save 16-byte
- * save-slot layout wall (see snd_SetupDmaTransfer) (near-miss). Portable #else. */
 extern s32 snd_SendCommandSync(s32 sel, s32 count, void *data);
 extern s32 snd_CheckLoadInProgress(s32 noWait);
 extern s32 D_001A74C8; /* nonzero while the command ring still has pending work */
+
+/* SCHEDULING DEVICE (RULING #8435): three `noreorder` nops, ordered after the
+ * call that produces `v` and before its test. The ROM's spin loop at
+ * 0x133298..0x1332AC is `jal snd_Pump; nop; nop; nop; nop; bnez $2` — the
+ * delay slot plus three nops cc1 never emits; this reproduces those three.
+ * No-op on the native arm. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_00133250);
+#define R5900_SPIN_PAD3(v) \
+    __asm__(".set noreorder\n\tnop\n\tnop\n\tnop\n\t.set reorder" : "+r"(v))
+#else
+#define R5900_SPIN_PAD3(v) ((void)0)
+#endif
+
+/**
+ * func_00133250 - bring up the IOP sound/loader driver.
+ *
+ * @arg0..@arg3: the four words of the 0x2A (bring-up) command record.
+ * Returns 0 when the driver is already up (g_sndIopReady == 1); otherwise
+ * drains any pending command-ring work (pumping until snd_Pump reports idle),
+ * waits out any in-flight load, sends command 0x2A synchronously and stores its
+ * result as the new g_sndIopReady, which it also returns.
+ *
+ * Compiled by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, selected in
+ * tools/ee/s136os_functions.txt), which packs the s0-s3/ra saves 8 bytes apart
+ * as the ROM does. Its one device is R5900_SPIN_PAD3 in the drain loop: without
+ * it the body is three words short (24/43 words, s136os solo TU, task #1914).
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00133250)
+S136OS_SLOT(func_00133250);
 #else
 s32 func_00133250(s32 arg0, s32 arg1, s32 arg2, s32 arg3) {
     s32 cmd[4];
@@ -888,7 +910,12 @@ s32 func_00133250(s32 arg0, s32 arg1, s32 arg2, s32 arg3) {
         return 0; /* IOP driver already up */
     }
     if (D_001A74C8 != 0) {
-        while (snd_Pump() != 0) { } /* drain the pending command ring */
+        s32 busy;
+
+        do { /* drain the pending command ring */
+            busy = snd_Pump();
+            R5900_SPIN_PAD3(busy);
+        } while (busy != 0);
     }
     snd_CheckLoadInProgress(0); /* block until any in-flight load finishes */
     cmd[0] = arg0;
