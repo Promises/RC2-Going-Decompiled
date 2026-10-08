@@ -37,9 +37,10 @@
  * 05_all29_report.txt, 07_all96_report.txt, classes 08/09_classify*.txt). None
  * reached 100 on either arm; sdk29 >= engine96 on 31 of 40, but 32 of those are
  * PACKED-SAVE-walled there. The wall is a property of the 2.9 arm only: the
- * s136os arm (SN 1.36 -fopt-stack) has the ROM's 8-byte slots, and thirteen of
- * these arms are matched there (FACTs #8830, #9658, #9707, #9856; the s136os
- * re-screen of the remaining arms is NOTE #9857). Table figures below are the
+ * s136os arm (SN 1.36 -fopt-stack) has the ROM's 8-byte slots, and sixteen of
+ * these arms are matched there (FACTs #8830, #9658, #9707, #9856, #10000; the
+ * s136os re-screen of the remaining arms is NOTE #9857, with func_00270D60 and
+ * func_00273D20 taken further in NOTEs #9994 and #9998). Table figures below are the
  * t512 measurements on the two held arms, kept as recorded.
  *   arm                        sdk29%  e96%   saves   residual class (sdk29 arm)
  *   ShowSplashImage             88.84  86.76  3g/0f   PACKED-SAVE,GPREL
