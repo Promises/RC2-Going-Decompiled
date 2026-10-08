@@ -523,3 +523,4 @@ usa text/178E88 func_0027F168
 usa text/178E88 func_0027F858
 usa text/178E88 func_00280380
 usa text/250080 func_003510C0
+usa text/250080 FmvStreamStartDma

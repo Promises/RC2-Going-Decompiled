@@ -1393,20 +1393,47 @@ s32 FmvBitstreamObjInit(u8 *obj, s32 srcBase, s32 tagBase, s32 ringSize,
 }
 #endif
 
-/* FmvStreamStartDma: initialise the IPU_TO bitstream sub-object's ring state and
- * build its DMA source-tag chain. Clears the playback counters, resets each
- * f50-array ring slot (stride 0x18: two -1 handles + two zeroed counters),
- * emits one 0x80-qwc IPU_TO source tag per macroblock via func_003515C0
- * (id 0x80) followed by the qwc=2 terminator, then programs channel-4
- * MADR/QWC/TADR and suspends its CHCR via func_00351550(5). Operates on the
- * sub-object embedded at FmvStream+0x48 (type not yet recovered -> raw
- * offsets). Returns 1 (the ROM sets $v0 = 1 before its jr; task #1801 found
- * the old `void` declaration was the FmvBitstreamObjInit residual). Byte-match
- * blocked: 8-byte-packed saves. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", FmvStreamStartDma);
+/**
+ * FmvStreamStartDma: initialise the IPU_TO bitstream sub-object's ring state and
+ * build its DMA source-tag chain. Sets +0x44 to 1, clears the playback
+ * counters, resets every DMA-add ring slot (+0x50 array, +0x54 slots: two -1
+ * tags and two zeroed counters), emits one tag per 0x800-byte ring block via
+ * func_003515C0 (tag id 3, qwc 0x80, address = the block) followed by a
+ * zero-qwc id-2 tag addressed at the tag ring itself, then programs channel-4
+ * QWC/MADR/TADR and suspends its CHCR via func_00351550(5).
+ * @param stream the sub-object embedded at FmvStream+0x48 (type not yet
+ *               recovered as a whole -> raw offsets)
+ * @return 1, always (task #1801 found the old `void` declaration was the
+ *         FmvBitstreamObjInit residual)
+ *
+ * MATCHED on the s136os arm (task #1888). Three things close it, each measured
+ * by undoing it alone on a solo s136 compile (relocated fields masked):
+ *  - each slot store re-reads the +0x50 array base, as the ROM does (four
+ *    `lw 0x50` per iteration): one struct-array access per store. With the
+ *    slot pointer formed once per iteration it is 80/88 words (82 built).
+ *  - both loops are plain `for` loops with no enclosing `if (n > 0)`: cc1
+ *    then emits the ROM's single blez guard. With the guards it is 90/88
+ *    (92 built: a second, redundant entry test per loop).
+ *  - the block's source address is written `(i << 11) + base`: the other
+ *    operand order swaps the addu operands, 3/88.
+ * No devices.
+ * GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+ * (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in tools/ee/s136os_functions.txt)
+ * and spliced over S136OS_SLOT by tools/ee/s136os_splice.sh (task #1888). There
+ * is no asm fallback: a build that skips the splice drops the function. On
+ * native it is plain C.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_FmvStreamStartDma)
+S136OS_SLOT(FmvStreamStartDma);
 #else
-/* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 67.90% / engine96 63.94%. Residual: PACKED-SAVE (4 callee saves) + 61 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
+/* One DMA-add ring slot (stride 0x18; FmvDmaAddCmd's layout at func_003521B0). */
+typedef struct FmvDmaAddSlot {
+    /* 0x00 */ s64 tag0; /* -1 = empty */
+    /* 0x08 */ s64 tag1;
+    /* 0x10 */ s32 arg0; /* position within the sector (func_00352058) */
+    /* 0x14 */ s32 arg1; /* bytes still unconsumed (func_00352058) */
+} FmvDmaAddSlot;
+
 s32 FmvStreamStartDma(u8 *stream) {
     s32 i;
 
@@ -1417,23 +1444,16 @@ s32 FmvStreamStartDma(u8 *stream) {
     *(s32 *)(stream + 0x58) = 0;
     *(s32 *)(stream + 0x5C) = 0;
 
-    if (*(s32 *)(stream + 0x54) > 0) {
-        for (i = 0; i < *(s32 *)(stream + 0x54); i++) {
-            u8 *slot = *(u8 **)(stream + 0x50) + i * 0x18;
-            *(s64 *)(slot + 0x0) = -1;
-            *(s64 *)(slot + 0x8) = -1;
-            *(s32 *)(slot + 0x10) = 0;
-            *(s32 *)(slot + 0x14) = 0;
-        }
+    for (i = 0; i < *(s32 *)(stream + 0x54); i++) {
+        (*(FmvDmaAddSlot **)(stream + 0x50))[i].tag0 = -1;
+        (*(FmvDmaAddSlot **)(stream + 0x50))[i].tag1 = -1;
+        (*(FmvDmaAddSlot **)(stream + 0x50))[i].arg0 = 0;
+        (*(FmvDmaAddSlot **)(stream + 0x50))[i].arg1 = 0;
     }
 
-    i = 0;
-    if (*(s32 *)(stream + 0x8) > 0) {
-        for (i = 0; i < *(s32 *)(stream + 0x8); i++) {
-            func_003515C0((u64 *)(*(u32 *)(stream + 0x4) + i * 0x10),
-                          (*(u32 *)(stream + 0x0) + (i << 11)) & 0x0FFFFFFF,
-                          3, 0x80);
-        }
+    for (i = 0; i < *(s32 *)(stream + 0x8); i++) {
+        func_003515C0((u64 *)(*(u32 *)(stream + 0x4) + i * 0x10),
+                      ((i << 11) + *(u32 *)(stream + 0x0)) & 0x0FFFFFFF, 3, 0x80);
     }
 
     func_003515C0((u64 *)(*(u32 *)(stream + 0x4) + i * 0x10),
