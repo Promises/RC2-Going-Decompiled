@@ -1,4 +1,5 @@
 #include "common.h"
+#include "vec.h"             /* Vec4 (16-byte xyzw) */
 
 /*
  * text/191238 — boot/IRX init + sky render + segment/asset loader + MAP/minimap
@@ -479,7 +480,116 @@ void func_002919A0(void) {
  * Not portable-C expressible (no callable body); left as INCLUDE_ASM. */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/191238", func_002919C0);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", DrawSkyShellsScaledSpin);
+/*
+ * DrawSkyShellsScaledSpin — draw the sky shells with spin rates scaled by the
+ * camera's view axis (RenderSky's branch for g_playerProgress == 0, the boot /
+ * title area). Points g_pSkyShellSpinRates at g_skyShellSpinTableScaled, takes
+ * the dot product of the camera matrix's first row with the unit axis (+X, or
+ * -Y while g_nGameState is 2), and writes each of the 10 static rates times the
+ * negated dot into the scaled table's `rate` column. Then, as
+ * DrawSkyShellsFixedSpin (text/1DFF80) does, spins shells 0..9 with
+ * UpdateSkyShellRotation, gives shells 10+ an identity matrix, and draws each,
+ * re-reading the shell count (g_pSkyData+0x6) every iteration. No params, no
+ * return value.
+ *
+ * Byte-exact on the s136os arm (task #1988; bare INCLUDE_ASM before). Each lever
+ * priced by removing it alone (solo s136 compile, relocated fields masked; N/67
+ * words differ):
+ *  - ADDRESSING-MODEL DEVICES (RULING #8620, the size-16 FACT #8036 equate form
+ *    of the unit's other ...Abs names): the ROM reads g_pSkyData (0x291A64,
+ *    0x291AB4) and g_nGameState (0x2919EC) with the assembler's absolute macro,
+ *    `lui $3; lw $3,%lo($3)`, where -G8 makes a 4-byte extern gp-relative. Plain
+ *    g_pSkyData: 26/67, 64 words; g_nGameState as the unsized array 16E980 uses
+ *    (cc1 splits %hi into its own register): 17/67. 188858.c carries the same
+ *    g_nGameStateAbs equate. Outside the guard: the s136os splice carries only
+ *    the function's .ent..end block and .extern lines;
+ *  - g_skyShellMatrixSmall, the section(".sdata") asm-label alias
+ *    DrawSkyShellsFixedSpin uses for the same reason (RULING #8620): with the
+ *    plain array, loop motion hoists its %hi into a saved $17: 42/67, 66 words;
+ *  - the axis is cleared as one TImode store (`por $2,$0,$0; sq $2`, as
+ *    183558.c's func_00283638 notes cc1 emits for a TI zero) before x is set;
+ *    four float zeros: 58/67, 69 words. Native clears the fields;
+ *  - the rate rows are indexed (`scaled[k].rate`), so loop.c strength-reduces
+ *    each to a pointer that starts at the table + 8, the ROM's
+ *    `addiu $2,$2,%lo(..); addiu $2,$2,8`; walking pointers: 38/67, 65 words;
+ *  - the two loops have their own counters; one shared counter is live across
+ *    the Vec3DotVu0 call and takes a saved register: 28/67, 68 words.
+ */
+#ifndef TARGET_NATIVE
+__asm__(".extern g_pSkyDataAbs, 16\n\tg_pSkyDataAbs = g_pSkyData");
+__asm__(".extern g_nGameStateAbs, 16\n\tg_nGameStateAbs = g_nGameState");
+extern u8 *g_pSkyDataAbs;
+extern s32 g_nGameStateAbs;
+#else
+#define g_pSkyDataAbs   g_pSkyData
+#define g_nGameStateAbs g_nGameState
+#endif
+/* GUARD (task #1988): on EE this C is the image's body, compiled alone by SN
+ * 2.95.3 v1.36 -fopt-stack (tools/ee/s136os_functions.txt) and spliced over the
+ * S136OS_SLOT line by tools/ee/s136os_splice.sh; the 2.9 compile sees only the
+ * slot, so a build that skips the splice loses the function. On native it is
+ * plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_DrawSkyShellsScaledSpin)
+S136OS_SLOT(DrawSkyShellsScaledSpin);
+#else
+extern f32  Vec3DotVu0(const Vec4 *a, const Vec4 *b);
+extern void MatrixIdentityVu0(void *m);
+extern void UpdateSkyShellRotation(s32 shellIdx);
+extern void DrawSkyShell(s32 shellIdx);
+extern void *g_pSkyShellSpinRates;
+extern s32  g_skyShellSpinTableStatic[];
+extern s32  g_skyShellSpinTableScaled[];
+extern Vec4 g_cameraMatrix;
+#ifndef TARGET_NATIVE
+extern u8 g_skyShellMatrixSmall[] __asm__("g_skyShellMatrix") __attribute__((section(".sdata")));
+#else
+extern u8  g_skyShellMatrix[];
+extern s32 g_nGameState;
+extern u8 *g_pSkyData;
+#define g_skyShellMatrixSmall g_skyShellMatrix
+#endif
+/* One 12-byte row of the shell spin-rate tables; only `rate` is touched here. */
+typedef struct SkyShellSpin {
+    f32 x, y;
+    f32 rate;
+} SkyShellSpin;
+void DrawSkyShellsScaledSpin(void) {
+    Vec4 axis;
+    f32  scale;
+    s32  k, i;
+
+    g_pSkyShellSpinRates = g_skyShellSpinTableScaled;
+#ifndef TARGET_NATIVE
+    {
+        typedef unsigned int Quad __attribute__((mode(TI)));
+        *(Quad *)&axis = 0;
+    }
+#else
+    axis.x = axis.y = axis.z = axis.w = 0.0f;
+#endif
+    axis.x = 1.0f;
+    if (g_nGameStateAbs == 2) {
+        axis.x = 0.0f;
+        axis.y = -1.0f;
+    }
+    scale = -Vec3DotVu0(&g_cameraMatrix, &axis);
+    {
+        SkyShellSpin *rates  = (SkyShellSpin *)g_skyShellSpinTableStatic;
+        SkyShellSpin *scaled = (SkyShellSpin *)g_skyShellSpinTableScaled;
+        for (k = 0; k < 10; k++) {
+            scaled[k].rate = rates[k].rate * scale;
+        }
+    }
+    for (i = 0; i < *(s16 *)(g_pSkyDataAbs + 0x6); i++) {
+        if (i >= 0xA) {
+            MatrixIdentityVu0(g_skyShellMatrixSmall);
+        } else {
+            UpdateSkyShellRotation(i);
+        }
+        DrawSkyShell(i);
+    }
+}
+#endif
 
 extern void BeginSkyDrawSegment(void);
 extern void DrawSkyShellsScaledSpin(void);
