@@ -32,6 +32,8 @@ usa text/16E980 func_00270500
 usa text/16E980 ShowSplashImage
 usa text/16E980 func_0026EAC8
 usa text/16E980 func_002703C0
+usa text/16E980 func_0026EB98
+usa text/16E980 DispatchCameraMode
 usa text/178E88 func_0027FBA8
 usa text/178E88 DrawDebugString
 usa text/178E88 func_00280250

@@ -297,12 +297,12 @@ extern void *g_memoryArenaTable[];   /* +0x14 (index 5) = image chunk header */
  * - g_vramFrameBufB is read as `lui $5 / lw $5,%lo($5)`, gas's expansion of a
  *   cc1-small symbol the assembler knows is not small data: the unit-level
  *   `.extern g_vramFrameBufB, 16` above (RULING #8620 family). Without it the
- *   load is %gp_rel, one word short.
- * - the brightness counter is set after the setup calls and the loop is a
- *   `for`: a `do`/`while` with the counter set at its declaration puts
- *   `li $16,0x80` after the `sd $31` (3 words) and issues the tint call's a1
- *   before a2 (2 words; the ROM sets a2 first). The `for` alone fixes the
- *   argument order, the late init alone fixes the prologue.
+ *   load is %gp_rel and the body one word short (33 positional differences).
+ * - the brightness counter is set after the setup calls (set at its
+ *   declaration, `li $16,0x80` issues after the `sd $31`: 3 words) and
+ *   stepped after the last call of the body (the old arm stepped it after
+ *   AppendDrawEnvContext2, which issues the tint call's a1 before a2: 2
+ *   words). A do/while with the same two placements is byte-identical.
  * GUARD: on EE this C is compiled alone by SN 2.95.3 v1.36 -fopt-stack
  * (tools/ee/s136os_functions.txt) and spliced over the S136OS_SLOT line by
  * tools/ee/s136os_splice.sh; on native it is plain C. */
@@ -343,7 +343,7 @@ void ShowSplashImage(s32 wadId) {
  * MATCHED on the s136os arm (task #1901). The C is unchanged from the old
  * #else arm; the one device is the unit-level `.extern g_vramFrameBufB, 16`
  * shared with ShowSplashImage (without it the g_vramFrameBufB load is %gp_rel
- * and the function one word short). The image pointer is re-read from the
+ * and the function one word short, 28 positional differences). The image pointer is re-read from the
  * arena table after the setup calls, as the ROM does (`lw $2,0x14($16)`).
  * GUARD: compiled alone by SN 2.95.3 v1.36 -fopt-stack and spliced over the
  * S136OS_SLOT line (tools/ee/s136os_splice.sh); plain C on native. */
@@ -378,34 +378,42 @@ void func_0026EAC8(s32 wadId) {
 
 /* func_0026EB98: pick a randomized ordering of the three attract-reel slots.
  * A 3-way random roll seeds (a, b, c) with a base permutation of {0,1,2}, then a
- * second coin-flip optionally swaps b and c. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_0026EB98);
+ * second coin-flip optionally swaps b and c.
+ *   a, b, c: out slots, each receiving 0, 1 or 2.
+ * MATCHED on the s136os arm (task #1901). No device. The roll is a `switch`
+ * with the cases in 0, 1, 2 order: the ROM's dispatch is cc1's balanced
+ * decision tree (`beq 1`, then `slti <2`), which the old if/else-if chain
+ * does not produce (an if/else-if chain in the same order: 4 words short,
+ * 38 positional differences). The swap reads *b first (`t = *c` first: 8).
+ * GUARD: compiled alone by SN 2.95.3 v1.36 -fopt-stack and spliced over the
+ * S136OS_SLOT line (tools/ee/s136os_splice.sh); plain C on native. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0026EB98)
+S136OS_SLOT(func_0026EB98);
 #else
 extern s32 GetRandomInt(s32 range);
-/* TODO(match): functional equivalent - not byte-exact; four callee-saves at
-   8-byte slot spacing (the 0x20-vs-0x10 packed-save wall). */
 void func_0026EB98(s32 *a, s32 *b, s32 *c) {
-    s32 roll = GetRandomInt(3);
-
-    if (roll == 1) {
-        *a = 1;
-        *b = 0;
-        *c = 2;
-    } else if (roll == 0) {
+    switch (GetRandomInt(3)) {
+    case 0:
         *a = 0;
         *b = 1;
         *c = 2;
-    } else if (roll == 2) {
+        break;
+    case 1:
+        *a = 1;
+        *b = 0;
+        *c = 2;
+        break;
+    case 2:
         *a = 2;
         *b = 1;
         *c = 0;
+        break;
     }
 
     if (GetRandomInt(2) != 0) {
-        s32 t = *c;
-        *c = *b;
-        *b = t;
+        s32 t = *b;
+        *b = *c;
+        *c = t;
     }
 }
 #endif
@@ -1271,32 +1279,42 @@ void CallCameraPollHandler(Camera *cam) {
  * active camera, scans all 48 slots for a higher-priority active camera
  * (TestCameraTakeover), switches to it on a win, then runs that camera's mode
  * `update` handler and records its post-update position into the prev-pos
- * fields (+0x64/+0x68/+0x6c). Always returns -1. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", DispatchCameraMode);
+ * fields (+0x64/+0x68/+0x6c). Always returns -1.
+ * MATCHED on the s136os arm (task #1901). No device; phrasing only, each
+ * measured in a solo s136 compile against the old arm's spelling:
+ * - the active-flag test is its own `if` around the slot test, so cc1 forms
+ *   %hi(g_cameraSlotActive) before %hi(g_cameraSlots) as the ROM does (the
+ *   single && chain swaps the two lui and their registers: 2 words);
+ * - `chosen` is stored before `changed` (the ROM's `daddu $16,$17` first;
+ *   the other order: 2 words);
+ * - the +0x30 -> +0x64 snapshot pointers are formed after the update call
+ *   (forming `pos` before it keeps it in a callee-saved register across the
+ *   call and reorders the tail: 25 words).
+ * GUARD: compiled alone by SN 2.95.3 v1.36 -fopt-stack and spliced over the
+ * S136OS_SLOT line (tools/ee/s136os_splice.sh); plain C on native. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_DispatchCameraMode)
+S136OS_SLOT(DispatchCameraMode);
 #else
 extern s32 g_cameraSlotActive[48];
 extern void func_00270500(Camera *cam);
 extern void func_00270220(void);
 extern s32 TestCameraTakeover(Camera *candidate, Camera *current);
 extern void SwitchActiveCamera(Camera *cam);
-/* TODO(match): functional equivalent - not byte-exact; many callee-saves at
-   8-byte slot spacing + the unnamed-vtbl base access (packed-save wall). */
 s32 DispatchCameraMode(void) {
     Camera *chosen = g_cameraState.activeCamera.p;
     s32 changed = 0;
     s32 i;
     s32 (*update)();
-    f32 *pos;
 
     CallCameraPollHandler(g_cameraState.activeCamera.p);
 
     for (i = 0; i < 48; i++) {
-        Camera *slot = &g_cameraSlots[i];
-        if (g_cameraSlotActive[i] != 0 && slot != chosen &&
-            TestCameraTakeover(slot, chosen) != 0) {
-            changed = 1;
-            chosen = slot;
+        if (g_cameraSlotActive[i] != 0) {
+            Camera *slot = &g_cameraSlots[i];
+            if (slot != chosen && TestCameraTakeover(slot, chosen) != 0) {
+                chosen = slot;
+                changed = 1;
+            }
         }
     }
 
@@ -1307,14 +1325,17 @@ s32 DispatchCameraMode(void) {
     update = g_cameraModeVtbl[chosen->modeId].update;
     func_00270500(chosen);
 
-    pos = (f32 *)((char *)chosen + 0x30);
     if (update != NULL) {
         update(chosen);
     }
-    /* prev-pos snapshot at +0x64/+0x68/+0x6c */
-    *(f32 *)((char *)chosen + 0x64) = pos[0];
-    *(f32 *)((char *)chosen + 0x68) = pos[1];
-    *(f32 *)((char *)chosen + 0x6c) = pos[2];
+    {
+        /* prev-pos snapshot: +0x30 position -> +0x64/+0x68/+0x6c */
+        f32 *src = (f32 *)((char *)chosen + 0x30);
+        f32 *dst = (f32 *)((char *)chosen + 0x64);
+        dst[0] = src[0];
+        dst[1] = src[1];
+        dst[2] = src[2];
+    }
 
     func_00270220();
     return -1;
