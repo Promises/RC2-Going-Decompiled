@@ -3189,10 +3189,11 @@ s32 StreamSceneSegment(s32 idx) {
  * into the decompressed data area (g_pSceneData @+0x6C), then flush again. The
  * decompressed header is then parsed:
  *   data[0x0] (u16) -> g_nSceneTotalFrames  (@+0x40)
- *   data[0x8] (u16) -> DAT_001b8808         (@+0x48)
+ *   data[0x8] (u16) -> g_sceneVoiceEndFrame (@+0x48)  read lhu, stored sh; an s16
+ *                      (TickCinematicPlayback reads it lh at 0x2EC108)
  *   data[0xC] (u16) -> g_nSceneCastCount    (@+0x44)  actor-record count
  *   data[0x10](s32) -> camera-key list ptr  g_pSceneCameraKeys = data + data[0x10]
- *   data[0x4](s32)  -> optional chunk ptr @+0x4C: 0 if data[0x4] < 0x400,
+ *   data[0x4](s32)  -> g_sceneSubtitleList @+0x4C: 0 if data[0x4] < 0x400,
  *                      else data + data[0x4]
  * The entry-offset table starts at data+0x14 (one s32 per actor record). For each
  * actor record `entry = data + table[i]`:
@@ -3236,10 +3237,12 @@ extern u32 *SpawnMoby(s32 classId);
 extern u16  g_nSceneTotalFrames;   /* 0x1B8800 (desc +0x40) */
 /* Halfword: written `sh` here (0x29464C), read `lh` by TickCinematicPlayback
  * (0x2EC108) -- signed 16-bit. */
-extern s16  DAT_001b8808;          /* 0x1B8808 (desc +0x48) */
+extern s16  g_sceneVoiceEndFrame;  /* 0x1B8808 (desc +0x48) */
 extern u16  g_nSceneCastCount;     /* 0x1B8804 (desc +0x44) */
 extern u32 *g_pSceneCameraKeys;    /* 0x1B8828 (desc +0x68) */
-extern s32  DAT_001b880c;          /* 0x1B880C (desc +0x4C) */
+/* The scene's timed-subtitle record list (read `lw 0x4C` by func_0027DC40 at
+ * 0x27DC6C). Declared s32, the type this arm has always given it. */
+extern s32  g_sceneSubtitleList;   /* 0x1B880C (desc +0x4C) */
 extern s32  g_nSceneSubChunkFrame; /* 0x1B87F8 (desc +0x38) */
 extern u16 *g_pSceneData;          /* 0x1B882C (desc +0x6C) */
 extern void *g_pSceneLoadBuffer;   /* 0x1B8830 (desc +0x70) */
@@ -3265,13 +3268,13 @@ void BindSceneChunk(void) {
     data = g_pSceneData;
     g_nSceneSubChunkFrame = 0;
     g_nSceneTotalFrames = data[0];
-    DAT_001b8808 = data[4];
+    g_sceneVoiceEndFrame = data[4];
     g_nSceneCastCount = data[6];
     g_pSceneCameraKeys = (u32 *)((s32)data + *(s32 *)(data + 8));
     if (*(s32 *)(data + 2) < 0x400) {
-        DAT_001b880c = 0;
+        g_sceneSubtitleList = 0;
     } else {
-        DAT_001b880c = (s32)data + *(s32 *)(data + 2);
+        g_sceneSubtitleList = (s32)data + *(s32 *)(data + 2);
     }
 
     i = 0;
