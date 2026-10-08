@@ -8992,7 +8992,111 @@ void func_003437F0(void *w, GuiPool *pool) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00343888);
+/* The scrolling row-list view that func_00343E80 fills and func_00343888 steps
+ * (only the fields those two touch; the initialiser above sets +0x4/+0xC to
+ * 16.0f and clears the rest). */
+typedef struct {
+    u8  _pad0[0xC];
+    f32 rowHeight;   /* 0x0C scroll distance that completes a one-row step */
+    s32 count;       /* 0x10 rows in use */
+    s32 cursor;      /* 0x14 highlighted row */
+    s32 scrollState; /* 0x18 0 idle, 1 step requested, 2 scrolling */
+    s32 scrollUp;    /* 0x1C step direction: 1 towards row 0 */
+    s32 above;       /* 0x20 rows visible above the cursor, as a count <= 0 */
+    s32 below;       /* 0x24 rows visible below the cursor */
+    s32 rows[25];    /* 0x28 item ids */
+    u8  _pad8C[4];
+    s32 scrollPos;   /* 0x90 scroll offset of the step in progress */
+    s32 ticks;       /* 0x94 frames stepped */
+} GuiRowListView;
+
+/* func_00343888: step the row-list view one frame. Bumps the frame counter;
+ * when idle, a pad press (0x1000 up / 0x4000 down) that can move the cursor
+ * plays sound 3 and requests a one-row scroll in that direction. A requested
+ * scroll resets the offset and starts; while scrolling the offset moves 4 per
+ * frame, and once it reaches +-rowHeight the cursor moves one row (clamped to
+ * [0, count-1]) and the scroll ends unless pad is still non-zero and the cursor
+ * is not at either end (held input keeps scrolling). Finally recounts how many
+ * rows fit above (as a negative count) and below the cursor, each capped at
+ * D_1AE1A4. Params: view = the list view; pad = the pressed-button mask.
+ * Returns 0.
+ * MATCHED byte-exact on the s136os arm (task #1987), device-free. Levers, each
+ * measured in a solo s136os compile against the frozen .s (PROCEDURE #9863):
+ * the new cursor held in a local stored at the join and again on both arms
+ * (`c = ++v->cursor` / `c = --v->cursor; v->cursor = c; if (c < 0) ...`), and
+ * the next state formed in a local stored twice (once before the end test,
+ * once as the movz select): 84 -> 5 of 146 words; the scroll offset formed per
+ * arm from the field (`pos = v->scrollPos - 4` / `+ 4`) rather than loaded
+ * once and adjusted, which puts it in $v0 as the ROM has: 5 -> 0.
+ * GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+ * (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in tools/ee/s136os_functions.txt)
+ * and spliced over S136OS_SLOT by tools/ee/s136os_splice.sh. There is no asm
+ * fallback. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00343888)
+S136OS_SLOT(func_00343888);
+#else
+extern s32 PlayGlobalSound(s32 id, s32 a, s32 b);
+extern s32 D_1AE1A4;
+s32 func_00343888(void *view_, s32 pad) {
+    GuiRowListView *v = view_;
+    s32 i;
+    s32 pos;
+    s32 c;
+    s32 st;
+    v->ticks++;
+    switch (v->scrollState) {
+    case 0:
+        if ((pad & 0x1000) && v->cursor > 0) {
+            PlayGlobalSound(3, 0, 0);
+            v->scrollUp = 1;
+            v->scrollState = 1;
+        } else if (pad & 0x4000) {
+            if (v->cursor < v->count - 1) {
+                PlayGlobalSound(3, 0, 0);
+                v->scrollUp = 0;
+                v->scrollState = 1;
+            }
+        }
+        break;
+    case 1:
+        v->scrollPos = 0;
+        v->scrollState = 2;
+        /* fall through */
+    case 2:
+        if (v->scrollUp == 0) {
+            pos = v->scrollPos - 4;
+        } else {
+            pos = v->scrollPos + 4;
+        }
+        v->scrollPos = pos;
+        if (v->rowHeight <= (f32)pos || (f32)pos <= -v->rowHeight) {
+            if (v->scrollUp == 0) {
+                c = ++v->cursor;
+            } else {
+                c = --v->cursor;
+            }
+            v->cursor = c;
+            if (c < 0) v->cursor = 0;
+            if (v->count - 1 < v->cursor) v->cursor = v->count - 1;
+            st = 0;
+            if (pad != 0) st = v->scrollState;
+            v->scrollState = st;
+            v->scrollState = (v->cursor != 0 && v->cursor != v->count - 1) ? st : 0;
+            v->scrollPos = 0;
+        }
+        break;
+    }
+    v->above = 0;
+    for (i = v->cursor; i > 0 && v->above > -D_1AE1A4; i--) {
+        v->above--;
+    }
+    v->below = 0;
+    for (i = v->cursor; i < v->count - 1 && v->below < D_1AE1A4; i++) {
+        v->below++;
+    }
+    return 0;
+}
+#endif
 
 /* func_00343AD0(view): the currently highlighted row id of a list view, or 0
  * when the view is empty. +0x10 is the live row count and +0x14 the highlighted
@@ -9053,14 +9157,6 @@ extern u8 g_inventoryOwnedLa[8] __asm__("g_inventoryOwned");
 #define g_inventoryOwnedLa g_inventoryOwned
 #endif
 extern s32 func_00343888(void *w, s32 flags);
-/* The list view func_00343E80 fills (only the fields it touches). */
-typedef struct {
-    u8  _pad0[0x10];
-    s32 count;      /* 0x10 */
-    s32 cursor;     /* 0x14 */
-    u8  _pad18[0x10];
-    s32 rows[25];   /* 0x28 */
-} GuiRowListView;
 void func_00343E80(void *view_, void *records_) {
     GuiRowListView *view = view_;
     GuiWeaponSlotEntry *records = records_;
