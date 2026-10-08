@@ -10008,21 +10008,23 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00345890);
  * identical.
  *
  * MATCHED byte-exact on the s136os arm (task #1895), all four from ONE body
- * shape. Nothing in it is a device; the two non-obvious choices are both
- * PHRASING, measured in a solo s136os compile (vmu-equivalent word compare
- * against the frozen .s) on func_00345F00:
- *   - STATEMENT ORDER is not offset order. The ROM issues every load first and
- *     then the stores; the stores whose values live in $16-$19 go first and the
- *     rest follow in source order. Which values get $16-$19 is decided by their
- *     live ranges in the first schedule, so the order of the cfg0 and +0x4A0
- *     stores moves the allocation: offset order is 55/60 words different, the
- *     ROM's store order written as statements 34/60 (the figure task #1522
- *     recorded for its inline helper), and this order 0/60. It also closes
- *     func_003461D0, whose shorter `== 0` test (no xori) shifted every live
- *     range by one.
- *   - `enable` is set at the top and stored late: the constant must be formed
- *     early (the ROM's `li $18,1` sits right after the +0x4A0 load) yet stay
- *     live into $16-$19. Storing a literal 1 in the same place: 14/60.
+ * shape. Nothing in it is a device; the non-obvious choices are PHRASING. The
+ * ROM issues every load first and then the stores, the stores of the values
+ * held in $16-$19 leading, and which values get $16-$19 is decided by their
+ * live ranges in the first schedule. So the statement order is not offset
+ * order, and three choices are load-bearing. Each was priced by undoing it
+ * alone in a solo s136os compile compared word by word with the frozen .s
+ * (func_00345F00 unless named):
+ *   - offset order: 55 of 60 words differ (and 62 built); the ROM's store
+ *     order written as statements: 34/60 (task #1522's figure for its helper)
+ *   - `enable` set first and stored late (the ROM forms `li $18,1` right
+ *     after the +0x4A0 load yet keeps it in $16-$19); a literal 1 in the same
+ *     place: 12/60
+ *   - the cfg0 store after obj[0x4AC]/[0x4B0]; back in its ROM store slot
+ *     (second): 10/60
+ *   - the obj[0x4A0] store after +0x278; just before the layout0 store instead:
+ *     0/60 here, but 6/59 on func_003461D0, whose `== 0` test (no xori) shifts
+ *     every live range by one
  *
  * GUARD (task #1895): on EE this C is the image's body, compiled alone by the
  * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; rows in
@@ -10882,16 +10884,52 @@ static void GuiBuildScreenDesc2(u8 *obj, void *label, s32 cfg0, s32 cfg1,
 }
 #endif
 
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00347348);
+/* func_00347348: family-2 builder, screen type 3 (label table D_1AA7F8, layout
+ * block D_1AE458..D_1AE480); the index is also stored literally at +0x38.
+ * MATCHED byte-exact on the s136os arm (task #1895) by the phrasing that closes
+ * the family-1 four above: written out (no helper), `enable` set first and
+ * stored late, the cfg0 store after obj[0x4FC]/[0x500]. Priced the same way (a
+ * solo s136os compile compared word by word with the frozen .s): the ROM's
+ * store order written as statements 41/66 (task #1522 measured 41/66 for its
+ * helper), a literal 1 for `enable` 16/66, cfg0 back in its ROM store slot
+ * 12/66, this body 0/66. (func_00347450 is not the same shape: its index is 1,
+ * so cc1 shares one register for the index and `enable`; left INCLUDE_ASM.)
+ * GUARD (task #1895): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00347348)
+S136OS_SLOT(func_00347348);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00347348, unit objdiff): 22.83%,
-   64/66 insns differ. Residual: UNKNOWN-addiu (first differing insn: 'addiu sp, sp, -0xa0' vs 'lw a2, %gp_rel(D_1AE458)(gp)').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
 void func_00347348(void *obj) {
-    GuiBuildScreenDesc2((u8 *)obj, D_1AA7F8, D_1AE458, D_1AE45C,
-                        D_1AE460, D_1AE468, D_1AE470, D_1AE478, D_1AE480, 3);
+    GuiScreenDesc2 d;
+    u8 *o = (u8 *)obj;
+    s32 enable;
+    enable = 1;
+    d.objCfg504 = *(s32 *)(o + 0x504);
+    d.typeActive = (*(s32 *)(o + 0x508) == 3);
+    d.objCfg4FC = *(s32 *)(o + 0x4FC);
+    d.objCfg500 = *(s32 *)(o + 0x500);
+    d.cfg0 = D_1AE458;
+    d.child4B8 = o + 0x4B8;
+    d.layout4 = D_1AE480;
+    d.typeIndex = 3;
+    d.cfg1 = D_1AE45C;
+    d.label = D_1AA7F8;
+    d.child220 = o + 0x220;
+    d.child130 = o + 0x130;
+    d.child17C = o + 0x17C;
+    d.child278 = o + 0x278;
+    d.layout3 = D_1AE478;
+    d.layout2 = D_1AE470;
+    d.objCfg470 = *(s32 *)(o + 0x470);
+    d.layout1 = D_1AE468;
+    d.layout0 = D_1AE460;
+    d.enable = enable;
+    d._z50 = 0;
+    d._z2C = 0;
+    d._z34 = 0;
+    func_003380B8(&d);
 }
 #endif
 
