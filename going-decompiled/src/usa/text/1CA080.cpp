@@ -310,7 +310,10 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_0
  * guardrail — the dense VU0 vector math plus delay-slot-sensitive FP branches
  * make a hand-written structure-exact #else unverifiable without an EE oracle;
  * not worth a silent op-for-op error in coverage-only C. The matching arm is
- * byte-frozen regardless (later cc1 8-byte-packed saves + qword ops). */
+ * taken as byte-frozen regardless (later cc1 8-byte-packed saves + qword ops).
+ * Save stride NOT re-measured for this member on the s136os arm: it has no C arm to compile
+ * (NOTE #9871). Of the 111 labeled members that were, 0 reproduce the 16-byte save stride there
+ * (FACT #9873), so the stride is not evidence that this member is walled. Residual: UNMEASURED. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CA138);
 
 /* func_002CA3E8: nearest ray/segment-vs-polygon-edge intersection. Indexes an
@@ -323,7 +326,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CA138);
  * intersection test uses multiple c.eq.s/c.lt.s compares with delay-slot
  * bc1f/bc1t branches (non-likely branches run their delay slot; a misread is a
  * silent op-for-op bug), unverifiable without an EE oracle in coverage-only C.
- * Matching arm is byte-frozen (8-byte-packed saves + qword ops) regardless. */
+ * Matching arm was taken as byte-frozen (8-byte-packed saves + qword ops) regardless.
+ * Save stride NOT re-measured for this member on the s136os arm: it has no C arm to compile
+ * (NOTE #9871). Of the 111 labeled members that were, 0 reproduce the 16-byte save stride there
+ * (FACT #9873), so the stride is not evidence that this member is walled. Residual: UNMEASURED. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CA3E8);
 
 /* func_002CA618: sample a piecewise-linear Vec4 path at distance `dist`.
@@ -342,7 +348,12 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CA618);
 /* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 36.59% -> STRUCTURAL,
  * first differing row @1: ROM `swc1 $f21,72(sp)` vs `swc1 $f21,64(sp)`;
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 34.88% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-80` vs `addiu sp,sp,-112`. */
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 34.88% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-80` vs `addiu sp,sp,-112`.
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): this member's prologue - the
+ * ROM's save set at its 8-byte stride, and its frame - is reproduced exactly (NOTE #9871), so
+ * the save-slot wall named above is a cc1 2.9 property and was measured false as the reason
+ * this member stays unmatched (FACT #9873). Residual: prologue SCHEDULE (7/72 words with a
+ * reworked body, NOTE #9530). */
 extern s32 FloatToInt(f32 v);
 extern f32 IntToFloat(s32 v);
 extern void Vec4SubVu0(void *dst, void *a, void *b);
@@ -713,8 +724,12 @@ void func_002CABC0(void) {
  * returning to the map (screen == 6) — re-syncs the galactic map to g_playerProgress
  * (MapSetCurrentLevel + UpdateLevelObjectiveStates + func_002DFE60). Finally it marks
  * the change committed (block[0x14C] = 1).
- * Wall: 8-byte-packed-save (4 GPRs) + branch-likely dialog/list-flag shapes — later
- * cc1 save-slot packing not reproduced. Preserved as portable C. */
+ * Wall (cc1 2.9 arm): 8-byte-packed-save (4 GPRs) + branch-likely dialog/list-flag shapes — later
+ * cc1 save-slot packing not reproduced. Preserved as portable C.
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): this member's prologue - the
+ * ROM's save set at its 8-byte stride, and its frame - is reproduced exactly (NOTE #9871), so
+ * the save-slot wall named above is a cc1 2.9 property and was measured false as the reason
+ * this member stays unmatched (FACT #9873). Residual: UNMEASURED. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", RequestMenuScreenChange);
 #else
@@ -959,8 +974,11 @@ s32 func_002CAFD8(void) {
  * INCLUDE_ASM (cc1 jtbl layout not reproduced). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", MenuScreenLoad);
 
-/* menu helper: 8-byte-packed-save wall (saves 5 GPRs incl $31; later cc1
- * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
+/* menu helper: cc1 2.9 8-byte-packed-save wall (saves 5 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM.
+ * Save stride NOT re-measured for this member on the s136os arm: it has no C arm to compile
+ * (NOTE #9871). Of the 111 labeled members that were, 0 reproduce the 16-byte save stride there
+ * (FACT #9873), so the stride is not evidence that this member is walled. Residual: UNMEASURED. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CB560);
 
 /* TickFrontEndScreenIdle: enter/refresh a menu screen's render context. Resets the
@@ -1093,7 +1111,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", TickFrontEndScr
 /* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 70.66% -> STRUCTURAL,
  * first differing row @3: ROM `addiu a3,v0,0  [LO16 0x001F27C0]` vs `addiu s0,v0,0  [LO16 0x001F27C0]`;
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 79.65% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. */
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 79.65% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`.
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): this member's prologue - the
+ * ROM's save set at its 8-byte stride, and its frame - is reproduced exactly (NOTE #9871), so
+ * the save-slot wall named above is a cc1 2.9 property and was measured false as the reason
+ * this member stays unmatched (FACT #9873). Residual: UNMEASURED. */
 s32 TickFrontEndScreenMachine(void) {
     u8 *mb = g_menuScreenBlock;
     s32 counter;
@@ -1206,8 +1228,11 @@ void MenuScreenCommitTransition(void) {
     block[0x4 / 4] = 0;
 }
 
-/* menu-screen lifecycle routine: 8-byte-packed-save wall (saves 8 GPRs incl $31; later cc1
- * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
+/* menu-screen lifecycle routine: cc1 2.9 8-byte-packed-save wall (saves 8 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM.
+ * Save stride NOT re-measured for this member on the s136os arm: it has no C arm to compile
+ * (NOTE #9871). Of the 111 labeled members that were, 0 reproduce the 16-byte save stride there
+ * (FACT #9873), so the stride is not evidence that this member is walled. Residual: UNMEASURED. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", MenuScreenUpdate);
 
 /* Screen-state-5 handler (the terminal "leaving the front-end" state, dispatched
@@ -1295,8 +1320,11 @@ void func_002CBD68(void) {
 }
 #endif
 
-/* menu data/list builder: 8-byte-packed-save wall (saves 3 GPRs incl $31; later cc1
- * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
+/* menu data/list builder: cc1 2.9 8-byte-packed-save wall (saves 3 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM.
+ * Save stride NOT re-measured for this member on the s136os arm: it has no C arm to compile
+ * (NOTE #9871). Of the 111 labeled members that were, 0 reproduce the 16-byte save stride there
+ * (FACT #9873), so the stride is not evidence that this member is walled. Residual: UNMEASURED. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", BuildPausePromptPopup);
 
 /* Level-select slot-index validity gate (idx < 0x15 or idx == 0x18). */
@@ -1613,8 +1641,11 @@ s32 TickActiveMenuScreen(void) {
 }
 #endif
 
-/* menu-screen lifecycle routine: 8-byte-packed-save wall (saves 9 GPRs incl $31; later cc1
- * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
+/* menu-screen lifecycle routine: cc1 2.9 8-byte-packed-save wall (saves 9 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM.
+ * Save stride NOT re-measured for this member on the s136os arm: it has no C arm to compile
+ * (NOTE #9871). Of the 111 labeled members that were, 0 reproduce the 16-byte save stride there
+ * (FACT #9873), so the stride is not evidence that this member is walled. Residual: UNMEASURED. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", RenderMenuScreenWidgets);
 
 /* Options-screen query (first word of the options screen's handler record
@@ -2612,7 +2643,12 @@ s32 func_002CEA38(void) {
  * the panel display (D_0025ABA0+0x58 / D_0025AC08+0x34) from whether the current entry
  * has been seen, poking D_0025AC08+0x3C when the cursor moved. Returns 1 on exit, the
  * popped value on back, else 0.
- * (matching arm left INCLUDE_ASM: 8-byte-packed-save wall.) */
+ * (matching arm left INCLUDE_ASM: cc1 2.9 8-byte-packed-save wall.)
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
+ * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
+ * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
+ * property and was measured false as the reason this member stays unmatched (FACT #9873).
+ * Residual: the saved-register set; the rest UNMEASURED. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", UpdateBestiaryMenuInput);
 #else
@@ -2719,10 +2755,15 @@ s32 UpdateBestiaryMenuInput(void) {
  * optional note (entry +0xE, or D_1ABA00 when -1), and the kill count line
  * (D_1ABA10 formatted with the count). Twin of DrawExtrasMenu.
  *
- * TODO(match): functional equivalent - not byte-exact. 8-byte-packed-save wall
+ * TODO(match): functional equivalent - not byte-exact. cc1 2.9 8-byte-packed-save wall
  * (saves 9 GPRs incl $31; later cc1 packs save slots 8-byte vs our 16-byte) plus
  * FP-arg scheduling; preserved as portable C, the matching arm stays INCLUDE_ASM.
- * (Stat-bar length uses (s32)(v) for cvt.w.s, per the in-unit convention.) */
+ * (Stat-bar length uses (s32)(v) for cvt.w.s, per the in-unit convention.)
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
+ * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
+ * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
+ * property and was measured false as the reason this member stays unmatched (FACT #9873).
+ * Residual: the saved-register set; the rest UNMEASURED. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawBestiaryEntry);
 #else
@@ -2866,12 +2907,18 @@ s32 func_002CF550(void) {
     return 0;
 }
 
-/* menu/HUD draw routine: 8-byte-packed-save wall (saves 4 GPRs incl $31; later cc1
- * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
+/* menu/HUD draw routine: cc1 2.9 8-byte-packed-save wall (saves 4 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM.
+ * Save stride NOT re-measured for this member on the s136os arm: it has no C arm to compile
+ * (NOTE #9871). Of the 111 labeled members that were, 0 reproduce the 16-byte save stride there
+ * (FACT #9873), so the stride is not evidence that this member is walled. Residual: UNMEASURED. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawBestiaryPagingArrows);
 
-/* menu/HUD draw routine: 8-byte-packed-save wall (saves 6 GPRs incl $31; later cc1
- * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
+/* menu/HUD draw routine: cc1 2.9 8-byte-packed-save wall (saves 6 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM.
+ * Save stride NOT re-measured for this member on the s136os arm: it has no C arm to compile
+ * (NOTE #9871). Of the 111 labeled members that were, 0 reproduce the 16-byte save stride there
+ * (FACT #9873), so the stride is not evidence that this member is walled. Residual: UNMEASURED. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawMenuPagingChrome);
 
 /* DrawMenuItemSelectionBox: draw the four-sided highlight box around a menu item,
@@ -3005,7 +3052,12 @@ s32 func_002D0240(void) {
  * with the caption string-ids / sub-page pointers for either the base set (when no
  * extras are unlocked, g_miscExtras==0) or the extras set, and lays out + resets the
  * vendor widget (func_00342450 / func_00342520 on g_guiInstance+0x3C160). Returns 0.
- * Matching arm stays INCLUDE_ASM (8-byte-packed-save + gp-rel scratch scheduling). */
+ * Matching arm stays INCLUDE_ASM (8-byte-packed-save + gp-rel scratch scheduling).
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
+ * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
+ * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
+ * property and was measured false as the reason this member stays unmatched (FACT #9873).
+ * Residual: the saved-register set; the rest UNMEASURED. */
 extern u8 g_inventoryOwned[];   /* u8[0x38] per-item have-flag */
 extern u8 g_itemStateFlags[];   /* u8[0x38] per-item persistent state bits */
 extern u8 D_0025C430[], D_0025C5C8[], D_0025CCD8[];  /* extras sub-page records */
@@ -3096,7 +3148,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", UpdateCheatMenu
 /* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 40.93% -> BIGDISP-SPLIT + STRUCTURAL,
  * first differing row @1: ROM `(none)` vs `sd s1,8(sp)`;
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 57.15% -> PACKED-SAVE, first differing row @2: ROM `sd s1,8(sp)` vs `sd ra,16(sp)`. */
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 57.15% -> PACKED-SAVE, first differing row @2: ROM `sd s1,8(sp)` vs `sd ra,16(sp)`.
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): this member's prologue - the
+ * ROM's save set at its 8-byte stride, and its frame - is reproduced exactly (NOTE #9871), so
+ * the save-slot wall named above is a cc1 2.9 property and was measured false as the reason
+ * this member stays unmatched (FACT #9873). Residual: UNMEASURED. */
 extern s32 CountSkillPointsCompleted(void);
 extern u8 D_138180[];
 extern u8 g_menuScreenBlock[];
@@ -3187,9 +3243,14 @@ s32 UpdateCheatMenuInput(void) {
  * drawn in the highlight color 0x7029A1FF. Twin of DrawExtrasMenu; input sibling
  * is UpdateCheatMenuInput above.
  *
- * TODO(match): functional equivalent - not byte-exact. 8-byte-packed-save wall
+ * TODO(match): functional equivalent - not byte-exact. cc1 2.9 8-byte-packed-save wall
  * (saves 9 GPRs incl $31; later cc1 packs save slots 8-byte vs our 16-byte) plus
- * FP-arg scheduling; preserved as portable C, the matching arm stays INCLUDE_ASM. */
+ * FP-arg scheduling; preserved as portable C, the matching arm stays INCLUDE_ASM.
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
+ * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
+ * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
+ * property and was measured false as the reason this member stays unmatched (FACT #9873).
+ * Residual: the saved-register set; the rest UNMEASURED. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawCheatMenu);
 #else
@@ -3294,7 +3355,11 @@ s32 func_002D0B40(void) {
  * (D_0025C098+0x50/+0x54 == cursor with mode +0x44 == 2/4), clears bit 0x4 of the
  * render object (*D_25C004 + 0x10); when not completed it sets that bit and zeroes
  * D_25C074. Returns 1 on exit, the popped value on back, else 0.
- * (matching arm left INCLUDE_ASM: 8-byte-packed-save wall.) */
+ * (matching arm left INCLUDE_ASM: cc1 2.9 8-byte-packed-save wall.)
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): this member's prologue - the
+ * ROM's save set at its 8-byte stride, and its frame - is reproduced exactly (NOTE #9871), so
+ * the save-slot wall named above is a cc1 2.9 property and was measured false as the reason
+ * this member stays unmatched (FACT #9873). Residual: UNMEASURED. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", UpdateSkillPointsMenu);
 #else
@@ -3381,9 +3446,14 @@ s32 UpdateSkillPointsMenu(void) {
  * text-width selection box. Each slot's label is drawn with the drop-shadow
  * cleared. Twin of DrawExtrasMenu.
  *
- * TODO(match): functional equivalent - not byte-exact. 8-byte-packed-save wall
+ * TODO(match): functional equivalent - not byte-exact. cc1 2.9 8-byte-packed-save wall
  * (saves 8 GPRs incl $31; later cc1 packs save slots 8-byte vs our 16-byte) plus
- * FP-arg scheduling; preserved as portable C, the matching arm stays INCLUDE_ASM. */
+ * FP-arg scheduling; preserved as portable C, the matching arm stays INCLUDE_ASM.
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
+ * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
+ * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
+ * property and was measured false as the reason this member stays unmatched (FACT #9873).
+ * Residual: the saved-register set; the rest UNMEASURED. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawSkillPointsMenu);
 #else
@@ -3651,8 +3721,13 @@ s32 UpdateExtrasMenuInput(void) {
  * distance from centre (edges 0x10/mid 0x50/centre 0x70 F0F0F0), and the centre slot
  * gets a text-width selection box.
  * (func_003017F8 takes 2 ints + 5 floats; it reads no $a2/$a3 — FACT #8918.)
- * Wall: 8-byte-packed-save (6 GPRs) + FP-arg scheduling — later cc1 save-slot packing
- * not reproduced. Preserved as portable C. */
+ * Wall (cc1 2.9 arm): 8-byte-packed-save (6 GPRs) + FP-arg scheduling — later cc1 save-slot packing
+ * not reproduced. Preserved as portable C.
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
+ * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
+ * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
+ * property and was measured false as the reason this member stays unmatched (FACT #9873).
+ * Residual: the saved-register set; the rest UNMEASURED. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawExtrasMenu);
 #else
@@ -3778,8 +3853,13 @@ s32 func_002D1850(void) {
  * redraw bit 0x4 when the reel is locked, else CLEAR it only when the cursor is
  * unchanged, the file-load is idle, and the present record shows this cursor
  * already presented (offsets 0x50/0x54 == cursor and state 0x44 in {2,4}).
- * Wall: 8-byte-packed-save (6 GPRs) + branch-likely present-record fence — later
- * cc1 save-slot packing not reproduced. Preserved as portable C. */
+ * Wall (cc1 2.9 arm): 8-byte-packed-save (6 GPRs) + branch-likely present-record fence — later
+ * cc1 save-slot packing not reproduced. Preserved as portable C.
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
+ * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
+ * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
+ * property and was measured false as the reason this member stays unmatched (FACT #9873).
+ * Residual: the saved-register set; the rest UNMEASURED. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", CinematicsMenuTick);
 #else
@@ -3876,8 +3956,13 @@ s32 CinematicsMenuTick(void) {
  * color fades by distance from centre (edges 0x10/mid 0x50/centre 0x70 F0F0F0), and
  * the centre slot gets a text-width selection box.
  * (func_003017F8 takes 2 ints + 5 floats; it reads no $a2/$a3 — FACT #8918.)
- * Wall: 8-byte-packed-save (6 GPRs) + FP-arg scheduling — later cc1 save-slot packing
- * not reproduced. Preserved as portable C. */
+ * Wall (cc1 2.9 arm): 8-byte-packed-save (6 GPRs) + FP-arg scheduling — later cc1 save-slot packing
+ * not reproduced. Preserved as portable C.
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
+ * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
+ * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
+ * property and was measured false as the reason this member stays unmatched (FACT #9873).
+ * Residual: the saved-register set; the rest UNMEASURED. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawCinematicsMenu);
 #else
@@ -4120,8 +4205,13 @@ s32 UpdatePlanetWarpMenuInput(void) {
  * slot color fades by distance from centre (edges 0x10F0F0F0, mid 0x50F0F0F0, centre
  * 0x70F0F0F0), and the centre slot also gets a text-width-sized selection box.
  * (func_003017F8 takes 2 ints + 5 floats; it reads no $a2/$a3 — FACT #8918.)
- * Wall: 8-byte-packed-save (6 GPRs) + FP-arg scheduling — later cc1 save-slot packing
- * not reproduced. Preserved as portable C. */
+ * Wall (cc1 2.9 arm): 8-byte-packed-save (6 GPRs) + FP-arg scheduling — later cc1 save-slot packing
+ * not reproduced. Preserved as portable C.
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
+ * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
+ * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
+ * property and was measured false as the reason this member stays unmatched (FACT #9873).
+ * Residual: the saved-register set; the rest UNMEASURED. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawPlanetWarpMenu);
 #else
@@ -4407,8 +4497,13 @@ s32 UpdateInsomniacMuseumInput(void) {
  * selected row (g_museumMenuCursor) else 0x80F0F0F0, and its label is the localized
  * D_1ABDA8[i] when the item is enabled (D_1ABA80[i] != 0) else the fallback 0x2C56.
  * (func_003017F8 takes 2 ints + 5 floats; it reads no $a2/$a3 — FACT #8918.)
- * Wall: 8-byte-packed-save (7 GPRs) + FP-arg scheduling — later cc1 save-slot packing
- * not reproduced. Preserved as portable C. */
+ * Wall (cc1 2.9 arm): 8-byte-packed-save (7 GPRs) + FP-arg scheduling — later cc1 save-slot packing
+ * not reproduced. Preserved as portable C.
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
+ * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
+ * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
+ * property and was measured false as the reason this member stays unmatched (FACT #9873).
+ * Residual: the saved-register set; the rest UNMEASURED. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawInsomniacMuseumMenu);
 #else
@@ -4504,8 +4599,12 @@ s32 func_002D2C60(void) {
  * next (cursor+1, capped at 0x11) — each plays UI sound 3 when the move stays in
  * range, sound 5 at the edge. Every non-back path then stamps the active topic:
  * D_25C940 = cursor and D_25C8C4 = the topic's string id D_1ABDC0[cursor].
- * Wall: 8-byte-packed-save (2 GPRs) — later cc1 save-slot packing not reproduced.
- * Preserved as portable C. */
+ * Wall (cc1 2.9 arm): 8-byte-packed-save (2 GPRs) — later cc1 save-slot packing not reproduced.
+ * Preserved as portable C.
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): this member's prologue - the
+ * ROM's save set at its 8-byte stride, and its frame - is reproduced exactly (NOTE #9871), so
+ * the save-slot wall named above is a cc1 2.9 property and was measured false as the reason
+ * this member stays unmatched (FACT #9873). Residual: UNMEASURED. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", UpdateHelpTopicMenuInput);
 #else
@@ -4645,7 +4744,11 @@ s32 func_002D2FC0(void) {
  * screen's query handler). The 8-digit spelling is the one splat gives the
  * defining dlabel in data/138B80.data.s and the one the ROM's relocations name;
  * the 6-digit D_25CA80 was only an address alias (task #1739).
- * Wall: 8-byte-packed-save (saves $16 + $17 + $31). Preserved as portable C. */
+ * Wall (cc1 2.9 arm): 8-byte-packed-save (saves $16 + $17 + $31). Preserved as portable C.
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): this member's prologue - the
+ * ROM's save set at its 8-byte stride, and its frame - is reproduced exactly (NOTE #9871), so
+ * the save-slot wall named above is a cc1 2.9 property and was measured false as the reason
+ * this member stays unmatched (FACT #9873). Residual: UNMEASURED. */
 extern s32 g_optionsSubCursor;
 extern u8 D_0025CA80[];
 extern s32 D_25CB30;
@@ -4719,8 +4822,13 @@ s32 func_002D2FC8(void) {
  * 330/332, then the localized label for the current option (D_1ABDE8[cursor],
  * screen-centred) and the footer prompt (string 0x2BE5). Returns 0.
  * (func_003017F8 takes 2 ints + 5 floats; it reads no $a2/$a3 — FACT #8918.)
- * Wall: 8-byte-packed-save + FP-arg scheduling — later cc1 save-slot packing not
- * reproduced. Preserved as portable C. */
+ * Wall (cc1 2.9 arm): 8-byte-packed-save + FP-arg scheduling — later cc1 save-slot packing not
+ * reproduced. Preserved as portable C.
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
+ * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
+ * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
+ * property and was measured false as the reason this member stays unmatched (FACT #9873).
+ * Residual: the saved-register set; the rest UNMEASURED. */
 extern void func_002904B0(s32 x0, s32 y0, s32 x1, s32 y1, s32 color, s32 flag);
 extern s32 D_1ABAA4;      /* glyph row (int, converted to float) */
 extern u8 D_1ABDE8[];     /* per-option label string-id table, s16 on 4-byte stride */
@@ -4862,8 +4970,12 @@ s32 func_002D33A8(void) {
  * the pulsing inactive colour from func_002AA3F0. The arrows carry their prompt
  * labels (0x2DD6 / 0x2DD7), and the screen title (0x312A) + footer (0x2BE5) are
  * centred. Returns 0. (func_003017F8 reads no $a2/$a3 — FACT #8918.)
- * Wall: 8-byte-packed-save + FP-arg scheduling — later cc1 save-slot packing not
- * reproduced. Preserved as portable C. */
+ * Wall (cc1 2.9 arm): 8-byte-packed-save + FP-arg scheduling — later cc1 save-slot packing not
+ * reproduced. Preserved as portable C.
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): the ROM's save set at its
+ * 8-byte stride is reproduced; only the frame size differs (NOTE #9871). So the save-slot wall
+ * named above is a cc1 2.9 property and was measured false as the reason this member stays
+ * unmatched (FACT #9873). Residual: the frame size; the rest UNMEASURED. */
 extern u32 func_002AA3F0(u32 color1, u32 color2, s32 period, s32 counterSel, s32 reset);
 extern void func_0027FBA8(s32 x, s32 y, u64 color, char *str, s64 wrap);
 extern s32 g_padButtonsHeld;
@@ -4999,8 +5111,12 @@ s32 func_002D37E8(void) {
  * else 0x2C5D; drawn at 0x15D,0xBA via func_002801B8). Both composed draws pass the
  * string length (func_001157AC = strlen) as the clip arg. Returns 0.
  * (func_003017F8 takes 2 ints + 5 floats; it reads no $a2/$a3 — FACT #8918.)
- * Wall: 8-byte-packed-save + FP-arg scheduling — later cc1 save-slot packing not
- * reproduced. Preserved as portable C. */
+ * Wall (cc1 2.9 arm): 8-byte-packed-save + FP-arg scheduling — later cc1 save-slot packing not
+ * reproduced. Preserved as portable C.
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): the ROM's save set at its
+ * 8-byte stride is reproduced; only the frame size differs (NOTE #9871). So the save-slot wall
+ * named above is a cc1 2.9 property and was measured false as the reason this member stays
+ * unmatched (FACT #9873). Residual: the frame size; the rest UNMEASURED. */
 extern s32 D_1ABAB0;     /* glyph row (int, converted to float) */
 extern char D_1AB9F8[];  /* sprintf format string (left composed line) */
 extern char D_1ABA38[];  /* sprintf format string (right composed line) */
@@ -5122,8 +5238,12 @@ s32 func_002D3C68(void) {
  * g_playerProgress slot (plus the 0x80000000 sentinel) in the seen-mask at +0x1DC.
  * Confirm then returns the active screen's pending result tri-state (latched into
  * block[0x18]); cancel returns 1; the idle path ticks func_0029D528 and returns 0.
- * Wall: 8-byte-packed-save ($16 + $31) + bnel branch-likely dead-store shape.
- * Preserved as portable C. */
+ * Wall (cc1 2.9 arm): 8-byte-packed-save ($16 + $31) + bnel branch-likely dead-store shape.
+ * Preserved as portable C.
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): this member's prologue - the
+ * ROM's save set at its 8-byte stride, and its frame - is reproduced exactly (NOTE #9871), so
+ * the save-slot wall named above is a cc1 2.9 property and was measured false as the reason
+ * this member stays unmatched (FACT #9873). Residual: UNMEASURED. */
 extern s32 func_0029D528(s32 padPressed);
 extern s32 g_health;            /* 0x18C2EC - base of the per-cutscene unlock records at +0x464 */
 extern s32 g_gsPixelOffsetY;    /* 0x1A7354 - play-count source at +0x3C */
@@ -5634,7 +5754,12 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", UpdateShipCusto
  * func_00123028, subtract func_00122A98, multiply func_00122B00, double->int
  * func_00123130). Return value is unused (the original leaves v0 as the void
  * func_0028F2C0's leftover). Matching arm stays INCLUDE_ASM (soft-float call
- * scheduling + 9-GPR packed save). */
+ * scheduling + 9-GPR packed save).
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
+ * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
+ * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
+ * property and was measured false as the reason this member stays unmatched (FACT #9873).
+ * Residual: the saved-register set; the rest UNMEASURED. */
 extern s32 func_0028EDF0(s32 u, s32 v);
 extern s64 func_001234F0(float f);
 extern s32 func_00123028(s64 a, s64 b);

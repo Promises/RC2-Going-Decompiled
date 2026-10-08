@@ -1980,7 +1980,12 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", DrawBlobShadows
  * #8789, NOTE #8777); SIBCALL second, reproduced solo (cc1 emits `j AppendScreenClearPacket` where
  * the ROM has only `jr $31`). t493's 'SIBCALL' above is a blanket-screen label. Not dli.
  * PACKED-SAVE on sdk29; engine96 + #8036 aliases + #8483 fence + row reaches 90.41 (26 of 98
- * words), residual SCHED1 + DIV-TRAP (NOTE #8789). */
+ * words), residual SCHED1 + DIV-TRAP (NOTE #8789).
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
+ * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
+ * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
+ * property and was measured false as the reason this member stays unmatched (FACT #9873).
+ * Residual: the saved-register set; the rest UNMEASURED. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", FadeOutToBlackBlocking);
 #else
@@ -2953,7 +2958,12 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0
  * C-shape / addressing (NOTE #8789), built 144 words vs the ROM's 174 on sdk29, 146-149 on
  * engine96, plus PACKED-SAVE (ROM saves at stride 8, cc1 2.9 at 16; NOTE #8777). Solo score
  * 48.06%. Residual class: REGALLOC at the dli site (pin-reachable, above), plus t493's residual
- * above. */
+ * above.
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
+ * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
+ * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
+ * property and was measured false as the reason this member stays unmatched (FACT #9873).
+ * Residual: the saved-register set; the rest UNMEASURED. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027F4D8);
 #else

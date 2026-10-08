@@ -3139,7 +3139,12 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", UpdateLevelObje
 #else
 /* t511 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
  * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 69.18% -> PACKED-SAVE, first differing row @0: ROM `addiu sp, sp, -0x30` vs `(nothing)`;
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing, MATCH_ guard) 68.00% -> SCHED-PROEPI, first differing row @0: ROM `addiu sp, sp, -0x30` vs `addiu sp, sp, -0x40`. */
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing, MATCH_ guard) 68.00% -> SCHED-PROEPI, first differing row @0: ROM `addiu sp, sp, -0x30` vs `addiu sp, sp, -0x40`.
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
+ * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
+ * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
+ * property and was measured false as the reason this member stays unmatched (FACT #9873).
+ * Residual: the saved-register set; the rest UNMEASURED. */
 s32 UpdateLevelObjectiveStates(void) {
     extern s32 EvaluateProgressCondition(s32 cond, s32 arg);  /* defined later in-unit */
     ObjectiveScan *scan = (ObjectiveScan *)(g_pRainHeightmap + 0x34);

@@ -774,7 +774,11 @@ extern s32 func_00133960(void);
 extern void func_00350868(u8 *stream, u8 *src, s32 len, s32 dstOfs);
 extern u8 *D_1B2354;
 /* (end of this body's declarations) */
-/* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 30.39% / engine96 34.69%. Residual: PACKED-SAVE (4 callee saves) + 152 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
+/* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 30.39% / engine96 34.69%. Residual: PACKED-SAVE (4 callee saves) + 152 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs).
+ * Save stride NOT re-measured for this member on the s136os arm: its C arm does not compile
+ * solo there (NOTE #9871). Of the 111 labeled members that were, 0 reproduce the 16-byte save
+ * stride there (FACT #9873), so the stride is not evidence that this member is walled.
+ * Residual: UNMEASURED. */
 /* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
    saves (s0..s2/ra) plus several branch-likely div-by-zero guards. Revisit
    with the gameplay-TU compiler.
@@ -883,9 +887,13 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", OnFmvGifDmaInte
 /* func_00350F28: vblank field-sync waiter — spin while WaitVblankGetField(0) still
  * reports `targetField` and progressive-scan is off; once the field changes (or
  * progressive is on) latch D_1AE788=1 / D_1AE78C=0 and return 1.
- * Blocked: 8-byte-packed saves (s0@0x0, ra@0x8) — under 2.9 -G8 -fno-gcse this C
- * compiles a 16-byte-slot 0x20 frame; the original packs 8-byte in a 0x10 frame
- * (the genuine save-slot wall). */
+ * Blocked on cc1 2.9: 8-byte-packed saves (s0@0x0, ra@0x8) — under 2.9 -G8 -fno-gcse
+ * this C compiles a 16-byte-slot 0x20 frame; the original packs 8-byte in a 0x10 frame
+ * (the genuine save-slot wall of that arm).
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): this member's prologue - the
+ * ROM's save set at its 8-byte stride, and its frame - is reproduced exactly (NOTE #9871), so
+ * the save-slot wall named above is a cc1 2.9 property and was measured false as the reason
+ * this member stays unmatched (FACT #9873). Residual: SCHED (NOTE #9710; 4/20 words). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00350F28);
 #else
@@ -929,7 +937,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00350F88);
 extern s32 func_00352638(u8 *obj, u64 a, u64 b, s32 pos, s32 n);
 extern char D_1AE7E8[];
 /* (end of this body's declarations) */
-/* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 72.19% / engine96 53.51%. Residual: PACKED-SAVE (7 callee saves) + 35 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
+/* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 72.19% / engine96 53.51%. Residual: PACKED-SAVE (7 callee saves) + 35 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs).
+ * Save stride NOT re-measured for this member on the s136os arm: its C arm does not compile
+ * solo there (NOTE #9871). Of the 111 labeled members that were, 0 reproduce the 16-byte save
+ * stride there (FACT #9873), so the stride is not evidence that this member is walled.
+ * Residual: UNMEASURED. */
 /* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
    saves (s0..s4/ra). Revisit with the gameplay-TU compiler.
 
@@ -2164,7 +2176,7 @@ s32 func_00352680(FmvStream *obj) {
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/250080", func_003526A0);
 
 /* func_003526A8: end-of-stream flush (pads the bitstream to a 4-byte boundary).
- * Blocked (match): 8-byte-packed saves (s0@0x20, ra@0x28).
+ * Blocked (match, cc1 2.9 arm): 8-byte-packed saves (s0@0x20, ra@0x28).
  * PARKED #70 (#else not confident): the asm sets up 4 stack out-param pointers
  * (sp+0x10/+0x14/+0x18/+0x1C) before `jal func_00352590`, then reads sp+0x14/+0x1C
  * (sum<4 -> early-out) and sp+0x10/+0x18 (masked &0xFFFFFFF | 0x20000000 into DMATAGs
@@ -2172,7 +2184,10 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/250080", func_0
  * decompiles func_00352590 as a 1-param forwarder `FUN_003517c0(p+0x48)`, contradicting
  * the 4-out-param wiring. Resolve func_00352590.s + func_003517c0 (does it write the 4
  * slots?) + func_003511A8's arg arity before writing a faithful #else. Not forcing a
- * low-confidence body. */
+ * low-confidence body.
+ * Save stride NOT re-measured for this member on the s136os arm: it has no C arm to compile
+ * (NOTE #9871). Of the 111 labeled members that were, 0 reproduce the 16-byte save stride there
+ * (FACT #9873), so the stride is not evidence that this member is walled. Residual: UNMEASURED. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003526A8);
 
 /* func_00352780: poll stream-done then host-side done. */

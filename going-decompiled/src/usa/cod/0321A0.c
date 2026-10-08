@@ -729,8 +729,9 @@ s32 snd_SendCommandSync(s32 fno, s32 count, void *cmdBytes) {
 
 /* snd_QueueCommandToRing: append one command to the active double-buffered
  * 989snd ring (or, when idle with an empty command, issue a bare sync RPC). Not
- * matched — the multi-callee-save frame hits the same 16-byte save-slot layout
- * wall as snd_SetupDmaTransfer (near-miss). Portable #else body (no branch-likely
+ * matched — on cc1 2.9 the multi-callee-save frame hits the same 16-byte save-slot
+ * layout wall as snd_SetupDmaTransfer, itself now matched on the s136os arm (near-miss).
+ * Portable #else body (no branch-likely
  * delay slots; all control flow is plain bnez/beqz/bne/beq/blez/b).
  *
  * Ring model (buffer i = D_001A74C0): D_001A74A0[i] -> a 0x1000-byte command
@@ -741,7 +742,12 @@ s32 snd_SendCommandSync(s32 fno, s32 count, void *cmdBytes) {
  * caps at 0x100 entries. arg4 is a 32-bit parameter here (the shared decl) but
  * lands in the descriptor as a sign-extended 64-bit qword, matching the original.
  * D_001A74C4 is a "service pending" flag briefly borrowed (cleared then restored)
- * while spinning for space. */
+ * while spinning for space.
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
+ * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
+ * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
+ * property and was measured false as the reason this member stays unmatched (FACT #9873).
+ * Residual: the saved-register set; the rest UNMEASURED. */
 extern s32   snd_CommitRingEntry(void);
 extern s32   D_001A74A8[2]; /* per-buffer free space in bytes */
 extern u8   *D_001A74B0[2]; /* per-buffer 16-byte ring-entry descriptor arrays */

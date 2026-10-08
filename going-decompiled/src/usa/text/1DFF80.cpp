@@ -583,7 +583,12 @@ void func_002E0650(void) {
  * $11 site moves this body 7.61% -> 8.17%. The dli is NOT the only residual: the first site is in
  * another register, so no row was landed and this stays INCLUDE_ASM. Residual class:
  * REGALLOC/structure (7.61% solo), plus PACKED-SAVE (ROM saves at stride 8, cc1 2.9 at 16; NOTE
- * #8777). */
+ * #8777).
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): this C compiles to a frame
+ * that saves no registers where the ROM saves 2 (NOTE #9871), so the stride cannot be observed
+ * and the gap is structural. The save-slot wall is a cc1 2.9 property, measured false as a wall
+ * on every labeled member that compiles on s136os (FACT #9873). Residual: structural; the rest
+ * UNMEASURED. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E07F8);
 #else
@@ -1361,10 +1366,14 @@ void ComputeListenerOcclusionProbe(Vec4 *out) {
  * (mask 0x82, owner *(emitter+0x18)).  Used to test whether a sound source is
  * occluded from the listener.
  * TODO(match): functional equivalent - not byte-exact; every body instruction
- * matches; the only delta is frame layout - this cc1 packs the callee saves
+ * matches on cc1 2.9; the only delta there is frame layout - it packs the callee saves
  * (s0,s1,s2,ra) at a 16-byte stride (0x50 frame) where the original uses an
  * 8-byte stride (0x30 frame) (the 8-byte-packed save wall, same as
- * func_002E6D98). */
+ * func_002E6D98).
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): this member's prologue - the
+ * ROM's save set at its 8-byte stride, and its frame - is reproduced exactly (NOTE #9871), so
+ * the save-slot wall named above is a cc1 2.9 property and was measured false as the reason
+ * this member stays unmatched (FACT #9873). Residual: SCHED (NOTE #9729; 3/39 words). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", CastEmitterOcclusionRay);
 #else

@@ -894,9 +894,13 @@ extern void func_002B0BF0(Moby *target, MobyLockOn *lock, f32 x, f32 y, f32 z);
  * NATIVE SHIM (no byte target; matching build uses INCLUDE_ASM above). Derived
  * register-exact from AcquireMobyAutoTarget.s @0x2B4AC0.
  *
- * WALL (matching build): save-layout — 8 callee-saves + $ra at 8-byte spacing,
- * with three fp temps. The pinned cc1 packs callee-save slots at 16-byte
- * spacing, so this frame can't be reproduced. */
+ * WALL (matching build, cc1 2.9 arm): save-layout — 8 callee-saves + $ra at 8-byte
+ * spacing, with three fp temps. The pinned cc1 2.9 packs callee-save slots at
+ * 16-byte spacing, so it can't reproduce this frame.
+ * Save stride NOT re-measured for this member on the s136os arm: its C arm does not compile
+ * solo there (NOTE #9871). Of the 111 labeled members that were, 0 reproduce the 16-byte save
+ * stride there (FACT #9873), so the stride is not evidence that this member is walled.
+ * Residual: UNMEASURED. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", AcquireMobyAutoTarget);
 #else
@@ -3211,13 +3215,17 @@ void InstallFileLoadPump(void) {
  * where adjLang = (lang == 0) ? 0 : lang-1 for the language-adjusted bands.
  * No-op if the channel is busy (m+0x68 != 0) or no sample resolves.
  *
- * WALL (matching build, INCLUDE_ASM frozen): PACKED-SAVE — 8 callee-saves + $ra
+ * WALL (matching build on the cc1 2.9 arm, INCLUDE_ASM frozen): PACKED-SAVE — 8 callee-saves + $ra
  * at 8-byte spacing (cc1 2.9 reserves 16 per save); the deeply-nested id-band
  * tree; sq/lq 128-bit handle copies. The snd_PlaySample call now uses the real
  * 12-argument signature (task #510): the `code` category (2, or 6 for the
  * >=6000 band), the 0/1 sentinels and the start-cb/context stack words are
  * passed as the ROM passes them (the old 8-arg shim put the callback in $10).
- * sdk29 55.54% / engine96 48.62% (unit objdiff report). */
+ * sdk29 55.54% / engine96 48.62% (unit objdiff report).
+ * Save stride NOT re-measured for this member on the s136os arm: its C arm does not compile
+ * solo there (NOTE #9871). Of the 111 labeled members that were, 0 reproduce the 16-byte save
+ * stride there (FACT #9873), so the stride is not evidence that this member is walled.
+ * Residual: UNMEASURED. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", StartDialogVoice);
 #else

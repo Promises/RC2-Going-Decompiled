@@ -175,7 +175,12 @@ extern s32  g_sceneArenaCursor;   /* 0x1B2230 */
 /* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
  * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 61.20% PACKED-SAVE /
  * engine96 29.27% CONST-LI; best arm sdk29, first differing insn there: 'addiu sp, sp, -0x30'
- * vs 'addiu sp, sp, -0x40' */
+ * vs 'addiu sp, sp, -0x40'
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
+ * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
+ * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
+ * property and was measured false as the reason this member stays unmatched (FACT #9873).
+ * Residual: the saved-register set; the rest UNMEASURED. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", SetupMemoryArenaTable);
 #else
 /* Declarations this body needs whose only other declarations sit in other
@@ -240,7 +245,12 @@ void SetupMemoryArenaTable(void) {
 /* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
  * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 72.43% PACKED-SAVE /
  * engine96 66.15% CONST-LI; best arm sdk29, first differing insn there: 'addiu sp, sp, -0x820'
- * vs 'addiu sp, sp, -0x840' */
+ * vs 'addiu sp, sp, -0x840'
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
+ * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
+ * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
+ * property and was measured false as the reason this member stays unmatched (FACT #9873).
+ * Residual: the saved-register set; the rest UNMEASURED. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", BootSystemInit);
 #else
 /* Prototypes this body needs whose declarations sit in other guarded arms:
@@ -736,7 +746,12 @@ void func_00291CC0(u32 index) {
 /* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
  * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 68.20% PACKED-SAVE /
  * engine96 63.16% GPREL-DECL; best arm sdk29, first differing insn there: 'addiu sp, sp,
- * -0x50' vs 'addiu sp, sp, -0x70' */
+ * -0x50' vs 'addiu sp, sp, -0x70'
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
+ * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
+ * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
+ * property and was measured false as the reason this member stays unmatched (FACT #9873).
+ * Residual: the saved-register set; the rest UNMEASURED. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00291D28);
 #else
 extern u8  g_dirLightMatrices[];       /* 0x1C26C0 - 0x40-stride light matrices */
@@ -1046,7 +1061,12 @@ void func_00291FF8(s32 index) {
 /* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
  * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 42.27% PACKED-SAVE /
  * engine96 32.24% CONST-MULT; best arm sdk29, first differing insn there: 'addiu sp, sp,
- * -0x100' vs 'addiu sp, sp, -0x1b0' */
+ * -0x100' vs 'addiu sp, sp, -0x1b0'
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
+ * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
+ * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
+ * property and was measured false as the reason this member stays unmatched (FACT #9873).
+ * Residual: the saved-register set; the rest UNMEASURED. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002920C0);
 #else
 /* Declarations this body needs whose only other declarations sit in other
@@ -1291,7 +1311,11 @@ extern s32 g_particleTexCountAbs;
 /* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
  * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 49.88% PACKED-SAVE /
  * engine96 48.88% IDIOM-LIKELY; best arm sdk29, first differing insn there: 'addiu sp, sp,
- * -0x40' vs 'addiu sp, sp, -0x60' */
+ * -0x40' vs 'addiu sp, sp, -0x60'
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): this member's prologue - the
+ * ROM's save set at its 8-byte stride, and its frame - is reproduced exactly (NOTE #9871), so
+ * the save-slot wall named above is a cc1 2.9 property and was measured false as the reason
+ * this member stays unmatched (FACT #9873). Residual: SCHED (FACT #9078; 2/78 words). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", BindParticleFxAssets);
 #else
 /* Declarations this body needs whose only other declarations sit in other
@@ -1454,7 +1478,12 @@ void BuildUiTextureDescriptors(s32 *descTable, s32 count) {
 /* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
  * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 49.32% PACKED-SAVE /
  * engine96 30.14% GPREL-DECL; best arm sdk29, first differing insn there: 'addiu sp, sp,
- * -0x30' vs 'addiu sp, sp, -0x50' */
+ * -0x30' vs 'addiu sp, sp, -0x50'
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
+ * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
+ * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
+ * property and was measured false as the reason this member stays unmatched (FACT #9873).
+ * Residual: the saved-register set; the rest UNMEASURED. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", BindSkyData);
 #else
 extern s32 Log2Floor(s32 x);
@@ -1512,7 +1541,11 @@ void BindSkyData(u8 *skyData) {
 /* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
  * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 47.38% PACKED-SAVE /
  * engine96 50.95% CONST-MULT; best arm engine96, first differing insn there: 'lui v0,
- * %hi(g_pPlayerModelBuffer)' vs '' */
+ * %hi(g_pPlayerModelBuffer)' vs ''
+ * Save stride NOT re-measured for this member on the s136os arm: its #else body is parked in a
+ * native-only block away from this INCLUDE_ASM (NOTE #9871). Of the 111 labeled members that
+ * were, 0 reproduce the 16-byte save stride there (FACT #9873), so the stride is not evidence
+ * that this member is walled. Residual: UNMEASURED. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", LoadPlayerDisplayTextures);
 #endif
 
@@ -1644,7 +1677,12 @@ void LoadPlayerDisplayModel(s32 variant) {
 /* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
  * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 48.60% PACKED-SAVE /
  * engine96 53.36% GPREL-DECL; best arm engine96, first differing insn there: 'addiu sp, sp,
- * -0xa0' vs 'addiu sp, sp, -0xb0' */
+ * -0xa0' vs 'addiu sp, sp, -0xb0'
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
+ * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
+ * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
+ * property and was measured false as the reason this member stays unmatched (FACT #9873).
+ * Residual: the saved-register set; the rest UNMEASURED. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", LoadHeldItemDisplayModel);
 #else
 /* Prototypes this body needs whose declarations sit in other guarded arms:
@@ -1825,7 +1863,11 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/191238", func_0
 /* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
  * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 39.88% PACKED-SAVE /
  * engine96 53.94% SIBCALL; best arm engine96, first differing insn there: 'sd s1, 0x8(sp)' vs
- * 'sd s2, 0x10(sp)' */
+ * 'sd s2, 0x10(sp)'
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): this member's prologue - the
+ * ROM's save set at its 8-byte stride, and its frame - is reproduced exactly (NOTE #9871), so
+ * the save-slot wall named above is a cc1 2.9 property and was measured false as the reason
+ * this member stays unmatched (FACT #9873). Residual: UNMEASURED. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", LoadShipDisplayModel);
 #else
 /* Declarations this body needs whose only other declarations sit in other
@@ -1865,8 +1907,13 @@ void LoadShipDisplayModel(s32 index) {
  * dims come from the arena header) into VRAM and cache the packed 64-bit GS
  * texture register at g_levelDialogToc[0x13B0+0x38] for the draw path to load.
  * Engine-2.96 TU (prologue packs 6 saved regs at 8-byte slots, frame 0x90)
- * -> save-slot walled, canonical-2.9 can't byte-match; faithful #else, with the
- * trailing dsll/dsra/or register pack transcribed op-for-op. NEEDS-ORACLE. */
+ * -> save-slot walled on canonical-2.9, which can't byte-match it; faithful #else, with the
+ * trailing dsll/dsra/or register pack transcribed op-for-op. NEEDS-ORACLE.
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
+ * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
+ * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
+ * property and was measured false as the reason this member stays unmatched (FACT #9873).
+ * Residual: the saved-register set; the rest UNMEASURED. */
 #ifndef TARGET_NATIVE
 /* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
  * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 53.92% PACKED-SAVE /
@@ -2606,7 +2653,11 @@ extern char D_1A9240[];               /* debug fmt string (DebugPrintStub no-op)
 /* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
  * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 56.64% PACKED-SAVE /
  * engine96 58.79% SIBCALL; best arm engine96, first differing insn there: 'sd s0, 0x0(sp)' vs
- * 'sd s1, 0x8(sp)' */
+ * 'sd s1, 0x8(sp)'
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): this member's prologue - the
+ * ROM's save set at its 8-byte stride, and its frame - is reproduced exactly (NOTE #9871), so
+ * the save-slot wall named above is a cc1 2.9 property and was measured false as the reason
+ * this member stays unmatched (FACT #9873). Residual: UNMEASURED. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", FixupMobyClassHeader);
 #else
 /* Declarations this body needs whose only other declarations sit in other
@@ -2961,7 +3012,11 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/191238", func_0
 /* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
  * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 72.96% PACKED-SAVE /
  * engine96 70.60% CONST-LI; best arm sdk29, first differing insn there: 'addiu sp, sp, -0x10'
- * vs 'addiu sp, sp, -0x20' */
+ * vs 'addiu sp, sp, -0x20'
+ * Save stride re-checked against the ROM: it saves one GPR here ($ra, frame 0x10), so the
+ * frame-size difference the sdk29 arm shows is not a save-stride effect (NOTE #9871); the
+ * save-slot wall was in any case measured false on the s136os arm (FACT #9873). Residual:
+ * UNMEASURED. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", UpdateLevelStagingMachine);
 #else
 extern void func_00133230(void);
@@ -3163,7 +3218,12 @@ s32 StreamSceneSegment(s32 idx) {
 /* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
  * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 53.27% PACKED-SAVE /
  * engine96 57.27% GPREL-DECL; best arm engine96, first differing insn there: 'addiu sp, sp,
- * -0x50' vs 'addiu sp, sp, -0x40' */
+ * -0x50' vs 'addiu sp, sp, -0x40'
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
+ * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
+ * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
+ * property and was measured false as the reason this member stays unmatched (FACT #9873).
+ * Residual: the saved-register set; the rest UNMEASURED. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", BindSceneChunk);
 #else
 extern void func_0011AEA0(s32 mode);                      /* FlushCache */
@@ -3874,7 +3934,11 @@ void func_00294C48(s32 classId, s32 slot) {
 /* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
  * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 54.27% PACKED-SAVE /
  * engine96 41.61% SIBCALL; best arm sdk29, first differing insn there: 'addiu sp, sp, -0x10'
- * vs 'addiu sp, sp, -0x20' */
+ * vs 'addiu sp, sp, -0x20'
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): this member's prologue - the
+ * ROM's save set at its 8-byte stride, and its frame - is reproduced exactly (NOTE #9871), so
+ * the save-slot wall named above is a cc1 2.9 property and was measured false as the reason
+ * this member stays unmatched (FACT #9873). Residual: UNMEASURED. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00294CD0);
 #else
 extern s32  func_00294EE0(s32 id);            /* load-in-flight gate (nonzero = busy) */
@@ -4070,10 +4134,15 @@ s32 func_00294EE0(s32 classId) {
  * +0x1C field to 4 (header +0xD entries at header +0x28, stride 0x20), and logs the
  * remaining SRAM via DebugPrintStub (D_1A9340 = "*AFTER GADGET* - free sram").
  *
- * Engine-2.96 TU (prologue packs 8 saved regs at 8-byte slots) -> save-slot walled,
- * canonical-2.9 can't byte-match; faithful #else, transcribed op-for-op from the
+ * Engine-2.96 TU (prologue packs 8 saved regs at 8-byte slots) -> save-slot walled on
+ * canonical-2.9, which can't byte-match it; faithful #else, transcribed op-for-op from the
  * frozen .s (incl. the DecompressWad 2-arg src/dest and the sub-record `bnel`
  * likely-branch loop). NEEDS-ORACLE.
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
+ * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
+ * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
+ * property and was measured false as the reason this member stays unmatched (FACT #9873).
+ * Residual: the saved-register set; the rest UNMEASURED.
  */
 #ifndef TARGET_NATIVE
 /* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
@@ -4208,7 +4277,12 @@ void LoadMobyClassFromWad(s32 classId, s32 index, void *descArg) {
 /* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
  * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 63.59% PACKED-SAVE /
  * engine96 54.45% SIBCALL; best arm sdk29, first differing insn there: 'addiu sp, sp, -0x40'
- * vs 'addiu sp, sp, -0x60' */
+ * vs 'addiu sp, sp, -0x60'
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
+ * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
+ * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
+ * property and was measured false as the reason this member stays unmatched (FACT #9873).
+ * Residual: the saved-register set; the rest UNMEASURED. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00295238);
 #else
 extern s32 g_discToc[];
@@ -4384,7 +4458,12 @@ void func_00295478(s32 classId, void *dest) {
 /* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
  * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 27.06% PACKED-SAVE /
  * engine96 38.38% GPREL-DECL; best arm engine96, first differing insn there: 'addiu sp, sp,
- * -0x70' vs 'addiu sp, sp, -0x20' */
+ * -0x70' vs 'addiu sp, sp, -0x20'
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
+ * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
+ * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
+ * property and was measured false as the reason this member stays unmatched (FACT #9873).
+ * Residual: the saved-register set; the rest UNMEASURED. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002954F0);
 #else
 /* Prototypes this body needs whose declarations sit in other guarded arms:
@@ -4957,7 +5036,12 @@ extern s32 *g_pLevelOrderAbs;
 /* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
  * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 56.58% PACKED-SAVE /
  * engine96 60.14% GPREL-DECL; best arm engine96, first differing insn there: 'lui v0,
- * %hi(g_mapVertexData)' vs '' */
+ * %hi(g_mapVertexData)' vs ''
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): this member's prologue - the
+ * ROM's save set at its 8-byte stride, and its frame - is reproduced exactly (NOTE #9871), so
+ * the save-slot wall named above is a cc1 2.9 property and was measured false as the reason
+ * this member stays unmatched (FACT #9873). Residual: the asm_unit -G8 delay-slot hoist
+ * (FACT #9078/#9089; 37/86 words). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapFindNearestAvailableLevel);
 #else
 /* Declarations this body needs whose only other declarations sit in other
@@ -5325,7 +5409,11 @@ s32 MapUpdateLevelAvailability(void) {
 /* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
  * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 42.76% PACKED-SAVE /
  * engine96 32.89% GPREL-DECL; best arm sdk29, first differing insn there: 'addiu sp, sp,
- * -0x10' vs 'addiu sp, sp, -0x50' */
+ * -0x10' vs 'addiu sp, sp, -0x50'
+ * Save stride re-checked against the ROM: it saves one GPR here ($ra, frame 0x10), so the
+ * frame-size difference the sdk29 arm shows is not a save-stride effect (NOTE #9871); the
+ * save-slot wall was in any case measured false on the s136os arm (FACT #9873). Residual:
+ * UNMEASURED. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapUpdate);
 #else
 /* Declarations this body needs whose only other declarations sit in other
@@ -5435,7 +5523,12 @@ s32 MapUpdate(void) {
 /* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
  * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 33.90% PACKED-SAVE /
  * engine96 32.87% CONST-LI; best arm sdk29, first differing insn there: 'addiu sp, sp, -0x140'
- * vs 'addiu sp, sp, -0x11b0' */
+ * vs 'addiu sp, sp, -0x11b0'
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
+ * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
+ * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
+ * property and was measured false as the reason this member stays unmatched (FACT #9873).
+ * Residual: the saved-register set; the rest UNMEASURED. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapDraw);
 #else
 /* Declarations this body needs whose only other declarations sit in other
@@ -6513,7 +6606,12 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/191238", func_0
 /* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
  * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 55.24% PACKED-SAVE /
  * engine96 46.14% IDIOM-LIKELY; best arm sdk29, first differing insn there: 'addiu sp, sp,
- * -0x270' vs 'addiu sp, sp, -0x290' */
+ * -0x270' vs 'addiu sp, sp, -0x290'
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
+ * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
+ * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
+ * property and was measured false as the reason this member stays unmatched (FACT #9873).
+ * Residual: the saved-register set; the rest UNMEASURED. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002984E0);
 #else
 extern u8   *g_mapBitmapBuffer;

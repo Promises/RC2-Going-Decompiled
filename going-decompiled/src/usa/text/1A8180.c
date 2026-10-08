@@ -6281,7 +6281,11 @@ s32 func_002AE7E8(Moby *moby) {
  * 0.00% in both runs. Residual class: LI.D on the engine96 arm (FACT #7952: GNU as rejects li.d
  * for r5900 and asm_unit.sh expands li.s only; RULING #8172 clause 4 keeps li.d out of
  * asm_unit.sh), plus PACKED-SAVE (ROM saves at stride 8, cc1 2.9 at 16; NOTE #8777) and other
- * non-dli codegen on sdk29. Stays INCLUDE_ASM. */
+ * non-dli codegen on sdk29. Stays INCLUDE_ASM.
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): this member's prologue - the
+ * ROM's save set at its 8-byte stride, and its frame - is reproduced exactly (NOTE #9871), so
+ * the save-slot wall named above is a cc1 2.9 property and was measured false as the reason
+ * this member stays unmatched (FACT #9873). Residual: UNMEASURED. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AE9E0);
 #else

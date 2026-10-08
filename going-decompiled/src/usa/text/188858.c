@@ -6251,7 +6251,12 @@ extern u64 GetHudIconTex0(s32 iconIndex);   /* resolve a HUD icon's GS tex0 regi
  * but in a different register. No allowlist row applies to the body AS COMPILED: a row must carry
  * the ROM's words for cc1's register. A #8598 pin + row is UNTRIED. Solo score 24.56%. Residual
  * class: REGALLOC at the dli site, plus PACKED-SAVE (ROM saves at stride 8, cc1 2.9 at 16; NOTE
- * #8777). */
+ * #8777).
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
+ * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
+ * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
+ * property and was measured false as the reason this member stays unmatched (FACT #9873).
+ * Residual: the saved-register set; the rest UNMEASURED. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028F540);
 #else
@@ -6308,7 +6313,12 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028F6E8);
  * but in a different register. No allowlist row applies to the body AS COMPILED: a row must carry
  * the ROM's words for cc1's register. A #8598 pin + row is UNTRIED. Solo score 16.50%. Residual
  * class: REGALLOC at the dli site, plus PACKED-SAVE (ROM saves at stride 8, cc1 2.9 at 16; NOTE
- * #8777). */
+ * #8777).
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
+ * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
+ * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
+ * property and was measured false as the reason this member stays unmatched (FACT #9873).
+ * Residual: the saved-register set; the rest UNMEASURED. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028F700);
 #else
@@ -6378,7 +6388,12 @@ void func_0028F700(s32 iconIndex, s32 x, s32 y, s32 w, s32 h, s32 alpha) {
  * but in a different register. No allowlist row applies to the body AS COMPILED: a row must carry
  * the ROM's words for cc1's register. A #8598 pin + row is UNTRIED. Solo score 19.80%. Residual
  * class: REGALLOC at the dli site, plus PACKED-SAVE (ROM saves at stride 8, cc1 2.9 at 16; NOTE
- * #8777). */
+ * #8777).
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
+ * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
+ * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
+ * property and was measured false as the reason this member stays unmatched (FACT #9873).
+ * Residual: the saved-register set; the rest UNMEASURED. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028F8E0);
 #else
@@ -6426,7 +6441,12 @@ void func_0028F8E0(s32 iconIndex, s32 x, s32 y, s32 w, s32 h, s32 alpha, s32 rgb
  * but in a different register. No allowlist row applies to the body AS COMPILED: a row must carry
  * the ROM's words for cc1's register. A #8598 pin + row is UNTRIED. Solo score 12.25%. Residual
  * class: REGALLOC at the dli site, plus PACKED-SAVE (ROM saves at stride 8, cc1 2.9 at 16; NOTE
- * #8777). */
+ * #8777).
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): this C compiles to a frame
+ * that saves no registers where the ROM saves 3 (NOTE #9871), so the stride cannot be observed
+ * and the gap is structural. The save-slot wall is a cc1 2.9 property, measured false as a wall
+ * on every labeled member that compiles on s136os (FACT #9873). Residual: structural; the rest
+ * UNMEASURED. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028FAE0);
 #else
@@ -6515,7 +6535,12 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/188858", func_0
  * that value at 0x28FDBC ($9) and 0x28FDD4 ($5), but in a different register. No allowlist row
  * applies to the body AS COMPILED: a row must carry the ROM's words for cc1's register. A #8598
  * pin + row is UNTRIED. Solo score 3.70%. Residual class: REGALLOC at the dli site, plus
- * PACKED-SAVE (ROM saves at stride 8, cc1 2.9 at 16; NOTE #8777). */
+ * PACKED-SAVE (ROM saves at stride 8, cc1 2.9 at 16; NOTE #8777).
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
+ * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
+ * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
+ * property and was measured false as the reason this member stays unmatched (FACT #9873).
+ * Residual: the saved-register set; the rest UNMEASURED. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028FC78);
 #else
@@ -6597,7 +6622,12 @@ void func_0028FC78(f32 cx, f32 cy, f32 halfW, f32 halfH, f32 angle,
  * but in a different register. No allowlist row applies to the body AS COMPILED: a row must carry
  * the ROM's words for cc1's register. A #8598 pin + row is UNTRIED. Solo score 23.65%. Residual
  * class: REGALLOC at the dli site, plus PACKED-SAVE (ROM saves at stride 8, cc1 2.9 at 16; NOTE
- * #8777). */
+ * #8777).
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
+ * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
+ * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
+ * property and was measured false as the reason this member stays unmatched (FACT #9873).
+ * Residual: the saved-register set; the rest UNMEASURED. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028FFF0);
 #else

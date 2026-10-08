@@ -878,8 +878,10 @@ s32 func_002F6B68(void) {
  * 5th param (flag) is 1 only for the special id 0xBF; the language param is
  * forced to 0 while a queued cinematic is already busy.
  *
- * NOT byte-matched: 4 GPR saves (s0-s2 + ra) hit the 8-byte-packed-save wall,
- * and g_cinematicFmvSize (0x1B218C) is reached %gp_rel here, in a delay slot,
+ * Byte-exact on the s136os arm since task #1948 (see the GUARD comment at its
+ * S136OS_SLOT below). The history of the cc1 2.9 arm, which still does not match:
+ * 4 GPR saves (s0-s2 + ra) hit that arm's 8-byte-packed-save wall, and
+ * g_cinematicFmvSize (0x1B218C) is reached %gp_rel here, in a delay slot,
  * vs absolute elsewhere - the delay-slot rule of FACT #8058. Body is otherwise
  * instruction-identical; kept as the portable #else impl.
  *
@@ -1210,7 +1212,12 @@ s32  RequestGameStateChange(s32 a, s32 b, s32 c, s32 d, s32 e);
  * allowlist row for that site moves this body 70.49% -> 51.90%: DOWN. The row was applied (its
  * words are in the object) and the score still fell. The dli is NOT the only residual, so no row
  * was landed and this stays INCLUDE_ASM. Residual class: PACKED-SAVE (ROM saves at stride 8, cc1
- * 2.9 at 16; NOTE #8777); the rest of the non-dli codegen is not diagnosed. */
+ * 2.9 at 16; NOTE #8777); the rest of the non-dli codegen is not diagnosed.
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
+ * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
+ * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
+ * property and was measured false as the reason this member stays unmatched (FACT #9873).
+ * Residual: the saved-register set; the rest UNMEASURED. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", RunCinematicPlaybackFrame);
 #else

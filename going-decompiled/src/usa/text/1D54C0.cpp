@@ -372,7 +372,12 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D5540);
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 43.34% / engine96 34.45%; better arm sdk29; 367 differing
  * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
- * insn: ROM `addiu sp,sp,-128` vs `addiu sp,sp,-160`. Not iterated in t495. */
+ * insn: ROM `addiu sp,sp,-128` vs `addiu sp,sp,-160`. Not iterated in t495.
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
+ * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
+ * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
+ * property and was measured false as the reason this member stays unmatched (FACT #9873).
+ * Residual: the saved-register set; the rest UNMEASURED. */
 s32 func_002D5540(void) {
     extern s32 g_shipCustomization;      /* PlayerStats+0xF8 ship-customize bitfield */
     extern s32 g_shipCustomizeCursor;    /* selected paint index (gp-rel) */
@@ -1451,7 +1456,12 @@ extern void func_00286138(s32 a, s32 b);
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 45.51% / engine96 37.61%; better arm sdk29; 133 differing
  * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
- * insn: ROM `addiu sp,sp,-32` vs `addiu sp,sp,-112`. Not iterated in t495. */
+ * insn: ROM `addiu sp,sp,-32` vs `addiu sp,sp,-112`. Not iterated in t495.
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
+ * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
+ * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
+ * property and was measured false as the reason this member stays unmatched (FACT #9873).
+ * Residual: the saved-register set; the rest UNMEASURED. */
 s32 MenuScreenDoAction(s32 op, s32 arg, void *outFlag) {
     extern u8 g_currentLanguage;
     extern u8 g_collTriBuffer[];
@@ -1651,7 +1661,11 @@ extern void StopFileLoad(void);
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 73.15% / engine96 70.40%; better arm sdk29; 37 differing
  * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
- * insn: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. Not iterated in t495. */
+ * insn: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. Not iterated in t495.
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): this member's prologue - the
+ * ROM's save set at its 8-byte stride, and its frame - is reproduced exactly (NOTE #9871), so
+ * the save-slot wall named above is a cc1 2.9 property and was measured false as the reason
+ * this member stays unmatched (FACT #9873). Residual: UNMEASURED. */
 s32 func_002D7AE0(void) {
     extern u8  g_mapVertexData[];       /* MapCache base */
     extern s16 g_fileLoadState;         /* 0x1A63AC: 0 idle / nonzero CD-read busy */
@@ -1785,7 +1799,11 @@ extern void func_00132938(s32 flag);
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 63.85% / engine96 55.96%; better arm sdk29; 144 differing
  * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
- * insn: ROM `addiu sp,sp,-32` vs `addiu sp,sp,-48`. Not iterated in t495. */
+ * insn: ROM `addiu sp,sp,-32` vs `addiu sp,sp,-48`. Not iterated in t495.
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): this member's prologue - the
+ * ROM's save set at its 8-byte stride, and its frame - is reproduced exactly (NOTE #9871), so
+ * the save-slot wall named above is a cc1 2.9 property and was measured false as the reason
+ * this member stays unmatched (FACT #9873). Residual: UNMEASURED. */
     /* TODO(match): functional equivalent - not byte-exact. */
 s32 func_002D87C8(MenuWidget *obj) {
     u8 *o = (u8 *)obj;
@@ -2122,7 +2140,11 @@ extern void func_00283460(void *dst, const void *src, s32 nbytes);
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 64.78% / engine96 50.75%; better arm sdk29; 118 differing
  * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
- * insn: ROM `addiu sp,sp,-32` vs `addiu sp,sp,-64`. Not iterated in t495. */
+ * insn: ROM `addiu sp,sp,-32` vs `addiu sp,sp,-64`. Not iterated in t495.
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): this member's prologue - the
+ * ROM's save set at its 8-byte stride, and its frame - is reproduced exactly (NOTE #9871), so
+ * the save-slot wall named above is a cc1 2.9 property and was measured false as the reason
+ * this member stays unmatched (FACT #9873). Residual: UNMEASURED. */
 s32 StreamTextTable(void *cmdArg) {
     extern s16   g_fileLoadState;      /* 0x1A63AC: 0 idle / nonzero CD-read busy */
     extern u8    g_discToc[];          /* master disc asset directory */
@@ -2298,7 +2320,11 @@ extern void func_002DFF68(s32 handle, s32 amount);
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 70.59% / engine96 64.00%; better arm sdk29; 49 differing
  * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
- * insn: ROM `addiu sp,sp,-32` vs `addiu sp,sp,-48`. Not iterated in t495. */
+ * insn: ROM `addiu sp,sp,-32` vs `addiu sp,sp,-48`. Not iterated in t495.
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): this member's prologue - the
+ * ROM's save set at its 8-byte stride, and its frame - is reproduced exactly (NOTE #9871), so
+ * the save-slot wall named above is a cc1 2.9 property and was measured false as the reason
+ * this member stays unmatched (FACT #9873). Residual: UNMEASURED. */
     /* TODO(match): functional equivalent - not byte-exact. */
 s32 func_002DA358(MenuWidget *obj) {
     extern s32 D_00261900[];
@@ -2582,7 +2608,12 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", InitMenuBgImage
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 76.54% / engine96 56.11%; better arm sdk29; 28 differing
  * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
- * insn: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-48`. Not iterated in t495. */
+ * insn: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-48`. Not iterated in t495.
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
+ * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
+ * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
+ * property and was measured false as the reason this member stays unmatched (FACT #9873).
+ * Residual: the saved-register set; the rest UNMEASURED. */
 s32 InitMenuBgImageBuffers(void *obj) {
     s32 preloaded = *(s32 *)((u8 *)obj + 0x34) & 0x200;
 
@@ -2671,7 +2702,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", LoadMenuBgImage
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 46.72% / engine96 33.70%; better arm sdk29; 72 differing
  * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
- * insn: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. Not iterated in t495. */
+ * insn: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. Not iterated in t495.
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): this member's prologue - the
+ * ROM's save set at its 8-byte stride, and its frame - is reproduced exactly (NOTE #9871), so
+ * the save-slot wall named above is a cc1 2.9 property and was measured false as the reason
+ * this member stays unmatched (FACT #9873). Residual: UNMEASURED. */
 extern u8  g_discToc[];                    /* 0x14B540 master disc asset directory */
 extern s16 g_fileLoadState;                /* 0x1A63AC 0 idle / nonzero busy */
 extern s32 g_menuBgImageIndex;             /* active-language bg image index */
@@ -2768,11 +2803,16 @@ s32 UploadMenuBgImagePair(void *obj) {
  * WALL (empirically confirmed 2026-07-14, canonical-2.9 objdiff): engine-2.96
  * SAVE-SLOT wall — the ROM packs 9 GPR + 4 FPR saves at 8-byte spacing (frame
  * 0x70); the pinned 2.9 cc1 reserves 16-byte slots (frame 0xA0). Not
- * C-controllable → matches impossible, #else is correct (prior "const-layout"
+ * C-controllable on that cc1 → no 2.9 match, #else is correct (prior "const-layout"
  * note was imprecise). Secondary near-miss: the ROM reads currentLevel/activeSlot
  * as g_mapVertexData struct fields (+0x230/+0x234, absolute) where the #else uses
  * the gp-rel g_nMapCurrentLevel/g_nMapActiveSlot aliases — a real modeling lever,
- * but it cannot overcome the save-slot wall. */
+ * but on 2.9 it cannot overcome the save-slot wall.
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
+ * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
+ * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
+ * property and was measured false as the reason this member stays unmatched (FACT #9873).
+ * Residual: the saved-register set; the rest UNMEASURED. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DBC98);
 #else
@@ -2958,7 +2998,12 @@ extern void DrawFont1RightJustifiedLabel(s32 x, s32 y, u32 color, s32 str, s32 w
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 39.81% / engine96 39.76%; better arm sdk29; 144 differing
  * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
- * insn: ROM `addiu sp,sp,-160` vs `addiu sp,sp,-144`. Not iterated in t495. */
+ * insn: ROM `addiu sp,sp,-160` vs `addiu sp,sp,-144`. Not iterated in t495.
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
+ * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
+ * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
+ * property and was measured false as the reason this member stays unmatched (FACT #9873).
+ * Residual: the saved-register set; the rest UNMEASURED. */
     /* TODO(match): functional equivalent - not byte-exact. */
 s32 func_002DC0F0(MenuWidget *obj) {
     u8 *o = (u8 *)obj;
@@ -3004,7 +3049,12 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DC378);
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 66.57% / engine96 52.82%; better arm sdk29; 81 differing
  * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
- * insn: ROM `addiu sp,sp,-32` vs `addiu sp,sp,-64`. Not iterated in t495. */
+ * insn: ROM `addiu sp,sp,-32` vs `addiu sp,sp,-64`. Not iterated in t495.
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
+ * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
+ * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
+ * property and was measured false as the reason this member stays unmatched (FACT #9873).
+ * Residual: the saved-register set; the rest UNMEASURED. */
     /* TODO(match): functional equivalent - not byte-exact. */
 s32 func_002DC378(MenuWidget *obj) {
     u8 *o = (u8 *)obj;
@@ -3347,8 +3397,13 @@ s32 func_002DC8A8(void) {
  * card status code (D_001F28A4). Returns 2. Wall: stack text-box struct built
  * with 128-bit packing + gp-relative cached colours.
  * Byte-match: engine-2.96 SAVE-SLOT wall (prologue packs $16/$17/$31 at 8-byte
- * spacing 0x40/0x48/0x50; 2.9 reserves 16-byte slots) → match impossible, #else
- * is correct. Not "TODO(match)". */
+ * spacing 0x40/0x48/0x50; 2.9 reserves 16-byte slots) → no match on 2.9, #else
+ * is correct. Not "TODO(match)".
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
+ * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
+ * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
+ * property and was measured false as the reason this member stays unmatched (FACT #9873).
+ * Residual: the saved-register set; the rest UNMEASURED. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DC940);
 #else
@@ -3490,7 +3545,12 @@ extern void DrawHudSpriteRotated(s32 xBits, f32 y, s32 wBits, s32 hBits, s32 ang
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 45.50% / engine96 39.67%; better arm sdk29; 99 differing
  * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
- * insn: ROM `addiu sp,sp,-48` vs `addiu sp,sp,-64`. Not iterated in t495. */
+ * insn: ROM `addiu sp,sp,-48` vs `addiu sp,sp,-64`. Not iterated in t495.
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
+ * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
+ * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
+ * property and was measured false as the reason this member stays unmatched (FACT #9873).
+ * Residual: the saved-register set; the rest UNMEASURED. */
     /* TODO(match): functional equivalent - not byte-exact. */
 s32 func_002DCDC0(MenuWidget *obj) {
     extern u8 D_001ABC00, D_001ABC01, D_001ABBF8, D_001ABBF9;
@@ -3644,7 +3704,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DD450);
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 80.91% / engine96 47.57%; better arm sdk29; 64 differing
  * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
- * insn: ROM `addiu sp,sp,-80` vs `addiu sp,sp,-112`. Not iterated in t495. */
+ * insn: ROM `addiu sp,sp,-80` vs `addiu sp,sp,-112`. Not iterated in t495.
+ * Save stride NOT re-measured for this member on the s136os arm: its C arm does not compile
+ * solo there (NOTE #9871). Of the 111 labeled members that were, 0 reproduce the 16-byte save
+ * stride there (FACT #9873), so the stride is not evidence that this member is walled.
+ * Residual: UNMEASURED. */
 s32 func_002DD450(IntroTextBox *box) {
     TextLayout2d layout;
     char *str;
@@ -3887,8 +3951,13 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DD888);
  * 0xD-frame autosave arm. Returns 0/1/-1.
  * Wall: large branch graph over save-system globals.
  * Byte-match: engine-2.96 SAVE-SLOT wall (prologue packs 7 regs at 8-byte
- * spacing 0x0..0x30; 2.9 reserves 16-byte slots) → match impossible, #else is
- * correct. Not "TODO(match)". */
+ * spacing 0x0..0x30; 2.9 reserves 16-byte slots) → no match on 2.9, #else is
+ * correct. Not "TODO(match)".
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
+ * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
+ * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
+ * property and was measured false as the reason this member stays unmatched (FACT #9873).
+ * Residual: the saved-register set; the rest UNMEASURED. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DDD30);
 #else
@@ -4647,7 +4716,11 @@ extern s32 func_002B1D40(void);
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 49.82% / engine96 41.23%; better arm sdk29; 62 differing
  * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
- * insn: ROM `addiu sp,sp,-32` vs `addiu sp,sp,-48`. Not iterated in t495. */
+ * insn: ROM `addiu sp,sp,-32` vs `addiu sp,sp,-48`. Not iterated in t495.
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): this member's prologue - the
+ * ROM's save set at its 8-byte stride, and its frame - is reproduced exactly (NOTE #9871), so
+ * the save-slot wall named above is a cc1 2.9 property and was measured false as the reason
+ * this member stays unmatched (FACT #9873). Residual: UNMEASURED. */
     /* TODO(match): functional equivalent - not byte-exact. */
 void func_002DFE60(void) {
     extern s16 D_0025EBEE, D_0025EBFA, D_0025EC06, D_0025EC12, D_0025EC10;

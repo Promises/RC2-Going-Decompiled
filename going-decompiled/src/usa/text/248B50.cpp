@@ -512,7 +512,12 @@ extern s32 func_0027F790(void);
  * cc1 2.96-ee-001003-1): sdk29 28.20% / engine96 24.17%.
  * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 210/216 words differ;
  * frozen-.s census: 8 callee GPR saves, 4 fp saves.
- * Residual: PACKED-SAVE (8 callee GPR saves, 4 fp) — 12 of the 210 differing words are frame/save-slot; remainder REGALLOC/SCHED, not iterated. */
+ * Residual: PACKED-SAVE (8 callee GPR saves, 4 fp) — 12 of the 210 differing words are frame/save-slot; remainder REGALLOC/SCHED, not iterated.
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
+ * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
+ * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
+ * property and was measured false as the reason this member stays unmatched (FACT #9873).
+ * Residual: the saved-register set; the rest UNMEASURED. */
 void GuiMenuListDraw(GuiWidget *self) {
     char *p = (char *)self;
     f32 *scratch = func_00336C18(self);
@@ -791,7 +796,12 @@ extern void GuiElementSetGlyph(void *e, u8 *atlas, s32 code);
  * cc1 2.96-ee-001003-1): sdk29 59.04% / engine96 57.26%.
  * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 179/194 words differ;
  * frozen-.s census: 9 callee GPR saves, 1 fp saves.
- * Residual: PACKED-SAVE (9 callee GPR saves, 1 fp) — 10 of the 179 differing words are frame/save-slot; remainder REGALLOC/SCHED, not iterated. */
+ * Residual: PACKED-SAVE (9 callee GPR saves, 1 fp) — 10 of the 179 differing words are frame/save-slot; remainder REGALLOC/SCHED, not iterated.
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
+ * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
+ * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
+ * property and was measured false as the reason this member stays unmatched (FACT #9873).
+ * Residual: the saved-register set; the rest UNMEASURED. */
 extern void UpdatePopupMenu(GuiWidget *w, s32 arg);
 extern u8 D_1ADBE8[], D_1ADBF0[], D_1ADC00[], D_1ADF98[], D_1ADFA0[];
 extern u8 D_1AE570[], D_1AE578[], D_1AE588[];
@@ -1245,7 +1255,11 @@ extern f32 GuiHermiteInterp(f32 t, f32 c0, f32 c1, f32 c2, f32 c3);
  * cc1 2.96-ee-001003-1): sdk29 55.98% / engine96 37.84%.
  * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 176/186 words differ;
  * frozen-.s census: 4 callee GPR saves, 0 fp saves.
- * Residual: PACKED-SAVE (4 callee GPR saves) — 4 of the 176 differing words are frame/save-slot; remainder REGALLOC/SCHED, not iterated. */
+ * Residual: PACKED-SAVE (4 callee GPR saves) — 4 of the 176 differing words are frame/save-slot; remainder REGALLOC/SCHED, not iterated.
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): this member's prologue - the
+ * ROM's save set at its 8-byte stride, and its frame - is reproduced exactly (NOTE #9871), so
+ * the save-slot wall named above is a cc1 2.9 property and was measured false as the reason
+ * this member stays unmatched (FACT #9873). Residual: UNMEASURED. */
 /* keyframe-callback target vtable (obj at w->unk80): the dispatch reads a
  * half-word field offset at +0x10 and the method pointer at +0x14. */
 typedef struct GuiKeyframeTargetVtbl {
@@ -1810,7 +1824,12 @@ extern f32 *func_00336C18(GuiWidget *e);
  * cc1 2.96-ee-001003-1): sdk29 72.40% / engine96 59.83%.
  * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 105/112 words differ;
  * frozen-.s census: 5 callee GPR saves, 0 fp saves.
- * Residual: PACKED-SAVE (5 callee GPR saves) — 4 of the 105 differing words are frame/save-slot; remainder REGALLOC/SCHED, not iterated. */
+ * Residual: PACKED-SAVE (5 callee GPR saves) — 4 of the 105 differing words are frame/save-slot; remainder REGALLOC/SCHED, not iterated.
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
+ * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
+ * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
+ * property and was measured false as the reason this member stays unmatched (FACT #9873).
+ * Residual: the saved-register set; the rest UNMEASURED. */
 extern s32 g_maxHealth;
 extern s32 g_nanotech;
 extern u8 g_soundBankHandlesBlk[];
@@ -2045,7 +2064,12 @@ extern void *func_003368D0(void *p);
  * cc1 2.96-ee-001003-1): sdk29 51.70% / engine96 44.13%.
  * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 100/101 words differ;
  * frozen-.s census: 9 callee GPR saves, 0 fp saves.
- * Residual: PACKED-SAVE (9 callee GPR saves) — 6 of the 100 differing words are frame/save-slot; remainder REGALLOC/SCHED, not iterated. */
+ * Residual: PACKED-SAVE (9 callee GPR saves) — 6 of the 100 differing words are frame/save-slot; remainder REGALLOC/SCHED, not iterated.
+ * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
+ * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
+ * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
+ * property and was measured false as the reason this member stays unmatched (FACT #9873).
+ * Residual: the saved-register set; the rest UNMEASURED. */
 extern u8 D_1AD908[]; /* vtable installed at +0x1464 */
 extern u8 D_1AD8E8[]; /* vtable installed at +0x1468 */
 void *func_0034BDB0(void *widget) {
