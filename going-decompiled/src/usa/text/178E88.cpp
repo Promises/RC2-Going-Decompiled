@@ -2638,8 +2638,8 @@ void func_0027F0A8(const u64 *corners, u64 tex0) {
  * g_gsPixelOffsetXAbs/YAbs. Each priced by removing it alone (solo s136os
  * compile of this unit, word compare against the ROM .s, relocated fields
  * masked): plain g_gsPixelOffsetX[0]/Y[0] 9/39 words (cc1 hoists the %hi into
- * a spare register instead of the same-register lui/lw pair); master's
- * x2/y2-first order 9/39.
+ * a spare register instead of the same-register lui/lw pair); x2/y2 formed
+ * first (master's order, with these stores and aliases) 9/39.
  * Record of the cc1 2.9 / 2.96 attempts (t493, unit objdiff, objdiff_build.sh +
  * unit_report.sh): sdk29 74.79% / engine96 57.72%; task #946 got cc1 2.9 to one
  * adjacent swap with non-volatile barriers, none needed here. */

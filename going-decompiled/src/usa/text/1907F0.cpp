@@ -63,10 +63,7 @@ extern s32 g_nGameState;     /* top-level game state id (0 = in-game) */
 
 extern s32 TickCountdownTimer(s32 *counter);   /* shared countdown step (text/183178) */
 extern void func_0029C600(s32 arg0);
-/* DECL-LEVER(#1877): defined void. func_00290EF8 returns this call's $v0, which
- * the ROM's DrawFullScreenTint leaves holding the bumped DMA cursor; a
- * value-returning definition moves its bytes (17/36 words), so it stays void. */
-extern s32 DrawFullScreenTint(s32 r, s32 g, s32 b, s32 a);
+extern s32 DrawFullScreenTint(s32 r, s32 g, s32 b, s32 a); /* DECL-LEVER(#1877): defined void; func_00290EF8 returns this call's $v0 (the ROM's DrawFullScreenTint leaves the bumped DMA cursor there), and a value-returning definition moves its bytes (17/36 words) */
 
 /* Forward decls for the screen-fade / level-init helpers and their callees. */
 extern s32  func_00290EA0(void);            /* fade pump status callback */
