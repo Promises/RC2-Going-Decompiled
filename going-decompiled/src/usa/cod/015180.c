@@ -2675,7 +2675,113 @@ s32 func_0011E360(s32 fd) {
     return 0;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011E4E0);
+/* The no-wait semaphore table: one entry per outstanding no-wait read, holding
+ * the completion semaphore the IOP will signal; -1 marks a free entry. */
+extern s32 D_001346A8[32];
+
+/**
+ * Read up to `size` bytes from file `fd` into `buf`: send command 2 (read) with
+ * the slot's server handle, the buffer, the size and the slot's table index,
+ * and wait for the IOP's completion on a fresh semaphore. A slot opened with
+ * mode bit 0x8000 (no-wait) instead files that semaphore in the first free
+ * entry of D_001346A8 under the file-I/O lock, negates the request's semaphore
+ * to tell the server so, and returns 0 once the RPC is accepted. The caller's
+ * buffer is written back from the D-cache first unless mode bit 0x20000000 is
+ * set; the request block always is.
+ *
+ * @return the byte count (or the server's negative status), 0 for an accepted
+ *         no-wait read, -1 when the library is not initialised, -9 for a bad
+ *         descriptor, -11 when the RPC fails
+ *
+ * Each spelling below is priced by undoing it alone (solo unit compile scored
+ * against the ROM words with relocated fields masked, differing words after
+ * alignment; task #1872):
+ *  - the second no-wait test is written `(s16)mode & 0x8000`. Written like the
+ *    first, gcse PRE merges the two tests into one `andi` held in a
+ *    callee-saved register across six calls, where the ROM recomputes
+ *    `andi $2,$19,0x8000` in the `bnez` delay slot; the cast makes it a
+ *    different expression to gcse and combine still folds it to the same
+ *    `andi`. Spelled plainly: 26 words (149 vs 152).
+ *  - `req->result` is stored before `req->resultSize`; the other order: 4.
+ *  - the RPC is passed `&D_0013E980` rather than `req`: 21.
+ *
+ * SCHEDULING DEVICE (RULING #8483: empty template, emits nothing): the fence
+ * after `i = 0` names the table's first word as a memory operand, so the
+ * table's `%hi` and `i = 0` are both issued before it, and it stops reorg's
+ * backward delay-slot search at the pre-loop `bne`. That slot is then filled
+ * from both successor threads with the one `lui %hi(D_0013F5C0)` that gcse
+ * hoisted onto them, as in the ROM (0x11E5E8). Without the fence `i = 0` takes
+ * the slot and that `lui` stays duplicated at the head of both threads: 5
+ * words, 153 vs 152. Untied (`__asm__ __volatile__("")`): 5, the table's
+ * `%hi` then issues after it. `i = 0` in the for-init (after the fence): 5.
+ * The non-volatile form also reads 0.
+ */
+s32 func_0011E4E0(s32 fd, void *buf, s32 size) {
+    FioSlot *slot = func_0011D950(fd);
+    FioRequest *req = &D_0013E980;
+    struct SemaParam sp;
+    s32 result;
+    s32 mode;
+    s32 sema;
+    s32 ok;
+    s32 i;
+
+    func_0011DD98(2);
+    if (D_0013472C == 0) {
+        func_0011DDC8();
+        return -1;
+    }
+    if (slot == 0 || (mode = slot->mode) == 0) {
+        func_0011DDC8();
+        return -9;
+    }
+    req->u.read.handle = slot->handle;
+    sp.maxCount = 1;
+    req->u.read.index = ((u8 *)slot - D_0013FE80) >> 4;
+    req->u.read.buf = buf;
+    req->u.read.size = size;
+    sp.initCount = 0;
+    sp.option = 0;
+    sema = func_0011AC20((s32 *)&sp);
+    req->result = &result;
+    req->resultSize = 4;
+    D_0013E980.sema = sema;
+    if (mode & 0x8000) {
+        func_0011AC60(D_0013473C);
+        i = 0;
+        __asm__ __volatile__("" : : "m"(D_001346A8[0]));
+        for (; i < 32; i++) {
+            if (D_001346A8[i] == -1) {
+                D_001346A8[i] = req->sema;
+                req->sema = -req->sema;
+                break;
+            }
+        }
+        func_0011AC40(D_0013473C);
+    }
+    if (!(mode & 0x20000000)) {
+        sceSifWriteBackDCache(buf, size);
+    }
+    sceSifWriteBackDCache(req, 0x20);
+    if (func_0011D620(D_00140080, 2, 0, &D_0013E980, 0x20, D_0013F5C0, 4, 0, 0) < 0) {
+        func_0011AC30(sema);
+        func_0011DDC8();
+        return -11;
+    }
+    ok = *(s32 *)((u32)D_0013F5C0 | 0x20000000);
+    func_0011DDC8();
+    if (ok == 0) {
+        func_0011AC30(sema);
+        return -11;
+    }
+    if ((s16)mode & 0x8000) {
+        func_0011AC30(sema);
+        return 0;
+    }
+    func_0011AC60(sema);
+    func_0011AC30(sema);
+    return result;
+}
 
 /* func_0011E740: 0x60 bytes of inter-function padding (`addiu sp,+0xN; nop`
  * filler words) split off by symbol_addrs size:0x60; the real function begins at
