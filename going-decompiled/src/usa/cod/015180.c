@@ -2417,10 +2417,14 @@ void func_0011DD48(void) {
 }
 
 /**
- * Run the func_0011DD48 teardown step, then forward the global handle
- * D_00134734 to func_0011AC60. Always returns 0.
+ * Take the file-I/O lock: create the lock semaphore D_00134734 on first use
+ * (func_0011DD48), then wait on it (func_0011AC60, WaitSema). Always returns 0.
+ * func_0011DDC8 releases it.
+ *
+ * @param mode  the caller's command number (0 open, 1 close, 2 read); every
+ *              ROM caller passes it, the body never reads it
  */
-s32 func_0011DD98(void) {
+s32 func_0011DD98(s32 mode) {
     func_0011DD48();
     func_0011AC60(D_00134734);
     return 0;
@@ -2480,9 +2484,196 @@ s32 func_0011E0A0(void) {
     return 0;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011E0D8);
+extern s32 func_0011D620(void *a0, s32 a1, s32 a2, void *a3, s32 a4,
+                         void *a5, s32 a6, s32 a7, s32 a8);
+extern void sceSifWriteBackDCache(void *ptr, s32 size);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011E360);
+/* The file-I/O RPC client and its two transfer buffers. */
+extern u8 D_00140080[];
+extern u8 D_0013F5C0[];
+
+/* The request block sent to the IOP file server: a completion semaphore, where
+ * the 4-byte result is to be written back, then the per-command arguments.
+ * Every command ends with the caller's file-table index. */
+typedef struct FioRequest {
+    s32 sema;
+    s32 *result;
+    s32 resultSize;
+    union {
+        struct {
+            s32 flags;
+            s32 mode;
+            char path[0x400];
+            s32 index;
+        } open;
+        struct {
+            s32 handle;
+            s32 index;
+        } close;
+        struct {
+            s32 handle;
+            void *buf;
+            s32 size;
+            s32 _pad;
+            s32 index;
+        } read;
+    } u;
+} FioRequest;
+extern FioRequest D_0013E980;
+
+/* A file-table slot (D_0013FE80, 0x10 bytes each): the server-side handle and
+ * the open mode (0 = free). */
+typedef struct FioSlot {
+    s32 handle;
+    s32 mode;
+} FioSlot;
+
+extern s32 func_0011DE08(void);
+extern s32 D_00134738;
+
+/**
+ * Open `path` with `flags` (and, as the variadic argument, the creation mode):
+ * initialise the library on first use, refuse when the IOP file server's
+ * version tag is incompatible, claim a file-table slot, then send command 0
+ * (open) carrying the flags (bits 0x10000000/0x80000000 masked off), the mode,
+ * the path (truncated to 0x3FF characters) and the slot's index. On success the
+ * slot records the server handle and the flags.
+ *
+ * @return the new descriptor (the file-table index), the server's negative
+ *         status, -0x10004 for an incompatible server, -19 when the table is
+ *         full, -11 when the RPC fails
+ *
+ * `ret` carries both the server's accepted word and the returned descriptor:
+ * the ROM keeps them in one register ($17), and two variables put the
+ * descriptor in its own callee-saved register instead.
+ */
+s32 func_0011E0D8(const char *path, s32 flags, ...) {
+    FioRequest *req = &D_0013E980;
+    struct SemaParam sp;
+    FioSlot *slot;
+    char *ap;
+    s32 result;
+    s32 index;
+    s32 mode;
+    s32 sema;
+    s32 ret;
+    s32 i;
+
+    func_0011DD98(0);
+    if (D_0013472C == 0) {
+        func_0011DE08();
+    }
+    if (func_0011E010() != 0) {
+        func_0011DDC8();
+        return -0x10004;
+    }
+    slot = func_0011D8C8();
+    if (slot == 0) {
+        func_0011DDC8();
+        return -19;
+    }
+    ap = (char *)__builtin_next_arg(flags)
+         - (__builtin_args_info(2) >= 8 ? 0 : (8 - __builtin_args_info(2)) * 8);
+    mode = *(s32 *)ap;
+    for (i = 0; i < 0x400; i++) {
+        if ((req->u.open.path[i] = path[i]) == 0) {
+            break;
+        }
+    }
+    if (i == 0x400) {
+        req->u.open.path[0x3FF] = 0;
+    }
+    index = ((u8 *)slot - D_0013FE80) >> 4;
+    req->u.open.flags = flags & 0x6FFFFFFF;
+    req->u.open.mode = mode;
+    req->u.open.index = index;
+    sp.maxCount = 1;
+    sp.initCount = 0;
+    sp.option = 0;
+    sema = func_0011AC20((s32 *)&sp);
+    req->result = &result;
+    req->sema = sema;
+    req->resultSize = 4;
+    if (func_0011D620(D_00140080, 0, 0, &D_0013E980, 0x418, D_0013F5C0, 4, 0, 0) < 0) {
+        func_0011AC30(sema);
+        func_0011DDC8();
+        return -11;
+    }
+    ret = *(s32 *)((u32)D_0013F5C0 | 0x20000000);
+    func_0011DDC8();
+    if (ret == 0) {
+        func_0011AC30(sema);
+        return -11;
+    }
+    func_0011AC60(sema);
+    func_0011AC30(sema);
+    if (result < 0) {
+        func_0011AC60(D_00134738);
+        slot->mode = 0;
+        func_0011AC40(D_00134738);
+        return result;
+    }
+    ret = index;
+    func_0011AC60(D_00134738);
+    slot->handle = result;
+    slot->mode |= flags;
+    func_0011AC40(D_00134738);
+    return ret;
+}
+
+/**
+ * Close file `fd`: under the file-I/O lock, send command 1 (close) with the
+ * slot's server handle and table index, free the slot, and wait for the IOP's
+ * completion on a fresh semaphore.
+ *
+ * @return 0 (or the server's negative status), -1 when the library is not
+ *         initialised, -9 for a bad descriptor, -11 when the RPC fails
+ */
+s32 func_0011E360(s32 fd) {
+    FioSlot *slot = func_0011D950(fd);
+    FioRequest *req = &D_0013E980;
+    struct SemaParam sp;
+    s32 result;
+    s32 sema;
+    s32 ok;
+
+    func_0011DD98(1);
+    if (D_0013472C == 0) {
+        func_0011DDC8();
+        return -1;
+    }
+    if (slot == 0 || slot->mode == 0) {
+        func_0011DDC8();
+        return -9;
+    }
+    req->u.close.handle = slot->handle;
+    req->u.close.index = ((u8 *)slot - D_0013FE80) >> 4;
+    sp.maxCount = 1;
+    sp.initCount = 0;
+    sp.option = 0;
+    sema = func_0011AC20((s32 *)&sp);
+    D_0013E980.sema = sema;
+    req->result = &result;
+    req->resultSize = 4;
+    if (func_0011D620(D_00140080, 1, 0, req, 0x14, D_0013F5C0, 4, 0, 0) < 0) {
+        func_0011AC30(sema);
+        func_0011DDC8();
+        return -11;
+    }
+    slot->mode = 0;
+    ok = *(s32 *)((u32)D_0013F5C0 | 0x20000000);
+    func_0011DDC8();
+    if (ok == 0) {
+        func_0011AC30(sema);
+        return -11;
+    }
+    func_0011AC60(sema);
+    func_0011AC30(sema);
+    if (result < 0) {
+        return result;
+    }
+    return 0;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011E4E0);
 
