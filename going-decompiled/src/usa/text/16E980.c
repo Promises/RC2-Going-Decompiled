@@ -274,7 +274,11 @@ extern void AppendFrameInitGsState(void);
 extern void func_00285CE8(void);
 extern void KickFrameDmaChain(void);
 extern void WaitFrameDmaFence(s32 a);
-extern void WaitGsPathsIdle(s32 a, s32 b);
+/* WaitGsPathsIdle is sceGsSyncPath (vendored libgraph.h: int sceGsSyncPath(int
+ * mode, u_short timeout)); the ROM returns 0 in $v0. Declared value-returning
+ * (RULING #9118): as void, cc1 treats $v0 as free across the call and
+ * func_0026FC88's s136os body allocates differently (4 words). */
+extern s32 WaitGsPathsIdle(s32 a, s32 b);
 extern s32 WaitVblankGetField(s32 a);
 extern void DrawFullScreenTint(s32 a, s32 b, s32 c, s32 d);
 extern s32 g_vramFrameBufB;
@@ -670,8 +674,34 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/16E980", func_0
  * Uploads the CLUT (16x16, clutVram>>8) then the image (PSM 0x1B, imageVram>>8,
  * buffer width max(1,w/64)), each via func_00126288 descriptor + GIF-path image
  * kick + path idle; then packs TEX0: TBP/TBW/PSM 0x1B/TW/TH/TCC/CBP/CPSM +
- * bit 63, and descOut = { TEX0, 1, 0 }. */
-#ifdef TARGET_NATIVE
+ * bit 63, and descOut = { TEX0, 1, 0 }.
+ *   src:       the texture blob (GsTexBlobHeader).
+ *   descOut:   receives the three doublewords { TEX0, 1, 0 }.
+ *   imageVram: image VRAM byte address (>> 8 = TBP).
+ *   clutVram:  CLUT VRAM byte address (>> 8 = CBP).
+ * MATCHED on the s136os arm (task #1970). No asm devices. What closed it,
+ * each priced by removing it alone in a solo s136 compile (positional word
+ * differences of 116, relocations masked, before the dli row below, which the
+ * solo screen does not apply and which accounts for 2 of each figure):
+ *   - clutBp (clutVram >> 8) formed after the CLUT-size test, not at its
+ *     declaration: the ROM keeps clutVram in s1 and shifts it in the first
+ *     Log2Floor delay slot (removing: 115 words, 97);
+ *   - the CLUT size as an if/else testing clutPsm == 0 (a ternary compiles to
+ *     movn: 115 words, 105; testing != 0 inverts the branch: +3);
+ *   - TEX0 packed from sign-extended (u64) fields, as the ROM's lw + dsll
+ *     (a (u32) cast per field adds zero-extension: +5);
+ *   - imageData = tex + (clutBytes + 0x20), the ROM's association (+2);
+ *   - WaitGsPathsIdle declared s32 at unit level (see there; void: +4).
+ * The bit-63 constant (`dli $3,0x8000000000000000`) is a RULING #8549 site:
+ * the ROM carries SN Ps2EeAs's `addiu $3,$0,-1; dsll32 $3,$3,31`, GNU as
+ * expands it `ori $3,$0,0x8000; dsll32 $3,$3,16`; the row is in
+ * tools/ee/ps2eeas_dli_sites.txt.
+ * GUARD: on EE this C is compiled alone by SN 2.95.3 v1.36 -fopt-stack
+ * (tools/ee/s136os_functions.txt) and spliced over the S136OS_SLOT line by
+ * tools/ee/s136os_splice.sh; on native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0026FC88)
+S136OS_SLOT(func_0026FC88);
+#else
 extern void FillMemory32(void *dst, s32 val, s32 nbytes);
 extern s32 Log2Floor(s32 x);
 extern void func_00126288(void *ctx, s32 bp, s32 bw, s32 psm, s32 x, s32 y,
@@ -705,15 +735,20 @@ void func_0026FC88(void *src, void *descOut, s32 imageVram, s32 clutVram) {
     u8 ctx[0x60];
     GsTexBlobHeader *tex = src;
     u64 *out = descOut;
-    s32 clutBp = clutVram >> 8;
+    s32 clutBp;
     u64 tex0;
 
     FillMemory32(&blk, 0, 0x54);
     blk.clutData = tex->data;
-    blk.clutBytes = tex->clutPsm ? 0x200 : 0x400;
+    if (tex->clutPsm == 0) {
+        blk.clutBytes = 0x400;
+    } else {
+        blk.clutBytes = 0x200;
+    }
+    clutBp = clutVram >> 8;
     blk.log2W = Log2Floor(tex->width);
     blk.log2H = Log2Floor(tex->height);
-    blk.imageData = (u8 *)tex + blk.clutBytes + 0x20;
+    blk.imageData = (u8 *)tex + (blk.clutBytes + 0x20);
     blk.pixelCount = tex->width * tex->height;
     func_00126288(ctx, (s16)clutBp, 1, (s16)tex->clutPsm, 0, 0, 0x10, 0x10);
     func_0011AEA0(0);
@@ -729,21 +764,19 @@ void func_0026FC88(void *src, void *descOut, s32 imageVram, s32 clutVram) {
     func_0011AEA0(0);
     KickGifImageUpload(ctx, blk.imageData);
     WaitGsPathsIdle(0, 0);
-    tex0 = (u64)(u32)blk.imageBp
-         | ((u64)(u32)blk.bufWidth << 14)
+    tex0 = (u64)blk.imageBp
+         | ((u64)blk.bufWidth << 14)
          | ((u64)0x1B << 20)
-         | ((u64)(u32)blk.log2W << 26)
-         | ((u64)(u32)blk.log2H << 30)
+         | ((u64)blk.log2W << 26)
+         | ((u64)blk.log2H << 30)
          | ((u64)1 << 34)                  /* TCC = RGBA */
-         | ((u64)(u32)clutBp << 37)        /* CBP */
-         | ((u64)(u32)tex->clutPsm << 51)  /* CPSM */
+         | ((u64)clutBp << 37)             /* CBP */
+         | ((u64)tex->clutPsm << 51)       /* CPSM */
          | ((u64)1 << 63);
     out[0] = tex0;
     out[1] = 1;
     out[2] = 0;
 }
-#else
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_0026FC88);
 #endif
 
 /* func_0026FE58: kick the boot dialog-voice file load then build the splash

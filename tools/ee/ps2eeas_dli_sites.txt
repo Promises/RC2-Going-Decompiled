@@ -65,6 +65,11 @@
 # EE_REG's $14 pin on the loop counter, which is what puts cc1's dli registers
 # at the ROM's $13 and $9 (RULING #8598 + #8549, FACT #8791's pin+row form).
 #
+# func_0026FC88 (text/16E980) is compiled from C (s136os arm, task #1970). Its
+# site is the TEX0 packet's bit-63 constant, in reorder mode and followed by an
+# `or`. GNU as gives `ori $3,$0,0x8000; dsll32 $3,$3,16`; the ROM has the form
+# below at 0x26FE1C..0x26FE20.
+#
 # region function       rom_addr    operands                 words
 usa      func_00290320  0x0029033C  $12,0x4400000000008001   340c8800 000c63fc 358c8001
 usa      func_00290320  0x002903AC  $4,0xfffff000000000      3404ffff 00042438 3484f000 00042638
@@ -91,3 +96,4 @@ usa      InitMobyFromClass  0x0029FF40  $7,0x40404000000000   34078080 00073c38 
 usa      DrawTexturedQuad2d  0x0027E990  $9,0x400000000008001     34098000 00094afc 35298001
 usa      DrawTexturedQuad2d  0x0027E9A8  $17,0x8531531531531068   34118531 00118c78 3631a62a 00118c78 3631c54c 00118bb8 36311068
 usa      DrawTexturedQuad2d  0x0027E9E4  $8,0xfffff000000000      3408ffff 00084438 3508f000 00084638
+usa      func_0026FC88  0x0026FE1C  $3,0x8000000000000000   2403ffff 00031ffc
