@@ -48,6 +48,17 @@ EMPTY real allowlist -G0 (control)
 EMPTY real allowlist -G8 (control)
 EMPTY relative input path -G0
 EMPTY relative input path -G8
+LASLOT la_abs -G8
+LASLOT la_b -G0
+LASLOT la_b -G8
+LASLOT la_cmt -G8
+LASLOT la_far -G8
+LASLOT la_jal -G0
+LASLOT la_jal -G8
+LASLOT la_lab -G8
+LASLOT la_lkly -G8
+LASLOT la_ls -G8
+LASLOT la_nore -G8
 LAY lay_alldead -G8
 LAY lay_brsp -G8
 LAY lay_comma -G8

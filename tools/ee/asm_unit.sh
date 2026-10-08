@@ -298,6 +298,25 @@ cd "$FIXROOT"
 # would assemble the same bytes; the reset only keeps the rule's scope exact.
 # Not extended to div.s/cvt.w.s: the ROM keeps those out of slots too, but
 # that is observed, not tested as a rule.
+#
+# And the small half of the atomic `la` macro (RULING #9966, NOTE #9963 §3,
+# task #1965). The `la` pre-expansion below pins its ABSOLUTE form in a
+# noreorder bracket, but prints the small form as a bare 1-word
+# `addiu $r,$gp,%gp_rel(SYM)`, which GNU as 2.40 may swap into the slot of a
+# following reorder-mode branch (cod/0321A0 snd_FlushCommandRing: `la $16,
+# D_001A74A8; b` became `b; addiu`). The SN ee-as never did: the ROM has a
+# gp-relative addiu in 0 of 43,315 USA and 0 of 43,497 EU branch delay slots,
+# against 617 / 623 gp-relative lw on the same census (FACT #9962), and keeps
+# `addiu; <branch>; nop` at 9 sites per region. So when that addiu is DIRECTLY
+# followed (no label, directive or comment line between) by a reorder-mode
+# non-likely branch, jump or call, the BRANCH is pinned in a noreorder/nop
+# wrapper, the form of the pins above. The addiu itself is never bracketed: a
+# `.set noreorder` directly after an l.s/lwc1 triggers the COP1 load-delay
+# flush below and would add a nop at unrelated sites. Likely branches are
+# left alone (GNU as does not swap into an annulled slot, and cc1 never emits
+# one in reorder mode). Unscoped at -G8 by ruling, not allowlisted: the census
+# is an assembler property. Each pin leaves a `# asm_unit.sh la-slot pin`
+# comment, counted into the per-unit line described below.
 # (cc1 is a Win32 PE - its .s lines end in CRLF, hence the \r-stripping.)
 #
 # Last, at every -G, the scoped Ps2EeAs `dli` expansion (RULING #8549, task
@@ -363,6 +382,12 @@ cd "$FIXROOT"
 # rows, so every EU unit prints `0 transforms (0 allowlist rows for eu)`: the
 # pass is inert there by construction, which is not the same as clean. A unit
 # that is refused prints no such line.
+# It is followed by a second line, the small-`la` slot pin's (RULING #9966):
+#   asm_unit.sh: la-slot: N pins
+# N is the number of branches pinned in this unit, counted from the pin's
+# comment markers in what reaches `as`. It is 0 at -G0 by construction (the
+# rule lives in the -G8 pass), which is not the same as a -G8 unit with no
+# site. landing_gate.sh's ASMUNIT row knows this spelling too.
 # The selftest is tools/ee/asm_unit_selftest.sh.
 DLIAWK="$ROOT/tools/ee/ps2eeas_dli.awk"
 DLISRC="$ROOT/tools/ee/ps2eeas_dli_sites.txt"
@@ -467,6 +492,9 @@ if [ "$GFLAG" = "-G8" ]; then
       }
       return ""
     }
+    # the small-`la` slot pin (see header) looks at exactly one line: the one
+    # directly after the addiu. Any line at all closes the window.
+    { lapin = lapend; lapend = 0 }
     /^[ \t]*\.ent[ \t]/ { curfn = $2 }
     # flush a held mfc1 unless the next line opens a noreorder region (or is
     # a comment-only line, which we let pass while still holding)
@@ -541,6 +569,14 @@ if [ "$GFLAG" = "-G8" ]; then
     /^\t(bgezall|bltzall|bc1fl|bc1tl)\t/ { if (nore && pendmov == "") { pendbr = $0; lastmtc = ""; next } }
     /^\t(j|jal|jalr|b|beq|bne|beql|bnel|blez|bgez|bgtz|bltz|blezl|bgezl|bgtzl|bltzl|bgezal|bltzal|bc1f|bc1t)\t/ {
       if (nore && pendmov == "") { pendbr = $0; lastmtc = ""; next }
+      # small-`la` slot pin (see header, RULING #9966): SN-as never swapped
+      # its 1-word gp-relative `la` into a following branch slot.
+      if (lapin && !nore && $0 ~ /^\t(j|jal|jalr|b|beq|bne|blez|bgez|bgtz|bltz|bgezal|bltzal|bc1f|bc1t)\t/) {
+        print "\t# asm_unit.sh la-slot pin (RULING #9966)"
+        print "\t.set\tnoreorder"; print; print "\tnop"; print "\t.set\treorder"
+        lapin = 0; prevcop = 0
+        next
+      }
       # volatile-marker pin (see header): the insn directly before this
       # reorder-mode branch was volatile - SN-as left the slot empty.
       if (volpend) {
@@ -681,9 +717,10 @@ if [ "$GFLAG" = "-G8" ]; then
       s=$0; sub(/^\tla\t/,"",s)
       split(s,p,","); r=p[1]; sym=p[2]
       base=sym; sub(/\+[0-9]+$/,"",base)   # smallness is decided by the BASE symbol
-      if ((base in sz) && sz[base]<=8)
+      if ((base in sz) && sz[base]<=8) {
         printf "\taddiu\t%s,$gp,%%gp_rel(%s)\n", r, sym
-      else {
+        lapend = 1   # the slot pin window opens on the next line
+      } else {
         # the SN ee-as la macro is atomic: GNU as must not steal its second
         # half into a following branch delay slot (proven by the original
         # bytes of text/1A8180 func_002B11C8: lui/addiu adjacent, nop in the
@@ -722,6 +759,8 @@ NIN=$(($(wc -l < "$DLIIN"))); NOUT=$(($(wc -l < "$DLIOUT")))
 # the count mode's per-region field (`<valid> <usa> <eu> <bad>`)
 DLIN=$(awk '/^\t# ps2eeas_dli_sites\.txt [^ ]+: dli / { n++ } END { print n + 0 }' "$DLIOUT")
 DLIM=$(echo "$DLICOUNT" | awk -v r="$REGION" '{ print (r == "usa") ? $2 : (r == "eu") ? $3 : 0 }')
+LAPINS=$(awk '/^\t# asm_unit\.sh la-slot pin / { n++ } END { print n + 0 }' "$DLIOUT")
 mips-linux-gnu-as -march=r5900 -mabi=eabi -no-pad-sections -EL "$GFLAG" -I. -o "$OUT_O" - < "$DLIOUT"
 echo "asm_unit.sh: dli: $DLIN transforms ($DLIM allowlist rows for $REGION)" >&2
+echo "asm_unit.sh: la-slot: $LAPINS pins" >&2
 rm -f "$DLIIN" "$DLIOUT"; rm -rf "$DLITMP"

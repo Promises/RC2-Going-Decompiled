@@ -615,6 +615,9 @@ check_asmunit() {
   # in its exact spelling only: a reworded one stays unknown and WARNs, because
   # GATE-F3 (#1158) reads that spelling
   nd=$(/usr/bin/grep -cE "$ASMUNIT_DLI_RE" "$log" || true)
+  # and so is its `la-slot: N pins` line (RULING #9966, task #1965), likewise
+  # in its exact spelling only
+  nd=$(( nd + $(/usr/bin/grep -cE "$ASMUNIT_LA_RE" "$log" || true) ))
   na=$(( $(/usr/bin/grep -c 'asm_unit\.sh:' "$log" || true) - nd ))
   if [ "$n" = 0 ]; then
     ok "ASMUNIT [$REGION]: 0 asm_unit.sh WARNING/REFUSED/FAIL lines in $(wc -l < "$log" | tr -d ' ') log lines"
@@ -623,11 +626,13 @@ check_asmunit() {
     show < <(/usr/bin/grep -nE 'asm_unit\.sh: (WARNING|REFUSED|FAIL):' "$log" | cut -c1-400 | sed 's/^/       /')
   fi
   if [ "$na" != "$n" ]; then
-    warn "ASMUNIT [$REGION]: $((na - n)) asm_unit.sh: line(s) with none of WARNING/REFUSED/FAIL in $log — a diagnostic kind this row does not know; read it and extend the row: $(/usr/bin/grep -n 'asm_unit\.sh:' "$log" | /usr/bin/grep -vE 'asm_unit\.sh: (WARNING|REFUSED|FAIL):' | /usr/bin/grep -vE "$ASMUNIT_DLI_RE" | cut -c1-200 | tr '\n' ';')"
+    warn "ASMUNIT [$REGION]: $((na - n)) asm_unit.sh: line(s) with none of WARNING/REFUSED/FAIL in $log — a diagnostic kind this row does not know; read it and extend the row: $(/usr/bin/grep -n 'asm_unit\.sh:' "$log" | /usr/bin/grep -vE 'asm_unit\.sh: (WARNING|REFUSED|FAIL):' | /usr/bin/grep -vE "$ASMUNIT_DLI_RE" | /usr/bin/grep -vE "$ASMUNIT_LA_RE" | cut -c1-200 | tr '\n' ';')"
   fi
 }
 # asm_unit.sh's per-unit transform line, whole-line anchored (task #1205)
 ASMUNIT_DLI_RE='^asm_unit\.sh: dli: [0-9]+ transforms \([0-9]+ allowlist rows for (usa|eu)\)$'
+# and its per-unit small-`la` slot pin line (RULING #9966, task #1965)
+ASMUNIT_LA_RE='^asm_unit\.sh: la-slot: [0-9]+ pins$'
 
 # ---------------------------------------------------------- NATIVE-ARENA ----
 # check_arena [REGEN_SCRIPT] — the NATIVE-ARENA row (task #1431, on #1419's
@@ -2529,6 +2534,16 @@ selftest_asmunit() {
   local nd; nd=$(/usr/bin/grep -cE "$ASMUNIT_DLI_RE" "$log" || true)
   if [ "$nd" -ge 1 ]; then ok "control: $nd asm_unit.sh dli: line(s) in the exact spelling, none counted as an unknown kind ($(/usr/bin/grep -E "$ASMUNIT_DLI_RE" "$log" | sort | uniq -c | sed -E 's/^ +//' | tr '\n' ';' | sed 's/;$//; s/;/ ; /g'))"
   else say "SELFTEST-FAIL (23) this build's log carries no 'asm_unit.sh: dli: N transforms (M allowlist rows for $REGION)' line: asm_unit.sh did not emit the interface GATE-F3 (#1158) reads"; b=1; fi
+  # task #1965: the same for the `la-slot: N pins` line (RULING #9966)
+  local nl; nl=$(/usr/bin/grep -cE "$ASMUNIT_LA_RE" "$log" || true)
+  if [ "$nl" -ge 1 ]; then ok "control: $nl asm_unit.sh la-slot: line(s) in the exact spelling, none counted as an unknown kind ($(/usr/bin/grep -E "$ASMUNIT_LA_RE" "$log" | sort | uniq -c | sed -E 's/^ +//' | tr '\n' ';' | sed 's/;$//; s/;/ ; /g'))"
+  else say "SELFTEST-FAIL (23) this build's log carries no 'asm_unit.sh: la-slot: N pins' line: asm_unit.sh did not emit the RULING #9966 per-unit line"; b=1; fi
+  for s in '1 pin' '1 pins (usa)'; do
+    { cat "$log"; printf 'asm_unit.sh: la-slot: %s\n' "$s"; } > "$T/asmunit_laword.log"
+    FAILED=0; WARNED=0; STRICT=0; check_asmunit "$T/asmunit_laword.log" > "$T/asmunit_laword.txt"
+    if [ "$FAILED" = 0 ] && [ "$WARNED" = 1 ]; then ok "fired: 'asm_unit.sh: la-slot: $s' is not the known spelling and WARNs"
+    else say "SELFTEST-FAIL (23) 'asm_unit.sh: la-slot: $s' was read as the known la-slot line (FAILED=$FAILED WARNED=$WARNED):"; show < "$T/asmunit_laword.txt"; b=1; fi
+  done
   for s in 'transform (9 allowlist rows for usa)' 'transforms (9 allowlist rows for usa) INERT'; do
     { cat "$log"; printf 'asm_unit.sh: dli: 9 %s\n' "$s"; } > "$T/asmunit_dliword.log"
     FAILED=0; WARNED=0; STRICT=0; check_asmunit "$T/asmunit_dliword.log" > "$T/asmunit_dliword.txt"

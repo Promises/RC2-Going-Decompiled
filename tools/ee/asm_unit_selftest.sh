@@ -72,6 +72,15 @@
 #        slot (a `jal` and a `bc1tl`), while an mtc1 directly before its
 #        reader still gets the nop and a non-reader slot gets none. The arms
 #        match the whole mtc1-branch-slot run (task #1378, FACT #9035).
+#   LASLOT (RULING #9966, task #1965) at -G8, a small-symbol `la` directly
+#        before a reorder-mode `b` or `jal` keeps its 1-word gp-relative addiu
+#        before the branch and a nop in the slot (`la-slot: 1 pins`); after an
+#        l.s it gets no COP1 flush nop. A label, a comment line or a noreorder
+#        bracket between, an absolute `la`, a likely branch, an `la` that is not
+#        adjacent, and every seed at -G0 pin nothing (`0 pins`) and keep GNU
+#        as's words. Against a copy from before task #1965, the three pinning
+#        arms must FAIL (GNU as swaps the addiu into the slot) and the line is
+#        absent from every arm.
 #
 # The seeds are written in cc1 layout (TAB, mnemonic, TAB, operands) into the
 # container's own /tmp, so no VM mount sits between writing and assembling
@@ -118,6 +127,7 @@ run() {
   FAILS=$(grep -c 'asm_unit\.sh: FAIL:' "$T/err" || true)
   WARNS=$(grep -c 'asm_unit\.sh: WARNING' "$T/err" || true)
   DLINE=$(grep '^asm_unit\.sh: dli:' "$T/err" || true)
+  LALINE=$(grep '^asm_unit\.sh: la-slot:' "$T/err" || true)
   OBJ=0; WORDS=""
   if [ -s "$T/o.o" ]; then
     OBJ=1
@@ -474,6 +484,41 @@ for k in "b:\$L1:10000001" "beql:\$2,\$0,\$L1:50400001" "j:\$L1:08000003" \
   run "mt_$op" -G8
   ok=$(accepted); [ "$ok" = 1 ] && ok=$(has "44816000 $w 46026000")
   verdict "MTC1 mt_$op -G8" "$ok" "mtc1, $op, then add.s \$f0,\$f12 in its slot, no nop anywhere in the run [44816000 $w 46026000]"
+done
+
+# --- LASLOT: the small half of the atomic `la` macro (RULING #9966) ---------
+# Each seed puts an independent addu before the `la`, so GNU as has a choice
+# of slot filler: without the pin it swaps the addiu into the slot (NOTE
+# #9963 §2, cod/0321A0 snd_FlushCommandRing). The arms assert the whole run
+# from the addu through the slot, and the per-unit line, compared whole-line.
+LH='\t.text\n\t.ent\tF\nF:\n'; LE='\t.end\tF\n\t.extern\tg_s, 4\n\t.extern\tg_a, 16\n'
+LU='\taddu\t$2,$3,$4\n'; LJ='$L1:\n\tj\t$31\n'
+seed la_b    "$LH$LU\tla\t\$16,g_s\n\tb\t\$L1\n$LJ$LE"
+seed la_jal  "$LH$LU\tla\t\$4,g_s+8\n\tjal\tG\n\tj\t\$31\n$LE"
+seed la_ls   "$LH\tl.s\t\$f0,g_s\n\tla\t\$16,g_s\n\tb\t\$L1\n$LJ$LE"
+seed la_lab  "$LH$LU\tla\t\$16,g_s\n\$L2:\n\tb\t\$L2\n$LE"
+seed la_cmt  "$LH$LU\tla\t\$16,g_s\n\t#nop\n\tb\t\$L1\n$LJ$LE"
+seed la_abs  "$LH$LU\tla\t\$16,g_a\n\tb\t\$L1\n$LJ$LE"
+seed la_lkly "$LH$LU\tla\t\$16,g_s\n\tbeql\t\$2,\$0,\$L1\n\taddu\t\$5,\$5,\$5\n$LJ$LE"
+seed la_nore "$LH$LU\t.set\tnoreorder\n\tla\t\$16,g_s\n\tb\t\$L1\n\tnop\n\t.set\treorder\n$LJ$LE"
+seed la_far  "$LH\tla\t\$16,g_s\n$LU\tb\t\$L1\n$LJ$LE"
+# <seed>:<-G>:<pins>:<the run that must appear>
+for k in "la_b:-G8:1:00641021 27900000 10000001 00000000" \
+         "la_jal:-G8:1:00641021 27840008 0c000000 00000000" \
+         "la_ls:-G8:1:c7800000 27900000 10000001 00000000" \
+         "la_lab:-G8:0:00641021 27900000 1000ffff" \
+         "la_cmt:-G8:0:00641021 10000001 27900000" \
+         "la_abs:-G8:0:00641021 3c100000 26100000 10000001 00000000" \
+         "la_lkly:-G8:0:00641021 27900000 50400002 00000000 00a52821" \
+         "la_nore:-G8:0:00641021 27900000 10000001 00000000" \
+         "la_far:-G8:0:27900000 10000001 00641021" \
+         "la_b:-G0:0:00641021 3c100000 10000001 66100000" \
+         "la_jal:-G0:0:00641021 3c040000 0c000000 64840008"; do
+  sd=${k%%:*}; r=${k#*:}; G=${r%%:*}; r=${r#*:}; np=${r%%:*}; w=${r#*:}
+  run "$sd" "$G"
+  ok=$(accepted); [ "$ok" = 1 ] && ok=$(has "$w")
+  [ "$LALINE" = "asm_unit.sh: la-slot: $np pins" ] || ok=0
+  verdict "LASLOT $sd $G" "$ok" "'asm_unit.sh: la-slot: $np pins', run [$w]"
 done
 
 echo "asm_unit_selftest: $N arms, $F failed ($AU)"
