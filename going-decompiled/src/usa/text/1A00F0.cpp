@@ -19,12 +19,17 @@
  *   - size 9..15 (we use 12): gp-addressable / assembler-absolute (absolute
  *     macro in straight-line code, 1-insn %gp_rel in a branch-delay slot).
  *
- * SAVE-LAYOUT WALL: this TU was built by the later SN cc1 that packs
- * callee-save slots 8-byte; the pinned cc1 reserves 16 bytes per save. Every
- * function that saves two or more GPRs (incl. $ra) is blocked on that wall and
- * stays INCLUDE_ASM (check the prologue: two+ sd of s-regs/$ra at 8-byte
- * spacing). The handwritten VU-chain builders (lqc2/vmul/vadd/sqc2 runs) and
- * the switch / jtbl-reloc-gap functions also stay INCLUDE_ASM.
+ * SAVE LAYOUT: this TU was built by the later SN cc1 that packs callee-save
+ * slots 8-byte; cc1 2.9 reserves 16 bytes per save. That is no longer a wall:
+ * the s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810) packs them the
+ * ROM's way, and multi-save members here are matched on it (rows in
+ * tools/ee/s136os_functions.txt; tree-wide, FACT #9873). Of the 26 plain
+ * INCLUDE_ASM members left (task #2001's census), 23 carry splat's
+ * "Handwritten function" tag, and their 929 tagged instructions are trapping
+ * addi/add/sub/neg plus teq, cache and bc0f, none of which cc1 emits from C;
+ * func_002A1390 is a COP2 body that needs $at and pad nops (NOTE #9693);
+ * UpdateMobyAnimLoopSound is a 2-word near miss (see its comment); and
+ * func_002A7AA8 (470 words) has no C yet.
  *
  * PADDING/FRAGMENT PSEUDO-FUNCTIONS: spimdisasm fused each function's trailing
  * epilogue-pad ("addiu $sp,+N; nop" runs) into the NEXT symbol start; those
@@ -165,7 +170,16 @@ void ResolveMobyAnimFramePtrs(Moby *moby) {
  * set, or +0x7C bit 0x8000 is set. If no slot is active and the sequence is present
  * (+0x6C != 0xFF) and neither stop flag is set, it starts the loop via
  * PlayMobySound(seq, 4, moby) and records the returned slot in +0x6D. Emitter slots
- * live at g_listenerPosHistory + slot*0x70. */
+ * live at g_listenerPosHistory + slot*0x70.
+ *
+ * TODO(match): not closed on the s136os arm after four rounds (tasks #1791,
+ * #1894, #1958, #2001; NOTEs #9699, #9852, #9970 and task #2001's NOTE hold
+ * the bodies and figures). The best body reaches 54 = 54 words with 2
+ * differing: two empty tied fences give the ROM's slot -> $4 -> $5 copy chain,
+ * and the idx fence then takes one of the R5900's two issue slots, so `mult`
+ * and `addiu %lo(g_listenerPosHistory)` come out swapped (0x2A02B4/B8).
+ * Without that fence the copies are propagated (53 words). This #else body
+ * is the native arm, not the near-miss. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", UpdateMobyAnimLoopSound);
 #else
