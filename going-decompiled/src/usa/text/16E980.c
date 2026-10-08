@@ -37,7 +37,7 @@
  * 05_all29_report.txt, 07_all96_report.txt, classes 08/09_classify*.txt). None
  * reached 100 on either arm; sdk29 >= engine96 on 31 of 40, but 32 of those are
  * PACKED-SAVE-walled there. The wall is a property of the 2.9 arm only: the
- * s136os arm (SN 1.36 -fopt-stack) has the ROM's 8-byte slots, and seventeen of
+ * s136os arm (SN 1.36 -fopt-stack) has the ROM's 8-byte slots, and eighteen of
  * these arms are matched there (FACTs #8830, #9658, #9707, #9856, #10000; the
  * s136os re-screen of the remaining arms is NOTE #9857, with func_00270D60 and
  * func_00273D20 taken further in NOTEs #9994 and #9998). Table figures below are the
@@ -896,14 +896,42 @@ void func_0026FF18(s32 frames, s32 mode, f32 fov, f32 stiffness, f32 damping,
 }
 #endif
 
-/* StepCameraFovInterp: camera FOV interpolation state machine (mode at
- * g_cameraState +0x3E8, enable flag +0x3E9). Eases the live FOV (+0x3D8) toward
- * its target by the active easing mode (spring func_002703C0, linear, smooth
- * func_002A8A68), then rebuilds the projection (BuildCameraProjection,
- * g_cameraProjScale = tan(fov*0.5) = sin/cos of the half-angle). WALL: four fp/gpr callee-saves at
- * 8-byte slot spacing (packed-save wall) + branch-likely-driven fp control flow.
- * Left INCLUDE_ASM. */
-#ifdef TARGET_NATIVE
+/* ROM_SPLIT: a section attribute on an extern DECLARATION (RULING #8620,
+ * ADDRESSING-MODEL DEVICE; EE arm only, moves no data, emits nothing). cc1
+ * treats a <= 8-byte extern as small data and reaches it %gp_rel; the
+ * attribute takes it out of that class so cc1 splits the address into
+ * `lui` + `%lo(sym)(reg)` as the ROM does. Used by StepCameraFovInterp. */
+#ifndef TARGET_NATIVE
+#define ROM_SPLIT __attribute__((section(".data")))
+#else
+#define ROM_SPLIT
+#endif
+
+/* StepCameraFovInterp: advance the camera FOV ease by one frame. Runs only
+ * while g_cameraState.fovEnabled (+0x3E9) is 1; fovMode (+0x3E8) picks the
+ * ease: 0 snaps fovLive (+0x3D8) to fovTarget and stops, 3 springs it
+ * (func_002703C0) and stops once the spring velocity is below 1e-4, 1 lerps
+ * from fovFrom toward fovTarget by the remaining timer fraction, 2 eases it
+ * through func_002A8A68; 1 and 2 stop when func_00283328 runs the timer out.
+ * Then g_cameraProjScale = sin(fov/2) / cos(fov/2) and BuildCameraProjection.
+ * No params, no return.
+ * MATCHED on the s136os arm (task #1986). Each item priced by undoing it
+ * ALONE in a solo s136 compile (positional word differences against the
+ * ROM's 99, relocations masked; the full body is 0):
+ *   - the cases are written in the ROM's block order 0, 3, 1, 2: cc1 lays
+ *     the case blocks out in source order (0, 1, 2, 3: 50);
+ *   - g_cameraProjScale is declared ROM_SPLIT (above): without it the store
+ *     is one %gp_rel `swc1` where the ROM has `lui` + `swc1 %lo` (98 words,
+ *     11);
+ *   - the quotient is held in `scale` before the store: stored directly, cc1
+ *     forms the `lui` before the two calls, in a callee-saved register,
+ *     which also swaps $f20/$f21 (10).
+ * GUARD: on EE this C is compiled alone by SN 2.95.3 v1.36 -fopt-stack
+ * (tools/ee/s136os_functions.txt) and spliced over the S136OS_SLOT line by
+ * tools/ee/s136os_splice.sh; native compiles it with ROM_SPLIT empty. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_StepCameraFovInterp)
+S136OS_SLOT(StepCameraFovInterp);
+#else
 extern s32 func_00283328(s16 *timer);
 extern f32 IntToFloat(s32 x);
 extern f32 func_002A8A68(f32 target, f32 from, f32 s);
@@ -913,7 +941,7 @@ extern f32 GetFloatAbs(f32 x);
 extern f32 func_00283B48(f32 x); /* sin */
 extern f32 func_00283B30(f32 x); /* cos */
 extern void BuildCameraProjection(void);
-extern f32 g_cameraProjScale;
+extern f32 g_cameraProjScale ROM_SPLIT;
 void StepCameraFovInterp(void) {
     if (g_cameraState.fovEnabled != 1) {
         return;
@@ -922,6 +950,15 @@ void StepCameraFovInterp(void) {
     case 0: /* snap */
         g_cameraState.fovEnabled = 0;
         g_cameraState.fovLive = g_cameraState.fovTarget;
+        break;
+    case 3: /* critically-damped spring; settle when the velocity dies */
+        g_cameraState.fovLive = func_002703C0(g_cameraState.fovLive,
+            g_cameraState.fovTarget, g_cameraState.fovStiffness,
+            g_cameraState.fovDamping, g_cameraState.fovMaxSpeed,
+            &g_cameraState.fovSpringVel);
+        if (GetFloatAbs(g_cameraState.fovSpringVel) < 1e-4f) {
+            g_cameraState.fovEnabled = 0;
+        }
         break;
     case 1: { /* linear from fovFrom toward fovTarget over the timer */
         f32 s;
@@ -941,26 +978,17 @@ void StepCameraFovInterp(void) {
             g_cameraState.fovTarget, g_cameraState.fovFrom,
             IntToFloat(g_cameraState.fovTimer) * g_cameraState.fovRate);
         break;
-    case 3: /* critically-damped spring; settle when the velocity dies */
-        g_cameraState.fovLive = func_002703C0(g_cameraState.fovLive,
-            g_cameraState.fovTarget, g_cameraState.fovStiffness,
-            g_cameraState.fovDamping, g_cameraState.fovMaxSpeed,
-            &g_cameraState.fovSpringVel);
-        if (GetFloatAbs(g_cameraState.fovSpringVel) < 1e-4f) {
-            g_cameraState.fovEnabled = 0;
-        }
-        break;
     default:
         break;
     }
     {
         f32 half = g_cameraState.fovLive * 0.5f;
-        g_cameraProjScale = func_00283B48(half) / func_00283B30(half); /* tan(fov/2) */
+        f32 scale = func_00283B48(half) / func_00283B30(half); /* tan(fov/2) */
+
+        g_cameraProjScale = scale;
         BuildCameraProjection();
     }
 }
-#else
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", StepCameraFovInterp);
 #endif
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/16E980", func_002701B8);

@@ -40,6 +40,7 @@ usa text/16E980 func_00270E40
 usa text/16E980 ApplyCameraTransition
 usa text/16E980 func_0026FC88
 usa text/16E980 AddScreenSpriteFx
+usa text/16E980 StepCameraFovInterp
 usa text/178E88 func_0027FBA8
 usa text/178E88 DrawDebugString
 usa text/178E88 func_00280250
