@@ -2300,10 +2300,11 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00
 
 /**
  * func_0011EFF0 = EE kernel syscall 0x5A. SCE library syscall stub (see
- * func_0011AA20): load the syscall number into $v1 and trap. Installs a DMA/INTC
- * handler over a buffer; called from func_0011F058 with a 3-word argument
- * (handler addr, buffer, length). Same primitive as func_0011F878. Exact SDK
- * name UNCONFIRMED.
+ * func_0011AA20): load the syscall number into $v1 and trap. func_0011F058
+ * calls it with (dst, src, nbytes) right after its SetSyscall has made 0x5A the
+ * word-copy routine func_0011F000. The call therefore copies a kernel patch,
+ * and is not a DMA/INTC setup (see SyscallPatchEntry). Same primitive as
+ * func_0011F878. Exact SDK name UNCONFIRMED.
  */
 s32 func_0011EFF0(s32 a, s32 b, s32 c) {
 #ifndef TARGET_NATIVE
@@ -2330,7 +2331,9 @@ s32 func_0011F000(s32 *dst, s32 *src, u32 nbytes) {
 /**
  * func_0011F038 = EE kernel syscall 0x5B. SCE library syscall stub (see
  * func_0011AA20): load the syscall number into $v1 and trap; result returned in
- * $v0. Takes one argument in $a0 (a channel id — see func_0011F058). Same
+ * $v0. Takes one argument in $a0, a syscall number from D_00134AD0. By the time
+ * func_0011F058 calls it, 0x5B has been replaced by the kernel patch at
+ * 0x80075000, and the result is installed as that number's handler. Same
  * primitive as func_0011F8C0. Exact SDK name UNCONFIRMED.
  */
 s32 func_0011F038(s32 a) {
@@ -2364,39 +2367,60 @@ void func_0011F048(s32 syscall, s32 handler) {
 #endif
 }
 
-/* A single DMA channel descriptor in the static init table D_00134AD0: a
- * (channel-id, mode) word pair consumed by the syscall stubs. Same layout as the
- * D_00135568 / D_00135CF0 tables used by func_0011F938 / func_0011FAB8. */
-typedef struct DmaChannelInit {
-    s32 channel;
-    s32 mode;
-} DmaChannelInit;
+/* One row of a kernel syscall-patch table: a syscall number and the handler
+ * address to install for it with SetSyscall (0x74). Used by D_00134AD0 (here),
+ * D_00135568 (func_0011F938) and D_00135CF0 (func_0011FAB8). ROM rows:
+ *   D_00134AD0 = {0x5A,0x11F000} {0x5B,0x80075000} {0x54,0x11F4C0} {0x55..0x59,0}
+ *   D_00135568 = {0x5A,0x11F888} {0x5B,0x80074000} {0xFFFFC402,0}
+ *   D_00135CF0 = {0x5A,0x11FA70} {0x5B,0x80076000} {0xFC,0} {0xFE,0} {0xFD,0}
+ *                {0xFF,0} {0x12C,0} {0x8,0}
+ * Row 0's handler is always one of this unit's (dst, src, nbytes) word-copy
+ * routines, and the caller's next call is syscall 0x5A with exactly those
+ * arguments, copying a kernel patch to row 1's 0x8007x000. Row 1 then installs
+ * that patch as syscall 0x5B. Each caller installs a fixed prefix of rows
+ * directly from the table (rows 0..2 here, rows 0..1 in the other two tables).
+ * For every later row it installs whatever syscall 0x5B returns for that
+ * row's number, so those rows' zero handlers are placeholders. Earlier text called this a
+ * "DmaChannelInit" (channel, mode) pair. That was wrong: nothing here touches
+ * the DMAC (FACT #9773, task #1853). Layout unchanged: two s32 words. */
+typedef struct SyscallPatchEntry {
+    s32 syscallNum;
+    s32 handler;
+} SyscallPatchEntry;
 
-extern DmaChannelInit D_00134AD0[8];
+extern SyscallPatchEntry D_00134AD0[8];
 extern u8 D_00134750;
 extern s32 D_00134AC8;
 
 /**
- * func_0011F058: bring up the third DMA-channel group (the one _InitSys finishes
- * with its tail call). Arms channel entry[0] (func_0011F048 = syscall 0x74),
- * installs the 0x80075000 handler over D_00134750 spanning 0x330 bytes
- * (func_0011EFF0 = syscall 0x5A), toggles the interrupt-enable syscall
- * (func_0011AEA0 = 0x64) off then on, arms entries[1] and [2] directly, then for
- * the remaining entries (3..7) queries each channel (func_0011F038 = syscall
- * 0x5B) and re-arms it with the returned value. Finally stores func_0011F038(3)
- * into D_00134AC8. Unlike func_0011F938 / func_0011FAB8 this group has no
- * hardware gate. Exact SDK name UNCONFIRMED.
+ * func_0011F058: apply the third kernel patch (_InitSys finishes with this as its
+ * tail call), driven by the syscall-patch table D_00134AD0.
+ * 1. Install row 0 with SetSyscall (func_0011F048 = 0x74). That makes syscall
+ *    0x5A the word-copy routine func_0011F000.
+ * 2. Copy the 0x330-byte kernel patch at D_00134750 to 0x80075000 through it
+ *    (func_0011EFF0 = syscall 0x5A).
+ * 3. Call FlushCache (func_0011AEA0 = 0x64) with 0 and then 2, so the copied code
+ *    is visible to instruction fetch. The meaning of 0 and 2 is ps2sdk's, which
+ *    is external knowledge.
+ * 4. Install rows 1 and 2 directly. Row 1 makes the patch at 0x80075000 syscall
+ *    0x5B.
+ * 5. For rows 3..7, install the handler that the new syscall 0x5B
+ *    (func_0011F038) returns for that row's number.
+ * 6. Store the 0x5B result for 3 in D_00134AC8.
+ * Unlike func_0011F938 / func_0011FAB8 this patch has no gate.
+ * Exact SDK name UNCONFIRMED.
  */
 void func_0011F058(void) {
     u32 i;
-    func_0011F048(D_00134AD0[0].channel, D_00134AD0[0].mode);
+    func_0011F048(D_00134AD0[0].syscallNum, D_00134AD0[0].handler);
     func_0011EFF0(0x80075000, (s32)&D_00134750, 0x330);
     func_0011AEA0(0);
     func_0011AEA0(2);
-    func_0011F048(D_00134AD0[1].channel, D_00134AD0[1].mode);
-    func_0011F048(D_00134AD0[2].channel, D_00134AD0[2].mode);
+    func_0011F048(D_00134AD0[1].syscallNum, D_00134AD0[1].handler);
+    func_0011F048(D_00134AD0[2].syscallNum, D_00134AD0[2].handler);
     for (i = 3; i < 8; i++) {
-        func_0011F048(D_00134AD0[i].channel, func_0011F038(D_00134AD0[i].channel));
+        func_0011F048(D_00134AD0[i].syscallNum,
+                      func_0011F038(D_00134AD0[i].syscallNum));
     }
     D_00134AC8 = func_0011F038(3);
 }
@@ -2542,20 +2566,29 @@ s32 func_0011F700(s32 a, s32 b, s32 c) {
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F710);
 
-extern s32 D_00134DA8[4]; /* handler table: two {arg0,arg1} pairs */
+extern s32 D_00134DA8[4]; /* two {syscall number, handler} pairs (ROM:
+                           * {0x83, func_0011F6C0} {0x5A, func_0011F688}),
+                           * the same shape as SyscallPatchEntry */
 extern s32 D_00134DA0;    /* cached end-of-walk pointer (func_0011F6C0 side) */
 extern s32 *func_0011F6C0(s32 *first, s32 *last, s32 value);
 
 /**
- * Install the unit's exception/interrupt handlers and walk the two parallel
- * handler regions to their common end.
+ * Locate the kernel's syscall table and cache its base in D_00134DA0.
  *
- * First registers two handlers via func_0011F818 (syscall 0x74) from the table
- * D_00134DA8 (a pair of {arg0,arg1} entries). Then it seeds two cursors with
- * func_0011F700 (syscall 0x83) over the 0x80000000..0x80080000 range, one
- * keyed on func_0011F6C0 and one on func_0011F688, and advances whichever
- * cursor (offset back by its handler's fixed bias, 0x20C / 0x168) is behind
- * until the two biased cursors meet. The meeting point is cached in D_00134DA0.
+ * Steps:
+ * 1. SetSyscall (func_0011F818 = 0x74) installs the two D_00134DA8 rows. The
+ *    linear find func_0011F6C0 becomes syscall 0x83, and the word copy
+ *    func_0011F688 becomes syscall 0x5A.
+ * 2. Syscall 0x83 (func_0011F700) runs the find in kernel mode over
+ *    0x80000000..0x80080000. It searches for the address of each installed
+ *    handler, which gives the table slot holding it.
+ * 3. Each hit minus its slot offset is a candidate table base. The offsets are
+ *    0x20C = 0x83 * 4 and 0x168 = 0x5A * 4.
+ * 4. Whichever candidate is lower is advanced to the next hit until the two
+ *    agree.
+ *
+ * The offsets are in-ROM evidence that 0x74(n, h) writes h into word n of
+ * that table. ps2sdk's name for it, SetSyscall, is external knowledge.
  */
 void func_0011F718(void) {
 #ifdef TARGET_NATIVE
@@ -2604,9 +2637,11 @@ extern void func_0011FAB8(void);
 /**
  * _InitSys: EE crt0 runtime bring-up, called once from _start before main.
  * Runs the unit's init sequence in fixed order — thread/exception scaffolding
- * (func_0011F640), device/handler init (func_0011F718), the GS/DMA reset path
- * (func_0011FAB8), the background worker thread (func_0011B800) and the first
- * DMA-channel group (func_0011F938) — then tail-calls func_0011F058 to finish.
+ * (func_0011F640), locating the kernel syscall table (func_0011F718), the
+ * timer-gated kernel patch (func_0011FAB8), the background worker thread
+ * (func_0011B800) and the OSD-config-gated kernel patch (func_0011F938) —
+ * then tail-calls func_0011F058, the ungated third patch. The three patches are
+ * syscall-patch tables (see SyscallPatchEntry), not DMA-channel setup.
  */
 void _InitSys(void) {
     func_0011F640();
@@ -2645,9 +2680,10 @@ void func_0011F868(s32 syscall, s32 handler) {
 
 /**
  * func_0011F878 = EE kernel syscall 0x5A. SCE library syscall stub (see
- * func_0011AA20): load the syscall number into $v1 and trap. Used during DMA
- * channel setup (see func_0011F938) with a 3-word argument. Exact SDK name
- * UNCONFIRMED.
+ * func_0011AA20): load the syscall number into $v1 and trap. func_0011F938
+ * calls it with (dst, src, nbytes) right after its SetSyscall has made 0x5A the
+ * word-copy routine func_0011F888. The call therefore copies a kernel patch
+ * (see SyscallPatchEntry). Exact SDK name UNCONFIRMED.
  */
 s32 func_0011F878(s32 a, s32 b, s32 c) {
 #ifndef TARGET_NATIVE
@@ -2674,8 +2710,10 @@ s32 func_0011F888(s32 *dst, s32 *src, u32 nbytes) {
 /**
  * func_0011F8C0 = EE kernel syscall 0x5B. SCE library syscall stub (see
  * func_0011AA20): load the syscall number into $v1 and trap; result returned
- * in $v0. Takes one argument in $a0 (a channel id — see func_0011F938).
- * Exact SDK name UNCONFIRMED.
+ * in $v0. Takes one argument in $a0, a syscall number from D_00135568. By the
+ * time func_0011F938 calls it, 0x5B has been replaced by the kernel patch at
+ * 0x80074000, and the result is installed as that number's handler. Exact SDK
+ * name UNCONFIRMED.
  */
 s32 func_0011F8C0(s32 a) {
 #ifndef TARGET_NATIVE
@@ -2685,9 +2723,14 @@ s32 func_0011F8C0(s32 a) {
 }
 
 /**
- * Read a hardware register pair, force its mode field to 0x2000 (clearing the
- * 0x...E000 bits), write it back, then re-read it; returns 1 if the resulting
- * 3-bit field at bits 13..15 is zero, else 0.
+ * Probe whether the kernel keeps bits 13..15 of the OSD config word. Steps:
+ * 1. Read the word (func_0011ACD0 = 0x4B, GetOsdConfigParam).
+ * 2. Write it back with that field set to 1 (func_0011ACC0 = 0x4A,
+ *    SetOsdConfigParam).
+ * 3. Read it again, then restore the original word.
+ * Returns 1 if the field still reads 0, else 0. func_0011F938 applies its
+ * kernel patch only when this returns 1. The 0x4A/0x4B names are external SDK
+ * numbering (task #1848).
  */
 s32 func_0011F8D0(void) {
     s32 regs[2];
@@ -2699,32 +2742,37 @@ s32 func_0011F8D0(void) {
     return (((u32)regs[1] >> 13) & 0x7) < 1;
 }
 
-/* D_00135568 / D_00135CF0 are the (channel-id, mode) init tables for the first
- * two DMA-channel groups; see DmaChannelInit above (defined for func_0011F058). */
-extern DmaChannelInit D_00135568[3];
+/* D_00135568 / D_00135CF0 are the syscall-patch tables for func_0011F938 and
+ * func_0011FAB8; see SyscallPatchEntry above (defined for func_0011F058). */
+extern SyscallPatchEntry D_00135568[3];
 extern u8 D_00134DC0;
 
 /**
- * func_0011F938: bring up the first DMA-channel group. Gated on func_0011F8D0
- * (only runs when the hardware mode field reads back clean). Arms channel
- * entry[0] (func_0011F868 = syscall 0x74), installs the 0x80074000 handler over
- * D_00134DC0 spanning 0x7A8 bytes (func_0011F878 = syscall 0x5A), toggles the
- * interrupt-enable syscall (func_0011AEA0 = 0x64) off then on, arms entry[1],
- * then for the remaining entries (index 2) queries each channel
- * (func_0011F8C0 = syscall 0x5B) and re-arms it with the returned value.
+ * func_0011F938: apply a kernel patch driven by the syscall-patch table
+ * D_00135568. It does nothing unless func_0011F8D0's OSD-config probe returns 1.
+ * 1. Install row 0 with SetSyscall (func_0011F868 = 0x74). That makes syscall
+ *    0x5A the word-copy routine func_0011F888.
+ * 2. Copy the 0x7A8-byte patch at D_00134DC0 to 0x80074000 through it
+ *    (func_0011F878 = 0x5A).
+ * 3. Call FlushCache (func_0011AEA0 = 0x64) with 0 and then 2.
+ * 4. Install row 1, which makes the patch at 0x80074000 syscall 0x5B.
+ * 5. For row 2, install the handler that the new syscall 0x5B
+ *    (func_0011F8C0) returns for that row's number. The ROM number there is
+ *    0xFFFFC402, which is not a positive syscall number. It is passed through
+ *    unchanged.
  * Exact SDK name UNCONFIRMED.
  */
 void func_0011F938(void) {
     u32 i;
     if (func_0011F8D0()) {
-        func_0011F868(D_00135568[0].channel, D_00135568[0].mode);
+        func_0011F868(D_00135568[0].syscallNum, D_00135568[0].handler);
         func_0011F878(0x80074000, (s32)&D_00134DC0, 0x7A8);
         func_0011AEA0(0);
         func_0011AEA0(2);
-        func_0011F868(D_00135568[1].channel, D_00135568[1].mode);
+        func_0011F868(D_00135568[1].syscallNum, D_00135568[1].handler);
         for (i = 2; i < 3; i++) {
-            func_0011F868(D_00135568[i].channel,
-                          func_0011F8C0(D_00135568[i].channel));
+            func_0011F868(D_00135568[i].syscallNum,
+                          func_0011F8C0(D_00135568[i].syscallNum));
         }
     }
 }
@@ -2783,8 +2831,10 @@ void func_0011FA50(s32 syscall, s32 handler) {
 /**
  * func_0011FA60 = EE kernel syscall 0x5A (same primitive as func_0011F878).
  * SCE library syscall stub (see func_0011AA20): load the syscall number into
- * $v1 and trap. Called from the GS/DMA reset path (func_0011FAB8) with a
- * 3-word argument. Exact SDK name UNCONFIRMED.
+ * $v1 and trap. func_0011FAB8 calls it twice with (dst, src, nbytes) right
+ * after its SetSyscall has made 0x5A the word-copy routine func_0011FA70. The
+ * calls therefore copy kernel patch data (see SyscallPatchEntry). Exact SDK
+ * name UNCONFIRMED.
  */
 s32 func_0011FA60(s32 a, s32 b, s32 c) {
 #ifndef TARGET_NATIVE
@@ -2811,9 +2861,10 @@ s32 func_0011FA70(s32 *dst, s32 *src, u32 nbytes) {
 /**
  * func_0011FAA8 = EE kernel syscall 0x5B (same primitive as func_0011F8C0).
  * SCE library syscall stub (see func_0011AA20): load the syscall number into
- * $v1 and trap; result returned in $v0. Takes one argument in $a0 (a channel
- * id). Called in a loop from the GS/DMA reset path (func_0011FAB8). Exact SDK
- * name UNCONFIRMED.
+ * $v1 and trap; result returned in $v0. Takes one argument in $a0, a syscall
+ * number from D_00135CF0. By the time func_0011FAB8's loop calls it, 0x5B has
+ * been replaced by the kernel patch at 0x80076000, and the result is installed
+ * as that number's handler. Exact SDK name UNCONFIRMED.
  */
 s32 func_0011FAA8(s32 a) {
 #ifndef TARGET_NATIVE
@@ -2822,33 +2873,37 @@ s32 func_0011FAA8(s32 a) {
 #endif
 }
 
-extern DmaChannelInit D_00135CF0[8];
+extern SyscallPatchEntry D_00135CF0[8];
 extern u8 D_00135588;
 extern u8 D_00135CC8;
 
 /**
- * func_0011FAB8: bring up the second (8-entry) DMA-channel group, used by the
- * GS/DMA reset path. Skips entirely when timer/DMAC register 0x10001810 has
- * bit 0x100 set (work already in progress). Otherwise arms entry[0]
- * (func_0011FA50 = syscall 0x74), installs two handlers via func_0011FA60
- * (syscall 0x5A) — 0x80076000 over D_00135588 (0x740 bytes) and 0x82000 over
- * D_00135CC8 (0x28 bytes) — toggles the interrupt-enable syscall
- * (func_0011AEA0 = 0x64) off then on, arms entry[1], then for entries 2..7
- * queries each channel (func_0011FAA8 = syscall 0x5B) and re-arms it with the
- * returned value. Exact SDK name UNCONFIRMED.
+ * func_0011FAB8: apply a kernel patch driven by the 8-row syscall-patch table
+ * D_00135CF0. It does nothing if bit 0x100 of the hardware register 0x10001810
+ * is set.
+ * 1. Install row 0 with SetSyscall (func_0011FA50 = 0x74). That makes syscall
+ *    0x5A the word-copy routine func_0011FA70.
+ * 2. Make two copies through it (func_0011FA60 = 0x5A):
+ *    - the 0x740-byte patch at D_00135588 to 0x80076000;
+ *    - the 0x28 bytes at D_00135CC8 to 0x82000.
+ * 3. Call FlushCache (func_0011AEA0 = 0x64) with 0 and then 2.
+ * 4. Install row 1, which makes the patch at 0x80076000 syscall 0x5B.
+ * 5. For rows 2..7, install the handler that the new syscall 0x5B
+ *    (func_0011FAA8) returns for that row's number.
+ * Exact SDK name UNCONFIRMED.
  */
 void func_0011FAB8(void) {
     u32 i;
     if ((*(volatile s32 *)0x10001810 & 0x100) == 0) {
-        func_0011FA50(D_00135CF0[0].channel, D_00135CF0[0].mode);
+        func_0011FA50(D_00135CF0[0].syscallNum, D_00135CF0[0].handler);
         func_0011FA60(0x80076000, (s32)&D_00135588, 0x740);
         func_0011FA60(0x82000, (s32)&D_00135CC8, 0x28);
         func_0011AEA0(0);
         func_0011AEA0(2);
-        func_0011FA50(D_00135CF0[1].channel, D_00135CF0[1].mode);
+        func_0011FA50(D_00135CF0[1].syscallNum, D_00135CF0[1].handler);
         for (i = 2; i < 8; i++) {
-            func_0011FA50(D_00135CF0[i].channel,
-                          func_0011FAA8(D_00135CF0[i].channel));
+            func_0011FA50(D_00135CF0[i].syscallNum,
+                          func_0011FAA8(D_00135CF0[i].syscallNum));
         }
     }
 }
