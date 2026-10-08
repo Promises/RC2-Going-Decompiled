@@ -4603,7 +4603,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033D070);
    is scheduling of the two rounded float arguments plus a nop the toolchain
    inserts after `mfc1` before cvt.w.s's raw `.word` (move_fixup.sed), which the
    ROM does not have. */
-extern s32 func_002801B8(s32 x, s32 y, u32 color, const char *text, s32 flag);
+extern s32 func_002801B8(s32 x, s32 y, u64 color, const char *text, s32 flag); /* DECL-LEVER(#1877): defined s32 colour; u64 kept so this unit's four declarations agree — the other two are load-bearing u64 (func_0033D3C0/func_0033ED18), and mixed u32/u64 block-scope declarations fail the native C compile */
 extern void func_00280C98(void *layout, s32 x, s32 y, s32 a, s32 b, s32 c, s32 d,
                           s32 e, s32 f);
 extern void func_00280B48(void *layout, u32 color, const char *text, s32 flag);
@@ -5559,7 +5559,7 @@ extern u8 D_1A7B9E;
    45/57 insns differ. Residual: UNKNOWN-addiu + movn/movz (first differing insn: 'addiu sp, sp, -0xc0' vs 'addiu sp, sp, -0xa0').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
    not byte-exact, so the arm stays #else. */
-extern s32 func_002801B8(s32 x, s32 y, u32 color, const char *text, s32 flag);
+extern s32 func_002801B8(s32 x, s32 y, u64 color, const char *text, s32 flag); /* DECL-LEVER(#1877): defined s32 colour; u64 kept so this unit's four declarations agree — the other two are load-bearing u64 (func_0033D3C0/func_0033ED18), and mixed u32/u64 block-scope declarations fail the native C compile */
 extern u8 D_1ADDB0[];
 void func_0033E680(void *w) {
     char buf[128];
