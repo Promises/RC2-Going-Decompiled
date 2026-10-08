@@ -3806,7 +3806,52 @@ s32 func_0012EE28(s32 *obj, u32 index, u64 value, s32 a3, s32 a4) {
     return found;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012EF20);
+/* An MPEG-2 pack header as func_0012EF20 records it. */
+typedef struct {
+    u32 scrExtension;          /* 0x0: system_clock_reference_extension (9 bits) */
+    u32 scrBaseLow;            /* 0x4: SCR base bits 31..0 */
+    u32 scrBaseHigh;           /* 0x8: SCR base bit 32 */
+    s32 hasSystemHeader;       /* 0xC: a system header (0x000001BB) follows */
+} MpegPackHeader;
+
+/* Declared without a prototype: the ROM passes the header in $a1 as well,
+ * which func_0012F070's one-parameter definition below does not read. */
+extern s32 func_0012F070();
+
+/**
+ * Parse an MPEG-2 pack header from the bitstream `bs` (func_0012E980 =
+ * get bits, func_0012E9D0 = marker bit): skip the pack start code and the
+ * '01' prefix, read the 33-bit SCR base in its 3/15/15-bit pieces and the
+ * 9-bit SCR extension, skip the mux rate and reserved bits, and consume the
+ * stuffing bytes. If a system header start code (0x000001BB) follows, it is
+ * flagged and skipped by func_0012F070. Always returns 1.
+ */
+s32 func_0012EF20(u64 *bs, MpegPackHeader *hdr) {
+    u32 i = 0;
+    u32 scr32to30, scr29to15, scr14to0, stuffing;
+    func_0012E980(bs, 0x22);                    /* pack start code + '01' */
+    scr32to30 = func_0012E980(bs, 3);
+    func_0012E9D0(bs);
+    scr29to15 = func_0012E980(bs, 15);
+    func_0012E9D0(bs);
+    scr14to0 = func_0012E980(bs, 15);
+    func_0012E9D0(bs);
+    hdr->scrExtension = func_0012E980(bs, 9);
+    func_0012E980(bs, 0x1E);                    /* marker, mux rate, markers, reserved */
+    stuffing = func_0012E980(bs, 3);
+    hdr->scrBaseHigh = (scr32to30 >> 2) & 1;
+    hdr->scrBaseLow = (scr32to30 << 30) | (scr29to15 << 15) | scr14to0;
+    for (i = 0; i < stuffing; i++) {
+        func_0012E980(bs, 8);
+    }
+    if (func_0012E8C8(bs, 32) == 0x1BB) {
+        hdr->hasSystemHeader = 1;
+        func_0012F070(bs, hdr);
+    } else {
+        hdr->hasSystemHeader = 0;
+    }
+    return 1;
+}
 
 /**
  * Skip one tagged record in the bitstream arg0: consume the 0x38-bit and 0x28-
