@@ -7119,46 +7119,60 @@ s32 GuiQuickSelectWheelTick(void *w, s32 flag) {
 }
 #endif
 
-/* func_00341160(self): render the quick-select / weapon-grid screen. No-op unless
- * self[+0xAB8] is set. Any of the four shoulder buttons (g_padButtonsPressed &
- * 0xF000) ticks the shared blend counter (func_002AA3F0(0,0,1,1,1)). Recolours the
- * grid cursor (self+0x214) with a pulsing tint, draws the frame sprites + the five
- * text labels (self+0x828..+0x9E0), hides self+0x880, then (re)builds the two grid
- * descriptors (func_00341548 + func_003413A8) and draws the two arrow sprites
- * (self+0x2A8/+0x2F4) twice — once mirrored (scale negated) and once restored. Then
- * it dispatches each of the 8 weapon-grid cells (descriptor table self+0x370 stride
- * 0x4C, element base self+0x340) and each of the 8 quick-select slots (table
- * self+0x61C stride 0x3C, base self+0x5EC) through the cell object's draw method
- * (obj+0xC, arg = base + obj[+8]). Finally draws the highlight sprite (self+0x5A0,
- * colour 0x80FFDE8D) and blits the cursor glyph (func_0034F028). Faithful
- * TARGET_NATIVE #else (engine 2.96 = no byte-match). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00341160);
+/**
+ * func_00341160: render the quick-select / weapon-grid screen `self`.
+ *
+ * No-op unless self+0xAB8 is set. Any of the four shoulder buttons
+ * (g_padButtonsPressed & 0xF000) ticks the shared blend counter
+ * (func_002AA3F0(0,0,1,1,1)). Recolours the grid cursor (self+0x214) with a pulsing
+ * tint, draws the frame sprites and the five text labels (self+0x828..+0x9E0), hides
+ * self+0x880, rebuilds the two grid descriptors (func_00341548, func_003413A8),
+ * draws the cursor, then the two arrow sprites (self+0x2A8 / +0x2F4) once as-is and
+ * once mirrored (x scale negated, then restored). It dispatches each of the 8
+ * weapon-grid cells (descriptor table self+0x370 stride 0x4C, element base
+ * self+0x340) and each of the 8 quick-select slots (table self+0x61C stride 0x3C,
+ * base self+0x5EC) through the cell object's draw method (obj+0xC, argument
+ * base + obj[+8]). Finally it draws the highlight sprite (self+0x5A0), sets its
+ * colour to 0x80FFDE8D for the next frame, and blits glyph 0x70 at (0xF3, 0x2B)
+ * from the GUI atlas (func_0034F028). No return value.
+ *
+ * Matched byte-exact on the s136os arm (task #1969):
+ * - the four element pointers are assigned after the 0xAB8 early-out (as
+ *   function-scope initialisers they are computed before it and the frame
+ *   changes: 147 words against the ROM's 146);
+ * - the pad mask is read through g_padButtonsPressedSplit, the file-scope
+ *   RULING #8620 addressing device (cc1-split lui/lw pair; 2 words without it);
+ * - each dispatch loop declares elem, desc, n in that order, which gives the
+ *   ROM's $s5/$s0/$s6 and $s0/$s1/$s2 allocation (desc, elem, n: 12 words).
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00341160)
+S136OS_SLOT(func_00341160);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern char *g_guiInstance;
 /* (end of this body's declarations) */
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00341160, unit objdiff): 61.92%,
-   112/167 insns differ. Residual: UNKNOWN-addiu + gp/abs-mixed symbol (first differing insn: 'addiu sp, sp, -0x50' vs 'addiu sp, sp, -0x30').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
 extern void func_0034F028(s32 atlas, s32 x, s32 y, s32 code);
 void func_003413A8(void *self);
 void func_00341548(void *self);
 void func_00341160(void *self) {
     u8 *s = (u8 *)self;
     f32 *sc;
+    GuiElement *cursor, *arrowL, *arrowR, *highlight;
 
     if (*(s32 *)(s + 0xAB8) == 0) {
         return;
     }
 
-    if (g_padButtonsPressed & 0xF000) {
+    if (g_padButtonsPressedSplit & 0xF000) {
         func_002AA3F0(0, 0, 1, 1, 1);
     }
+    cursor = (GuiElement *)(s + 0x214);
+    arrowL = (GuiElement *)(s + 0x2A8);
+    arrowR = (GuiElement *)(s + 0x2F4);
+    highlight = (GuiElement *)(s + 0x5A0);
 
-    *GuiElementGetColor((GuiElement *)(s + 0x214)) =
+    *GuiElementGetColor(cursor) =
         func_002AA3F0(0x60442D00, 0x70FFFEED, 0x14, 1, 0);
     GuiSpriteElementDraw(s);
     GuiSpriteElementDraw(s + 0x4C);
@@ -7173,19 +7187,19 @@ void func_00341160(void *self) {
     func_00341548(self);
     func_003413A8(self);
 
-    GuiSpriteElementDraw(s + 0x214);
-    GuiSpriteElementDraw(s + 0x2A8);
-    GuiSpriteElementDraw(s + 0x2F4);
-    sc = GuiElementGetScaleVec((GuiElement *)(s + 0x2A8)); *sc = -*sc;
-    sc = GuiElementGetScaleVec((GuiElement *)(s + 0x2F4)); *sc = -*sc;
-    GuiSpriteElementDraw(s + 0x2A8);
-    GuiSpriteElementDraw(s + 0x2F4);
-    sc = GuiElementGetScaleVec((GuiElement *)(s + 0x2A8)); *sc = -*sc;
-    sc = GuiElementGetScaleVec((GuiElement *)(s + 0x2F4)); *sc = -*sc;
+    GuiSpriteElementDraw(cursor);
+    GuiSpriteElementDraw(arrowL);
+    GuiSpriteElementDraw(arrowR);
+    sc = GuiElementGetScaleVec(arrowL); *sc = -*sc;
+    sc = GuiElementGetScaleVec(arrowR); *sc = -*sc;
+    GuiSpriteElementDraw(arrowL);
+    GuiSpriteElementDraw(arrowR);
+    sc = GuiElementGetScaleVec(arrowL); *sc = -*sc;
+    sc = GuiElementGetScaleVec(arrowR); *sc = -*sc;
 
-    {
-        u8 *desc = s + 0x370;
+    {                                   /* the 8 weapon-grid cells */
         u8 *elem = s + 0x340;
+        u8 *desc = s + 0x370;
         s32 n = 7;
         do {
             u8 *obj = *(u8 **)desc;
@@ -7195,9 +7209,9 @@ void func_00341160(void *self) {
             elem += 0x4C;
         } while (n > -1);
     }
-    {
-        u8 *desc = s + 0x61C;
+    {                                   /* the 8 quick-select slots */
         u8 *elem = s + 0x5EC;
+        u8 *desc = s + 0x61C;
         s32 n = 7;
         do {
             u8 *obj = *(u8 **)desc;
@@ -7208,8 +7222,8 @@ void func_00341160(void *self) {
         } while (n > -1);
     }
 
-    GuiSpriteElementDraw(s + 0x5A0);
-    *GuiElementGetColor((GuiElement *)(s + 0x5A0)) = (s32)0x80FFDE8D;
+    GuiSpriteElementDraw(highlight);
+    *GuiElementGetColor(highlight) = (s32)0x80FFDE8D;
     func_0034F028((s32)g_guiInstance + 0x36F28, 0xF3, 0x2B, 0x70);
 }
 #endif
