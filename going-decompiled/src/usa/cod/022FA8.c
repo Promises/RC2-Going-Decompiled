@@ -2773,11 +2773,36 @@ void func_0012B198(s32 arg0) {
  * padding. frames[] is the 3x4 table of buffer pointers func_0012FA18 walks:
  * rows at 0x1B8/0x1C8/0x1D8. */
 typedef struct {
-    u8  _pad0[0x80];
+    u8  _pad0[0xC];
+    s32 field0C;               /* 0x00C..0x048: cleared or seeded by func_0012F738 */
+    s32 _pad10;
+    s32 field14;
+    s32 _pad18;
+    void *field1C;             /* 0x01C: D_00130A90, the real entry of func_00130A8C */
+    s32 _pad20;
+    void (*field24)(void *);   /* 0x024: func_00130AA0 */
+    s32 _pad28;
+    s32 field2C;
+    s32 _pad30;
+    s32 field34;
+    s32 _pad38;
+    s32 field3C;
+    s32 _pad40;
+    s32 field44;               /* 0x044: a 0x600-byte block from func_0012FB80 */
+    s32 field48;
+    u8  _pad4C[0x70 - 0x4C];
+    s32 field70;
+    s32 _pad74;
+    s64 field78;
     s32 field80;               /* 0x080: owner field 0x10, after func_0012DAC0 */
     s32 _pad84;
     u64 field88;               /* 0x088: D_00137F38[bits 5..8 of owner field 0x20] */
-    u8  _pad090[0xB0 - 0x90];
+    s32 field90;
+    s32 field94;               /* 0x094..0x09C: -1 after func_0012F738 */
+    s32 field98;
+    s32 field9C;
+    u8  _padA0[0xAC - 0xA0];
+    s32 fieldAC;
     s32 fieldB0;               /* 0x0B0: non-zero picks func_0012E608 over func_0012D808 */
     s32 pictureParams[6];      /* 0x0B4: copied from IpuPictureSize.params */
     s32 fieldCC;               /* 0x0CC: IpuPictureSize.field5C */
@@ -2789,9 +2814,13 @@ typedef struct {
     s32 maxHeight;             /* 0x0E0: tallest picture; 0 = check bufferSize */
     s32 bufferSize;            /* 0x0E4 */
     s32 fieldE8;               /* 0x0E8: cleared by each GOP header */
-    u8  _padEC[0xF8 - 0xEC];
+    s32 _padEC;
+    s64 fieldF0;               /* 0x0F0: -1 after func_0012F738 */
     s32 state;                 /* 0x0F8: 1 is advanced to 2 by func_0012D420 */
-    u8  _padFC[0x118 - 0xFC];
+    s32 fieldFC;
+    s32 field100;
+    s32 field104;
+    u8  _pad108[0x118 - 0x108];
     s32 count;                 /* 0x118 */
     s32 lastDecodeZero;        /* 0x11C: the last VDEC result was 0 */
     s32 pending;               /* 0x120: an unpaired field picture */
@@ -2828,7 +2857,8 @@ typedef struct {
     s32 mbSlot;                /* 0x810: selects a 0x140-byte record (see func_0012BAA0) */
     s32 _pad814;
     s32 lastCmdFlag;           /* 0x818: D_00137F10[opcode] of the last IPU command */
-    u8  _pad81C[0x828 - 0x81C];
+    void *field81C;            /* 0x81C: scratchpad 0x70003600 after func_0012F738 */
+    u8  _pad820[0x828 - 0x820];
     s64 pictureInfo[2];        /* 0x828: the two values callback request 5
                                   returns for each picture */
     s32 bitBuffer;             /* 0x838: the 32 stream bits FDEC last returned */
@@ -4310,7 +4340,116 @@ void func_0012F690(void) {
     func_00130E88();
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012F738);
+struct AllocRegion;
+extern void func_0012FB48(s32 *arg0, s32 arg1, s32 arg2);
+extern s32 func_0012FB80(s32 arg0, struct AllocRegion *region, s32 size, u32 align);
+extern void func_0012FB60(s32 *arg0);
+extern void func_00130118(void *arg0);
+extern void func_0012F9C8(s32 *arg0);
+extern s32 func_0012FA18(s32 *arg0);
+extern void func_00130AA0(void *arg0);
+extern char D_0013BD20[];
+extern u8 D_00130A90[];
+
+/**
+ * Set up the IPU MPEG decoder for the FMV stream object `obj` in the
+ * caller's work area `buf`/`size`: clear the whole area, place the decoder
+ * context at its first word-aligned byte (obj[0x10] points at it) and, when
+ * fewer than 0x10C0 bytes remain, report it (D_0013BD20) and return 0.
+ * Otherwise give the rest above +0x10C0 to the bump allocator at +0x108
+ * (func_0012FB48), reset the stream object's counters and its two pairs of
+ * 64-bit timestamps (-1 = none), clear or seed the decoder's state words,
+ * hook the stream callbacks D_00130A90 / func_00130AA0, take a 0x600-byte
+ * block (func_0012FB80), initialise the IPU (func_00130118) and the stream
+ * object's tables (func_0012F9C8, func_0012FA18), point the 3x3 used slots
+ * of frames[][] at their 0x68-byte buffers, reset the allocator
+ * (func_0012FB60) and point field81C at scratchpad 0x70003600.
+ *
+ * The success path has no `return`: the ROM ends with the scratchpad
+ * address still in $v0 from the field81C store, which is what falling off
+ * the end gives (an explicit `return` of that value makes cc1 form the
+ * constant twice, 12 of 130 words). The only caller, FmvStreamInit,
+ * ignores the result. The two closing zero stores are written 0x84C before
+ * 0x854: in the ROM order cc1 issues them swapped (2 of 130).
+ */
+void *func_0012F738(s32 *obj, u8 *buf, u32 size) {
+    IpuDecoder *dec;
+    u32 left;
+    memset(buf, 0, size);
+    dec = (IpuDecoder *)(((u32)buf + 3) >> 2 << 2);
+    left = size - ((u8 *)dec - buf);
+    if (left < 0x10C0) {
+        func_00130288((s32)dec, D_0013BD20);
+        return 0;
+    }
+    obj[0x10] = (s32)dec;
+    func_0012FB48((s32 *)((u8 *)dec + 0x108), (s32)((u8 *)dec + 0x10C0), left - 0x10C0);
+    obj[0] = 0;
+    obj[1] = 0;
+    obj[2] = 0;
+    *(s64 *)&obj[4] = -1;
+    *(s64 *)&obj[6] = -1;
+    *(s64 *)&obj[8] = 0;
+    *(s64 *)&obj[10] = -1;
+    *(s64 *)&obj[12] = -1;
+    *(s64 *)&obj[14] = 0;
+    dec->pictureParams[0] = 0;
+    dec->pictureParams[1] = 0;
+    dec->pictureParams[2] = 0;
+    dec->pictureParams[3] = 0;
+    dec->pictureParams[4] = 0;
+    dec->pictureParams[5] = 0;
+    dec->fieldCC = 0;
+    dec->fieldD0 = 0;
+    dec->firstPictureStructure = 0;
+    dec->_padD8 = 0;
+    dec->maxWidth = 0;
+    dec->maxHeight = 0;
+    dec->bufferSize = 0;
+    dec->fieldE8 = 0;
+    dec->state = 0;
+    dec->field0C = 0;
+    dec->field14 = 0;
+    dec->field2C = 0;
+    dec->field34 = 0;
+    dec->field3C = 0;
+    dec->fieldF0 = -1;
+    dec->field1C = D_00130A90;
+    dec->field24 = func_00130AA0;
+    dec->field44 = func_0012FB80((s32)dec, (struct AllocRegion *)((u8 *)dec + 0x108), 0x600, 8);
+    dec->field48 = 0;
+    dec->fieldFC = 0;
+    dec->field100 = 0;
+    dec->field104 = 0;
+    dec->field70 = 0;
+    dec->field78 = 0;
+    dec->field80 = -1;
+    dec->field88 = 0;
+    dec->field90 = 0;
+    dec->fieldAC = 0;
+    dec->field94 = -1;
+    dec->field98 = -1;
+    dec->field9C = -1;
+    dec->callbacks = obj;
+    dec->fieldB0 = 1;
+    func_00130118(dec);
+    func_0012F9C8(obj);
+    func_0012FA18(obj);
+    dec->frames[0][0] = (s32)((u8 *)dec + 0x1E8);
+    dec->frames[0][1] = (s32)((u8 *)dec + 0x250);
+    dec->frames[0][3] = (s32)((u8 *)dec + 0x2B8);
+    dec->frames[1][0] = (s32)((u8 *)dec + 0x320);
+    dec->frames[1][1] = (s32)((u8 *)dec + 0x388);
+    dec->frames[1][3] = (s32)((u8 *)dec + 0x3F0);
+    dec->frames[2][0] = (s32)((u8 *)dec + 0x458);
+    dec->frames[2][1] = (s32)((u8 *)dec + 0x4C0);
+    dec->frames[2][3] = (s32)((u8 *)dec + 0x528);
+    func_0012FB60((s32 *)((u8 *)dec + 0x108));
+    dec->lastPicture = -1;
+    dec->gopBasePicture = 0;
+    dec->field81C = (void *)0x70003600;
+    dec->newGop = 0;
+}
 
 /**
  * Stub predicate that always returns 1 (a registered callback whose default
