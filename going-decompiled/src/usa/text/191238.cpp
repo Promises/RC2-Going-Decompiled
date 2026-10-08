@@ -1773,9 +1773,10 @@ void LoadShipDisplayTexture(s32 shipId) {
  * ADDRESSING-MODEL DEVICES for ParseLoadedSegment (RULING #8620; the size-16
  * FACT #8036 equate form of g_sceneArenaCursorAbs above). The ROM reaches five
  * pointer globals with the assembler's absolute macro (`lui $19; lw $19,%lo($19)`
- * for g_pLoadedSegment at 0x293144, `lui $1; sw ...,%lo($1)` for the four
- * stores at 0x29320C..0x293248, `lui $N; lw $N,%lo($N)` for the header
- * reloads), where -G8 would make them gp-relative. Each equate carries the size
+ * for g_pLoadedSegment at 0x293148, `lui $1; sw ...,%lo($1)` for the five
+ * stores at 0x2931E8..0x293238 (header +0, +4, icon map, CLUT and texture
+ * slots), `lui $N; lw $N,%lo($N)` for the header reloads from 0x29327C), where
+ * -G8 would make them gp-relative. Each equate carries the size
  * on a local name, so the relocations still name the real symbols and other
  * readers keep their own access. The unit's `.extern g_pLoadedSegment, 16` and
  * `.extern g_pHudAssetHeader, 16` lines below this function come after its
