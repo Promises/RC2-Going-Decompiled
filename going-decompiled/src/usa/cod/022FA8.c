@@ -974,7 +974,53 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00126470);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", KickGifImageUpload);
+extern char D_0013B4E0[];
+
+/**
+ * libgraph's sceGsExecLoadImage (its timeout message, D_0013B4E0, reads
+ * "sceGsExecLoadImage: DMA Ch.2 does not terminate"): send a 6-quadword
+ * load-image setup packet (the GIF tags and BITBLTBUF/TRXPOS/TRXREG/TRXDIR
+ * that func_00126288 builds) over GIF DMA channel 2 (0x1000A000), then the
+ * image data itself, whose quadword count is the NLOOP field of the image
+ * GIF tag at packet[10]. Addresses in scratchpad (0x70000000) are sent with
+ * the SPR bit (0x80000000), others masked to 28 bits.
+ *
+ * Returns 0, or -1 after printing the message when channel 2 is still busy
+ * after 0x1000000 polls (one count across both waits). Each wait carries its
+ * own `Kprintf; return -1` as in func_00126108; one shared timeout label puts
+ * the merged block at the end, where the ROM has it between the two arms of
+ * the second address test (22/95 words differ).
+ */
+s32 KickGifImageUpload(u64 *packet, void *image) {
+    u32 count = 0;
+    while (*(volatile u32 *)0x1000A000 & 0x100) {
+        if (count++ > 0x1000000) {
+            Kprintf(D_0013B4E0);
+            return -1;
+        }
+    }
+    *(volatile u32 *)0x1000A020 = 6;
+    if (((u32)packet & 0x70000000) == 0x70000000) {
+        *(volatile u32 *)0x1000A010 = ((u32)packet & 0x0FFFFFFF) | 0x80000000;
+    } else {
+        *(volatile u32 *)0x1000A010 = (u32)packet & 0x0FFFFFFF;
+    }
+    *(volatile u32 *)0x1000A000 = 0x101;
+    while (*(volatile u32 *)0x1000A000 & 0x100) {
+        if (count++ > 0x1000000) {
+            Kprintf(D_0013B4E0);
+            return -1;
+        }
+    }
+    *(volatile u32 *)0x1000A020 = (s32)(packet[10] & 0x7FFF);
+    if (((u32)image & 0x70000000) == 0x70000000) {
+        *(volatile u32 *)0x1000A010 = ((u32)image & 0x0FFFFFFF) | 0x80000000;
+    } else {
+        *(volatile u32 *)0x1000A010 = (u32)image & 0x0FFFFFFF;
+    }
+    *(volatile u32 *)0x1000A000 = 0x101;
+    return 0;
+}
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012672C);
 
