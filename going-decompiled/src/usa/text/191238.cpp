@@ -6737,56 +6737,110 @@ void func_00298AA0(void) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00298AA8);
 
+/* ADDRESSING-MODEL DEVICES (RULING #8620 / #9574; the size-12 form of
+ * g_particleTexCountAbs above): func_00298F20 reads and writes the save/load
+ * state word, the flags word beside it and two fields of g_pRainHeightmap
+ * absolutely in straight-line code (`lui` + `lw`/`sw`, or `lui $1` macro
+ * stores) but as one %gp_rel word in a delay slot (`lw $16,0($28)` at
+ * 0x298F70, `sw $2,24($28)` at 0x299000). Size 12 gives exactly that; the
+ * relocations still name g_nSaveLoadStatusCode, g_gameStateFlags and
+ * g_pRainHeightmap + 0x18 / + 0x1C. Emits nothing; top level, EE only. Native
+ * reads the same storage through the arm's own symbols. */
+#ifndef TARGET_NATIVE
+__asm__(".extern g_saveLoadStateAbs, 12\n\tg_saveLoadStateAbs = g_nSaveLoadStatusCode");
+__asm__(".extern g_saveLoadFlagsAbs, 12\n\tg_saveLoadFlagsAbs = g_gameStateFlags");
+__asm__(".extern g_rainTickAbs, 12\n\tg_rainTickAbs = g_pRainHeightmap + 0x18");
+__asm__(".extern g_rainActiveAbs, 12\n\tg_rainActiveAbs = g_pRainHeightmap + 0x1C");
+extern s32 g_saveLoadStateAbs;
+extern s32 g_saveLoadFlagsAbs;
+extern s32 g_rainTickAbs;
+extern s32 g_rainActiveAbs;
+#else
+extern u8 g_pRainHeightmap[];
+extern s32 g_nSaveLoadStatusCode[];        /* [0] = state code, [1] (+0x4) = flags */
+#define g_saveLoadStateAbs (g_nSaveLoadStatusCode[0])
+#define g_saveLoadFlagsAbs (g_nSaveLoadStatusCode[1])
+#define g_rainTickAbs      (*(s32 *)(g_pRainHeightmap + 0x18))
+#define g_rainActiveAbs    (*(s32 *)(g_pRainHeightmap + 0x1C))
+#endif
+
 /**
  * func_00298F20 — save/load status-machine tick.
  *
  * Raises the rain-active flag (g_pRainHeightmap+0x1C) when any area-load field
  * is pending (g_areaTable +0x16C/+0x10 nonzero, or +0x24 positive). Then honours
- * pending save/load transition bits in the status flags word
- * (g_nSaveLoadStatusCode+0x4): bit 0x80 -> enter state 0x15, bit 0x100 -> state
+ * pending save/load transition bits in the flags word beside the state word
+ * (g_gameStateFlags, 0x1A7424): bit 0x80 -> enter state 0x15, bit 0x100 -> state
  * 0x14 (each clearing its bit and setting 0x40). Dispatches the per-state
  * handler from the D_256050 jump table, then bumps the tick counter
  * (g_pRainHeightmap+0x18) — or resets it to 0 if the handler changed the state.
+ *
+ * Byte-exact on the s136os arm (task #1962). The ROM's two saves at 8-byte
+ * stride are what SN 1.36 -fopt-stack emits; the old t496 "PACKED-SAVE" label
+ * described the 2.9 arm. Each lever priced by removing it alone (solo s136
+ * compile, relocated fields masked; N/63 words differ):
+ *  - the area table read through AreaLoadT, so cc1 keeps the table base in $4
+ *    and the field offsets in the loads (0x16C, 0x10, 0x24): byte offsets,
+ *    14/63;
+ *  - the tick is bumped unconditionally and then cleared if the handler
+ *    changed the state (the ROM's `beq` with the bumped store in its slot,
+ *    0x299000): an if/else, 6/63;
+ *  - the state is latched beside the flags read, so its load fills the
+ *    first `beqz` slot (0x298F70): latched at entry, 17/63;
+ *  - the flags are re-read after the 0x80 case: carried in `flags`, 35/63;
+ *  - the four size-12 equates above: plain state word 40/63, plain flags word
+ *    47/63, plain tick 12/63, plain rain-active 7/63; all four at size 16,
+ *    47/63.
  */
-#ifndef TARGET_NATIVE
-/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
- * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 56.30% PACKED-SAVE /
- * engine96 58.75% GPREL-DECL; best arm engine96, first differing insn there: 'addiu sp, sp,
- * -0x10' vs 'addiu sp, sp, -0x20' */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00298F20);
+/* GUARD (task #1962): on EE this C is the image's body, compiled alone by SN
+ * 2.95.3 v1.36 -fopt-stack (tools/ee/s136os_functions.txt) and spliced over the
+ * S136OS_SLOT line by tools/ee/s136os_splice.sh; the 2.9 compile sees only the
+ * slot, so a build that skips the splice loses the function. On native it is
+ * plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00298F20)
+S136OS_SLOT(func_00298F20);
 #else
+/* Prototypes this body needs whose declarations sit in other guarded arms:
+ * the s136os arm compiles this arm alone, so it must see them here. */
 extern u8 g_areaTable[];
-extern u8 g_pRainHeightmap[];
-extern s32 g_nSaveLoadStatusCode[];        /* [0] = state code, [1] (+0x4) = flags */
 extern void (*D_256050[])(void);           /* per-state handler jump table */
+/* The pending area-load fields of g_areaTable this function tests. */
+typedef struct {
+    u8  _pad0[0x10];
+    s32 pendingB;       /* +0x10 */
+    u8  _pad14[0x10];
+    s32 pendingC;       /* +0x24, pending when > 0 */
+    u8  _pad28[0x144];
+    s32 pendingA;       /* +0x16C */
+} AreaLoadT;
 
 void func_00298F20(void) {
-    s32 origState = g_nSaveLoadStatusCode[0];
+    s32 origState;
     s32 flags;
 
-    if (*(s32 *)(g_areaTable + 0x16C) != 0 ||
-        *(s32 *)(g_areaTable + 0x10) != 0 ||
-        *(s32 *)(g_areaTable + 0x24) > 0) {
-        *(s32 *)(g_pRainHeightmap + 0x1C) = 1;
+    if (((AreaLoadT *)g_areaTable)->pendingA != 0 ||
+        ((AreaLoadT *)g_areaTable)->pendingB != 0 ||
+        ((AreaLoadT *)g_areaTable)->pendingC > 0) {
+        g_rainActiveAbs = 1;
     }
 
-    flags = g_nSaveLoadStatusCode[1];
+    flags = g_saveLoadFlagsAbs;
+    origState = g_saveLoadStateAbs;
     if (flags & 0x80) {
-        g_nSaveLoadStatusCode[0] = 0x15;
-        g_nSaveLoadStatusCode[1] = (flags & ~0x80) | 0x40;
-        flags = g_nSaveLoadStatusCode[1];
+        g_saveLoadStateAbs = 0x15;
+        g_saveLoadFlagsAbs = (flags & ~0x80) | 0x40;
     }
+    flags = g_saveLoadFlagsAbs;
     if (flags & 0x100) {
-        g_nSaveLoadStatusCode[0] = 0x14;
-        g_nSaveLoadStatusCode[1] = (flags & ~0x100) | 0x40;
+        g_saveLoadStateAbs = 0x14;
+        g_saveLoadFlagsAbs = (flags & ~0x100) | 0x40;
     }
 
-    D_256050[g_nSaveLoadStatusCode[0]]();
+    D_256050[g_saveLoadStateAbs]();
 
-    if (g_nSaveLoadStatusCode[0] == origState) {
-        *(s32 *)(g_pRainHeightmap + 0x18) += 1;
-    } else {
-        *(s32 *)(g_pRainHeightmap + 0x18) = 0;
+    g_rainTickAbs += 1;
+    if (g_saveLoadStateAbs != origState) {
+        g_rainTickAbs = 0;
     }
 }
 #endif
