@@ -108,13 +108,16 @@ segments:
       # memcmp/memcpy/memset/strcmp (one `ld-r` group: three of them start at
       # 4 mod 8, which SUBALIGN(8) cannot place alone) and strncpy are linked
       # from their verbatim .S in going-decompiled/libc/, assembled by Ps2EeAs.
-      # strlen (0x1157AC, 4 mod 8, right after game code) cannot be placed and
-      # stays INCLUDE_ASM in cod/015610. The old unit keeps its name for the
-      # part after strncpy, so its .s paths and baselines do not move; the head
-      # before memcmp is cod/015180h.
+      # strcpy (0x115690) and strlen (0x1157AC, 4 mod 8) are the same kind of
+      # .S and contiguous, so they are a second `ld-r` group (task #1925); the
+      # ROM's CDCD word at 0x1158F4 after strlen is the .cod FILL before the
+      # 8-aligned cod/015878. The old unit keeps its name for the part after
+      # strncpy, so its .s paths and baselines do not move; the head before
+      # memcmp is cod/015180h.
       - [0x015180, c, cod/015180h] # core.text head (0x115200..0x11533F)
       - [0x0152C0, lib, libgcc, r5900_memcmp_strcmp] # libc.a memcmp.o memcpy.o memset.o strcmp.o .text (0x115340..0x11568F)
-      - [0x015610, c, cod/015610] # core.text: func_00115690, strlen, CD fill, func_001158F8 (0x115690..0x115ABF)
+      - [0x015610, lib, libgcc, r5900_strcpy_strlen] # libc.a strcpy.o strlen.o .text (0x115690..0x1158F3), CDCD fill 0x1158F4
+      - [0x015878, c, cod/015878] # core.text: func_001158F8 (0x1158F8..0x115ABF)
       - [0x015A40, lib, libgcc, strncpy] # libc.a strncpy.o .text (0x115AC0..0x115C8B), its trailing zero word 0x115C8C
       - [0x015C10, c, cod/015180] # core.text: the rest of the old head unit (0x115C90..0x11FC67)
       - [0x01FBE8, lib, libgcc, _divdi3] # libgcc.a _divdi3.o .text (0x11FC68..0x120353), pad 0x120354

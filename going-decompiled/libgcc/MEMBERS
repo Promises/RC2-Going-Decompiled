@@ -26,11 +26,15 @@ w_sqrt  ../libm/newlib/libm/math/w_sqrt.c  -Igoing-decompiled/libm/shim -Igoing-
 # source is assembled whole-file by the held Ps2EeAs (build_libgcc.sh says
 # why). memcmp..strcmp are contiguous at 4-aligned ROM addresses, so they are
 # linked as one `ld-r` group (the remaining columns are its parts, in ROM
-# order); strncpy is linked alone. strlen.S is vendored but has no row: it
-# cannot be placed at its 4 mod 8 address (going-decompiled/libc/PROVENANCE).
+# order); strncpy is linked alone. strcpy (0x115690, 8-aligned) and strlen
+# (0x1157AC, 4 mod 8) are contiguous too, so they are a second group, which is
+# how strlen gets placed (task #1925, going-decompiled/libc/PROVENANCE).
 memcmp  ../libc/newlib/libc/machine/r5900/memcmp.S
 memcpy  ../libc/newlib/libc/machine/r5900/memcpy.S
 memset  ../libc/newlib/libc/machine/r5900/memset.S
 strcmp  ../libc/newlib/libc/machine/r5900/strcmp.S
 r5900_memcmp_strcmp  ld-r  memcmp memcpy memset strcmp
+strcpy  ../libc/newlib/libc/machine/r5900/strcpy.S
+strlen  ../libc/newlib/libc/machine/r5900/strlen.S
+r5900_strcpy_strlen  ld-r  strcpy strlen
 strncpy  ../libc/newlib/libc/machine/r5900/strncpy.S

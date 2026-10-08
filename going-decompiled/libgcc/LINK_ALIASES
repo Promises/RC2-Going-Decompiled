@@ -20,3 +20,7 @@ __errno  func_00115200
 # cod/015180 with the body, which now comes from the library. Row form here
 # is <old name> <library symbol>.
 func_00115AC0  strncpy
+# strlen's old address name (task #1925). The game C in text/188858 and others
+# calls it as func_001157AC; that name was an INCLUDE_ASM_ALIAS in cod/015610,
+# which went away when strlen moved to the r5900_strcpy_strlen group.
+func_001157AC  strlen

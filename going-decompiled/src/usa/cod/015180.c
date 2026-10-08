@@ -32,7 +32,8 @@ extern s32 D_00133E74;
 /* memcmp, memcpy, memset, strcmp and strncpy, which sat between this unit's
  * head (now cod/015180h) and func_00115C90, are linked from newlib's verbatim
  * hand-written R5900 .S (going-decompiled/libc/, task #1884, RULING #9817),
- * and strlen with its neighbours is cod/015610. This unit keeps the name
+ * as are strcpy and strlen (task #1925); func_001158F8 between strlen and
+ * strncpy is cod/015878. This unit keeps the name
  * cod/015180 for the rest (0x115C90..0x11FC67). */
 
 /* func_00115C90: clears D_00133E78, calls func_0011B270(arg1); on failure

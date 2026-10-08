@@ -1,18 +1,13 @@
 #include "common.h"
 
 /*
- * cod/015610 (0x115690..0x115ABF): the old cod/015180 code between strcmp and
- * strncpy, which are linked from newlib's verbatim .S (going-decompiled/libc/,
- * task #1884). strlen is here as INCLUDE_ASM although its verbatim .S also
- * reproduces the ROM: it starts at 4 mod 8 right after func_00115690, and the
- * .cod output section's SUBALIGN(8) cannot place a library member there.
- * strlen.S assembled by Ps2EeAs is byte-identical to this body (FACT #9816).
+ * cod/015878 (0x1158F8..0x115ABF): the old cod/015180 code between strlen and
+ * strncpy. strcpy (0x115690) and strlen (0x1157AC) before it, and strncpy
+ * after it, are linked from newlib's verbatim .S (going-decompiled/libc/,
+ * tasks #1884 and #1925). The ROM word 0x1158F4 between strlen and this unit
+ * is the .cod section's 0xCDCDCDCD FILL, written by the link because this
+ * unit starts 8-aligned; it is no longer an INCLUDE_ASM_FRAGMENT.
  */
-
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015610", func_00115690);
-
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015610", strlen);
-INCLUDE_ASM_ALIAS(func_001157AC, strlen);
 
 /* 0xCDCDCDCD inter-function-fill class. Each of these symbols is one or more
  * leading 0xCDCDCDCD debug-fill words (sometimes with dead stores/nops) emitted
@@ -27,11 +22,10 @@ INCLUDE_ASM_ALIAS(func_001157AC, strlen);
  * func_001253A4) and the body gets its own .s AS LONG AS an INCLUDE_ASM names
  * it: splat writes nonmatchings/<unit>/<fn>.s only for names the .c references
  * (segtypes/common/c.py global_asm_funcs), which is the "coverage hole" an
- * earlier attempt hit. The pad fragments below are INCLUDE_ASM_FRAGMENT.
+ * earlier attempt hit. Other units hold such pads as INCLUDE_ASM_FRAGMENT;
+ * func_001158F8's one-word pad is now the link's FILL (header comment).
  *
  * Still fused: func_0011F364, func_0011FB8C, func_00130A8C — their real bodies
  * are reached only by `j`/data reference, never by `jal`, so they are the
  * j-target class of task #471, not a carve defect of this class. */
-INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015610", func_001158F4);
-
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015610", func_001158F8);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015878", func_001158F8);

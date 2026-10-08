@@ -3,9 +3,9 @@ libc — newlib's hand-written R5900 string/memory routines, linked as library m
 
 Why this directory exists
 -------------------------
-Six functions in the game's SDK code are newlib libc routines that the SDK
+Seven functions in the game's SDK code are newlib libc routines that the SDK
 built from hand-written assembly, not C. Each SDK libc.a object's stabs name
-src/newlib/libc/machine/r5900/<name>.S (FACT #9816). This directory holds those
+src/newlib/libc/machine/r5900/<name>.S (FACT #9816; strcpy, FACT #9902). This directory holds those
 .S files verbatim, and tools/ee/build_libgcc.sh assembles them as library
 members (RULING #9817, under RULING #9783), so the game's units no longer carry
 their bodies as INCLUDE_ASM. They were never C, so this is not decompilation.
@@ -27,12 +27,13 @@ licence of its own. Each file below carries its own notice, quoted next.
   newlib/libc/machine/r5900/memcpy.S        ee/newlib/libc/machine/r5900/memcpy.S        753a52a237c52017688ba5ce9d8f804bb487b95e
   newlib/libc/machine/r5900/memset.S        ee/newlib/libc/machine/r5900/memset.S        50fba67610a277c9fd24d532708c417fba0a73fa
   newlib/libc/machine/r5900/strcmp.S        ee/newlib/libc/machine/r5900/strcmp.S        f72429d18b8bafcb9c21d229c855a5ab5a861cfe
+  newlib/libc/machine/r5900/strcpy.S        ee/newlib/libc/machine/r5900/strcpy.S        524c07548fccfb5b388e9265c343b747a9cdb124
   newlib/libc/machine/r5900/strlen.S        ee/newlib/libc/machine/r5900/strlen.S        5e97b57bed34b5873ef48e7ff6a702c48deb658d
   newlib/libc/machine/r5900/strncpy.S       ee/newlib/libc/machine/r5900/strncpy.S       b3533482268c1b379fd8158cf11fb94f25996adb
 
 Notice
 ------
-All six files carry the same notice block, byte for byte:
+All seven files carry the same notice block, byte for byte:
 
    Copyright (C) 1999 by Cygnus Solutions. All rights reserved.
 
@@ -81,6 +82,11 @@ strncpy is linked alone (0x115AC0..0x115C8F). Its Ps2EeAs .text is one word
 longer than the function: a trailing zero word, which the ROM also holds at
 0x115C8C.
 
-strlen is vendored but NOT linked. It starts at 0x1157AC (4 mod 8) right after
-game code (func_00115690), so it cannot be grouped with a library neighbour, and
-SUBALIGN(8) forbids it alone. It stays INCLUDE_ASM in cod/015610 (task #1884).
+strcpy and strlen are the second group, r5900_strcpy_strlen (0x115690..0x1158F3,
+task #1925). strlen starts at 0x1157AC (4 mod 8), so SUBALIGN(8) forbids it
+alone, but the function before it, func_00115690, is strcpy, which is the same
+kind of verbatim .S (its libc.a stabs name machine/r5900/strcpy.S, FACT #9902)
+and starts 8-aligned. Through EE gas strcpy.S gives the SDK archive's object,
+2 words shorter (its two dli sites). The ROM word after strlen, 0x1158F4, is
+0xCDCDCDCD: the .cod section's FILL, written by the link because the next game
+unit (cod/015878) starts 8-aligned.
