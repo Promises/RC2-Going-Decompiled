@@ -530,3 +530,4 @@ usa text/250080 FmvStreamStartDma
 usa text/250080 FmvDisplayWorkerLoop
 usa text/188858 func_0028EB10
 usa text/188858 func_0028ABC0
+usa text/1A00F0 IncrementBestiaryKillCount

@@ -1750,34 +1750,105 @@ s32 PickLowAmmoWeaponForDrop(s32 arg0, s32 *outSlot) {
 }
 #endif
 
-/* IncrementBestiaryKillCount: record a defeated enemy in the bestiary. Looks up
- * the moby's enemy class id (+0xAA) in g_bestiaryEntryTable (0x40 entries, stride
- * 0x18, each listing up to four class ids at +0x0/+0x2/+0x4/+0x6); if no entry
- * matches, does nothing. On a match, applies the "misc extras" challenge bonus
- * (when g_miscExtras is set, D_1A9E70 == -1, and the D_1A7A3A progress counter is
- * below 0x14): advances D_1A7A3B and, once it reaches half of D_1A7A3A, awards
- * func_0029C488(0xB4) and steps D_1A7A3A. Finally bumps the matched entry's u16[2]
- * defeat counter in g_bestiaryKillCounts (stride 4): killType 0 -> +0x0, killType 1
- * -> +0x2, capped at 0x270F. */
+/* IncrementBestiaryKillCount: record a defeated enemy in the bestiary.
+ *
+ *   moby      the defeated moby; its enemy class id is the s16 at +0xAA
+ *   killType  0 or 1: which of the entry's two u16 defeat counters to bump;
+ *             any other value records nothing
+ *
+ * Scans g_bestiaryEntryTable (0x40 entries, stride 0x18) for the first entry
+ * listing the class id among its four ids; with no match it returns at once.
+ * On a match it first applies the misc-extras challenge bonus: when
+ * g_miscExtras is set, D_1A9E70 is -1 and the D_1A7A3A step is below 0x14, the
+ * D_1A7A3B kill tally is incremented and stored, and once twice the tally
+ * reaches the step it awards func_0029C488(0xB4), clears the tally and bumps
+ * the step. Then the matched entry's counter in g_bestiaryKillCounts
+ * (u16[2] per entry) is incremented while it is below 0x270F, so it
+ * saturates at 9999 (FACT #5514).
+ *
+ * GUARD (task #1894): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. On native it is plain C.
+ *
+ * Devices, each priced by removing it alone (solo s136os compile at the
+ * unit's -G8 -fno-gcse plus -fopt-stack, words compared positionally against
+ * the ROM .s with relocated fields masked, a length shortfall counted as
+ * differing; with every device in place 0 of the 93 words differ):
+ *  - ADDRESSING-MODEL DEVICE (RULING #8620 / FACT #8036 size-16 equates,
+ *    offset 0): the ROM reaches the three -G8-small bytes g_miscExtras,
+ *    D_1A7A3A and D_1A7A3B absolutely -- `lui $2,%hi(g_miscExtras)` at
+ *    0x2A79C4, `lui $1,%hi(D_1A7A3B); sb $2,%lo(D_1A7A3B)($1)` at 0x2A7A08 --
+ *    so they are named through second assembler symbols equated to them and
+ *    sized 16. The relocations still name the real symbols. Removed: 86
+ *    words built, 57 differ.
+ *  - CODEGEN DEVICE (RULING #8404 form, not an asynchronous-object claim):
+ *    the gate reads of g_miscExtras and D_1A7A3A and the tally read of
+ *    D_1A7A3B go through volatile lvalues. cc1 costs the equated loads as one
+ *    gp-relative instruction and moves them into branch delay slots (the
+ *    g_miscExtras load is even copied into the scan loop), where the ROM
+ *    issues each absolute load in place behind a nop slot. Removed alone:
+ *    g_miscExtras 66 words differ; D_1A7A3A 92 words built, 53 differ;
+ *    D_1A7A3B 92 built, 49 differ; all three 92 built, 65 differ.
+ *    The compare and bump reads of D_1A7A3A need none (0 either way).
+ *    Writer census (ROM stores naming each symbol, all USA asm):
+ *    g_miscExtras is stored only by RestorePlayerProgressState; D_1A7A3A and
+ *    D_1A7A3B only by RestorePlayerProgressState and this function.
+ *  - Empty tied fences (RULING #8483): `+r(next) : m(tally)` after the tally
+ *    store keeps the compare chain below the store (ROM 0x2A7A08..0x2A7A18:
+ *    sb, then andi/sll/slt; removed: 3 words differ), and the input-only
+ *    fence on `next` after the compare keeps it live so the compare lands in
+ *    $3 as in the ROM (removed: 6 words differ).
+ * Phrasing, not devices: the per-id inner loop (an unrolled four-way test
+ * gives 88 words, 87 differ) and the counter taken as [found][killType] in
+ * each arm, which keeps the ROM's separate `addiu $2,$2,2` at 0x2A7A74
+ * ([found][1] folds the 2 into %lo: 92 words, 14 differ).
+ */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", IncrementBestiaryKillCount);
+__asm__(".extern g_miscExtrasAbs, 16\n\tg_miscExtrasAbs = g_miscExtras");
+__asm__(".extern D_1A7A3AAbs, 16\n\tD_1A7A3AAbs = D_1A7A3A");
+__asm__(".extern D_1A7A3BAbs, 16\n\tD_1A7A3BAbs = D_1A7A3B");
+extern u8 g_miscExtrasAbs;
+extern u8 D_1A7A3AAbs;
+extern u8 D_1A7A3BAbs;
 #else
-extern u8 g_bestiaryEntryTable[];
-extern u8 g_bestiaryKillCounts[];
 extern u8 g_miscExtras;
+extern u8 D_1A7A3A;
+extern u8 D_1A7A3B;
+#define g_miscExtrasAbs g_miscExtras
+#define D_1A7A3AAbs D_1A7A3A
+#define D_1A7A3BAbs D_1A7A3B
+#endif
+
+typedef struct BestiaryEntry {
+    s16 classIds[4];
+    u8 _rest[0x10];
+} BestiaryEntry;
+extern BestiaryEntry g_bestiaryEntryTable[];
+extern u16 g_bestiaryKillCounts[][2];
 extern s32 D_1A9E70;
-extern u8 D_1A7A3A, D_1A7A3B;
+/* Defined s32 in 198FA0.cpp; the result is unused here and the ROM caller
+ * reuses $v0 straight after the call (0x2A7A2C), so this TU declares it void
+ * as 188858.c does. Declared s32 it moves 4 of 93 words. */
 extern void func_0029C488(s32 arg);
+
+#if !defined(TARGET_NATIVE) && !defined(S136OS_IncrementBestiaryKillCount)
+S136OS_SLOT(IncrementBestiaryKillCount);
+#else
 void IncrementBestiaryKillCount(Moby *moby, s32 killType) {
-    s16 classId = *(s16 *)((char *)moby + 0xAA);
+    s16 classId = *(s16 *)((u8 *)moby + 0xAA);
     s32 found = -1;
-    s32 i;
+    s32 i, j;
+    u16 *counter;
 
     for (i = 0; i < 0x40; i++) {
-        s16 *entry = (s16 *)(g_bestiaryEntryTable + i * 0x18);
-        if (entry[0] == classId || entry[1] == classId ||
-            entry[2] == classId || entry[3] == classId) {
-            found = i;
+        for (j = 0; j < 4; j++) {
+            if (classId == g_bestiaryEntryTable[i].classIds[j]) {
+                found = i;
+                break;
+            }
+        }
+        if (found != -1) {
             break;
         }
     }
@@ -1787,26 +1858,30 @@ void IncrementBestiaryKillCount(Moby *moby, s32 killType) {
     }
 
     /* misc-extras challenge bonus */
-    if (g_miscExtras != 0 && D_1A9E70 == -1 && D_1A7A3A < 0x14) {
-        D_1A7A3B = D_1A7A3B + 1;
-        if (((D_1A7A3B & 0xFF) << 1) >= D_1A7A3A) {
+    if (*(volatile u8 *)&g_miscExtrasAbs != 0 && D_1A9E70 == -1 &&
+        *(volatile u8 *)&D_1A7A3AAbs < 0x14) {
+        s32 next = *(volatile u8 *)&D_1A7A3BAbs + 1;
+        s32 below;
+        D_1A7A3BAbs = next;
+        __asm__("" : "+r"(next) : "m"(D_1A7A3BAbs));
+        below = ((u8)next << 1) < D_1A7A3AAbs;
+        __asm__("" : : "r"(next));
+        if (!below) {
             func_0029C488(0xB4);
-            D_1A7A3B = 0;
-            D_1A7A3A = D_1A7A3A + 1;
+            D_1A7A3BAbs = 0;
+            D_1A7A3AAbs = D_1A7A3AAbs + 1;
         }
     }
 
-    /* bump the per-entry defeat counter (u16[2], capped at 0x270F) */
     if (killType == 0) {
-        u16 *c = (u16 *)(g_bestiaryKillCounts + found * 4);
-        if (*c < 0x270F) {
-            *c = *c + 1;
-        }
+        counter = &g_bestiaryKillCounts[found][killType];
     } else if (killType == 1) {
-        u16 *c = (u16 *)(g_bestiaryKillCounts + found * 4 + 2);
-        if (*c < 0x270F) {
-            *c = *c + 1;
-        }
+        counter = &g_bestiaryKillCounts[found][killType];
+    } else {
+        return;
+    }
+    if (*counter < 0x270F) {
+        *counter = *counter + 1;
     }
 }
 #endif
