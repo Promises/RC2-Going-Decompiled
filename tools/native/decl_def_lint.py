@@ -27,6 +27,14 @@ Each side is reduced to an ABI CLASS per parameter and for the return:
 value), `void`. A row is reported when the classes differ:
   RETURN-UNSET  declared value-returning, defined void: the caller reads
               a return the definition never writes
+  RETURN-DISCARDED  declared void, defined value-returning. ABI-SAFE: the
+              caller never reads the return, so no arm reads garbage (an INFO
+              row before task #1860). It is an error so that a return-type
+              SWEEP is enforceable in both directions: #1847 found that a row
+              retyping a definition could leave `void` declarations of it
+              behind with nothing in the gate able to see them. Pre-existing
+              sites stay silent under --base (base-relative, NEW-only); a
+              deliberate one is annotated DECL-LEVER like any other row
   RETURN-WIDTH  declared a wider int than the definition returns
   RETURN      both value-returning, in different locations (s32 vs s64/f32)
   ORDER       same classes, different order (the f32/pointer permutation)
@@ -97,14 +105,13 @@ BLIND SPOTS (a clean run is not a proof of absence):
   - A row is one declaration SITE compared with the FIRST definition of
     the name (by path); DUPDEF lists names defined twice in a region.
 
-INFO rows (shown with --info, never an error): RETURN-DISCARDED (declared
-void, defined value-returning: the caller never reads it), RETURN-WORD /
+INFO rows (shown with --info, never an error): RETURN-WORD /
 PARAM-WORD (int <-> pointer, or a narrower int: same location on both arms),
 ARITY-EXTRA (trailing arguments the definition never reads), POINTEE, and a
 NOPROTO declaration whose call cannot be mis-promoted.
 
 COST (XPS, clang 23.1.1): ~30 s for the 44 units; --base ~50 s (two trees);
---selftest ~10 s (28 arms, tasks #1425/#1461).
+--selftest ~10 s (32 arms, tasks #1425/#1461/#1860).
 
 UNITS (task #1425). Unit arguments SELECT rows; they never narrow the parse.
 The whole TARGET_NATIVE population is always parsed, and a row is kept when
@@ -435,7 +442,10 @@ def compare(decl, dfn):
     if dr != fr:
         pair = "%s vs %s" % (decl["ret"], dfn["ret"])
         if dr == "void":
-            info.append("RETURN-DISCARDED " + pair)        # caller never reads it
+            # ABI-safe (the caller never reads it), but an error since #1860:
+            # without it a return-type sweep cannot be shown complete in the
+            # void-declaration direction (see RETURN-DISCARDED above)
+            err.append("RETURN-DISCARDED " + pair)
         elif fr == "void":
             err.append("RETURN-UNSET " + pair)             # caller reads garbage
         elif loc_of(dr) != loc_of(fr):
@@ -969,9 +979,18 @@ def selftest():
         ("s7 value-declared, void-defined -> RETURN-UNSET, FAIL",
          "int Sink(int x);\nint f(void) { return Sink(1); }\n", 1,
          [r"^DESIGN-CALL usa Sink .* RETURN-UNSET int vs void"]),
-        ("s8 void-declared, value-defined + int/pointer param: ABI-identical -> PASS (INFO only)",
-         "void Value(void);\nvoid Sink(void *p);\nvoid f(void) { Value(); Sink(0); }\n", 0,
+        ("s8 an int/pointer param: ABI-identical -> PASS (INFO only)",
+         "void Sink(void *p);\nvoid f(void) { Sink(0); }\n", 0,
          [r"^#### decl-def-lint: PASS"], [r"^DESIGN-CALL", r"^FIXABLE"]),
+        # task #1860: before it, s8 also declared `void Value(void)` and
+        # asserted PASS — RETURN-DISCARDED was INFO. s8b is that half, inverted.
+        ("s8b void-declared, value-defined -> RETURN-DISCARDED, FAIL (#1860)",
+         "void Value(void);\nvoid f(void) { Value(); }\n", 1,
+         [r"^DESIGN-CALL usa Value  decl going-decompiled/src/usa/text/use.c:2 .* RETURN-DISCARDED void vs int$"]),
+        ("s8c the same declaration ANNOTATED -> PASS (#1860: DECL-LEVER suppresses the class)",
+         "void Value(void); /* DECL-LEVER(#1860): test */\nvoid f(void) { Value(); }\n", 0,
+         [r"^ANNOTATED   usa Value .* RETURN-DISCARDED void vs int$", r"^#### decl-def-lint: PASS"],
+         [r"^DESIGN-CALL", r"^STALE-LEVER"]),
         ("s9 calls, function-pointer locals and casts are not declarations -> PASS",
          "void Matched(float *dst, float len, const float *src);\n"
          "void f(float *a) { void (*fp)(int) = (void (*)(int))Matched; fp(1); Matched(a, 1.0f, a); }\n",
@@ -1078,6 +1097,22 @@ def selftest():
          "int g(void) { extern int Sink(int); return Sink(2); }\n"
          "int h(void) { extern int Sink(int); return Sink(3); }\n", "kind", False, (),
          [r"^NEW", r"^GONE"]),
+    ]
+    # task #1860, RETURN-DISCARDED under --base: a NEW one fails, and a
+    # pre-existing one present at both base and tip does not (the
+    # base-relativity that lets the class be an error over the tree's
+    # existing sites without an exemption list).
+    vd = "void Value(void);\nvoid f(void) { Value(); }\n"
+    diffs += [
+        ("d9 an agreeing declaration made void (a sweep's missed site, #1847's shape) -> "
+         "NEW RETURN-DISCARDED, FAIL",
+         "int Value(void);\nvoid f(void) { Value(); }\n", vd, "kind", True,
+         [r"^NEW  \+1  usa Value  decl going-decompiled/src/usa/text/use\.c  RETURN-DISCARDED  "
+          r"\[count base 0 -> tip 1: every site is new\]$",
+          r"^  site DESIGN-CALL usa Value  decl going-decompiled/src/usa/text/use\.c:2 .* "
+          r"RETURN-DISCARDED void vs int$"]),
+        ("d10 control: a PRE-EXISTING RETURN-DISCARDED at base and tip -> no NEW, PASS",
+         vd, "/* moved */\n" + vd, "kind", False, (), [r"^NEW", r"^GONE"]),
     ]
     ok = all([_diff_arm(*d) for d in diffs]) and ok
     n = len(arms) + len(diffs)
