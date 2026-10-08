@@ -673,40 +673,69 @@ void func_002A0918(void) {
     }
 }
 
-/* func_002A0958: service the 16 procedural-animation slots. For each slot with an
- * owner moby: release the slot (clear the owner) if the owner is being torn down
- * (+0x20 bit 0x80) or is no longer idle (+0x42 sequence != 0xFF). While idle, hold
- * for +0x31 frames or until the per-slot timer reaches 0x14; once elapsed, if the
- * owner's rest animation descriptor (via +0x24 anim set, indexed by +0x43) matches
- * the idle sequence, kick the blend back toward rest (+0x44 = 1 - +0x4C) and step
- * the animation (UpdateMobyAnimation). Slots with no owner reset their timer. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A0958);
+/* func_002A0958: service the 16 procedural-animation slots, once per frame.
+ *
+ * No params, no return. For each slot i (g_proceduralAnimSlotOwners[i] with its
+ * frame counter g_proceduralAnimSlotTimer[i]):
+ *  - no owner: the timer is cleared;
+ *  - an owner being torn down (+0x20 bit 0x80) or no longer idle (+0x42
+ *    sequence != 0xFF): the slot is released AND its timer cleared;
+ *  - an idle owner still holding (+0x31 != 0) or whose timer is below 0x14
+ *    (a signed compare): the timer is incremented;
+ *  - otherwise, when the rest descriptor (owner +0x24 anim set, entry +0x43 of
+ *    its table at +0x48) has the idle sequence in its +0x13 byte, the blend is
+ *    set back toward rest (+0x44 = 1.0 - +0x4C) and UpdateMobyAnimation steps
+ *    the moby, re-read from the slot.
+ * The timer is left alone on that last path, so the kick repeats every frame
+ * until the owner leaves the idle sequence.
+ *
+ * Earlier C here released a slot without clearing its timer; the ROM falls
+ * through from the release into the clear (0x2A0A24 `sw $0,0($16)`).
+ *
+ * GUARD (task #1894): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. On native it is plain C.
+ *
+ * No device. Phrasing, priced against the ROM .s by a solo s136os compile
+ * (relocated fields masked, a length difference counted as differing): an
+ * int index the loop optimizer replaces by the timer pointer, giving the
+ * ROM's signed `slt` against timer+0x40 (a pointer-driven loop compares
+ * unsigned and adds an entry test: 70 words built, 68 differ); the release
+ * and the no-owner case sharing one timer clear, as nested ifs (separate
+ * `continue` tails: 34 differ); the hold test as `== 0 && >= 0x14` with the
+ * increment in the else, which puts the increment after the kick as in the
+ * ROM (the inverse: 21); and the descriptor entry formed as one pointer
+ * before the +0x48 load (one expression: 5). Each priced by changing it alone.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002A0958)
+S136OS_SLOT(func_002A0958);
 #else
 extern void UpdateMobyAnimation(Moby *moby);
 void func_002A0958(void) {
     s32 i;
+
     for (i = 0; i < 0x10; i++) {
         u8 *owner = (u8 *)g_proceduralAnimSlotOwners[i];
-        u8 *animDesc;
 
-        if (owner == NULL) {
-            g_proceduralAnimSlotTimer[i] = 0;
-            continue;
+        if (owner != NULL) {
+            if ((owner[0x20] & 0x80) || owner[0x42] != 0xFF) {
+                g_proceduralAnimSlotOwners[i] = 0;
+            } else {
+                if (owner[0x31] == 0 && (s32)g_proceduralAnimSlotTimer[i] >= 0x14) {
+                    u8 *entry = *(u8 **)(owner + 0x24) + owner[0x43] * 4;
+                    u8 *restDesc = *(u8 **)(entry + 0x48);
+                    if (restDesc[0x13] == owner[0x42]) {
+                        *(f32 *)(owner + 0x44) = 1.0f - *(f32 *)(owner + 0x4C);
+                        UpdateMobyAnimation((Moby *)g_proceduralAnimSlotOwners[i]);
+                    }
+                } else {
+                    g_proceduralAnimSlotTimer[i]++;
+                }
+                continue;
+            }
         }
-        if ((owner[0x20] & 0x80) || owner[0x42] != 0xFF) {
-            g_proceduralAnimSlotOwners[i] = 0;
-            continue;
-        }
-        if (owner[0x31] != 0 || g_proceduralAnimSlotTimer[i] < 0x14) {
-            g_proceduralAnimSlotTimer[i]++;
-            continue;
-        }
-        animDesc = *(u8 **)(*(u8 **)(owner + 0x24) + owner[0x43] * 4 + 0x48);
-        if (animDesc[0x13] == owner[0x42]) {
-            *(f32 *)(owner + 0x44) = 1.0f - *(f32 *)(owner + 0x4C);
-            UpdateMobyAnimation((Moby *)owner);
-        }
+        g_proceduralAnimSlotTimer[i] = 0;
     }
 }
 #endif

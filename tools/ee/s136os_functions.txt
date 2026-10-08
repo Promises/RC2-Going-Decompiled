@@ -533,3 +533,4 @@ usa text/188858 func_0028ABC0
 usa text/1A00F0 IncrementBestiaryKillCount
 usa text/1A00F0 PickLowAmmoWeaponForDrop
 usa text/1A00F0 func_002A0368
+usa text/1A00F0 func_002A0958
