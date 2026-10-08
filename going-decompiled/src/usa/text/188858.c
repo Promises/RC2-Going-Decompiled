@@ -5418,9 +5418,18 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/188858", func_0
 
 extern s32 GetRandomInt(s32 max);   /* uniform [0, max) */
 
+/* g_gameTimeAbs: an ASSEMBLER alias of g_gameTime (the #8036 construct, as
+ * g_pHudAssetHeaderAbs above and g_gameTimeAbs in text/1EFFC0.cpp). The unit is
+ * -G8, so a plain g_gameTime read is %gp_rel; func_0028E7E8's three ROM reads
+ * are absolute `lui; lw %lo(g_gameTime)`. The `.extern ,16` makes gas expand
+ * this name absolutely; the relocations name g_gameTime itself. EE arm only. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028E7E8);
+__asm__(".extern g_gameTimeAbs, 16\n\tg_gameTimeAbs = g_gameTime");
+extern s32 g_gameTimeAbs;
 #else
+#define g_gameTimeAbs g_gameTime
+#endif
+
 /**
  * Pick the current animation frame for a HUD icon widget and cache it.
  *
@@ -5435,49 +5444,74 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028E7E8);
  * finished, holds baseFrame and reschedules the start time 2*count + rand(30) +
  * 10 ticks ahead. An icon with texId 0xFFFF, or any other mode, yields frame 0.
  * The chosen frame is written back to slot+0x4 and returned.
+ *
+ * MATCHED on the s136os arm (task #1878) at the unit's -O2 default
+ * (S136EXTRA="", RULING #9450). The `%` needs nothing: SN 1.36 emits no
+ * zero-divide check for it, as the ROM's second div has none. Priced by
+ * reverting each alone in the solo s136os harness (words differing / ROM 109):
+ *   - ADDRESSING: g_pHudAssetHeaderAbs[1] and g_gameTimeAbs (assembler
+ *     aliases, no instruction emitted) give the ROM's absolute lui/lw pairs
+ *     (header 9/109, game time 82/109 and 3 words short).
+ *   - the 0xFFFF test wraps the switch, so it shares the final store
+ *     (an early return: 96/109, 3 words long).
+ *   - the reflection `2*count - (frame + 2)` takes `frame + 2` as its own
+ *     statement: as one expression it folds to (2*count-2) - frame, which
+ *     if-converts to movz where the ROM branches (case 2's site: 12/109).
+ *   - case 2 forms `frame` before it loads `count` (count/2*count otherwise
+ *     swap $5/$6: 6/109).
+ *   - the restart is maxLevel*2 + (GetRandomInt(30) + 10), with the sum held
+ *     in a local so cc1 does not reassociate the +10 onto 2*count (2/109).
  */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0028E7E8)
+S136OS_SLOT(func_0028E7E8);
+#else
 s32 func_0028E7E8(void *slot) {
     u8 *w = (u8 *)slot;
-    HudIconSlot *icon = &((HudIconSlot *)g_pHudAssetHeader[1])[*(s16 *)(w + 0x0)];
-    s32 dur;
-    s32 count;
-    s32 phase;
+    HudIconSlot *icon = &((HudIconSlot *)g_pHudAssetHeaderAbs[1])[*(s16 *)(w + 0x0)];
     s32 frame = 0;
+    s32 count;
 
-    if (icon->texId == 0xFFFF) {
-        *(s32 *)(w + 0x4) = 0;
-        return 0;
-    }
-
-    switch (*(u8 *)(w + 0x2)) {
-    case 0: /* static: hold the base frame */
-        frame = icon->baseFrame;
-        break;
-    case 1: /* loop on a fixed cadence */
-        dur = ((u8 *)icon)[0x7];
-        frame = icon->baseFrame + (g_gameTime - *(s32 *)(w + 0xC)) / dur % icon->maxLevel;
-        break;
-    case 2: /* ping-pong: run forward then back */
-        dur = ((u8 *)icon)[0x7];
-        count = icon->maxLevel;
-        phase = (g_gameTime - *(s32 *)(w + 0xC)) / dur % (2 * count - 2);
-        frame = icon->baseFrame + (phase < count ? phase : 2 * count - (phase + 2));
-        break;
-    case 3: /* one-shot ping-pong, then hold + schedule a random restart */
-        if (*(s32 *)(w + 0xC) < g_gameTime) {
-            dur = ((u8 *)icon)[0x7];
+    if (icon->texId != 0xFFFF) {
+        switch (*(u8 *)(w + 0x2)) {
+        case 0: /* static: hold the base frame */
+            frame = icon->baseFrame;
+            break;
+        case 1: /* loop on a fixed cadence */
+            frame = icon->baseFrame
+                  + (g_gameTimeAbs - *(s32 *)(w + 0xC)) / ((u8 *)icon)[0x7] % icon->maxLevel;
+            break;
+        case 2: { /* ping-pong: run forward then back */
+            s32 phase = (g_gameTimeAbs - *(s32 *)(w + 0xC)) / ((u8 *)icon)[0x7];
+            frame = phase % (2 * icon->maxLevel - 2);
             count = icon->maxLevel;
-            phase = (g_gameTime - *(s32 *)(w + 0xC)) / dur;
-            if (phase < 2 * count - 2) {
-                frame = icon->baseFrame + (phase < count ? phase : 2 * count - (phase + 2));
-            } else {
-                frame = icon->baseFrame;
-                *(s32 *)(w + 0xC) = 2 * count + GetRandomInt(0x1E) + 0xA;
+            if (frame >= count) {
+                s32 back = frame + 2;
+                frame = 2 * count - back;
             }
-        } else {
-            frame = *(s32 *)(w + 0x4);
+            frame += icon->baseFrame;
+            break;
         }
-        break;
+        case 3: /* one-shot ping-pong, then hold + schedule a random restart */
+            if (*(s32 *)(w + 0xC) < g_gameTimeAbs) {
+                frame = (g_gameTimeAbs - *(s32 *)(w + 0xC)) / ((u8 *)icon)[0x7];
+                count = icon->maxLevel;
+                if (frame < 2 * count - 2) {
+                    if (frame >= count) {
+                        s32 back = frame + 2;
+                        frame = 2 * count - back;
+                    }
+                    frame += icon->baseFrame;
+                } else {
+                    s32 delay;
+                    frame = icon->baseFrame;
+                    delay = GetRandomInt(0x1E) + 0xA;
+                    *(s32 *)(w + 0xC) = icon->maxLevel * 2 + delay;
+                }
+            } else {
+                frame = *(s32 *)(w + 0x4);
+            }
+            break;
+        }
     }
 
     *(s32 *)(w + 0x4) = frame;
