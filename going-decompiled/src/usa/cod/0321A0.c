@@ -1100,7 +1100,7 @@ void func_00133490(s32 arg0) {
 /* sceCdRead(lbn, sectors, buf, mode) — the direct libcdvd read-start fallback.
  * `mode` is DEREFERENCED (3 bytes: trycount/spindlctrl/datapattern), so the 4th
  * argument must be live in $7 at the call. */
-extern s32 func_001253A8(s32 lbn, s32 sectors, s32 buf, void *mode);
+extern s32 sceCdRead(s32 lbn, s32 sectors, s32 buf, void *mode);
 extern s32 snd_CheckLoadInProgress(s32 noWait);
 extern s32 D_001A7494;                     /* pending-read marker */
 /* D_001A7100 is the 16-byte load-status block the IOP and the EE share by DMA:
@@ -1157,7 +1157,7 @@ s32 CdStartRead(s32 lbn, s32 sectors, s32 buf, void *rmode) {
 
     if (g_sndIopReady == 0) {
         /* IOP driver down -> direct libcdvd. Pass all four through, as the ROM does. */
-        return func_001253A8(lbn, sectors, buf, rmode);
+        return sceCdRead(lbn, sectors, buf, rmode);
     }
     if (snd_CheckLoadInProgress(1) == 1) {
         return 0; /* a load is already in flight */

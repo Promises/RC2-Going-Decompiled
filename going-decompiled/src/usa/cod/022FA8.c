@@ -441,7 +441,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00124630);
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_001246D0);
 
 /* libcdvd's semaphores and busy flag. Written from the RPC end-callback
- * func_00124630 (interrupt context) as well as from sceCdInit, func_001253A8,
+ * func_00124630 (interrupt context) as well as from sceCdInit, sceCdRead,
  * func_00125620, func_00124818 and func_00124780 (ROM writer census), which
  * makes `volatile` a plausible original declaration. Its placement here is a
  * measured codegen device (RULING #8404), not derived from that census:
@@ -481,7 +481,7 @@ void func_00124780(void) {
 extern s32 D_00136394;  /* libcdvd initialised (non-zero once set up) */
 /* libcdvd's pending end-callback state (-1 = none). Stored by func_00124630
  * (the RPC end-callback, interrupt context, which re-reads it right after its
- * own store), func_001253A8, func_00125620 and func_00124818 (ROM writer census
+ * own store), sceCdRead, func_00125620 and func_00124818 (ROM writer census
  * over asm/usa). `volatile` here is a measured codegen device (RULING #8404):
  * without it cc1 sinks the -1 store into the func_0011AC40 call's delay slot,
  * where the ROM stores it before loading the call's argument. */
@@ -709,7 +709,7 @@ typedef struct {
  * flags change asynchronously: its only writer in the ROM is sceCdInit's
  * clear (`sw $0, %lo(D_001363B4)`, census of asm/usa). A volatile load is
  * not copied into a branch delay slot by reorg, which leaves the ROM's
- * `b; nop` before the second test in func_001253A8; plain, cc1 fills that
+ * `b; nop` before the second test in sceCdRead; plain, cc1 fills that
  * slot with the load (2 of 120 words differ). */
 extern volatile s32 D_001363B4;
 extern CdReadRequest D_00136480;
@@ -737,7 +737,7 @@ extern void func_001246D0(void);
  * without it cc1 drops the ROM's `slti` split of the decision tree (76 of
  * 120 words differ).
  */
-s32 func_001253A8(u32 lbn, u32 sectors, void *buf, CdReadMode *mode) {
+s32 sceCdRead(u32 lbn, u32 sectors, void *buf, CdReadMode *mode) {
     CdReadRequest *req = &D_00136480;
     s32 size;
     if (!(D_001363B4 & 1) && func_00124AF0() == 6) {
@@ -2774,7 +2774,7 @@ void func_0012B198(s32 arg0) {
  * rows at 0x1B8/0x1C8/0x1D8. */
 typedef struct {
     u8  _pad0[0xC];
-    s32 field0C;               /* 0x00C..0x048: cleared or seeded by func_0012F738 */
+    s32 field0C;               /* 0x00C..0x048: cleared or seeded by IpuInitDecoder */
     s32 _pad10;
     s32 field14;
     s32 _pad18;
@@ -2798,7 +2798,7 @@ typedef struct {
     s32 _pad84;
     u64 field88;               /* 0x088: D_00137F38[bits 5..8 of owner field 0x20] */
     s32 field90;
-    s32 field94;               /* 0x094..0x09C: -1 after func_0012F738 */
+    s32 field94;               /* 0x094..0x09C: -1 after IpuInitDecoder */
     s32 field98;
     s32 field9C;
     u8  _padA0[0xAC - 0xA0];
@@ -2815,7 +2815,7 @@ typedef struct {
     s32 bufferSize;            /* 0x0E4 */
     s32 fieldE8;               /* 0x0E8: cleared by each GOP header */
     s32 _padEC;
-    s64 fieldF0;               /* 0x0F0: -1 after func_0012F738 */
+    s64 fieldF0;               /* 0x0F0: -1 after IpuInitDecoder */
     s32 state;                 /* 0x0F8: 1 is advanced to 2 by func_0012D420 */
     s32 fieldFC;
     s32 field100;
@@ -2857,7 +2857,7 @@ typedef struct {
     s32 mbSlot;                /* 0x810: selects a 0x140-byte record (see func_0012BAA0) */
     s32 _pad814;
     s32 lastCmdFlag;           /* 0x818: D_00137F10[opcode] of the last IPU command */
-    void *field81C;            /* 0x81C: scratchpad 0x70003600 after func_0012F738 */
+    void *field81C;            /* 0x81C: scratchpad 0x70003600 after IpuInitDecoder */
     u8  _pad820[0x828 - 0x820];
     s64 pictureInfo[2];        /* 0x828: the two values callback request 5
                                   returns for each picture */
@@ -2879,7 +2879,7 @@ extern char D_0013BA98[];
 
 /**
  * Wait for the IPU input DMA to drain and resynchronise the bit position
- * (called before each macroblock by func_0012B8B0). After IpuWaitReady,
+ * (called before each macroblock by IpuDecodeSlice). After IpuWaitReady,
  * while the IPU_FROM DMA (channel 3, QWC 0x1000B020) still has quadwords
  * and IPU_CTRL (0x10002010) shows no error (bit 14), ask callback entry 1
  * for more input whenever the IPU_TO channel (4) is idle (QWC 0, CHCR STR
@@ -2894,7 +2894,7 @@ extern char D_0013BA98[];
  * IPU_BP is read through a volatile pointer BEFORE the plain IPU_TOP read,
  * as in func_0012C508; TOP first leaves 13 of the 127 words different.
  */
-s32 func_0012B1C0(IpuDecoder *dec) {
+s32 IpuWaitBdec(IpuDecoder *dec) {
     s32 ok = 1;
     s32 kick[8];
     s32 req[8];
@@ -3082,7 +3082,7 @@ s32 func_0012B780(IpuDecoder *dec, s32 mbaMax, s32 *mba, s32 *mbaInc, s32 pmv[2]
     return 0;
 }
 
-extern s32 func_0012B1C0(IpuDecoder *dec);
+extern s32 IpuWaitBdec(IpuDecoder *dec);
 extern s32 func_0012BB60(IpuDecoder *dec, s32 *macroblockType, s32 *motionType,
                          s32 *dctType, s32 pmv[2][2][2], s32 mvFieldSel[2][2],
                          s32 dmvector[2]);
@@ -3098,7 +3098,7 @@ s32 func_0012BAA0(IpuDecoder *dec, s32 pmv[2][2][2], s32 *motionType,
  * Decode one slice (mpeg2decode's slice): start it (func_0012B780, whose
  * nonzero result is returned as is), then for each macroblock up to mbaMax
  * clear the current 0x140-byte record's word 0x6CC and resynchronise the
- * IPU (func_0012B1C0, 0 ends the picture with 2). With no increment pending,
+ * IPU (IpuWaitBdec, 0 ends the picture with 2). With no increment pending,
  * a zero 23-bit peek or a bad code ends the slice (3); otherwise decode the
  * next increment (func_0012B568). An address past mbaMax is reported
  * (D_0013BB58) and returns 2. A coded macroblock (increment 1) is decoded by
@@ -3109,7 +3109,7 @@ s32 func_0012BAA0(IpuDecoder *dec, s32 pmv[2][2][2], s32 *motionType,
  *
  * Returns 0 once mbaMax macroblocks are done.
  */
-s32 func_0012B8B0(IpuDecoder *dec, s32 mbaMax) {
+s32 IpuDecodeSlice(IpuDecoder *dec, s32 mbaMax) {
     s32 pmv[2][2][2];
     s32 mvFieldSel[2][2];
     s32 dmvector[2];
@@ -3129,7 +3129,7 @@ s32 func_0012B8B0(IpuDecoder *dec, s32 mbaMax) {
             return 0;
         }
         *(s32 *)((u8 *)dec + dec->mbSlot * 0x140 + 0x6CC) = 0;
-        if (func_0012B1C0(dec) == 0) {
+        if (IpuWaitBdec(dec) == 0) {
             return 2;
         }
         if (mbaInc == 0) {
@@ -4372,7 +4372,7 @@ extern u8 D_00130A90[];
  * ignores the result. The two closing zero stores are written 0x84C before
  * 0x854: in the ROM order cc1 issues them swapped (2 of 130).
  */
-void *func_0012F738(s32 *obj, u8 *buf, u32 size) {
+void *IpuInitDecoder(s32 *obj, u8 *buf, u32 size) {
     IpuDecoder *dec;
     u32 left;
     memset(buf, 0, size);

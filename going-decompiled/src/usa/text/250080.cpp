@@ -234,7 +234,7 @@ extern s32 func_00352638(u8 *obj, u64 a, u64 b, s32 pos, s32 n);
 extern s32 func_003522C0(void *dmaq, ...);  /* FMV DMA-add-queue enqueue (deferred native; ret ignored) */
 extern void ZeroQwords(void *p, s32 n);
 extern s32 func_00133850(s32 a, s32 b, s32 c, s32 d, s32 e, s32 f);
-extern void *func_0012F738(void);
+extern void *IpuInitDecoder(void);
 extern s32 func_0012FA70(u8 *obj, s32 slot, void *cb, s32 arg);
 extern void func_003525D0(FmvStream *s);
 extern s32 FmvBitstreamObjInit(u8 *obj, s32 a, s32 b, s32 c, s32 d, s32 e);
@@ -1236,7 +1236,7 @@ s32 func_003513F0(u8 *block) {
 
 /* func_003513F8(obj, buf, byteLen, flag): kick off a CD sector read for the FMV
  * bitstream. Converts byteLen to 2KB sectors (>>11), issues sceCdRead
- * (func_001253A8) from the object's current LBN cursor (obj+0x4) into buf with a
+ * (sceCdRead) from the object's current LBN cursor (obj+0x4) into buf with a
  * fixed retry mode {trycount=0x64, spindlctrl=1, datapattern=0}. When flag != 0
  * it returns 0 without advancing (query/prime mode); otherwise it advances the
  * LBN cursor by the sector count, waits (sceCdSync, func_00124B88(0)) and returns
@@ -1252,7 +1252,7 @@ s32 func_003513F0(u8 *block) {
 S136OS_SLOT(func_003513F8);
 #else
 /* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 64.74% / engine96 77.79%. Residual: PACKED-SAVE (6 callee saves) + 19 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
-extern s32 func_001253A8(u32 lbn, u32 sectors, void *buf, void *mode); /* sceCdRead */
+extern s32 sceCdRead(u32 lbn, u32 sectors, void *buf, void *mode); /* sceCdRead */
 extern s32 func_00124B88(s32 mode);                                    /* sceCdSync */
 /* MATCHED on the s136os arm (task #1387; screened by task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
  * masked): EXACT 39/39, relocations equal. The
@@ -1267,7 +1267,7 @@ s32 func_003513F8(u8 *obj, void *buf, s32 byteLen, s32 flag) {
     mode[0] = 0x64; /* trycount   */
     mode[1] = 1;    /* spindlctrl */
     mode[2] = 0;    /* datapattern; mode[3] is padding the ROM never writes */
-    func_001253A8(*(s32 *)(obj + 0x4), sectors, buf, mode);
+    sceCdRead(*(s32 *)(obj + 0x4), sectors, buf, mode);
     if (flag == 0) {
         *(s32 *)(obj + 0x4) += sectors; /* advance the LBN cursor */
         func_00124B88(0);
@@ -1991,7 +1991,7 @@ S136OS_SLOT(FmvStreamInit);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
-extern void *func_0012F738(void);
+extern void *IpuInitDecoder(void);
 extern s32 func_0012FA70(u8 *obj, s32 slot, void *cb, s32 arg);
 extern void func_003525D0(FmvStream *s);
 extern s32 FmvBitstreamObjInit(u8 *obj, s32 a, s32 b, s32 c, s32 d, s32 e);
@@ -2003,7 +2003,7 @@ extern s32 func_00352AE0(s32 unused, u8 *obj);
 /* (end of this body's declarations) */
 /* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 94.22% / engine96 85.55%. Residual: PACKED-SAVE (7 callee saves) + 11 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
 /** FmvStreamInit - construct the FMV stream object: reset its message dispatch
- *  table (func_0012F738), register the five stream-event callbacks (frame-drop
+ *  table (IpuInitDecoder), register the five stream-event callbacks (frame-drop
  *  report, two DMA-add-queue pumps, retry, and the cursor snapshot), clear the
  *  playback FSM (func_003525D0), then build the embedded bitstream object at
  *  +0x48 (FmvBitstreamObjInit).
@@ -2021,7 +2021,7 @@ extern s32 func_00352AE0(s32 unused, u8 *obj);
  * splice drops the function. On native it is plain C. */
 s32 FmvStreamInit(FmvStream *obj, u64 p2, u64 p3, s32 p4, s32 p5, s32 p6, s32 p7,
                   s32 p8) {
-    func_0012F738();
+    IpuInitDecoder();
     func_0012FA70((u8 *)obj, 0, (void *)func_00352A20, 0);
     func_0012FA70((u8 *)obj, 1, (void *)func_00352A48, 0);
     func_0012FA70((u8 *)obj, 2, (void *)func_00352A80, 0);
