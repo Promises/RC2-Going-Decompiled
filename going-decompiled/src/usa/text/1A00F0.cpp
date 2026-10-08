@@ -1,4 +1,5 @@
 #include "common.h"
+#include "weapon.h"
 
 /*
  * text/1A00F0 — the ".text tail head" sub-TU (carve-pipeline TIER-1-C,
@@ -1672,81 +1673,132 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A7490);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A75CC);
 
-/* PickLowAmmoWeaponForDrop: choose which owned weapon an ammo pickup should drop
- * for, writing the chosen item slot to *outSlot and returning how many boxes to
- * drop. A weapon is a candidate when it is owned (g_inventoryOwned[i]), has a
- * non-zero ammo capacity (g_weaponTable[g_itemEquippedSlot[i]*0xE0 + 0x8E]) and is
- * not one of the excluded slots. First it counts how many candidates are below
- * capacity (g_weaponAmmo[i] < cap); if any, it picks a random one of those (excl.
- * slots 0x1F/0x3D); otherwise it picks a random valid candidate (excl. slots
- * 0x1F/0x3D/0x2D/0x4D). Returns 2 one time in five, else 1. */
+/* PickLowAmmoWeaponForDrop: choose which owned weapon an ammo pickup drops for.
+ *
+ *   arg0     unused
+ *   outSlot  receives the chosen item id; left untouched when none is picked
+ *   returns  how many ammo boxes to drop: 2 one time in five, else 1
+ *
+ * An item i (0..0x37) is a candidate when it is owned (g_inventoryOwned[i]),
+ * its equipped variant's WeaponDef has a non-zero ammoCapacity (+0x8E) and it
+ * is not an excluded id. The first pass counts the candidates (excluding ids
+ * 0x1F/0x3D/0x2D/0x4D) and how many of them are below capacity
+ * (g_weaponAmmo[i] < ammoCapacity). If any are below capacity it picks a
+ * random one of those (excluding only 0x1F/0x3D); otherwise a random
+ * candidate from the full exclusion list. The 0x3D and 0x4D tests can never
+ * fire, since the scans stop at 0x37; they are in the ROM all the same.
+ *
+ * GUARD (task #1894): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. On native it is plain C.
+ *
+ * Devices, each priced by removing it alone (solo s136os compile at the
+ * unit's -G8 -fno-gcse plus -fopt-stack, words compared positionally against
+ * the ROM .s with relocated fields masked, a length shortfall counted as
+ * differing; with every device in place 0 of the 141 words differ):
+ *  - ADDRESSING-MODEL DEVICE (RULING #8620 / FACT #8036, offset 0): the ROM
+ *    forms g_inventoryOwned's address with the assembler's one-insn `la`
+ *    macro (`lui $13; addiu $13,$13` kept adjacent at 0x2A7738), so cc1 must
+ *    see a small array while gas sizes it 16: g_inventoryOwnedAbs, as
+ *    188858.c spells it. Removed: 70 words differ.
+ *  - Empty tied fence (RULING #8483) on the constant 1 of the final select:
+ *    it lets local-alloc give the select's result $4 and the 1 $3, as the ROM
+ *    does at 0x2A78E4 (`li $3,1; li $4,2; movn $4,$3,$2`). Removed: 4
+ *    words differ (the two constants and the result swap registers).
+ *  - Empty volatile barrier (RULING #8483 rev 2) after the select: the fence
+ *    takes an issue cycle, and without the barrier sched2 hoists the epilogue
+ *    `ld $16` into it, ahead of the movn. Removed: 2 words differ.
+ * Phrasing, not devices: the capacity read through a WeaponDef pointer
+ * (`lhu $2,0x8E($3)` with the record in $3, and the record/slot table bases
+ * in the ROM's register order), and a second index for the two pick scans,
+ * which the ROM keeps in $4 where the counting scan uses $5. Inline
+ * g_weaponTable[...].ammoCapacity reads: 56 words differ; one index shared
+ * by all three scans: 32 differ. Fifteen spellings of the final select
+ * without the fence (ternaries either way round, if/else, a preset result,
+ * the result in lowCount, u8/s16/u32 return types, a register-variable
+ * result) all leave those 4 words; a `register` result is folded away.
+ */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", PickLowAmmoWeaponForDrop);
+__asm__(".extern g_inventoryOwnedAbs, 16\n\tg_inventoryOwnedAbs = g_inventoryOwned");
+extern u8 g_inventoryOwnedAbs[8];
 #else
 extern u8 g_inventoryOwned[];
+#define g_inventoryOwnedAbs g_inventoryOwned
+#endif
 extern u8 g_itemEquippedSlot[];
-extern u8 g_weaponTable[];
+extern WeaponDef g_weaponTable[];
 extern s32 g_weaponAmmo[];
 extern s32 GetRandomInt(s32 n);
+
+#if !defined(TARGET_NATIVE) && !defined(S136OS_PickLowAmmoWeaponForDrop)
+S136OS_SLOT(PickLowAmmoWeaponForDrop);
+#else
 s32 PickLowAmmoWeaponForDrop(s32 arg0, s32 *outSlot) {
     s32 i, lowCount = 0, validCount = 0;
+    s32 roll, one, boxes;
     (void)arg0;
 
-    /* count valid weapons and how many are below ammo capacity */
     for (i = 0; i < 0x38; i++) {
-        u16 cap;
-        if (g_inventoryOwned[i] == 0) {
+        WeaponDef *w;
+        if (g_inventoryOwnedAbs[i] == 0) {
             continue;
         }
-        cap = *(u16 *)&g_weaponTable[g_itemEquippedSlot[i] * 0xE0 + 0x8E];
-        if (cap == 0 || i == 0x1F || i == 0x3D || i == 0x2D || i == 0x4D) {
+        w = &g_weaponTable[g_itemEquippedSlot[i]];
+        if (w->ammoCapacity == 0 || i == 0x1F || i == 0x3D || i == 0x2D || i == 0x4D) {
             continue;
         }
         validCount++;
-        if (g_weaponAmmo[i] < cap) {
-            lowCount++;
-        }
+        lowCount += g_weaponAmmo[i] < w->ammoCapacity;
     }
 
     if (lowCount != 0) {
-        /* pick a random below-capacity weapon (excludes slots 0x1F/0x3D) */
+        /* a random below-capacity weapon */
         s32 pick = GetRandomInt(lowCount);
-        for (i = 0; i < 0x38; i++) {
-            u16 cap;
-            if (g_inventoryOwned[i] == 0) {
+        s32 j;
+        for (j = 0; j < 0x38; j++) {
+            WeaponDef *w;
+            if (g_inventoryOwnedAbs[j] == 0) {
                 continue;
             }
-            cap = *(u16 *)&g_weaponTable[g_itemEquippedSlot[i] * 0xE0 + 0x8E];
-            if (cap == 0 || !(g_weaponAmmo[i] < cap) || i == 0x1F || i == 0x3D) {
+            w = &g_weaponTable[g_itemEquippedSlot[j]];
+            if (w->ammoCapacity == 0 || !(g_weaponAmmo[j] < w->ammoCapacity) ||
+                j == 0x1F || j == 0x3D) {
                 continue;
             }
             if (pick == 0) {
-                *outSlot = i;
+                *outSlot = j;
                 break;
             }
             pick--;
         }
     } else {
-        /* none below capacity: pick a random valid weapon */
+        /* none below capacity: a random valid weapon */
         s32 pick = GetRandomInt(validCount);
-        for (i = 0; i < 0x38; i++) {
-            u16 cap;
-            if (g_inventoryOwned[i] == 0) {
+        s32 j;
+        for (j = 0; j < 0x38; j++) {
+            WeaponDef *w;
+            if (g_inventoryOwnedAbs[j] == 0) {
                 continue;
             }
-            cap = *(u16 *)&g_weaponTable[g_itemEquippedSlot[i] * 0xE0 + 0x8E];
-            if (cap == 0 || i == 0x1F || i == 0x3D || i == 0x2D || i == 0x4D) {
+            w = &g_weaponTable[g_itemEquippedSlot[j]];
+            if (w->ammoCapacity == 0 || j == 0x1F || j == 0x3D || j == 0x2D || j == 0x4D) {
                 continue;
             }
             if (pick == 0) {
-                *outSlot = i;
+                *outSlot = j;
                 break;
             }
             pick--;
         }
     }
 
-    return (GetRandomInt(5) != 0) ? 1 : 2;
+    roll = GetRandomInt(5);
+    one = 1;
+    __asm__("" : "+r"(one));
+    boxes = (roll == 0) ? 2 : one;
+    __asm__ __volatile__("");
+    return boxes;
 }
 #endif
 
