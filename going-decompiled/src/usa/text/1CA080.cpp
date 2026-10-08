@@ -390,8 +390,12 @@ void func_002CA618(u8 *path, s32 *outSeg, f32 *outFrac, Vec4 *outVec, f32 dist,
 #endif
 
 /* func_002CA740: 8 bytes of dead pad (addiu $sp,0x10; nop) carved off the real
- * entry func_002CA748 in task #472. func_002CA748: menu helper using 128-bit
- * sq/lq (vector) loads/stores (the EE quadword ops are not emitted from scalar C). */
+ * entry func_002CA748 in task #472. func_002CA748: path sampler using 128-bit
+ * sq/lq (vector) loads/stores. Those quadword ops ARE emitted from C on the
+ * s136os arm: a Vec4 struct copy gives lq/sq there (task #2036, NOTE #10111).
+ * TODO(match): first body 129 vs 134 words; the first 38 words match, then the
+ * ROM copies each Vec4 path point serially with the +0x10 not folded into the
+ * lq, where cc1 interleaves the two copies and folds it. */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CA740);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CA748);
@@ -974,11 +978,19 @@ s32 func_002CAFD8(void) {
  * INCLUDE_ASM (cc1 jtbl layout not reproduced). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", MenuScreenLoad);
 
-/* menu helper: cc1 2.9 8-byte-packed-save wall (saves 5 GPRs incl $31; later cc1
- * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM.
- * Save stride NOT re-measured for this member on the s136os arm: it has no C arm to compile
- * (NOTE #9871). Of the 111 labeled members that were, 0 reproduce the 16-byte save stride there
- * (FACT #9873), so the stride is not evidence that this member is walled. Residual: UNMEASURED. */
+/* func_002CB560: menu exit. Called by TickFrontEndScreenMachine while the exit
+ * latch (+0x1C) is set; waits until the idle counter (+0x120) reaches 10, then
+ * fences frame DMA, closes the active screen's 14 items, restores the changed
+ * equip-slot sound-bank handles, re-uploads the HUD banks and enters state 5
+ * (countdown 2). Saves 5 GPRs incl $31 at the 8-byte stride, which cc1 2.9
+ * packs 16-byte; that save-slot wall is a cc1 2.9 property only: on the s136os
+ * arm a C body reproduces this prologue, frame and length exactly (111 = 111
+ * words, task #2036). TODO(match), measured task #2036 (solo s136 compile under
+ * the unit's flags; best body, every spelling and its cost in NOTE #10111):
+ * 29/111 positional words. ~21 are ALLOCATION in the slot-handle loop (cc1
+ * ties the bank pointer to its base register where the ROM ties the menu-block
+ * pointer, permuting $2-$7; 14 spellings inert) and 8 are SCHEDULE in the
+ * tail's state/countdown/collision-flag stores (9 spellings inert). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CB560);
 
 /* TickFrontEndScreenIdle: enter/refresh a menu screen's render context. Resets the
