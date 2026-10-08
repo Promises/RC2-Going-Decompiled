@@ -497,3 +497,4 @@ usa text/1823B8 func_00282798
 usa text/188858 InitHudMobyTable
 usa text/188858 BeginSubtitleDisplay
 usa text/188858 UploadTextureToGs
+usa text/188858 func_0028C1E8

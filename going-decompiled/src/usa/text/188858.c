@@ -3951,42 +3951,58 @@ s32 func_0028C180(HudElement *rec, s32 *pA, s32 *pB) {
     return 0;
 }
 
-/* func_0028C1E8(rec, pX, pY, ...): apply a HUD layout record's alignment flags
- * (+0x60) to an (*pX,*pY) coordinate using fractional offset tables
- * (D_255A00/D_255A60) scaled by the record's half-extents (+0x58/+0x5C), via
- * IntToFloat/FloatToInt round-trips.
- *
- * Whether the record's +0x7C show timer is still running selects both the
- * offset table (running -> D_255A00, expired -> D_255A60) and the sign of the
- * table index (idxBase - idxDelta vs idxBase + idxDelta), which is clamped into
- * [0, 0x17]. The +0x60 flags then
- * pick exactly one axis/direction: bit 1/2 nudge Y by the +0x5C extent (biased
- * +52 px) negative/positive; bit 4/8 nudge X by the +0x58 extent (biased +20 px)
- * negative/positive; each nudge = round(table * (extent + bias)). The results
- * are ADDED into *pX / *pY.
- *
- * WALL (matching build): callee-saves incl. $f20 + the FP scaling schedule and
- * the movz/movz index clamp cc1 does not reproduce. Matching arm stays
- * INCLUDE_ASM; #else is the portable body. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028C1E8);
-#else
 extern f32 IntToFloat(s32 v);      /* 0x2846D8 int->float (mtc1;cvt.s.w) */
 extern s32 FloatToInt(f32 x);      /* 0x2846A0 float->int (cvt.w.s;mfc1) */
 extern f32 D_255A00[];             /* fractional-offset table, show timer running (24 entries) */
 extern f32 D_255A60[];             /* fractional-offset table, show timer expired (24 entries) */
-void func_0028C1E8(HudElement *rec, s32 *pX, s32 *pY, s32 idxBase, s32 idxDelta) {
+
+/**
+ * Nudge an (*pX, *pY) screen coordinate by a HUD element's alignment flags.
+ *
+ *   rec       the HudElement; reads its +0x7C show timer, +0x60 alignment
+ *             flags and +0x58/+0x5C half-extents
+ *   pX, pY    the coordinate, adjusted in place (the nudge is ADDED)
+ *   idx       base index into the fractional-offset table
+ *   idxDelta  added to idx while the show timer has expired, subtracted
+ *             while it is still running
+ *
+ * The index is clamped into [0, 0x17] and selects scale from D_255A00 (timer
+ * running) or D_255A60 (expired). The +0x60 flags then pick exactly one
+ * axis/direction: bit 1/2 nudge Y by the +0x5C extent (biased +52 px)
+ * negative/positive; bit 4/8 nudge X by the +0x58 extent (biased +20 px)
+ * negative/positive; each nudge is round(scale * (extent + bias)) via the
+ * IntToFloat/FloatToInt helpers.
+ *
+ * MATCHED byte-exact on the s136os arm at the unit's -O2 default (RULING
+ * #9450; task #1833), with no pin, fence or pad. The index spelling is the
+ * whole lever (solo s136os harness, verify_match_unit words differing / built
+ * length in brackets):
+ *   - idx adjusted in place in each arm of the timer test. Assigned to a fresh
+ *     local, cc1 if-converts the arms into one `movn` and reuses the first
+ *     +0x7C read, where the ROM branches (`b` + subu/addu slots) and re-reads
+ *     it [103 vs 105 words];
+ *   - the clamp applied to idx itself, not to a copy [5/106];
+ *   - the table indexed by idx, not a copy: with one, the upper clamp's movz
+ *     lands in the 0x17 constant's register [3/106].
+ *
+ * GUARD (task #1269): on EE this C is the image's body, compiled alone by SN
+ * 2.95.3 v1.36 -fopt-stack (tools/ee/s136os_functions.txt) and spliced over the
+ * S136OS_SLOT line by tools/ee/s136os_splice.sh. On native it is plain C.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0028C1E8)
+S136OS_SLOT(func_0028C1E8);
+#else
+void func_0028C1E8(HudElement *rec, s32 *pX, s32 *pY, s32 idx, s32 idxDelta) {
     u8 *r = (u8 *)rec;
-    s32 idx;
     f32 scale;
     s32 flags;
     s32 dx = 0;   /* X nudge from the +0x58 half-extent (flags 4/8) */
     s32 dy = 0;   /* Y nudge from the +0x5C half-extent (flags 1/2) */
 
-    if (*(s32 *)(r + 0x7C) != 0) {
-        idx = idxBase - idxDelta;
+    if (*(s32 *)(r + 0x7C) != 0) {   /* show timer still running */
+        idx -= idxDelta;
     } else {
-        idx = idxBase + idxDelta;
+        idx += idxDelta;
     }
     if (idx < 0) {
         idx = 0;
