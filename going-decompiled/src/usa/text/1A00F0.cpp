@@ -1232,68 +1232,99 @@ void func_002A1058(void) {
     ((s32 (*)(void *, void *, s32))CopyQwords)((void *)0x70003A00, &g_proceduralAnimBounds[0x280], 0x3C0);
 }
 
-/* BeginMobyDrawSegment — open the per-frame moby draw segment. Appends the VIF
- * code-ref tag (D_10FFC0 / D_10FFB0), selects VU1 program 6, kicks the VIF0
- * chain (D_100080) and appends the segment's GS reg packet (reg 0x47 = SCISSOR,
- * value 0x5360B). Then it opens the DMA segment: remembers the current
- * g_frameDmaCursor as the open tag, resets the VRAM bump cursor to
- * g_vramDynamicBase, reserves a qword, points the frame-DMA scratch at
- * g_renderTaskWorkBuf-0x10000, seeds the VU-chain cursor from g_renderTaskList,
- * and clears g_deferredSegment2Tag. The matching build keeps the asm; this is
- * the faithful TARGET_NATIVE coverage arm. Task #759 closed all but one
- * residual in an EE arm: the prologue issues `lui a0` before `lhu a1`, where
- * the ROM has them the other way round. The C, its .externs and the variants
- * tried are in FACT #8055. */
-#ifdef TARGET_NATIVE
-extern u16   D_10FFB0;                  /* VIF code-ref tag qword count         */
-extern u8    D_10FFC0[];                /* VIF code-ref tag template            */
-extern u8    D_100080[];                /* VIF0 kick chain                      */
-extern s32   g_activeVu1Program;        /* 0x1B161C uploaded VU1 microcode id   */
-extern void *g_vramDynamicBase;         /* 0x1A72D4 VRAM dynamic region base    */
-extern void *g_mobyVuChainCursor;       /* 0x1B1AD8 moby VU/DMA chain cursor    */
-extern void  AppendVifCodeRefTag(void *code, u32 count);
-extern void  KickVif0Chain(void *chain);
-/* GS A+D reg-write: the DATA is a 64-bit register value. Widen it to u64 for the
- * native/#else build (prevents silent truncation of bits >=32); matching-build
- * decl kept verbatim (byte-neutral). */
-#ifdef TARGET_NATIVE
-extern void  AppendGsRegPacket(s32 reg, u64 data);
+/* BeginMobyDrawSegment — open the per-frame moby draw segment.
+ *
+ * No params, no return. Appends the VIF code-ref tag (D_10FFC0, D_10FFB0
+ * qwords), selects VU1 program 6, kicks the VIF0 chain (D_100080) and appends
+ * the segment's GS reg packet (reg 0x47 = SCISSOR, value 0x5360B). Then it
+ * opens the DMA segment: remembers the current g_frameDmaCursor as the open
+ * tag, resets the VRAM bump cursor to g_vramDynamicBase, reserves a qword,
+ * points the frame-DMA scratch word (g_frameDmaCursor+4) at
+ * g_renderTaskWorkBuf - 0x10000, seeds the VU-chain cursor from
+ * g_renderTaskList, and clears g_deferredSegment2Tag.
+ *
+ * GUARD (task #1958): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. On native it is plain C.
+ *
+ * Each device and phrasing priced by removing it alone (solo s136os compile at
+ * the unit's -G8 -fno-gcse plus -fopt-stack, words compared positionally
+ * against the ROM .s with relocated fields masked, a length shortfall counted
+ * as differing; with everything in place 0 of the 43 words differ):
+ *  - ADDRESSING-MODEL DEVICES (RULING #8620; FACT #8036's size-16 equate
+ *    form, offset 0, as g_mobySegmentOpenTagAbs above): the ROM reaches
+ *    g_activeVu1Program (0x2A10AC `lui $1,%hi(g_activeVu1Program)`),
+ *    g_vramDynamicBase (0x2A10E0), g_vramAllocCursor (0x2A1104) and
+ *    g_renderTaskWorkBuf (0x2A10D8) absolutely while each is -G8 small, so
+ *    those references name second assembler symbols equated to them and
+ *    sized 16; the relocations still name the real symbols. Removed alone:
+ *    g_activeVu1Program 42 words built, 34 differ; g_vramDynamicBase 42/21;
+ *    g_vramAllocCursor 42/12; g_renderTaskWorkBuf 42/23. The open tag and
+ *    g_deferredSegment2Tag use the unit's existing equates
+ *    (g_mobySegmentOpenTagAbs, g_deferredSegment2TagAbs16; plain symbols:
+ *    42/19 and 42/4).
+ *  - Empty tied volatile fence (RULING #8483) on the GS data: it keeps
+ *    `li $5,0x5360B` ahead of the `0x47` argument, which lands in the jal
+ *    delay slot (0x2A10C8) as in the ROM. Removed, or non-volatile: 2 words
+ *    differ (the `ori` and `addiu $4,0x47` swap places).
+ * Phrasing, not devices (FACT #8055's shape): D_10FFB0 as an incomplete u16
+ * array, so it is not -G8 small and loads with `lui; lhu %lo` (a scalar u16:
+ * 42 built, 43 differ); the frame cursor read once into a local and advanced
+ * in place, so its `addiu $2,$2,0x10` reuses the load and the open-tag store
+ * issues early (writing g_frameDmaCursor directly: 17 differ); and the VRAM
+ * base read into a local before the open-tag store (4 differ). */
+#ifndef TARGET_NATIVE
+__asm__(".extern g_activeVu1ProgramAbs, 16\n\tg_activeVu1ProgramAbs = g_activeVu1Program");
+__asm__(".extern g_vramDynamicBaseAbs, 16\n\tg_vramDynamicBaseAbs = g_vramDynamicBase");
+__asm__(".extern g_vramAllocCursorAbs, 16\n\tg_vramAllocCursorAbs = g_vramAllocCursor");
+__asm__(".extern g_renderTaskWorkBufAbs, 16\n\tg_renderTaskWorkBufAbs = g_renderTaskWorkBuf");
+extern s32 g_activeVu1ProgramAbs;
+extern void *g_vramDynamicBaseAbs;
+extern void *g_vramAllocCursorAbs;
+extern void *g_renderTaskWorkBufAbs;
 #else
-extern void  AppendGsRegPacket(s32 reg, u32 data);
-#endif
+extern s32 g_activeVu1Program;           /* 0x1B161C uploaded VU1 microcode id   */
+extern void *g_vramDynamicBase;          /* 0x1A72D4 VRAM dynamic region base    */
+#define g_activeVu1ProgramAbs g_activeVu1Program
+#define g_vramDynamicBaseAbs g_vramDynamicBase
+#define g_vramAllocCursorAbs g_vramAllocCursor
+#define g_renderTaskWorkBufAbs g_renderTaskWorkBuf
 #endif
 
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", BeginMobyDrawSegment);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_BeginMobyDrawSegment)
+S136OS_SLOT(BeginMobyDrawSegment);
 #else
-/* Declarations this body needs whose only other declarations sit in other
- * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern void AppendGsRegPacket(s32 reg, u64 data);
 extern void AppendVifCodeRefTag(void *code, u32 count);
 extern void KickVif0Chain(void *chain);
-extern u8 D_100080[];
-extern u16 D_10FFB0;
-extern u8 D_10FFC0[];
-extern s32 g_activeVu1Program;
-extern s32 g_deferredSegment2Tag;
+extern u8 D_100080[];                    /* VIF0 kick chain                      */
+extern u16 D_10FFB0[];                   /* VIF code-ref tag qword count         */
+extern u8 D_10FFC0[];                    /* VIF code-ref tag template            */
 extern u32 *g_frameDmaCursor;
-extern u32 *g_mobySegmentOpenTag;
 extern void *g_mobyVuChainCursor;
-extern void *g_vramAllocCursor;
-extern void *g_vramDynamicBase;
-/* (end of this body's declarations) */
 void BeginMobyDrawSegment(void) {
-    AppendVifCodeRefTag(D_10FFC0, D_10FFB0);
-    g_activeVu1Program = 6;
-    KickVif0Chain(D_100080);
-    AppendGsRegPacket(0x47, 0x5360B);
+    u32 *cursor;
+    void *vramBase;
 
-    g_mobySegmentOpenTag = g_frameDmaCursor;
-    g_vramAllocCursor = g_vramDynamicBase;
-    g_frameDmaCursor = (u32 *)((u8 *)g_frameDmaCursor + 0x10);
-    ((u32 *)&g_frameDmaCursor)[1] = (u32)((u8 *)g_renderTaskWorkBuf - 0x10000);
+    AppendVifCodeRefTag(D_10FFC0, D_10FFB0[0]);
+    g_activeVu1ProgramAbs = 6;
+    KickVif0Chain(D_100080);
+    {
+        u64 scissor = 0x5360B;
+        __asm__ __volatile__("" : "+r"(scissor));
+        AppendGsRegPacket(0x47, scissor);
+    }
+
+    cursor = g_frameDmaCursor;
+    vramBase = g_vramDynamicBaseAbs;
+    g_mobySegmentOpenTagAbs = cursor;
+    g_vramAllocCursorAbs = vramBase;
+    cursor += 4;
+    g_frameDmaCursor = cursor;
+    ((u32 *)&g_frameDmaCursor)[1] = (u32)((u8 *)g_renderTaskWorkBufAbs - 0x10000);
     g_mobyVuChainCursor = g_renderTaskList;
-    g_deferredSegment2Tag = 0;
+    g_deferredSegment2TagAbs16 = 0;
 }
 #endif
 
