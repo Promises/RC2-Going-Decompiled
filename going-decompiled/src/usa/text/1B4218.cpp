@@ -2988,7 +2988,7 @@ void UpdateActiveMobys(void) {
 }
 #endif
 
-extern void sceSifCallRpc(s32 a, s32 b, s32 c, s32 d, s32 e, s32 f, s32 g, s32 h, s32 i);
+extern s32 sceSifCallRpc(s32 a, s32 b, s32 c, s32 d, s32 e, s32 f, s32 g, s32 h, s32 i); /* s32: the definition's type (cod/015180) */
 extern s32  func_00133250(s32 a, s32 b, s32 c, s32 d);
 extern u8 D_001A7210[];                     /* dialog sound-channel config block */
 
