@@ -236,7 +236,7 @@
 #            no emission is not a different emission (FACT #8645).
 #            The Ps2EeAs arm is the point:
 #            the host-only checks PASS a ROM-true row Ps2EeAs does not emit
-#            (func_002E5074@0x2E50E4, #1105), which --selftest arm (22) seeds.
+#            (#1105's site at 0x2E50E4, in func_002E5074 when filed), which --selftest arm (22) seeds.
 #            ⚠️ The checker reaches Ps2EeAs through tools/ee/vm.sh, which is
 #            hardcoded to colima-ee-x86 (VM a) — this row runs on VM a whatever
 #            EE_DOCKER_CONTEXT says, and prints so. The assembly source goes
@@ -1764,12 +1764,33 @@ SEED
 # units and real ROM words:
 #   (a) a unit's case line deleted from a copy of unit_flags.sh, so it falls
 #       back to -G0 — exactly how 1FCF48 sat before #889. USA seeds text/1FCF48
-#       and must name its two compiled gp-word functions (func_002FD020,
-#       ResetFrameArenas: the #889 known answer); EU seeds the first -G8 unit
-#       with its own case line whose seeded scan names a MISMATCH in it.
+#       and must name exactly its compiled gp-word functions, the list
+#       gmodel_compiled_gp_fns derives from the REAL tree (task #1843: a literal
+#       here went stale when #1789 promoted one, FACT #9763); EU seeds the first
+#       -G8 unit with its own case line whose seeded scan names a MISMATCH in it.
 #   (b) the first LATENT member's INCLUDE_ASM line deleted from a scratch copy
 #       of its .c (a promotion at -G0) -> MISMATCH naming it.
 # Then the real tree must pass.
+#
+# gmodel_compiled_gp_fns REGION UNIT — (a)'s expected answer, read from the
+# REAL tree and never from the seeded scan under test (that would make the
+# comparison $got = $got, which cannot fail): each <fn>.s of UNIT whose ROM
+# words splat annotates %gp_rel, less those the unit's source still names in an
+# INCLUDE_ASM line (gmodel_scan.sh's own "compiled from C" predicate). The real
+# scan cannot supply it: at the unit's real -G it prints only the UNIT total.
+# %gp_rel is a different gp detector from gmodel_scan's word decode, so the
+# arm holds its line count to that total before trusting the names. Sorted and
+# space-terminated, the form $got takes.
+gmodel_compiled_gp_fns() {
+  local src s fn
+  src=$(sh "$HERE/ee_cc1.sh" --resolve "going-decompiled/src/$1/$2") || return 2
+  for s in "going-decompiled/asm/$1/nonmatchings/$2"/*.s; do
+    [ -f "$s" ] && /usr/bin/grep -q '%gp_rel' "$s" || continue
+    fn=$(basename "$s" .s)
+    /usr/bin/grep -qE "^[[:space:]]*INCLUDE_ASM\(\"[^\"]*\",[[:space:]]*$fn[[:space:]]*\)" "$src"
+    case $? in 0) ;; 1) printf '%s\n' "$fn" ;; *) printf 'UNREADABLE:%s\n' "$src" ;; esac
+  done | LC_ALL=C sort | tr '\n' ' '
+}
 selftest_gmodel() {
   local T="$1" b=0 unit line fl got
   say "-- (17) GMODEL (#919): (a) a -G8 unit's case line removed from a copy of unit_flags.sh -> must FAIL naming its compiled gp-word functions; (b) a LATENT member's INCLUDE_ASM removed in a scratch src copy -> must FAIL naming it; the real tree must pass"
@@ -1787,9 +1808,16 @@ selftest_gmodel() {
     [ "$FAILED" = 1 ] && [ -n "$got" ] || continue
     seeded=$unit; break
   done
+  local want="" ngp="" nscan=""
+  if [ -n "$seeded" ] && [ "$REGION" = usa ]; then
+    want=$(gmodel_compiled_gp_fns "$REGION" "$seeded")
+    ngp=$(cat "going-decompiled/asm/$REGION/nonmatchings/$seeded"/*.s | /usr/bin/grep -c '%gp_rel' || true)
+    nscan=$(awk -v u="$seeded" '$1=="UNIT" && $2==u {print $4}' "$T/gmodel_scan_real.txt")
+  fi
   if [ -z "$seeded" ]; then say "SELFTEST-FAIL no -G8 unit's removed case line made GMODEL fail (candidates: $(printf '%s' "$cands" | tr '\n' ' '))"; b=1
-  elif /usr/bin/grep -q "^       MISMATCH " "$T/gmodel_seed_flags.txt" && [ -z "$(/usr/bin/grep '^       MISMATCH ' "$T/gmodel_seed_flags.txt" | /usr/bin/grep -v "^       MISMATCH $seeded -G0 ")" ] && { [ "$REGION" != usa ] || [ "$got" = "ResetFrameArenas func_002FCFC8 func_002FD020 " ]; }; then ok "fired (a): $seeded's case line removed -> $(/usr/bin/grep '^FAIL GMODEL' "$T/gmodel_seed_flags.txt" | sed 's/ — move the unit.*: / : /')"
-  else say "SELFTEST-FAIL (a) seeded $seeded: wrong members ($got):"; show < "$T/gmodel_seed_flags.txt"; b=1; fi
+  elif [ "$REGION" = usa ] && { [ -z "$want" ] || [ "$ngp" != "$nscan" ]; }; then say "SELFTEST-BROKEN (a) cannot derive $seeded's expected members from the real tree: %gp_rel names '$want', $ngp %gp_rel line(s) against the real scan's UNIT total '${nscan}'"; b=1
+  elif /usr/bin/grep -q "^       MISMATCH " "$T/gmodel_seed_flags.txt" && [ -z "$(/usr/bin/grep '^       MISMATCH ' "$T/gmodel_seed_flags.txt" | /usr/bin/grep -v "^       MISMATCH $seeded -G0 ")" ] && { [ "$REGION" != usa ] || [ "$got" = "$want" ]; }; then ok "fired (a): $seeded's case line removed -> $(/usr/bin/grep '^FAIL GMODEL' "$T/gmodel_seed_flags.txt" | sed 's/ — move the unit.*: / : /')"
+  else say "SELFTEST-FAIL (a) seeded $seeded: wrong members ($got; the real tree derives $want):"; show < "$T/gmodel_seed_flags.txt"; b=1; fi
   # (b)
   local lat; lat=$(/usr/bin/grep '^LATENT ' "$T/gmodel_scan_real.txt" | head -1)
   if [ -z "$lat" ]; then say "SELFTEST-BROKEN: no LATENT member on this tree to seed (b) from"; b=1; else
@@ -2366,10 +2394,19 @@ selftest_mount_sync() {
 
 # selftest_dlisites OUTDIR — arm (22), callable on its own after sourcing this
 # file (`. tools/ee/landing_gate.sh; region_vars usa; selftest_dlisites /tmp/x`).
-# The seed is #1105's func_002E5074@0x2E50E4 row: ROM-true, splat-true and
+# The seed is #1105's row for the site at 0x2E50E4: ROM-true, splat-true and
 # simulation-true, so ONLY the Ps2EeAs arm can fail it. The host-only checker
 # must pass the same copy — if it ever stops doing so, the seed no longer
 # isolates the Ps2EeAs arm and the arm says so instead of passing.
+#
+# The site's SHAPE is pinned and its function NAME derived (task #1843): the
+# checker finds a row's splat file by name, so with the name hard-coded a
+# rename of the function (func_002E5074 when #1105 filed it) failed the
+# isolation check as "SPLAT 0 splat files named …" — observed, and misread as
+# the seed no longer isolating. dlisites_seed_fn names the one nonmatchings .s
+# that holds 0x2E50E4 `addiu $8,$0,0x13` (13000824) then 0x2E50E8
+# `dsll $8,$8,20` (38450800), as splat transcribed them; none, or two, is
+# SELFTEST-BROKEN.
 #
 # The seed's "fired" predicate requires the KNOWN emission, `PS2EEAS emits
 # 3c080130` (task #1185): FACT #8645 saw the old predicate, which ended at
@@ -2395,25 +2432,32 @@ selftest_mount_sync() {
 # row's failure (FACT #8691).
 # The wrapper exits 3 when its fault matched nothing, so a fault that stops
 # applying reads SELFTEST-BROKEN rather than passing.
-DLISITES_SEED_FIRED_RE='^FAIL DLISITES: 1 of [0-9]+ allowlist row\(s\) fail — .*: FAIL line [0-9]+: usa +func_002E5074 +0x002E50E4 .* \| PS2EEAS emits 3c080130( ;|$)'
+DLISITES_SEED_FIRED_RE='^FAIL DLISITES: 1 of [0-9]+ allowlist row\(s\) fail — .*: FAIL line [0-9]+: usa +@FN@ +0x002E50E4 .* \| PS2EEAS emits 3c080130( ;|$)'
+dlisites_seed_fn() {
+  local hits
+  hits=$(/usr/bin/grep -rlE --include='*.s' '/\* [0-9A-F]+ 002E50E4 13000824 \*/' "$1")
+  [ -n "$hits" ] && [ "$(printf '%s\n' "$hits" | wc -l | tr -d ' ')" = 1 ] && /usr/bin/grep -qE '/\* [0-9A-F]+ 002E50E8 38450800 \*/' "$hits" || return 1
+  basename "$hits" .s
+}
 selftest_dlisites() {
-  local T="$1" b=0 rc
-  local seed='usa      func_002E5074  0x002E50E4  $8,0x1300000             24080013 00084538'
-  say "-- (22) DLISITES (#1116, #1142): the real allowlist must pass; a copy with #1105's ROM-true row func_002E5074@0x2E50E4 appended must FAIL naming ONLY that row with PS2EEAS emits 3c080130; the host-only checker must PASS that copy (the arm it isolates); a source cut in transit and a site absent from Ps2EeAs's output must each be could-not-run; that copy with a real site absent must FAIL naming the seed AND the CNR row"
+  local T="$1" b=0 rc fn
+  say "-- (22) DLISITES (#1116, #1142): the real allowlist must pass; a copy with #1105's ROM-true row for the site at 0x2E50E4 (function named from its splat file, #1843) appended must FAIL naming ONLY that row with PS2EEAS emits 3c080130; the host-only checker must PASS that copy (the arm it isolates); a source cut in transit and a site absent from Ps2EeAs's output must each be could-not-run; that copy with a real site absent must FAIL naming the seed AND the CNR row"
+  fn=$(dlisites_seed_fn "$ROOT/going-decompiled/asm/usa/nonmatchings") || { say "SELFTEST-BROKEN (22) not exactly one splat file under asm/usa/nonmatchings holds #1105's site (0x2E50E4 13000824, 0x2E50E8 38450800) — the seed has no function to name"; return 1; }
+  local seed="usa      $fn  0x002E50E4  \$8,0x1300000             24080013 00084538" fired_re="${DLISITES_SEED_FIRED_RE//@FN@/$fn}"
   local kfail="FAIL DLISITES: 1 of 8 allowlist row(s) fail — asm_unit.sh would expand them as written: FAIL line 50: $seed | PS2EEAS emits "
-  if printf '%s\n' "$kfail" | /usr/bin/grep -qE "$DLISITES_SEED_FIRED_RE"; then say "SELFTEST-BROKEN the fired predicate accepts an EMPTY 'PS2EEAS emits' (FACT #8645)"; b=1
-  elif ! printf '%s\n' "${kfail}3c080130" | /usr/bin/grep -qE "$DLISITES_SEED_FIRED_RE"; then say "SELFTEST-BROKEN the fired predicate rejects the genuine 'PS2EEAS emits 3c080130'"; b=1
-  elif printf '%s\n' "${kfail}24080013" | /usr/bin/grep -qE "$DLISITES_SEED_FIRED_RE"; then say "SELFTEST-BROKEN the fired predicate accepts a WRONG word, 'PS2EEAS emits 24080013' (FACT #8683, #8691)"; b=1
+  if printf '%s\n' "$kfail" | /usr/bin/grep -qE "$fired_re"; then say "SELFTEST-BROKEN the fired predicate accepts an EMPTY 'PS2EEAS emits' (FACT #8645)"; b=1
+  elif ! printf '%s\n' "${kfail}3c080130" | /usr/bin/grep -qE "$fired_re"; then say "SELFTEST-BROKEN the fired predicate rejects the genuine 'PS2EEAS emits 3c080130'"; b=1
+  elif printf '%s\n' "${kfail}24080013" | /usr/bin/grep -qE "$fired_re"; then say "SELFTEST-BROKEN the fired predicate accepts a WRONG word, 'PS2EEAS emits 24080013' (FACT #8683, #8691)"; b=1
   else ok "predicate: rejects an empty 'PS2EEAS emits' and a wrong 'PS2EEAS emits 24080013', accepts 'PS2EEAS emits 3c080130'"; fi
   FAILED=0; check_dlisites > "$T/dlisites_real.txt"
   if [ "$FAILED" = 0 ] && /usr/bin/grep -q '^OK   DLISITES: all [1-9][0-9]* allowlist row(s)' "$T/dlisites_real.txt"; then ok "control: $(/usr/bin/grep '^OK   DLISITES' "$T/dlisites_real.txt" | sed 's/^OK   //')"; else say "SELFTEST-FAIL the real allowlist does not pass DLISITES:"; show < "$T/dlisites_real.txt"; b=1; fi
   { cat "$HERE/ps2eeas_dli_sites.txt"; printf '%s\n' "$seed"; } > "$T/dlisites_seed.txt"
   FAILED=0; check_dlisites "$T/dlisites_seed.txt" > "$T/dlisites_seeded.txt"
-  if [ "$FAILED" = 1 ] && /usr/bin/grep -qE "$DLISITES_SEED_FIRED_RE" "$T/dlisites_seeded.txt"; then ok "fired: $(/usr/bin/grep '^FAIL DLISITES' "$T/dlisites_seeded.txt" | sed 's/ — asm_unit.sh would expand them as written//')"
-  else say "SELFTEST-FAIL the seeded func_002E5074 row did not fail DLISITES alone with PS2EEAS emits 3c080130 (FAILED=$FAILED):"; show < "$T/dlisites_seeded.txt"; b=1; fi
+  if [ "$FAILED" = 1 ] && /usr/bin/grep -qE "$fired_re" "$T/dlisites_seeded.txt"; then ok "fired: $(/usr/bin/grep '^FAIL DLISITES' "$T/dlisites_seeded.txt" | sed 's/ — asm_unit.sh would expand them as written//')"
+  else say "SELFTEST-FAIL the seeded $fn row did not fail DLISITES alone with PS2EEAS emits 3c080130 (FAILED=$FAILED):"; show < "$T/dlisites_seeded.txt"; b=1; fi
   python3 "$HERE/ps2eeas_dli_sites.py" "$T/dlisites_seed.txt" > "$T/dlisites_hostonly.txt" 2>&1; rc=$?
   if [ "$rc" = 0 ] && /usr/bin/grep -qE '^ps2eeas_dli_sites: [0-9]+ rows, 0 failed \(Ps2EeAs NOT run\)$' "$T/dlisites_hostonly.txt"; then ok "isolation: the host-only checker passes the same seeded copy (rc 0, $(tail -1 "$T/dlisites_hostonly.txt" | sed 's/^ps2eeas_dli_sites: //')) — only the Ps2EeAs arm sees it"
-  else say "SELFTEST-BROKEN the host-only checker no longer passes the func_002E5074 seed (rc $rc) — it no longer isolates the Ps2EeAs arm; choose a seed only Ps2EeAs rejects:"; show < "$T/dlisites_hostonly.txt"; b=1; fi
+  else say "SELFTEST-BROKEN the host-only checker no longer passes the $fn seed (rc $rc) — it no longer isolates the Ps2EeAs arm; choose a seed only Ps2EeAs rejects:"; show < "$T/dlisites_hostonly.txt"; b=1; fi
   cat > "$T/dlisites_fault.py" <<'PYEOF'
 # landing_gate --selftest (22) fault wrapper: argv = checker path, then its args
 import os, re, sys
@@ -2446,7 +2490,7 @@ PYEOF
     elif [ "$rc" = 1 ] && /usr/bin/grep -qE "$want" "$T/dlisites_$mode.txt" && ! /usr/bin/grep -qE '^(OK   DLISITES|FAIL DLISITES)' "$T/dlisites_$mode.txt"; then ok "fired ($mode): $(/usr/bin/grep '^FAIL ps2eeas_dli_sites.py' "$T/dlisites_$mode.txt" | cut -c1-260)"
     else say "SELFTEST-FAIL (22) the $mode fault did not read could-not-run (neither OK nor a row FAIL) (rc $rc):"; show < "$T/dlisites_$mode.txt"; b=1; fi
   done
-  want='^FAIL DLISITES: 1 of [0-9]+ allowlist row\(s\) fail — .*: FAIL line [0-9]+: usa +func_002E5074 +0x002E50E4 .* \| PS2EEAS emits 3c080130 ; and 1 row\(s\) could not run: CNR  line [0-9]+: .* \| PS2EEAS site_[0-9]+ is absent from Ps2EeAs.s output: not checked$'
+  want='^FAIL DLISITES: 1 of [0-9]+ allowlist row\(s\) fail — .*: FAIL line [0-9]+: usa +'"$fn"' +0x002E50E4 .* \| PS2EEAS emits 3c080130 ; and 1 row\(s\) could not run: CNR  line [0-9]+: .* \| PS2EEAS site_[0-9]+ is absent from Ps2EeAs.s output: not checked$'
   FAILED=0; ( python3() { DLISITES_FAULT=dropfirst command python3 "$T/dlisites_fault.py" "$@"; }; check_dlisites "$T/dlisites_seed.txt"; exit "$FAILED" ) > "$T/dlisites_failcnr.txt"; rc=$?
   if /usr/bin/grep -qE '\(rc 3,' "$T/dlisites_failcnr.txt"; then say "SELFTEST-BROKEN (22) the dropfirst fault matched nothing — the arm no longer injects it:"; show < "$T/dlisites_failcnr.txt"; b=1
   elif [ "$rc" = 1 ] && /usr/bin/grep -qE "$want" "$T/dlisites_failcnr.txt"; then ok "fired (seed FAIL + CNR): $(/usr/bin/grep '^FAIL DLISITES' "$T/dlisites_failcnr.txt" | sed 's/ — asm_unit.sh would expand them as written//' | cut -c1-320)"
