@@ -2306,6 +2306,17 @@ void func_002E6D98(void) {
 }
 #endif
 
+/* Inter-function padding at 0x2E6E10..0x2E6E17: the two zero words retail
+ * places after func_002E6D98. They exist only after `endlabel func_002E6D98`
+ * in its nonmatchings .s, which is no longer included now that the s136os arm
+ * supplies the body, so without this directive everything after it lands 8 bytes
+ * low (landing_gate cmp 365266 at task #2030's first gate run). Not a codegen
+ * device: layout data (RULING #8467). Same construct as text/198FA0.cpp's
+ * padding after func_0029DCB8. */
+#ifndef TARGET_NATIVE
+__asm__(".word 0\n\t.word 0");
+#endif
+
 /* 989snd service calls used by the teardown flush. */
 extern void func_00133230(void);
 extern void func_00132AC8(void);
