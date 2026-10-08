@@ -18,10 +18,14 @@
  * emit at -G0. Measured before the move: -G8 leaves the unit object
  * byte-identical with nothing new promoted.
  *
- * The screen's abs.s member was wrong: `__builtin_fabsf` emits `abs.s` on
- * both cc1s, and GetFloatAbs is compiled from C on the matching build (task
- * #634). func_00283638 (`sq $0`) is compiled from C on the matching build
- * through RULING #8479's $0 register pin (task #1370). Everything else stays
+ * The screen's abs.s premise was wrong (NARROWS FACT #7899): `__builtin_fabsf`
+ * emits `abs.s` on both cc1s, so abs.s is not a wall and the "63 of 71" count
+ * above over-counts by its abs.s members. GetFloatAbs is compiled from C on
+ * the matching build (task #634). AngleAbsDiffPi is too (task #1976): it is
+ * plain-2.9 C with two #8598 FPR pins and one #8435 FPR-tied nop pad, the one
+ * device route FACT #9990's both-arms screen of all 68 bodies found.
+ * func_00283638 (`sq $0`) is compiled from C on the matching build through
+ * RULING #8479's $0 register pin (task #1370). Everything else stays
  * INCLUDE_ASM for the matching build.
  *
  * Per docs/PORTING.md these are tier-2 "pure-computation" functions: each VU0
@@ -1304,21 +1308,67 @@ f32 func_002845D8(f32 x) {
 }
 #endif
 
-/** Shortest absolute angular distance between angles a and b (radians): result in [0, pi]. */
+/*
+ * EE-only devices for AngleAbsDiffPi (task #1976). Both are empty natively.
+ *
+ * EE_REG(r) binds a LIVE local to EE register `r` where cc1 2.9's allocator
+ * colours it differently from the ROM (RULING #8598 register-pin device: cc1
+ * still emits every instruction, the pin only steers allocation).
+ *
+ * R5900_FPR_PAD1(v) is one explicit `noreorder` nop tied to the FPR value `v`
+ * through "+f" (RULING #8435 SCHEDULING DEVICE): the FPR twin of 188858.c's
+ * GPR-tied R5900_SHORT_LOOP_PAD1, in the form of 1A8180.c's AF948_FPU_PAD. The
+ * tie pins the nop after `v` is set and before its next use; `noreorder` stops
+ * the assembler moving it. It emits only a nop.
+ */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", AngleAbsDiffPi);
+#define EE_REG(r) __asm__(r)
+#define R5900_FPR_PAD1(v) __asm__(".set noreorder\n\tnop\n\t.set reorder" : "+f"(v))
 #else
-/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
- * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `sub.s $f0,$f12,$f13` vs `sub.s
- * $f12,$f12,$f13`. Residual HANDWRITTEN-FPUX: `abs.s` (no cc1 pattern) and `add.s $f1,$f14,$f14`
- * for 2*pi. */
+#define EE_REG(r)
+#define R5900_FPR_PAD1(v) ((void)0)
+#endif
+
+/**
+ * AngleAbsDiffPi - shortest absolute angular distance between two angles.
+ *
+ *   a, b  angles in radians, each within one turn of the other
+ *   ->    |a - b| folded into [0, pi]: if |a - b| >= pi, 2*pi - |a - b|
+ *
+ * MATCHED on the plain 2.9 arm (sdk29, -O2 -G8), so no s136os selector row
+ * (task #1976, from FACT #9990's probe d1). The ROM is 14 words with no
+ * relocations: `sub.s; lui/ori/mtc1 $f14 (pi); nop; abs.s; c.lt.s; nop; bc1t;
+ * nop; add.s $f1,$f14,$f14; sub.s $f0,$f1,$f0; jr; nop`.
+ *
+ * `abs.s` is plain `__builtin_fabsf` (NARROWS FACT #7899). The earlier
+ * "abs.s has no cc1 pattern" comment here was wrong. 2*pi is `pi + pi` in
+ * $f1, not a second constant. Three devices, each priced by removing it
+ * alone (FACT #9990, solo screen, sdk29 and s136 agree):
+ *   - `pi` pinned to $f14 (#8598): without it, DIFF 3/14 (allocation);
+ *   - `twopi` pinned to $f1 (#8598): without it, DIFF 2/14 (allocation);
+ *   - R5900_FPR_PAD1(pi) (#8435): the ROM's nop after `mtc1 $1,$f14`. An
+ *     empty "+f" fence there instead gives DIFF 10/14, which is exactly that
+ *     nop missing. With no asm at all it is DIFF 12/14: 2*pi folds into a
+ *     second li.s.
+ * A $f0 pin on `d` is NOT load-bearing (#9990 a6 vs d1), so there is none.
+ * `!(d < pi)` is the ROM's `c.lt.s` with the add/sub on the fall-through
+ * path.
+ */
 f32 AngleAbsDiffPi(f32 a, f32 b) {
-    f32 d = a - b;
-    d = (d < 0.0f) ? -d : d;
-    if (d >= PR_PI) d = 2.0f * PR_PI - d;
+    f32 d;
+    register f32 pi EE_REG("$f14");
+    register f32 twopi EE_REG("$f1");
+
+    d = a - b;
+    pi = PR_PI;
+    R5900_FPR_PAD1(pi);
+    d = __builtin_fabsf(d);
+    if (!(d < pi)) {
+        twopi = pi + pi;
+        d = twopi - d;
+    }
     return d;
 }
-#endif
 
 /** Fractional part of x: x - trunc(x) (VU0 cvt.w.s/cvt.s.w; truncates toward zero). */
 #ifndef TARGET_NATIVE
