@@ -1,7 +1,7 @@
 
-memcmp = 0x00115340; // libc.a (verbatim, 96B-verified)
-memcpy = 0x001153D4; // libc.a (verbatim, 96B-verified)
-memset = 0x00115484; // libc.a (verbatim, 96B-verified)
+memcmp = 0x00115340; // libc.a (verbatim, 96B-verified) - linked from newlib's hand-written libc/machine/r5900/memcmp.S, vendored verbatim in going-decompiled/libc and assembled by Ps2EeAs, in the r5900_memcmp_strcmp group (task 1884, RULING 9817)
+memcpy = 0x001153D4; // libc.a (verbatim, 96B-verified) - linked from newlib's hand-written libc/machine/r5900/memcpy.S, vendored verbatim in going-decompiled/libc and assembled by Ps2EeAs, in the r5900_memcmp_strcmp group (task 1884, RULING 9817)
+memset = 0x00115484; // libc.a (verbatim, 96B-verified) - linked from newlib's hand-written libc/machine/r5900/memset.S, vendored verbatim in going-decompiled/libc and assembled by Ps2EeAs, in the r5900_memcmp_strcmp group (task 1884, RULING 9817)
 func_0011B580 = 0x0011B580; // type:func size:0x8 - leaf boundary splat no longer finds (INCLUDE_ASM_FRAGMENT debris, 2 words) (task #1255)
 func_0011B588 = 0x0011B588; // type:func size:0x68 - handwritten leaf after the 0x11B580 debris, splat merges it into func_0011B580 without this boundary (task #1255)
 func_0011BB30 = 0x0011BB30; // type:func size:0x8 - zero-word inter-function padding leaf (INCLUDE_ASM_FRAGMENT), splat emits no leaf without this entry (task #1255)
@@ -74,7 +74,7 @@ func_00133930 = 0x00133930; // type:func
 // are pinned to their size as in the cod/015180 block above.
 // cod/015180h (task 1884) - the head unit has no other mark of these starts, so splat would fold func_00115228 into the debris before it
 func_00115228 = 0x00115228; // type:func
-// cod/015180 - CD-fill heads (start-only pins)
+// cod/015180 - CD-fill heads (start-only pins). func_001158F8 is in cod/015610 since task 1884
 func_001158F8 = 0x001158F8; // type:func
 func_00124418 = 0x00124418; // type:func
 func_00125D98 = 0x00125D98; // type:func
