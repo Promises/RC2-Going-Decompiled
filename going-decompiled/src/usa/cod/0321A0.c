@@ -359,6 +359,10 @@ extern char D_001A7760[]; /* "IOP load RPC failed" diagnostic */
  * addressing declarations above snd_BankLoadByLoc and R5900_SHORT_LOOP_PAD1 in
  * the poll loop, which reproduces the ROM's `lw $2,D_001A7180; nop; beq` at
  * 0x1327F4..0x1327FC (without it 11/79 words, s136os solo TU, task #1914).
+ * The shared declarations, each removed alone (words /79): D_001A7180's
+ * `.extern` 37 (16 in place of 12: 62), D_001A71C0's 63, D_001A7140's 51 (its
+ * [8] size 38), D_001A7180 as s32 4; D_001A71C4's and D_001A74D8's are unused
+ * here and read 0.
  */
 #if !defined(TARGET_NATIVE) && !defined(S136OS_snd_BankLoadFromIOP)
 S136OS_SLOT(snd_BankLoadFromIOP);
@@ -1083,23 +1087,39 @@ s32 CdStartRead(s32 lbn, s32 sectors, s32 buf, void *rmode) {
 }
 #endif
 
-/* snd_CheckLoadInProgress: tests/waits on the bank-load-in-progress flag
- * D_001A7100 (via func_0011B500 + snd_Pump). Best attempt 69% — the original
- * re-materialises the D_001A7100/D_001A713F addresses from fresh lui macros
- * every loop iteration (cc1-small symbolic refs the SN assembler expanded
- * absolutely), while this cc1+GAS either CSEs explicit %hi pairs in extra
- * callee-saved regs or gp-relativises the small declarations. Also hits the
- * multi-callee-save save-slot wall (see snd_SetupDmaTransfer) (near-miss).
- * Portable #else body. */
 /* sceCdSync(mode), defined in cod/022FA8.c. The ROM passes this function's own
  * noWait straight through ($4 is untouched before the jal at 0x13359C). */
 extern s32  func_00124B88(s32 mode);          /* direct-RPC load-status fallback */
-extern void func_0011B500(void *dst, void *src); /* poll IOP load status into dst */
+extern void func_0011B500(void *dst, void *src); /* InvalidDCache: re-read the IOP's copy */
 extern volatile s32 D_001A7100; /* IOP-shared load status block (0 = done); see CdStartRead */
-extern u8   D_001A713F;  /* poll-request scratch byte */
+extern u8   D_001A713F;  /* last byte of the 64-byte sync range */
 extern s32  D_001A7498;  /* cached "load complete" flag */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", snd_CheckLoadInProgress);
+
+/**
+ * snd_CheckLoadInProgress - test, or wait for, the IOP CD/bank load that
+ * CdStartRead started.
+ *
+ * @noWait: 1 = only test; anything else = block until the load finishes.
+ * Returns 1 while a load is still in flight and noWait is 1, otherwise 0 (also
+ * once a blocking wait has finished). With the IOP driver down (g_sndIopReady
+ * == 0) it forwards noWait to sceCdSync and returns that result.
+ *
+ * Each test invalidates the cache range 0x1A7100..0x1A713F so the status block
+ * is re-read from memory the IOP writes, then caches "done" (status == 0) in
+ * D_001A7498. The blocking wait pumps the sound engine between tests.
+ *
+ * Compiled by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, selected in
+ * tools/ee/s136os_functions.txt). No device of its own; it relies on
+ * CdStartRead's `.extern ,16` lines for D_001A7100/D_001A713F (each removed
+ * alone: 34/47 and 36/47 words, s136os solo TU, task #1914). Three phrasings
+ * are load-bearing, each priced by reverting it alone: `scratch` held in a local
+ * (the ROM keeps &D_001A713F in $s1 across both calls and re-forms
+ * &D_001A7100 each time; 37/47), `done == 1` (the ROM compares against the 1
+ * it also tests noWait with; 28/47), and a top-tested `while` (25/47 as a
+ * do-while). D_001A7100's volatile qualifier makes no difference here.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_snd_CheckLoadInProgress)
+S136OS_SLOT(snd_CheckLoadInProgress);
 #else
 s32 snd_CheckLoadInProgress(s32 noWait) {
     s32 done;
@@ -1107,19 +1127,23 @@ s32 snd_CheckLoadInProgress(s32 noWait) {
     if (g_sndIopReady == 0) {
         return func_00124B88(noWait); /* IOP driver down -> direct RPC status */
     }
-    func_0011B500((void *)&D_001A7100, &D_001A713F);
-    D_001A7498 = done = (D_001A7100 == 0);
-    if (done) {
-        return 0; /* load already complete */
-    }
-    if (noWait == 1) {
-        return 1; /* still loading, caller asked not to block */
-    }
-    do { /* block: pump the sound engine until the load finishes */
-        snd_Pump();
-        func_0011B500((void *)&D_001A7100, &D_001A713F);
+    {
+        u8 *scratch = &D_001A713F;
+
+        func_0011B500((void *)&D_001A7100, scratch);
         D_001A7498 = done = (D_001A7100 == 0);
-    } while (!done);
+        if (done == 1) {
+            return 0; /* load already complete */
+        }
+        if (noWait == 1) {
+            return 1; /* still loading, caller asked not to block */
+        }
+        while (!done) { /* block: pump the sound engine until the load finishes */
+            snd_Pump();
+            func_0011B500((void *)&D_001A7100, scratch);
+            D_001A7498 = done = (D_001A7100 == 0);
+        }
+    }
     return 0;
 }
 #endif
