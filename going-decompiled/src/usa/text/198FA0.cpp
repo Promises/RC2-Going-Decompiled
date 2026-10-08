@@ -1507,132 +1507,157 @@ void FillSaveSlotInfo(u8 *image, s32 slot, s32 dir) {
  * descriptor's srcPtr (srcPtr + slotMul*descLen), mirroring the serializer's
  * per-slot packing.
  *
- * Steps: (1) CRC-verify via VerifySaveHeaderChecksum — a bad image returns 1 immediately.
- * (2) Clear every descriptor's matchResult. (3) Walk the image sections: for each,
- * find the descriptor with the same tag; if found, record matchResult (1 / -1 /
- * -2 by length comparison), bump the global changed-section counter D_1A99A0 when
- * the bytes differ, and copy min(lengths) bytes into srcPtr+slotMul*descLen
- * (except tag-0x1770 zero-fill sections, which are not copied back). Sections
- * with no matching descriptor count as mismatches. (4) Mismatch tally: also count
- * a mismatch if the bytes consumed don't equal CalcSaveSectionsSize(table), plus
- * one for every descriptor that never reconciled (matchResult <= 0). (5) Store the
- * tally in the selected g_areaTable record (+0x24) and return it.
+ * @param image    save image: 8-byte header, then the section stream
+ * @param slotMul  memory-card slot; selects each descriptor's payload slice
+ * @param table    section descriptors, terminated by a NULL srcPtr
+ * @return         1 if the image fails its CRC (nothing restored), else the
+ *                 mismatch tally, which is also stored in the selected
+ *                 g_areaTable record (+0x24)
  *
- * WALLED at the byte level by the 8-byte-packed callee-save frame (10 saved regs:
- * s0-s7, fp, ra; the pinned 2.9 cc1 reserves 16 bytes/save vs the original's 8 —
- * see project_matching_ceiling, func_0029C678). The portable #else below is
- * cmp-oracle-validated (cmp_198FA0 isolated suite). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", DeserializeSaveSections);
+ * Steps: (1) CRC-verify via VerifySaveHeaderChecksum. (2) Clear every
+ * descriptor's matchResult. (3) Walk the image sections: for each, find the
+ * descriptor with the same tag; if found, record matchResult (1 / -1 / -2 by
+ * length comparison), bump the changed-section counter D_1A99A0 when the bytes
+ * differ, and copy min(lengths) bytes into srcPtr+slotMul*descLen (tag-0x1770
+ * zero-fill sections are not copied back). A section with no descriptor counts
+ * as a mismatch. (4) Also count a mismatch if the bytes consumed differ from
+ * CalcSaveSectionsSize(table), and one per descriptor before the post-terminator
+ * sentinel tag that never reconciled (matchResult <= 0). (5) Store the tally.
+ *
+ * Built on the s136os arm at the unit's gcse-on S136EXTRA (RULING #9910; task
+ * #1946, from NOTE #9905's body). The old "8-byte-packed callee-save frame" wall
+ * label held only for the 2.9 arm. What carries the bytes, each measured by
+ * removing it alone (solo s136 screen, positional words differing / ROM 157):
+ *  - The clear loop's index `k` is initialised ABOVE the srcPtr test (k inside
+ *    the if: 2/157). An insn in the if's fall-through block before the loop
+ *    makes gcse PRE insert %hi(g_areaTable) twice (there and before the test);
+ *    the two sets stop local-alloc moving the single-use equivalence down to the
+ *    final store, so reload rematerialises the lui into $6 where the ROM has $3.
+ *    With k above the test, loop.c creates the ROM's `daddu $3,$19` after gcse.
+ *  - The tag scan is hand-peeled (FACT #7985: a pad in the exit test blocks
+ *    rotation) and indexes table[i] throughout, not through an entry pointer.
+ *  - memcpy (func_00283460) is called through a void-returning cast: its
+ *    declaration returns void *, and a value-returning call allocates
+ *    differently (72/157, 159 words).
+ *  - `at` is a base local for the final store (no local folds the index load
+ *    to g_areaTable+332).
+ *  - Two operand-tied noreorder nop pads (RULING #8435), SCHEDULING DEVICES
+ *    reproducing ROM load-delay pads cc1 does not emit: DSS_PAD3 after the clear
+ *    loop's `lw` of the next srcPtr (0x29BFC4..0x29BFD4; without it 131/157 at
+ *    153 words), DSS_PAD1T after the tag scan's `lw` (0x29C024..0x29C02C;
+ *    without it 80/157). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_DeserializeSaveSections)
+S136OS_SLOT(DeserializeSaveSections);
 #else
-/* Declarations this body needs whose only other declarations sit in other
- * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern s32 VerifySaveHeaderChecksum(void *image);
-/* (end of this body's declarations) */
-/* t511 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 53.57% -> PACKED-SAVE, first differing row @0: ROM `addiu sp, sp, -0x60` vs `addiu sp, sp, -0xb0`;
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing, MATCH_ guard) 50.64% -> SCHED-PROEPI, first differing row @1: ROM `sd s1, 0x18(sp)` vs `sd s0, 0x10(sp)`. */
+typedef void (*SaveCopyFn)(void *dst, const void *src, s32 nbytes);
+#ifndef TARGET_NATIVE
+#define DSS_PAD3(v) __asm__(".set noreorder\n\tnop\n\tnop\n\tnop\n\t.set reorder" : "+r"(v))
+#define DSS_PAD1T(v) __asm__(".set noreorder\n\tnop\n\t.set reorder" : "+r"(v))
+#else
+#define DSS_PAD3(v) ((void)0)
+#define DSS_PAD1T(v) ((void)0)
+#endif
 s32 DeserializeSaveSections(void *image, s32 slotMul, SaveSection *table) {
-    s32 *section;        /* current image section header { tag, len, payload... } */
-    s32 mismatchCount;
-    s32 runningOffset;
-    s32 sentinel;
-    SaveSection *entry;
+    s32 *hdr = (s32 *)image;     /* walks the image section headers */
+    s32 mismatches;
+    s32 consumed;                /* image bytes accounted for */
 
-    if (VerifySaveHeaderChecksum(image) == 0) {
-        return 1;        /* CRC invalid: nothing restored */
+    if (VerifySaveHeaderChecksum(hdr) == 0) {
+        return 1;
     }
+    hdr += 2;
+    mismatches = 0;
+    consumed = 8;
 
-    section = (s32 *)((char *)image + 8);   /* first section header */
-    mismatchCount = 0;
-    runningOffset = 8;                       /* leading 8-byte image header */
-
-    /* Clear the reconcile result on every descriptor up to the terminator. */
-    for (entry = table; entry->srcPtr != 0; entry++) {
-        entry->matchResult = 0;
-    }
-
-    /* Walk the image's sections (until the { -1, * } terminator). */
-    while (section[0] != -1) {
-        s32 sectionTag = section[0];
-        s32 sectionLen = section[1];
-        SaveSection *match = 0;
-
-        /* Find the descriptor whose tag matches this section's tag. */
-        for (entry = table; entry->srcPtr != 0; entry++) {
-            if (entry->tag == sectionTag) {
-                match = entry;
-                break;
-            }
+    /* Clear every descriptor's reconcile result. */
+    {
+        s32 k = 0;
+        if (table->srcPtr != 0) {
+            void *src;
+            do {
+                table[k].matchResult = 0;
+                k++;
+                src = table[k].srcPtr;
+                DSS_PAD3(src);
+            } while (src != 0);
         }
+    }
 
-        if (match != 0 && match->srcPtr != 0) {
-            s32 descLen = match->len;
-            char *dest = (char *)match->srcPtr + slotMul * descLen;
-            char *payload = (char *)(section + 2);
+    /* Walk the image's sections until the { -1, * } terminator. */
+    while (hdr[0] != -1) {
+        s32 i = 0;
+        /* Find the descriptor whose tag matches this section's. */
+        if (table[0].srcPtr == 0) {
+            goto miss;
+        }
+        if (table[0].tag != hdr[0]) {
+            s32 tag;
+            do {
+                i++;
+                if (table[i].srcPtr == 0) {
+                    goto miss;
+                }
+                tag = table[i].tag;
+                DSS_PAD1T(tag);
+            } while (tag != hdr[0]);
+        }
+        if (table[i].srcPtr != 0) {
+            s32 len = table[i].len;
+            u8 *dest = (u8 *)table[i].srcPtr + slotMul * len;
+            s32 secLen = hdr[1];
             s32 copyLen;
-
-            if (sectionLen == descLen) {
-                match->matchResult = 1;
-                copyLen = descLen;
-            } else if (sectionLen < descLen) {
-                match->matchResult = -1;
-                copyLen = sectionLen;
+            u8 *payload;
+            if (secLen == len) {
+                table[i].matchResult = 1;
+                copyLen = len;
+            } else if (secLen < len) {
+                copyLen = secLen;
+                table[i].matchResult = -1;
             } else {
-                match->matchResult = -2;
-                copyLen = descLen;
+                table[i].matchResult = -2;
+                copyLen = len;
             }
-
+            payload = (u8 *)(hdr + 2);
             if (memcmp(dest, payload, copyLen) != 0) {
-                D_1A99A0 += 1;          /* count a section whose bytes changed */
+                D_1A99A0++;
             }
-
-            if (match->tag == 0x1770) {
-                /* zero-fill section: not restored; advance by its image length */
-                runningOffset += 8 + ((sectionLen + 3) & -4);
+            if (table[i].tag != 0x1770) {
+                ((SaveCopyFn)func_00283460)(dest, payload, copyLen);
+                consumed += ((copyLen + 3) & -4) + 8;
             } else {
-                func_00283460(dest, payload, copyLen);
-                runningOffset += 8 + ((copyLen + 3) & -4);
+                /* zero-fill section: not restored, accounted at its image length */
+                consumed += ((hdr[1] + 3) & -4) + 8;
             }
-        } else {
-            mismatchCount += 1;          /* no descriptor for this section */
+            goto next;
         }
-
-        /* Advance to the next image section header (payload is len-padded). */
-        section = (s32 *)((char *)section + 8 + ((sectionLen + 3) & -4));
+    miss:
+        mismatches++;               /* no descriptor for this section */
+    next:
+        hdr = (s32 *)((u8 *)hdr + (((hdr[1] + 3) & -4) + 8));
     }
 
-    runningOffset += 8;                  /* trailing terminator */
-
-    if (table->srcPtr != 0) {
-        if (runningOffset != CalcSaveSectionsSize(table)) {
-            mismatchCount += 1;          /* total byte count disagrees */
-        }
-        /* Count every descriptor that never reconciled (matchResult <= 0),
-         * stopping at the terminator or at a descriptor whose tag equals the
-         * post-terminator image sentinel word. */
-        sentinel = section[2];           /* word just past the terminator header */
-        if (table->tag != sentinel) {
-            entry = table;
-            for (;;) {
-                if (entry->matchResult <= 0) {
-                    mismatchCount += 1;
-                }
-                entry++;
-                if (entry->srcPtr == 0 || entry->tag == sentinel) {
-                    break;
-                }
+    consumed += 8;                  /* the terminator header */
+    if (consumed != CalcSaveSectionsSize(table)) {
+        mismatches++;
+    }
+    hdr += 2;                       /* hdr[0] is now the post-terminator sentinel */
+    {
+        s32 i = 0;
+        while (table[i].srcPtr != 0 && table[i].tag != hdr[0]) {
+            if (table[i].matchResult <= 0) {
+                mismatches++;
             }
+            i++;
         }
     }
 
     /* Record the tally in the currently-selected area record. */
     {
-        s32 idx = *(s32 *)(g_areaTable + AREA_SELECTED_INDEX_OFF);
-        *(s32 *)(g_areaTable + idx * AREA_RECORD_STRIDE + AREA_LOAD_RESULT_OFF) =
-            mismatchCount;
+        u8 *at = g_areaTable;
+        *(s32 *)(at + *(s32 *)(at + AREA_SELECTED_INDEX_OFF) * AREA_RECORD_STRIDE + AREA_LOAD_RESULT_OFF) = mismatches;
     }
-    return mismatchCount;
+    return mismatches;
 }
 #endif
 
