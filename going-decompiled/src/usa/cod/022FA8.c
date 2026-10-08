@@ -2403,16 +2403,6 @@ s32 func_0012B3C0(s32 arg0) {
     return func_0012C508(arg0, 3);
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012B3E0);
-
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012B568);
-
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012B678);
-
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012B780);
-
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012B8B0);
-
 /* The MPEG-2 decoder context of the IPU video player. The header parsers in
  * this unit follow the MSSG mpeg2decode reference syntax field for field, which
  * is where the names below come from; fields no function here shows stay
@@ -2431,7 +2421,7 @@ typedef struct {
     s32 state;                 /* 0x0F8: 1 is advanced to 2 by func_0012D420 */
     u8  _padFC[0x118 - 0xFC];
     s32 count;                 /* 0x118 */
-    s32 _pad11C;
+    s32 lastDecodeZero;        /* 0x11C: the last VDEC result was 0 */
     s32 pending;               /* 0x120: an unpaired field picture */
     s32 horizontalSize;        /* 0x124 */
     s32 verticalSize;          /* 0x128 */
@@ -2478,6 +2468,69 @@ typedef struct {
     s32 newGop;                /* 0x854: set by each GOP header */
     s32 *callbacks;            /* 0x858: handed to func_0012FAE8 while waiting */
 } IpuDecoder;
+
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012B3E0);
+
+/* func_00130250 formats a report; its definition below takes only the object,
+ * so this caller sees no prototype and passes the format and its value. */
+extern void func_00130250();
+extern char D_0013BAB8[];
+extern s32 func_0012C680(s32 *arg0, s32 arg1);
+extern s32 IpuSkipBits(s32 *arg0, s32 arg1);
+
+/**
+ * Decode a macroblock_address_increment (mpeg2decode's
+ * Get_macroblock_address_increment) with VDEC table 0 (func_0012C508):
+ * macroblock_stuffing (0x22) is skipped, each macroblock_escape (0x23) adds
+ * 33, and any other value ends the increment and is added. A 0 is a bad
+ * code: in an MPEG-2 stream an 11-bit 0xF that follows is skipped (and
+ * decoding goes on); otherwise the code is reported (D_0013BAB8 through
+ * func_00130250), lastDecodeZero set, and 1 returned.
+ *
+ * Returns the address increment. The source case order (stuffing, escape,
+ * 0, default) and `more = 1` ahead of the escape's += 33 give the ROM's
+ * layout; the other orders leave 3 to 56 words different.
+ */
+s32 func_0012B568(s32 *ipu) {
+    IpuDecoder *dec = (IpuDecoder *)ipu;
+    s32 increment = 0;
+    u32 code;
+    s32 peek;
+    s32 more;
+    do {
+        code = func_0012C508((s32)ipu, 0);
+        switch (code) {
+        case 0x22:
+            more = 1;
+            break;
+        case 0x23:
+            more = 1;
+            increment += 0x21;
+            break;
+        case 0:
+            peek = func_0012C680(ipu, 11);
+            if (dec->mpeg2 != 0 && peek == 0xF) {
+                IpuSkipBits(ipu, 11);
+                more = 1;
+                break;
+            }
+            func_00130250(dec, D_0013BAB8, code);
+            dec->lastDecodeZero = 1;
+            return 1;
+        default:
+            increment += code;
+            more = 0;
+            break;
+        }
+    } while (more);
+    return increment;
+}
+
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012B678);
+
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012B780);
+
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012B8B0);
 
 /* A decoded-picture buffer, as far as func_0012D350 shows it. */
 typedef struct {
@@ -2619,7 +2672,49 @@ s64 IpuWaitCmdResult(s32 *ipu) {
     return cmd;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012C508);
+/**
+ * Decode one VLC symbol with the IPU (VDEC, mpeg2decode's table lookups):
+ * wait for the IPU, issue VDEC 0x30000000 with table `tbl` in bits 26-27,
+ * and spin on IPU_CMD's busy bit (running callback entry #1 every 5001
+ * polls). Then reload the look-ahead from IPU_TOP (0x10002030) — when its
+ * busy bit is set only the bits up to the next byte of IPU_BP (0x10002020)
+ * count as valid — and note whether the result was 0 (lastDecodeZero).
+ * Returns the decoded value (the result's low 16 bits, sign-extended).
+ *
+ * IPU_BP is read through a volatile pointer and IPU_TOP through a plain one,
+ * in that order: the ROM forms IPU_BP's address in a register and loads
+ * IPU_TOP through the assembler's absolute-address macro, which is what cc1
+ * gives each kind of access. Both volatile, or both plain, leave 16 to 31
+ * words different; so does the valid-bit count as a conditional expression.
+ */
+s32 func_0012C508(s32 arg0, s32 tbl) {
+    IpuDecoder *dec = (IpuDecoder *)arg0;
+    s32 count = 0;
+    s32 cmd;
+    s64 result;
+    s64 top;
+    u32 bp;
+    IpuWaitIdle(dec);
+    cmd = 0x30000000 | (tbl << 26);
+    *(volatile u32 *)0x10002000 = cmd;
+    dec->lastCmdFlag = D_00137F10[cmd >> 28];
+    while ((result = *(volatile s64 *)0x10002000) < 0) {
+        if (count++ > 5000) {
+            func_0012FAE8(dec->callbacks);
+            count = 0;
+        }
+    }
+    bp = *(volatile u32 *)0x10002020;
+    top = *(s64 *)0x10002030;
+    dec->bitBuffer = top;
+    if (top < 0) {
+        dec->bitsValid = -(bp & 0x1F) & 0x1F;
+    } else {
+        dec->bitsValid = 32;
+    }
+    dec->lastDecodeZero = (s32)result == 0;
+    return (s16)result;
+}
 
 /**
  * Peek at the next `n` bits of the IPU bitstream without consuming them
