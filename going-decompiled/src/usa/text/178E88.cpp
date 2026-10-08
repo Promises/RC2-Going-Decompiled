@@ -2182,42 +2182,29 @@ void func_0027E368(void *ctx) {
 /* DrawFullScreenTint - append a full-screen alpha-tint draw to the frame DMA
  * chain: emit a GS RGBAQ register write packed from the (r,g,b,a) components,
  * then a 4-word DMACnt+ref chain entry pointing at the prebuilt tint quad
- * packet, and advance the cursor by 0x10 bytes.
- * Near-miss: the pinned cc1 CSEs the frame-DMA-cursor pointer load across the
- * four chain-word stores, whereas the original reloads it absolute for each
- * write (no-load-PRE). No declaration reproduces the per-store reload here.
- * Correct C preserved as the portable body. */
-/* TODO(match) t493: sdk29 38.97% / engine96 54.28% (unit objdiff, objdiff_build.sh +
- * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
- * every other remaining arm). Residual on the better arm (engine96): RELOAD — the original reloads
- * g_frameDmaCursor before each of the 4 packet stores (no type-based alias analysis); cc1 2.9 -O2
- * keeps it in a register. MEASURED, not landed: with -fno-strict-aliasing on this unit (a per-unit
- * flag = landing-gate question) plus the cc1-small model and left-to-right `or`s it reads 91.11%
- * sdk29, residual SCHED (jal / last `or` order). Levers: cc1-small/absolute globals model RUN:
- * 38.69% (sdk29); -fno-strict-aliasing MEASURED (flag not landed): 91.11% sdk29; engine96 with
- * sched1 MEASURED (flag not landed): 51.25%.
- * Task #946 (cc1 2.9 probes, match.sh): the "no declaration" line above is false. The per-store
- * reload is pure C under strict aliasing: read the cursor through a 1-element s32/u32 array view
- * that cc1 sees as small, e.g. `extern u32 curAbs[1]` equated to g_frameDmaCursor at offset 0
- * with `.extern ,16` (the ResetPerFrameDrawQueues construct). Store through
- * `((u32 *)curAbs[0])[k]` and bump with `curAbs[0] += 0x10`. With that, the whole tail after the
- * jal is word-for-word the ROM's. A u32 scalar view reloads only once: cc1 2.9's fixed-scalar /
- * varying-struct rule lets the indexed stores skip it, and the array view is itself an
- * in-struct access. Head: `u64 v = r | g << 8; v |= b << 16; v |= a << 24;` then
- * `__asm__ __volatile__("" : "+r"(v));` before the call gives the ROM's or-chain and
- * `li a0,1` in the jal slot. What remains is 1 adjacent swap: the ROM issues `sd ra` between
- * `dsll a3,24` and the last `or`, cc1 after it. 384 non-volatile barrier variants (barrier
- * subsets x shift orders x a pinned first argument) did not move it. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", DrawFullScreenTint);
+ * packet, and advance the cursor by 0x10 bytes. No return value (the ROM
+ * leaves the new cursor in $v0 incidentally).
+ * MATCHED (task #1877): s136os arm (SN 1.36 -fopt-stack, -O2 -G8 -fno-gcse),
+ * spliced. Two things, each priced by removing it alone (solo s136os compile
+ * of this unit, word compare against the ROM .s, relocated fields masked):
+ *   - the cursor goes through g_frameDmaCursorAbs, the absolute alias the 2D
+ *     batch code already uses, so cc1 re-forms lui/lw before each of the four
+ *     stores and stores the bump through $at as the ROM does; as
+ *     g_frameDmaCursor[0] it CSEs the pointer (25/36 words, built 32);
+ *   - the components are s32 (as 1CA080 declares them) widened with (s64)
+ *     before the shifts; as u64/s64 parameters the `dsll a,24` issues one slot
+ *     early (2/36). That is the "1 adjacent swap" task #946 could not move on
+ *     cc1 2.9 with 384 barrier variants. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_DrawFullScreenTint)
+S136OS_SLOT(DrawFullScreenTint);
 #else
-void DrawFullScreenTint(u64 r, s64 g, s64 b, s64 a) {
-    AppendGsRegPacket(1, r | g << 8 | b << 16 | a << 24);
-    g_frameDmaCursor[0][0] = 0x30000014;
-    g_frameDmaCursor[0][1] = (u32)g_fullScreenTintPacket;
-    g_frameDmaCursor[0][2] = 0;
-    g_frameDmaCursor[0][3] = 0x50000014;
-    g_frameDmaCursor[0] += 4;
+void DrawFullScreenTint(s32 r, s32 g, s32 b, s32 a) {
+    AppendGsRegPacket(1, (s64)r | (s64)g << 8 | (s64)b << 16 | (s64)a << 24);
+    ((u32 *)g_frameDmaCursorAbs)[0] = 0x30000014;
+    ((u32 *)g_frameDmaCursorAbs)[1] = (u32)g_fullScreenTintPacket;
+    ((u32 *)g_frameDmaCursorAbs)[2] = 0;
+    ((u32 *)g_frameDmaCursorAbs)[3] = 0x50000014;
+    g_frameDmaCursorAbs += 16;
 }
 #endif
 
@@ -3351,13 +3338,15 @@ void func_00280440(f32 inputScale, s32 a, s32 b, s32 c, const char *str, s32 max
 }
 #endif
 
-/* TODO(match) t493: sdk29 73.86% / engine96 63.61% (unit objdiff, objdiff_build.sh +
- * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
- * every other remaining arm). Residual on the better arm (sdk29): UNKNOWN-addiu (first differing
- * insn: ROM `addiu sp,sp,-32` vs built `addiu sp,sp,-48`). Levers: engine96 with sched1 MEASURED
- * (flag not landed): 74.58%. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_002804C0);
+/* MATCHED (task #1877): s136os arm (SN 1.36 -fopt-stack, -O2 -G8 -fno-gcse),
+ * spliced. The ROM loads 1.0f once into $f20 and uses it both as the measure
+ * scale and as the initial result, so the C names it once (`result`) before
+ * the measure; with two separate 1.0f literals cc1 keeps the floor in $f20,
+ * materialises the constant twice and saves one FPR fewer (30/36 words).
+ * Record of the cc1 2.9 / 2.96 attempts (t493, unit objdiff, objdiff_build.sh +
+ * unit_report.sh): sdk29 73.86% / engine96 63.61%. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002804C0)
+S136OS_SLOT(func_002804C0);
 #else
 /**
  * Compute a horizontal auto-scale factor to fit a string into `count` pixels.
@@ -3367,8 +3356,8 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_002804C0);
  * returns width-fit ratio count/width, floored at `inputScale`.
  */
 f32 func_002804C0(const char *str, s32 maxChars, s32 count, f32 inputScale) {
-    s32 width = (str != 0) ? func_0027F900(str, maxChars, 1.0f) : 0;
     f32 result = 1.0f;
+    s32 width = (str != 0) ? func_0027F900(str, maxChars, result) : 0;
 
     if (count < width) {
         result = (f32)count / (f32)width;
