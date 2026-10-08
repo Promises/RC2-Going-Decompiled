@@ -2044,7 +2044,75 @@ struct D350Node *func_0011D350(u32 key, struct D350Table *table) {
     return 0;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", rename);
+/* An RPC bind request packet (the SDK's SifRpcBindPkt). */
+typedef struct SifRpcBindPacket {
+    s32 header[4];
+    s32 recId;
+    s32 pktAddr;
+    s32 rpcId;
+    s32 client;
+    s32 server;     /* the server id asked for */
+} SifRpcBindPacket;
+
+/* The reply to a bind request (the SDK's SifRpcRendPkt), sent as command
+ * 0x80000008. */
+typedef struct SifRpcBindReply {
+    s32 header[4];
+    s32 recId;
+    s32 pktAddr;    /* 0x14: the requester's packet, echoed back */
+    s32 rpcId;
+    s32 client;     /* 0x1C: the requester's client, echoed back */
+    u32 cid;        /* 0x20: the command being answered (0x80000009) */
+    s32 server;     /* 0x24: the bound server, 0 if none is registered */
+    s32 buff;       /* 0x28: that server's receive buffer */
+    s32 cbuff;      /* 0x2C: that server's callback buffer */
+} SifRpcBindReply;
+
+/* The fields of a registered RPC server (the SDK's sceSifServeData) that a
+ * bind reply reports. */
+typedef struct SifRpcServer {
+    s32 rpcNumber;  /* 0x00 */
+    s32 func;       /* 0x04 */
+    s32 buff;       /* 0x08 */
+    s32 size;       /* 0x0C */
+    s32 cfunc;      /* 0x10 */
+    s32 cbuff;      /* 0x14 */
+} SifRpcServer;
+
+/**
+ * Answer an IOP request to bind to an EE RPC server (SIF command 0x80000009;
+ * sceSifInitRpc registers this as its handler, with the RPC state D_0013E900
+ * as `pool`). Takes a reply slot from the pool (func_0011D208), echoes the
+ * request's packet and client back, looks the asked-for server up
+ * (func_0011D350) and reports it with its two buffers - all three 0 when no
+ * such server is registered - then sends the reply as command 0x80000008
+ * through func_0011CD60, tail-called.
+ *
+ * Splat labelled this `rename`; it is not libc rename (see symbol_addrs).
+ * Loading both echoed fields into locals before either store gives the ROM's
+ * load/load/store/store order; copying them field by field interleaves them.
+ */
+void HandleRpcBindRequest(SifRpcBindPacket *req, RingPool *pool) {
+    SifRpcBindReply *reply = (SifRpcBindReply *)func_0011D208(pool);
+    SifRpcServer *server;
+    s32 pktAddr = req->pktAddr;
+    s32 client = req->client;
+
+    reply->client = client;
+    reply->pktAddr = pktAddr;
+    reply->cid = 0x80000009;
+    server = (SifRpcServer *)func_0011D350(req->server, (struct D350Table *)pool);
+    if (server == 0) {
+        reply->server = 0;
+        reply->buff = 0;
+        reply->cbuff = 0;
+    } else {
+        reply->server = (s32)server;
+        reply->buff = server->buff;
+        reply->cbuff = server->cbuff;
+    }
+    func_0011CD60(0x80000008, (s32)reply, 0x40, 0, 0, 0);
+}
 
 /* An SIF RPC client (the SDK's sceSifClientData). */
 typedef struct SifRpcClient {
@@ -2059,16 +2127,6 @@ typedef struct SifRpcClient {
     s32 endParam;
     void *serve;    /* set by the IOP's reply once the bind reached a server */
 } SifRpcClient;
-
-/* An RPC bind request packet (the SDK's SifRpcBindPkt). */
-typedef struct SifRpcBindPacket {
-    s32 header[4];
-    s32 recId;
-    s32 pktAddr;
-    s32 rpcId;
-    s32 client;
-    s32 server;     /* the server id asked for */
-} SifRpcBindPacket;
 
 extern RpcPacketTable D_0013E900;
 
