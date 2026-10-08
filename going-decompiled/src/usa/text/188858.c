@@ -2576,62 +2576,84 @@ void func_0028AB70(s32 event) {
 
 /* func_0028ABC0(id, voice): enqueue a subtitle/voice request (id, voice) into a
  * 7-slot ring buffer that lives in the data block at &g_pActiveTextTable: the id
- * ring is at +0x8 (s16[7]), the voice ring at +0x18 (s16[7]), with a head index
- * at +0x27 and an entry count at +0x26. No-op when the ring is full (count >= 7)
- * or `id` is already queued (duplicate suppression scans the live entries
- * forward from head, modulo 7). On insert the new entry goes at slot
- * (head+count)%7 and count is incremented.
+ * ring is at +0x8 (s16[7]), the voice ring at +0x18 (s16[7]), with an entry
+ * count at +0x26 and a head index at +0x27. No-op when the ring is full
+ * (count >= 7) or `id` is already queued (duplicate suppression scans the live
+ * entries backward from the newest, modulo 7, comparing each stored s16 with
+ * the full int `id`). On insert the new entry goes at slot (head+count)%7 and
+ * count is incremented.
+ *   id     subtitle / line id to queue
+ *   voice  voice id stored beside it
  *
- * NEAR-MISS: logic exact. The `div`/`mfhi` + `beql;break` divide-by-zero
- * scaffolding is NOT the obstacle: cc1 2.9 emits the same shape from the C `%`
- * (measured, task #1024). The best body measured is 94.67% (unit objdiff
- * report, solo sdk29; task #1076, NOTE #8535, replacing #1024's 76.17%). It
- * re-reads the count/head bytes absolutely and gets the loop-entry copies as
- * loop.c movables, so with two EE_REG pins everything through the scan loop is
- * the ROM instruction for instruction (#8535's normalised opcode+register
- * compare: 46 of 51 equal over the whole function). The residual is the tail
- * only: the ROM's dead `li $7,7` is missing (one word short), the shared 7's
- * `li $3,7` is emitted BEFORE the tail's `addu $2,$7,$11` where the ROM has
- * it after, and the voice-ring base lands in $7, not $8. The body is in NOTE
- * #8535.
+ * MATCHED on the s136os arm (task #1889) at the unit's -O2 default
+ * (S136EXTRA="", RULING #9450). NOTE #9576 had ruled this arm out because gcse
+ * folded the ROM's per-block count/head re-reads. Each device or spelling below
+ * was priced by reverting it alone in the solo s136os harness (words differing
+ * / ROM 60):
+ *   - count and head are read through two assembler aliases sized 16
+ *     (g_subtitleRingCount / g_subtitleRingHead = g_pActiveTextTable +
+ *     0x26 / +0x27): an ADDRESSING-MODEL DEVICE (RULING #8620, non-zero offset
+ *     under RULING #9574; the ROM's `lui; lbu %lo(g_pActiveTextTable+0x26)`).
+ *     As fields of the struct view below the reads are gp-relative and CSE'd
+ *     (count: 59/60; head: 62 vs 60 words).
+ *   - one local `k` holds the count read AND the loop's ring index: with two
+ *     variables gcse copy-propagates `count = k` away, the ROM's
+ *     `move $11,$2` disappears and the head load fills the bltz delay slot
+ *     instead (17/60). `count = k` after `i = k - 1` (else 17/60).
+ *   - the duplicate test compares with the int `id`, no (s16) cast (62 vs 60).
+ *   - the loop and the voice slot re-read head (and count) rather than reuse
+ *     the locals; that gives the ROM's hoisted `move $6,$7` copy and its tail
+ *     reloads, including the dead `li $7,7`.
+ * The SubtitleRing struct view is byte-neutral (raw s16 casts: same words).
+ * The divide traps come out as `break 7` and tools/ee/move_fixup.sed spells
+ * them `break 0,7`, the ROM's encoding.
  *
- * Why the two literal `% 7`s (which do give the dead li, in the ROM's slot)
- * still miss on registers (task #1100, cc1 .lreg dump): at local-alloc the
- * second li's pseudo is live only to its not-yet-folded div trap, because
- * cse's rerun after loop has already pointed div#2 at the FIRST 7. The short
- * pseudo out-ranks the first 7, takes $3, and pushes the first 7 to $4.
- * The ROM's allocation (first 7 in $3, dead li in $7, voice base in $8,
- * second remainder in $4) needs div#2 to still read the second li at
- * allocation and be retargeted to $3 afterwards. This cc1 never does that
- * retarget: with both 7s pinned ($3, $7), div#2 keeps reading $7.
- * -fno-rerun-cse-after-loop (diagnostic only; flags are per unit) restores
- * the first 7 in $3 and the second remainder in $4. That is consistent with
- * the compiler-revision class (RULING #7371), not a C spelling. 96 tail
- * spellings, register pins on every tail value, and an empty tied fence
- * (#8483) on a named second 7 were measured; none beats 94.67. Kept as the
- * portable #else body. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028ABC0);
+ * GUARD (task #1269): on EE this C is the image's body, compiled alone by SN
+ * 2.95.3 v1.36 -fopt-stack (tools/ee/s136os_functions.txt) and spliced over the
+ * S136OS_SLOT line by tools/ee/s136os_splice.sh. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0028ABC0)
+S136OS_SLOT(func_0028ABC0);
 #else
+#ifndef TARGET_NATIVE
+__asm__(".extern g_subtitleRingCount, 16\n\tg_subtitleRingCount = g_pActiveTextTable + 0x26");
+extern u8 g_subtitleRingCount;
+__asm__(".extern g_subtitleRingHead, 16\n\tg_subtitleRingHead = g_pActiveTextTable + 0x27");
+extern u8 g_subtitleRingHead;
+#else
+#define g_subtitleRingCount (((u8 *)&g_pActiveTextTable)[0x26])
+#define g_subtitleRingHead  (((u8 *)&g_pActiveTextTable)[0x27])
+#endif
+/* The subtitle request ring, viewed over the data block at &g_pActiveTextTable. */
+typedef struct {
+    u8  _pad0[0x8];
+    s16 id[7];          /* +0x08 queued line ids */
+    u8  _pad16[0x2];
+    s16 voice[7];       /* +0x18 their voice ids */
+    u8  count;          /* +0x26 (read through g_subtitleRingCount) */
+    u8  head;           /* +0x27 (read through g_subtitleRingHead) */
+} SubtitleRing;
+#define SUBTITLE_RING ((SubtitleRing *)&g_pActiveTextTable)
 void func_0028ABC0(s32 id, s32 voice) {
-    u8  *ring = (u8 *)&g_pActiveTextTable;
-    s16 *idRing = (s16 *)(ring + 0x8);
-    s16 *voiceRing = (s16 *)(ring + 0x18);
-    s32 count = ring[0x26];
-    s32 head = ring[0x27];
-    s32 i;
-    if (count >= 7) {
-        return;
+    s32 count, head, i, k;
+
+    if (g_subtitleRingCount >= 7) {
+        return;                         /* ring full */
     }
-    for (i = count - 1; i >= 0; i--) {
-        if (idRing[(head + i) % 7] == (s16)id) {
-            return;
+    k = g_subtitleRingCount;
+    head = g_subtitleRingHead;
+    i = k - 1;
+    count = k;
+    for (; i >= 0; i--) {
+        k = (g_subtitleRingHead + i) % 7;
+        if (SUBTITLE_RING->id[k] == id) {
+            return;                     /* already queued */
         }
     }
-    idRing[(head + count) % 7] = (s16)id;
-    voiceRing[(head + count) % 7] = (s16)voice;
-    ring[0x26] = (u8)(count + 1);
+    SUBTITLE_RING->id[(head + count) % 7] = id;
+    SUBTITLE_RING->voice[(g_subtitleRingHead + g_subtitleRingCount) % 7] = voice;
+    g_subtitleRingCount = g_subtitleRingCount + 1;
 }
+#undef SUBTITLE_RING
 #endif
 
 /* func_0028ACB0: mis-split 1-instruction fragment — `addiu $sp,+0x10` epilogue
