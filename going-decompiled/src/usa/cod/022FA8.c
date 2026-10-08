@@ -1261,12 +1261,12 @@ extern u32  g_mcRpcResult;     /* libmc RPC receive-buffer (result code) */
 extern s32  func_0011AC70(s32 sema);
 extern s32 func_0011AC40(s32 sema);
 
-/* libmc's name-carrying RPC request (McOpen, McMkDir, func_00127E48 = GetDir):
+/* libmc's name-carrying RPC request (McOpen, McMkDir = Delete, func_00127E48 = GetDir):
  * 0x414 bytes, the largest send buffer in the family. */
 typedef struct {
     s32  port;                 /* 0x000 */
     s32  slot;                 /* 0x004 */
-    s32  mode;                 /* 0x008: open flags / GetDir mode; 0 for MkDir */
+    s32  mode;                 /* 0x008: open flags / GetDir mode; 0 for Delete */
     s32  maxent;               /* 0x00C: GetDir only */
     void *table;               /* 0x010: GetDir only */
     char name[0x400];          /* 0x014: strncpy'd, 1023 chars + forced NUL */
@@ -1673,11 +1673,14 @@ s32 McChdir(s32 arg0, s32 arg1) {
 #endif
 
 /**
- * McMkDir (libmc sceMcMkdir): create directory `name` on memory card
- * `port`/`slot`, as libmc RPC #15 through the same 0x414-byte name request as
- * McOpen (mode word 0). Same guards and return codes as McOpen (-100 / -200 /
- * -210, else the sceSifCallRpc result); on success the mutex stays held with
- * the pending command 15 recorded for McSync.
+ * McMkDir is libmc's sceMcDelete, not mkdir (FACT #5885: RPC #15 is
+ * sceMcFuncNoDelete in the vendored libmc.h table; the real mkdir is
+ * func_00127630, McOpen with mode 0x40). The splat-era name is kept because
+ * the function is matched. Deletes `name` on memory card `port`/`slot`
+ * through the same 0x414-byte name request as McOpen (mode word 0). Same
+ * guards and return codes as McOpen (-100 / -200 / -210, else the
+ * sceSifCallRpc result); on success the mutex stays held with the pending
+ * command 15 recorded for McSync.
  */
 s32 McMkDir(s32 port, s32 slot, const char *name) {
     u8 *client = g_mcRpcClient;
