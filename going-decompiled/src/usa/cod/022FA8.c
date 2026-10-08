@@ -493,7 +493,7 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00124980);
 
 extern s32 func_00124980(s32 arg);
-extern void func_0011AC40(s32 sema);  /* syscall 0x42 SignalSema */
+extern s32 func_0011AC40(s32 sema);  /* syscall 0x42 SignalSema */
 extern s32 D_00137550[];  /* libcdvd N-command RPC client */
 extern u32 D_00136400[];  /* RPC receive buffer */
 
@@ -824,7 +824,7 @@ extern s32  g_mcMutexSema;     /* libmc mutex/semaphore handle */
 extern s32  D_00141B80;        /* libmc RPC send-buffer (fd marshalled @+0) */
 extern u32  g_mcRpcResult;     /* libmc RPC receive-buffer (result code) */
 extern s32  func_0011AC70(s32 sema);
-extern void func_0011AC40(s32 sema);
+extern s32 func_0011AC40(s32 sema);
 
 /**
  * func_00127668 = McClose (libmc): close the memory-card file descriptor `fd`.
@@ -1103,7 +1103,7 @@ extern u8  g_mcRpcRequest[];
 extern s32 g_mcPendingCmd;
 
 extern s32 func_0011AC70(s32 sema);   /* syscall 0x45 PollSema   */
-extern void func_0011AC40(s32 sema);  /* syscall 0x42 SignalSema */
+extern s32 func_0011AC40(s32 sema);  /* syscall 0x42 SignalSema */
 /* func_0011D620 (sceSifCallRpc-shaped) is already declared at file scope earlier in
  * this unit; NOT redeclared here. My first draft did redeclare it with `void *` for the
  * trailing end-function/end-param pair and the native gate rejected it as a conflicting

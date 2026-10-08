@@ -1526,7 +1526,7 @@ extern u8 *g_pFmvArenaBase;          /* FMV work-arena base (0x1B234C) */
 extern char D_1AE7A0[];              /* FMV debug format string */
 extern void DebugPrintStub(const char *fmt, ...);
 extern s32 func_0011AB10(void);      /* current thread id */
-extern void func_0011AAB0(s32 thid, s32 arg);
+extern s32 func_0011AAB0(s32 thid, s32 priority);
 extern void BuildAspectBlitStrips(void *a, void *b);
 extern s32 InitFmvPlaybackEngine(void *a, void *b, void *engineCtx);
 extern s32 FmvStreamFeedLoop(void *dmaq, void *base, void *addq);   /* playback loop (parked) */
@@ -1581,7 +1581,7 @@ S136OS_SLOT(PlayFmvMovie);
 extern void DebugPrintStub(const char *fmt, ...);
 extern void BuildAspectBlitStrips(void *a, void *b);
 extern s32 func_0011AB10(void);
-extern void func_0011AAB0(s32 thid, s32 arg);
+extern s32 func_0011AAB0(s32 thid, s32 priority);
 extern s32 InitFmvPlaybackEngine(void *a, void *b, void *engineCtx);
 extern s32 FmvStreamFeedLoop(void *dmaq, void *base, void *addq);
 extern void func_003503D8(void);

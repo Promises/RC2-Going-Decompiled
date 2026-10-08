@@ -417,12 +417,21 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AA90);
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AAA0);
 
 /**
- * func_0011AAB0 = EE kernel syscall 0x29 (RotateThreadReadyQueue).
+ * func_0011AAB0 = EE kernel syscall 0x29 (ChangeThreadPriority).
  * SCE library syscall stub (see func_0011AA20): load the syscall number into
- * $v1 and trap; the kernel's result is returned in $v0. Called with two
- * arguments by func_0011B800 (thread id + a constant 1).
+ * $v1 and trap; the kernel sets thread `thid` to priority `priority` and
+ * returns the previous priority (or a negative error) in $v0. The ROM body is
+ * `addiu $v1,$0,0x29; syscall`. 0x29 is ChangeThreadPriority in the EE kernel
+ * numbering (external SDK knowledge; DeleteSema 0x41 / SignalSema 0x42 /
+ * WaitSema 0x44 / FlushCache 0x64 sit in the same table), and both callers use
+ * the SDK idiom ChangeThreadPriority(GetThreadId(), 1): func_0011B800 here and
+ * PlayFmvMovie (text/24D728), each passing func_0011AB10 = syscall 0x2F
+ * (GetThreadId). This stub was formerly labelled RotateThreadReadyQueue, which
+ * is 0x2B and takes one argument. Value-returning as the SDK declares it
+ * (`int ChangeThreadPriority(int, int)`, include/rtl/ee/eekernel.h); both
+ * callers discard the result (task #1848).
  */
-void func_0011AAB0(s32 thid, s32 arg) {
+s32 func_0011AAB0(s32 thid, s32 priority) {
 #ifndef TARGET_NATIVE
     __asm__ volatile("addiu $3, $0, 0x29\n\tsyscall 0" ::: "$3", "memory");
 #else  /* EE kernel syscall - not executable on the native host */
@@ -432,12 +441,16 @@ void func_0011AAB0(s32 thid, s32 arg) {
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AAC0);
 
 /**
- * func_0011AAD0 = EE kernel syscall 0x2B (ReleaseWaitThread).
+ * func_0011AAD0 = EE kernel syscall 0x2B (RotateThreadReadyQueue).
  * SCE library syscall stub (see func_0011AA20): load the syscall number into
- * $v1 and trap; the kernel releases the given thread from its wait state and
- * returns its result in $v0. Called by func_0011B728 with a thread id.
+ * $v1 and trap; the kernel rotates the ready queue at priority `priority` and
+ * returns its result in $v0. The ROM body is `addiu $v1,$0,0x2B; syscall`;
+ * 0x2B is RotateThreadReadyQueue in the EE kernel numbering (external SDK
+ * knowledge; ReleaseWaitThread, which this stub was formerly labelled, is
+ * 0x2D). Called by the deferred-request worker func_0011B728 (op 1) and as
+ * func_0011AAD0(1) by text/250080 (task #1848).
  */
-s32 func_0011AAD0(s32 thid) {
+s32 func_0011AAD0(s32 priority) {
 #ifndef TARGET_NATIVE
     __asm__ volatile("addiu $3, $0, 0x2B\n\tsyscall 0" ::: "$3", "memory");
 #else  /* EE kernel syscall - not executable on the native host */
@@ -570,12 +583,16 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011ACA0);
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011ACB0);
 
 /**
- * func_0011ACC0 = EE kernel syscall 0x4A. SCE library syscall stub (see
- * func_0011AA20): load the syscall number into $v1 and trap. Called as a
- * register-write primitive: the $a0 pointer holds the value the kernel writes
- * to a hardware register (see func_0011F8D0). Exact SDK name UNCONFIRMED.
+ * func_0011ACC0 = EE kernel syscall 0x4A (SetOsdConfigParam). SCE library
+ * syscall stub (see func_0011AA20): load the syscall number into $v1 and
+ * trap; the kernel takes the OSD configuration word from the $a0 pointer (see
+ * func_0011F8D0). The ROM body is `addiu $v1,$0,0x4A; syscall`. 0x4A is
+ * SetOsdConfigParam in the EE kernel numbering (external SDK knowledge; its
+ * 0x4B partner is func_0011ACD0, NOTE #9692). The vendored eekernel.h has no
+ * prototype; void matches ps2sdk's `void SetOsdConfigParam(ConfigParam *)`
+ * (task #1848).
  */
-void func_0011ACC0(s32 *in) {
+void func_0011ACC0(s32 *config) {
 #ifndef TARGET_NATIVE
     __asm__ volatile("addiu $3, $0, 0x4A\n\tsyscall 0" ::: "$3", "memory");
 #else  /* EE kernel syscall - not executable on the native host */
@@ -583,12 +600,16 @@ void func_0011ACC0(s32 *in) {
 }
 
 /**
- * func_0011ACD0 = EE kernel syscall 0x4B. SCE library syscall stub (see
- * func_0011AA20): load the syscall number into $v1 and trap. Called as a
- * register-read primitive: the kernel stores the register value through the
- * $a0 pointer (see func_0011F8D0). Exact SDK name UNCONFIRMED.
+ * func_0011ACD0 = EE kernel syscall 0x4B (GetOsdConfigParam). SCE library
+ * syscall stub (see func_0011AA20): load the syscall number into $v1 and
+ * trap; the kernel stores the OSD configuration word through the $a0 pointer
+ * (see func_0011F8D0, and the screenType / timezone readers in cod/022FA8).
+ * The ROM body is `addiu $v1,$0,0x4B; syscall`. 0x4B is GetOsdConfigParam in
+ * the EE kernel numbering (external SDK knowledge, NOTE #9692 section 4). The
+ * vendored eekernel.h has no prototype; void matches ps2sdk's
+ * `void GetOsdConfigParam(ConfigParam *)` (task #1848).
  */
-void func_0011ACD0(s32 *out) {
+void func_0011ACD0(s32 *config) {
 #ifndef TARGET_NATIVE
     __asm__ volatile("addiu $3, $0, 0x4B\n\tsyscall 0" ::: "$3", "memory");
 #else  /* EE kernel syscall - not executable on the native host */
@@ -1968,7 +1989,7 @@ void func_0011D868(void) {
 }
 
 extern s32 func_0011AC60(s32 handle);
-extern void func_0011AC40(s32 arg);
+extern s32 func_0011AC40(s32 sema);
 extern u8 D_0013FE80[];
 
 /* func_0011D8C8: allocate a slot from the 0x200-byte pool D_0013FE80 (32 slots
@@ -1995,7 +2016,7 @@ void *func_0011D8C8(void) {
     return 0;
 }
 
-extern void func_0011AC40(s32 sema);
+extern s32 func_0011AC40(s32 sema);
 extern u8 D_0013FE80[];
 
 /**
@@ -2051,13 +2072,16 @@ s32 func_0011DD98(void) {
     return 0;
 }
 
-extern void func_0011AC40(s32 sema);
+extern s32 func_0011AC40(s32 sema);
 
 /**
  * Release the singleton table lock: forward the global semaphore handle
- * D_00134734 to func_0011AC40 (SignalSema). A void tail call, so ee-gcc
- * sibling-call-optimises it into the original's frameless `j func_0011AC40`
- * (the handle load rides the jump's delay slot).
+ * D_00134734 to func_0011AC40 (SignalSema). A tail call whose result is
+ * discarded, so ee-gcc sibling-call-optimises it into the original's frameless
+ * `j func_0011AC40` (the handle load rides the jump's delay slot). That holds
+ * with func_0011AC40 declared value-returning (`int SignalSema(int)`, as the
+ * SDK has it): only `return func_0011AC40(...)` keeps $ra and becomes
+ * `jal` + a frame (task #1848, measured both ways).
  */
 void func_0011DDC8(void) {
     func_0011AC40(D_00134734);
@@ -2315,12 +2339,22 @@ s32 func_0011F038(s32 a) {
 
 /**
  * func_0011F048 = EE kernel syscall 0x74. SCE library syscall stub (see
- * func_0011AA20): load the syscall number into $v1 and trap. Used during DMA
- * channel setup (see func_0011F058) with a 2-word argument; callers ignore the
- * result, so this is modelled as void. Same primitive as func_0011F868. Exact
- * SDK name UNCONFIRMED.
+ * func_0011AA20): load the syscall number into $v1 and trap. Called by
+ * func_0011F058.
+ * SetSyscall: install `handler` as the kernel's entry for syscall number
+ * `syscall`. Identity from the ROM, not only from SDK numbering: each caller
+ * walks a {syscall number, handler} table (D_00134AD0 / D_00135568 /
+ * D_00135CF0, first rows {0x5A, a local word-copy routine} and
+ * {0x5B, 0x8007x000}), and the very next syscall 0x5A call copies a kernel
+ * patch to 0x8007x000 with exactly the (dst, src, nbytes) arguments the
+ * routine just installed as 0x5A takes (func_0011F000 for D_00134AD0). The
+ * SCE kernel numbering calls 0x74 RFU116 (ps2sdk: SetSyscall, external SDK
+ * knowledge). The vendored eekernel.h has no prototype for it; void matches
+ * ps2sdk's and no caller reads $v0 (task #1848). One of four file-local
+ * copies (0x11F048, 0x11F818, 0x11F868, 0x11FA50; the libkernl table entry
+ * is 0x11AFA0), so the splat name is kept rather than a duplicate name.
  */
-void func_0011F048(s32 a, s32 b) {
+void func_0011F048(s32 syscall, s32 handler) {
 #ifndef TARGET_NATIVE
     __asm__ volatile("addiu $3, $0, 0x74\n\tsyscall 0" ::: "$3", "memory");
 #else  /* EE kernel syscall - not executable on the native host */
@@ -2584,11 +2618,22 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00
 
 /**
  * func_0011F868 = EE kernel syscall 0x74. SCE library syscall stub (see
- * func_0011AA20): load the syscall number into $v1 and trap. Used during DMA
- * channel setup (see func_0011F938) with a 2-word argument; callers ignore the
- * result, so this is modelled as void. Exact SDK name UNCONFIRMED.
+ * func_0011AA20): load the syscall number into $v1 and trap. Called by
+ * func_0011F938.
+ * SetSyscall: install `handler` as the kernel's entry for syscall number
+ * `syscall`. Identity from the ROM, not only from SDK numbering: each caller
+ * walks a {syscall number, handler} table (D_00134AD0 / D_00135568 /
+ * D_00135CF0, first rows {0x5A, a local word-copy routine} and
+ * {0x5B, 0x8007x000}), and the very next syscall 0x5A call copies a kernel
+ * patch to 0x8007x000 with exactly the (dst, src, nbytes) arguments the
+ * routine just installed as 0x5A takes (func_0011F000 for D_00134AD0). The
+ * SCE kernel numbering calls 0x74 RFU116 (ps2sdk: SetSyscall, external SDK
+ * knowledge). The vendored eekernel.h has no prototype for it; void matches
+ * ps2sdk's and no caller reads $v0 (task #1848). One of four file-local
+ * copies (0x11F048, 0x11F818, 0x11F868, 0x11FA50; the libkernl table entry
+ * is 0x11AFA0), so the splat name is kept rather than a duplicate name.
  */
-void func_0011F868(s32 a, s32 b) {
+void func_0011F868(s32 syscall, s32 handler) {
 #ifndef TARGET_NATIVE
     __asm__ volatile("addiu $3, $0, 0x74\n\tsyscall 0" ::: "$3", "memory");
 #else  /* EE kernel syscall - not executable on the native host */
@@ -2711,11 +2756,21 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00
 /**
  * func_0011FA50 = EE kernel syscall 0x74 (same primitive as func_0011F868).
  * SCE library syscall stub (see func_0011AA20): load the syscall number into
- * $v1 and trap. Called from the GS/DMA reset path (func_0011FAB8) with a
- * 2-word argument; callers ignore the result, so this is modelled as void.
- * Exact SDK name UNCONFIRMED.
+ * $v1 and trap. Called by func_0011FAB8.
+ * SetSyscall: install `handler` as the kernel's entry for syscall number
+ * `syscall`. Identity from the ROM, not only from SDK numbering: each caller
+ * walks a {syscall number, handler} table (D_00134AD0 / D_00135568 /
+ * D_00135CF0, first rows {0x5A, a local word-copy routine} and
+ * {0x5B, 0x8007x000}), and the very next syscall 0x5A call copies a kernel
+ * patch to 0x8007x000 with exactly the (dst, src, nbytes) arguments the
+ * routine just installed as 0x5A takes (func_0011F000 for D_00134AD0). The
+ * SCE kernel numbering calls 0x74 RFU116 (ps2sdk: SetSyscall, external SDK
+ * knowledge). The vendored eekernel.h has no prototype for it; void matches
+ * ps2sdk's and no caller reads $v0 (task #1848). One of four file-local
+ * copies (0x11F048, 0x11F818, 0x11F868, 0x11FA50; the libkernl table entry
+ * is 0x11AFA0), so the splat name is kept rather than a duplicate name.
  */
-void func_0011FA50(s32 a, s32 b) {
+void func_0011FA50(s32 syscall, s32 handler) {
 #ifndef TARGET_NATIVE
     __asm__ volatile("addiu $3, $0, 0x74\n\tsyscall 0" ::: "$3", "memory");
 #else  /* EE kernel syscall - not executable on the native host */
