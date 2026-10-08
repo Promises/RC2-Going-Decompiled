@@ -42,9 +42,10 @@ typedef struct { s32 f[10]; } CamSlotRecord; /* 0x28-byte slot descriptor */
  * the streaming text-table directory relocated by func_00279D88. */
 extern u8 g_currentLanguage;
 #ifndef TARGET_NATIVE
-/* Absolute view of g_currentLanguage (the #8036 construct, RULING #8620): the
- * ROM reads it with lui/lbu %hi/%lo in func_00279D88, where cc1 would use
- * $gp; sized 16 for the assembler, relocations name g_currentLanguage. */
+/* ADDRESSING-MODEL DEVICE (RULING #8620): absolute view of g_currentLanguage
+ * (the #8036 construct). func_00279D88 reads the byte with the ROM's
+ * `lui $3,%hi; lbu $3,%lo($3)` pair, where cc1 would use a $gp lbu. Sized 16
+ * for the assembler; relocations name g_currentLanguage. */
 __asm__(".extern g_currentLanguageAbs, 16\n\tg_currentLanguageAbs = g_currentLanguage");
 extern u8 g_currentLanguageAbs;
 #else
@@ -143,10 +144,11 @@ extern u8 g_fullScreenTintPacket[];
 extern s32 g_gsPixelOffsetX[];
 extern s32 g_gsPixelOffsetY[];
 #ifndef TARGET_NATIVE
-/* Absolute views of the GS-window pixel offsets (the #8036 construct, RULING
- * #8620, as text/24D728 has them): func_0027F168 reads each with the
- * assembler's same-register lui/lw pair, i.e. cc1 saw small data. Sized 16 for
- * the assembler; relocations name the real symbols. */
+/* ADDRESSING-MODEL DEVICE (RULING #8620): absolute views of the GS-window
+ * pixel offsets (the #8036 construct, as text/24D728 has them). func_0027F168
+ * reads each with the ROM's same-register `lui $r,%hi; lw $r,%lo($r)` pair,
+ * the assembler's expansion of a one-insn `lw $r,sym`, i.e. cc1 saw small
+ * data. Sized 16 for the assembler; relocations name the real symbols. */
 __asm__(".extern g_gsPixelOffsetXAbs, 16\n\tg_gsPixelOffsetXAbs = g_gsPixelOffsetX");
 __asm__(".extern g_gsPixelOffsetYAbs, 16\n\tg_gsPixelOffsetYAbs = g_gsPixelOffsetY");
 extern s32 g_gsPixelOffsetXAbs, g_gsPixelOffsetYAbs;
