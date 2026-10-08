@@ -544,3 +544,4 @@ usa text/235FE8 func_00345FF0
 usa text/235FE8 func_003460E0
 usa text/235FE8 func_003461D0
 usa text/235FE8 func_00347348
+usa text/191238 func_00293B68

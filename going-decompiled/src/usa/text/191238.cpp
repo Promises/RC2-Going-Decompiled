@@ -2178,27 +2178,38 @@ void func_00293B10(s32 *table, s32 idx) {
  * through idMap (byte table); a negative id passes through. Each instance is
  * then dispatched to func_00293438 (when instMode != 0, with the material block
  * arg = instMode + matId*0x10 — instMode doubles as the material-block base
- * pointer) or func_00293760 (when instMode == 0). The matching build keeps the
- * asm (save-layout wall). */
+ * pointer) or func_00293760 (when instMode == 0).
+ * Byte-exact on the s136os arm (task #1909). The ROM saves eight GPRs at 8-byte
+ * stride, which SN 1.36 -fopt-stack emits as-is; the old "save-layout wall" was a
+ * property of the 2.9 arm only. What closed it is phrasing, each lever priced by
+ * removing it alone in a solo s136 compile (relocations masked):
+ *  - the group cursor is a local copy of the table pointer, so cc1 parks the
+ *    incoming $4 in $7 once $7 (groupCount) is copied out: without it 15/69;
+ *  - the cursor steps in the for header, so the next-group pointer gets $20 and
+ *    the next index $21, as in the ROM: stepped at the loop bottom, 4/69. */
 #ifdef TARGET_NATIVE
 extern void func_00293438(void *inst, s32 matBlock, s32 a2, s32 a3, s32 a4, s32 a5, s32 matId);
 extern void func_00293760(void *inst, s32 a1, s32 a2, s32 a3, s32 a4, s32 matId);
 #endif
 
-#ifndef TARGET_NATIVE
-/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
- * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 83.45% PACKED-SAVE /
- * engine96 76.84% UNKNOWN-addiu; best arm sdk29, first differing insn there: 'addiu sp, sp,
- * -0x50' vs 'addiu sp, sp, -0x80' */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00293B68);
+/* t496 probe (unit objdiff on the all-promoted probe files): sdk29 83.45% PACKED-SAVE
+ * ('addiu sp, sp, -0x50' vs '-0x80'), engine96 76.84% UNKNOWN-addiu.
+ * GUARD (task #1909): on EE this C is the image's body, compiled alone by SN
+ * 2.95.3 v1.36 -fopt-stack (tools/ee/s136os_functions.txt) and spliced over the
+ * S136OS_SLOT line by tools/ee/s136os_splice.sh; the 2.9 compile sees only the
+ * slot, so a build that skips the splice loses the function. On native it is
+ * plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00293B68)
+S136OS_SLOT(func_00293B68);
 #else
 /* Prototypes this body needs whose declarations sit in other guarded arms:
  * the s136os arm compiles this arm alone, so it must see them here. */
 extern void func_00293438(void *inst, s32 matBlock, s32 a2, s32 a3, s32 a4, s32 a5, s32 matId);
 extern void func_00293760(void *inst, s32 a1, s32 a2, s32 a3, s32 a4, s32 matId);
-void func_00293B68(u8 *groups, s32 instMode, u8 *idMap, s32 groupCount) {
+void func_00293B68(u8 *groupTable, s32 instMode, u8 *idMap, s32 groupCount) {
     s32 g;
-    for (g = 0; g < groupCount; g++) {
+    u8 *groups = groupTable;
+    for (g = 0; g < groupCount; g++, groups += 0x10) {
         s32 packed   = *(s32 *)(groups + 4);
         u8 *base     = *(u8 **)(groups + 0);
         s32 hi       = packed >> 16;
@@ -2221,7 +2232,6 @@ void func_00293B68(u8 *groups, s32 instMode, u8 *idMap, s32 groupCount) {
             }
             inst += 0x40;
         }
-        groups += 0x10;
     }
 }
 #endif
