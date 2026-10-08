@@ -4248,38 +4248,68 @@ void func_002DF1B8(s32 param) {
 }
 #endif
 
-/* Acquire a free map cache slot (id != 0, not already in-use, free bit clear,
- * with `forceSet` selecting bit polarity), mark it in-use (bit 2), fill its
- * backing memory with the 0xDEADBEEF pattern sized by GetMenuWorkBufferSize, and return
- * the slot id. Returns 0 if none free. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", AllocMenuWorkBuffer);
+/* Acquire a free menu work buffer from the 5-slot pool at D_001B1E90+0x40
+ * (per slot: the buffer address at +0, its flags at +4; flag bit 0 = size
+ * class, bit 1 = in use). The first slot whose size class matches wantLarge,
+ * that has a buffer, and is not in use is marked in use, its buffer filled
+ * with 0xDEADBEEF for GetMenuWorkBufferSize bytes, and returned. Returns 0
+ * when no slot is free.
+ *
+ * wantLarge: nonzero for a slot whose size-class bit is set (the 0x4F000
+ * buffers, per GetMenuWorkBufferSize), zero for one whose bit is clear.
+ *
+ * MATCHED on the s136os arm (SN 2.95.3 v1.36 -fopt-stack, task #1929). The
+ * ROM walks the buffer and flag words with two pointers, but reads the flag
+ * it marks through base + (slot << 3), formed at the top of every pass (it
+ * fills the size-class branch's delay slot). Each piece priced by removing it
+ * alone (solo s136 screen, relocated fields masked, words differing of 47,
+ * built length in brackets):
+ *   - the empty tied fence on slot (RULING #8483): without it loop.c folds
+ *     slot << 3 into the walking flag pointer, 41 (44);
+ *   - the offset formed at the top of the pass: 37 (45);
+ *   - the in-use flag read through base + offset rather than the walking
+ *     pointer: 42 (41);
+ *   - the offset added as an int with the offset first (the ROM's
+ *     `addu $5,$3,$8`): 1 as `(u8 *)flags + offset`;
+ *   - the size class as an if/else with a load in each arm: 42 (43) as a
+ *     conditional expression, which cc1 if-converts;
+ *   - slot = 0 before the walking copy of the flag base: 4 in a for-init. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_AllocMenuWorkBuffer)
+S136OS_SLOT(AllocMenuWorkBuffer);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern s32 GetMenuWorkBufferSize(s32 id);
 extern void FillMemory32(s32 dst, u32 pattern, s32 nbytes);
 /* (end of this body's declarations) */
-/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
- * objdiff): sdk29 71.70% / engine96 71.70%; better arm equal; 23 differing
- * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
- * insn: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. Not iterated in t495. */
-    /* TODO(match): functional equivalent - not byte-exact. */
-s32 AllocMenuWorkBuffer(s32 forceSet) {
-    s32 *ids   = (s32 *)(D_001B1E90 + 0x40);
+s32 AllocMenuWorkBuffer(s32 wantLarge) {
+    s32 *buffer = (s32 *)(D_001B1E90 + 0x40);
     u32 *flags = (u32 *)(D_001B1E90 + 0x44);
-    s32 i = 0;
-    for (;;) {
-        u32 polarity = forceSet ? (flags[i * 2] ^ 1) : flags[i * 2];
-        u32 raw = flags[i * 2];
-        if ((polarity & 1) == 0 && ids[i * 2] != 0 && (raw & 2) == 0) {
-            flags[i * 2] = raw | 2;
-            FillMemory32(ids[i * 2], 0xdeadbeef, GetMenuWorkBufferSize(ids[i * 2]));
-            return ids[i * 2];
+    s32 slot = 0;
+    u32 *flag = flags;
+
+    for (; slot < 5; slot++, buffer += 2, flag += 2) {
+        u32 sizeClass;
+        s32 offset;
+        __asm__("" : "+r"(slot));
+        offset = slot << 3;
+        if (wantLarge) {
+            sizeClass = *flag ^ 1;
+        } else {
+            sizeClass = *flag;
         }
-        i++;
-        if (i > 4) return 0;
+        if (sizeClass & 1) continue;
+        if (*buffer == 0) continue;
+        {
+            u32 *entry = (u32 *)(offset + (s32)flags);
+            u32 bits = *entry;
+            if (bits & 2) continue;
+            *entry = bits | 2;
+            FillMemory32(*buffer, 0xDEADBEEF, GetMenuWorkBufferSize(*buffer));
+            return *buffer;
+        }
     }
+    return 0;
 }
 #endif
 

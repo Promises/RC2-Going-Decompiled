@@ -571,3 +571,4 @@ usa text/1D54C0 func_002D9C18
 usa text/1D54C0 func_002DC520
 usa text/1D54C0 func_002D5A48
 usa text/1D54C0 func_002D5D10
+usa text/1D54C0 AllocMenuWorkBuffer
