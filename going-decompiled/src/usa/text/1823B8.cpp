@@ -63,9 +63,19 @@ _Static_assert(__builtin_offsetof(UiSpritePacket, alpha) == 0x88, "alpha");
  * Only the NATIVE port needs the platform render backend, through
  * ProjectAndClipBillboardQuad; that work is parked (RULING #9559) and says
  * nothing about the EE byte match.
+ * What a C body must reproduce (from the ROM, 245 words): a 0xA00-byte frame
+ * (`addiu $sp,$sp,-0xA00` at 0x2823B8, `addiu $sp,$sp,0xA00` in the jr delay
+ * slot at 0x282788) with $16..$23/$30/$31 saved at 0x990..0x9D8 and
+ * $f20..$f22 at 0x9E0..0x9F0, and the backwards ring step as a signed
+ * `div $0,$3,$4` (0x282604) + `mfhi $2` (0x282608) on (idx + frames - 1),
+ * behind cc1's divide-by-zero trap `beql $4,$0` / `break 0,7`
+ * (0x2825F4/0x2825F8).
  * Before writing C: its outer loops are NOT strength-reduced in the ROM
  * (`mult k,0x90` recomputed per iteration) while every natural C loop is, the
- * same wall DrawGlowSprites hit (NOTE #9807, task #1863). */
+ * same wall DrawGlowSprites hit (NOTE #9807, task #1863). Wall class: SN 1.36
+ * loop.c giv reduction, not addressing or allocation. No residual is measured
+ * here yet: NOTE #9807's one first-draft compile was 231 words against the
+ * ROM's 245, a LENGTH miss, not a near-miss. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1823B8", func_002823B8);
 
 /* MIS-SPLIT fragment: a bare `addiu $29,$29,0x100; nop` stack-restore tail that
@@ -153,21 +163,30 @@ extern Vec4 D_1A9FD0[4];    /* unit billboard quad corners */
  * 8 bytes apart, FACT #8810). `origin` must stay the local right after
  * `basis`: func_00283A70 reads it as the matrix's fourth row (sp+0xC0).
  * Four empty asm fences, each a SCHEDULING/ALLOCATION DEVICE that emits
- * nothing (RULING #8483). Task #1850 removed each ALONE and counted differing
- * words of the 120 (solo s136 compile, assembled, relocations masked):
- *  - `pos` tied after the stores (4/120): `pos` becomes multi-set, so alias
- *    analysis cannot prove the `lq` from it independent of the stack stores
- *    and it stays below them, as in the ROM;
- *  - `o` tied after that (11/120): hides `o = &origin` from cse, so the copy
- *    stores through $19 (`sq $2,0($19)`) instead of folding to `192($sp)`,
- *    and `o`'s set issues ahead of the colour stores;
- *  - `pos` tied again after the copy (4/120): keeps `sq` directly under `lq`;
- *  - `rollIn`, a copy of `off` behind a NON-volatile fence (2/120; the
- *    volatile form also 4/120): the copy dies at func_00283DA0's argument, so
- *    sched1 loads $5 before $4 as the ROM does.
+ * nothing (RULING #8483, rev 3: volatile or not is itself a measured lever).
+ * Each is priced two ways, one line changed ALONE: REMOVED, and with the
+ * OTHER form (volatile <-> non-volatile). Words differing of the 120, real
+ * USA unit build, linked image vs retail (task #1903; the same figures as
+ * task #1861's unit objdiff/vmu and, for removal, task #1850's solo harness):
+ *  - F1, `pos` tied after the stores, volatile — removed 4/120; non-volatile
+ *    builds 122 words, LENGTH-refused by the splice. `pos` becomes multi-set,
+ *    so alias analysis cannot prove the `lq` from it independent of the stack
+ *    stores and it stays below them, as in the ROM;
+ *  - F2, `o` tied after that, volatile — removed 11/120; non-volatile 0/120,
+ *    byte-identical, so its `volatile` is a FREE CHOICE, not load-bearing.
+ *    The fence hides `o = &origin` from cse, so the copy stores through $19
+ *    (`sq $2,0($19)`) instead of folding to `192($sp)`, and `o`'s set issues
+ *    ahead of the colour stores;
+ *  - F3, `pos` tied again after the copy, volatile — removed 4/120;
+ *    non-volatile 4/120 (the same four words): keeps `sq` directly under `lq`;
+ *  - F4, `rollIn`, a copy of `off`, NON-volatile — removed 2/120; volatile
+ *    4/120: the copy dies at func_00283DA0's argument, so sched1 loads $5
+ *    before $4 as the ROM does.
  * Not devices but also load-bearing: `origin` as its own local rather than
  * basis[3] (31/120), `off` separate from `view` (6/120), the chained colour
  * assignment (4/120: it puts the 0x40 store first). NOTE #9786 has the route.
+ * Only its NATIVE port needs the platform render backend, through
+ * func_00281540 (parked, RULING #9559); the EE byte match above did not.
  */
 #if !defined(TARGET_NATIVE) && !defined(S136OS_func_00282868)
 S136OS_SLOT(func_00282868);
@@ -276,12 +295,16 @@ extern void func_0027CDC8(void *worldPos, f32 *outX, f32 *outY);
  * Compiled on the s136os arm (SN 1.36 -fopt-stack: $16..$23/$30/$31 saved
  * 8 bytes apart, FACT #8810). `origin` must stay the local right after
  * `basis`: func_00283A70 reads it as the matrix's fourth row (sp+0xC0).
- * Two empty asm fences (RULING #8483) that emit nothing; task #1850 removed
- * each ALONE and counted differing words of the 244 (solo s136 compile,
- * assembled through the build's li.s expansion, relocations masked):
- *  - `o` tied before the copy (1/244): the copy stores through $18
- *    (`sq $2,0($18)`) instead of cse folding it to `192($sp)`;
- *  - `pos` tied after the copy (4/244): keeps `sq` directly under `lq`.
+ * Two empty asm fences (RULING #8483, rev 3) that emit nothing, both
+ * volatile. Each is priced two ways, one line changed ALONE: REMOVED, and
+ * NON-volatile. Words differing of the 244, real USA unit build, linked image
+ * vs retail (task #1903; the same figures as task #1861's unit objdiff/vmu
+ * and, for removal, task #1850's solo harness):
+ *  - G1, `o` tied before the copy — removed 1/244; non-volatile 10/244, so
+ *    here the `volatile` is worth more than the fence: the copy stores
+ *    through $18 (`sq $2,0($18)`) instead of cse folding it to `192($sp)`;
+ *  - G2, `pos` tied after the copy — removed 4/244; non-volatile 4/244 (the
+ *    same four words): keeps `sq` directly under `lq`.
  * Also load-bearing (removing each alone): `keep` as a second pointer to
  * `offset` while `off` walks the corners (191/244), `mtx = view` after the
  * add (215/244), the walking `s`/`t` pointers instead of quad.st[i][k]
@@ -289,6 +312,8 @@ extern void func_0027CDC8(void *worldPos, f32 *outX, f32 *outY);
  * zero compares only, the stores writing 0.0f directly (109/244), the
  * `+= cond ? -jitter : jitter` form (65/244), `origin` as its own local
  * (28/244) and the chained colour assignment (4/244).
+ * Only its NATIVE port needs the platform render backend, through
+ * func_00281540 (parked, RULING #9559); the EE byte match above did not.
  */
 #if !defined(TARGET_NATIVE) && !defined(S136OS_func_00282A80)
 S136OS_SLOT(func_00282A80);
