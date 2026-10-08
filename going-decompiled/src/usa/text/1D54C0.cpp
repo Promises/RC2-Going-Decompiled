@@ -4478,7 +4478,7 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_0
  * RTC, snapshot the current level WAD, build the image at `dst`, and arm the
  * 0x13-frame autosave countdown if idle. */
 #ifndef TARGET_NATIVE
-/* ADDRESSING-MODEL DEVICE for the D_1A7360 RTC buffer that func_002DF668 and
+/* ADDRESSING-MODEL DEVICE for the g_saveClock RTC buffer that func_002DF668 and
  * func_002DF710 stamp from (emits no code; RULING #8620's form on an extern
  * declaration). It sits at FILE SCOPE, not inside either member's #else arm, so
  * that the unit's own 2.9 TU declares the symbol too: tools/ee/s136os_splice.sh
@@ -4486,9 +4486,9 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_0
  * s136os TU's end-of-file `, 8` line (cc1's, from the `[8]` extent) is not
  * carried in front of the block, where it would make the access gp-relative
  * (task #1394: the splice REFUSED the in-arm placement for both members as
- * ADDRESSING D_1A7360). No 2.9 code in this unit names D_1A7360, so nothing
+ * ADDRESSING D_1A7360, its name then). No 2.9 code in this unit names g_saveClock, so nothing
  * else changes. */
-__asm__(".extern D_1A7360, 16");
+__asm__(".extern g_saveClock, 16");
 #endif
 /* GUARD (task #1394): on EE the #else body below is the image's func_002DF668, compiled
  * alone by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
@@ -4507,8 +4507,8 @@ extern void func_00297FA0(s32 saveRegion);
 extern void BuildSaveImage(void *dst);
 /* (end of this body's declarations) */
 /* The RTC timestamp buffer the save image is stamped from (0x1A7360). The EE
- * arm names it by its ROM symbol D_1A7360 (the relocation the ROM carries);
- * the native runtime knows the same address as D_001A7360. The `.extern ,16`
+ * arm names it g_saveClock (symbol_addrs, task #1973; splat's D_1A7360 before),
+ * and so does the native runtime. The `.extern ,16`
  * (at file scope above this function's guard) plus the 8-byte extent is an
  * ADDRESSING-MODEL DEVICE (RULING #8620 class,
  * as D_001B1E90 above): cc1 treats it as -G8 small data and emits each use as
@@ -4519,11 +4519,11 @@ extern void BuildSaveImage(void *dst);
  * same device, the lui/addiu pair lands in swapped registers. */
 #ifndef SAVE_CLOCK_BUF
 #ifndef TARGET_NATIVE
-extern u8 D_1A7360[8];
-#define SAVE_CLOCK_BUF ((void *)D_1A7360)
+extern u8 g_saveClock[8];
+#define SAVE_CLOCK_BUF ((void *)g_saveClock)
 #else
-extern u8 D_001A7360[];
-#define SAVE_CLOCK_BUF ((void *)D_001A7360)
+extern u8 g_saveClock[];
+#define SAVE_CLOCK_BUF ((void *)g_saveClock)
 #endif
 #endif
 #ifndef TARGET_NATIVE
@@ -4540,7 +4540,7 @@ extern u8 g_areaTable[];
  * cmp 0; screened by task #1389, SN 2.95.3 v1.36 -fopt-stack, masked words
  * and relocations). Levers: the record fields through g_areaTable (the ROM's lui/addiu
  * base in $18) rather than the five gp-relative aliases D_00139554 ...
- * D_00139548; the D_1A7360 device above; `slot` an s32 (the ROM stores $5
+ * D_00139548; the g_saveClock device above; `slot` an s32 (the ROM stores $5
  * with no sign extension). */
 void func_002DF668(void *dst, s32 slot) {
     u8 *area = (u8 *)g_areaTable;
@@ -4585,11 +4585,11 @@ extern void BuildSaveImage(void *dst);
  * once. */
 #ifndef SAVE_CLOCK_BUF
 #ifndef TARGET_NATIVE
-extern u8 D_1A7360[8];
-#define SAVE_CLOCK_BUF ((void *)D_1A7360)
+extern u8 g_saveClock[8];
+#define SAVE_CLOCK_BUF ((void *)g_saveClock)
 #else
-extern u8 D_001A7360[];
-#define SAVE_CLOCK_BUF ((void *)D_001A7360)
+extern u8 g_saveClock[];
+#define SAVE_CLOCK_BUF ((void *)g_saveClock)
 #endif
 #endif
 extern u8 g_areaTable[];
@@ -4606,7 +4606,7 @@ extern u8 g_areaTable[];
  * gp-relative aliases D_00139528 ... D_00139554 / D_00139410, with the base
  * taken AFTER the calls (the ROM materialises it into a caller-saved register
  * there; taken at entry, cc1 holds it in an extra callee-saved register), and
- * the D_1A7360 device. */
+ * the g_saveClock device. */
 void func_002DF710(void *dst, s32 slot) {
     u8 *area;
 

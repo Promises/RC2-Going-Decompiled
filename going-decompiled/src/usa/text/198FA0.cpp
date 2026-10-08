@@ -1445,7 +1445,7 @@ s32 SerializeSaveSections(void *dst, s32 slot, SaveSection *table) {
  * 0xA0, dir stride 0x1C) from a save image. Stores whether the image fails
  * VerifySaveHeaderChecksum, then copies fields from the payloads of the first
  * four global save sections: g_playerProgress, the g_boltCount block (word 0
- * and byte 0x12), D_1A7BC8, and the 8-byte D_1A7360. No return value.
+ * and byte 0x12), D_1A7BC8, and the 8-byte g_saveClock. No return value.
  *
  * Built on the s136os arm (task #1691). The old "ldl/ldr cannot come from C"
  * label is wrong: a byte-aligned 8-byte struct copy gives them. Two spellings
@@ -1492,7 +1492,7 @@ void FillSaveSlotInfo(u8 *image, s32 slot, s32 dir) {
     image += 0x40 + 8;                      /* section 2: D_1A7BC8 */
     g_areaSaveSlotRecords[slot].saveSlots[dir].word = *(s32 *)image;
     g_areaSaveSlotRecords[slot].saveSlots[dir].block =
-        *(SaveSlotInfoBlock8 *)(image + 4 + 8); /* section 3: D_1A7360 */
+        *(SaveSlotInfoBlock8 *)(image + 4 + 8); /* section 3: g_saveClock */
 }
 #endif
 
@@ -1674,11 +1674,13 @@ s32 DeserializeSaveSections(void *image, s32 slotMul, SaveSection *table) {
  * D_1A7BC8 are read only here in this unit, always absolute (0x29C2F8,
  * 0x29C310), so they are sized 16 directly (75/145 without). Nothing is moved
  * and nothing is emitted; native reads the plain symbols.
- * g_saveClockAbs is a NONZERO-offset equate (RULING #9574): offset 0xC from
- * g_gsPixelOffsetY (0x1A7354), ROM `lui $4,%hi(D_1A7360)` at 0x29C1E8. */
+ * g_saveClockAbs equates g_saveClock (0x1A7360), ROM `lui $4,%hi(g_saveClock)`
+ * at 0x29C1E8. It was the RULING #9574 offset form `g_gsPixelOffsetY + 0xC`
+ * until task #1973 named the clock: the relocation now names g_saveClock
+ * itself, at the same address. */
 #ifndef TARGET_NATIVE
 __asm__(".extern g_levelVisitedMarkersAbs, 16\n\tg_levelVisitedMarkersAbs = g_levelVisitedMarkers");
-__asm__(".extern g_saveClockAbs, 16\n\tg_saveClockAbs = g_gsPixelOffsetY + 0xC");
+__asm__(".extern g_saveClockAbs, 16\n\tg_saveClockAbs = g_saveClock");
 __asm__(".extern g_boltCount, 16\n\t.extern D_1A7BC8, 16");
 #endif
 
@@ -1718,7 +1720,6 @@ __asm__(".extern g_boltCount, 16\n\t.extern D_1A7BC8, 16");
 S136OS_SLOT(CommitProgressCheckpoint);
 #else
 extern u8   g_health[];
-extern u8   g_gsPixelOffsetY[];
 extern s32  g_boltCount;
 extern s32  D_1A7BC8;                 /* extra checkpoint word (recorded at rec+0x3C) */
 extern u8   g_saveImageGlobal[];
@@ -1733,7 +1734,8 @@ typedef struct { u8 bytes[8]; } SaveClock8; /* byte-aligned: ldl/ldr, sdl/sdr */
 extern SaveClock8 g_saveClockAbs;           /* 8 bytes: cc1-small, see the device above */
 extern u8         g_levelVisitedMarkersAbs[8];
 #else
-#define g_saveClockAbs (*(SaveClock8 *)(g_gsPixelOffsetY + 0xC))
+extern u8 g_saveClock[8];
+#define g_saveClockAbs (*(SaveClock8 *)g_saveClock)
 #define g_levelVisitedMarkersAbs g_levelVisitedMarkers
 #endif
 
