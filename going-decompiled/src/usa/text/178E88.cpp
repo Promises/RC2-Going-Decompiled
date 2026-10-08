@@ -1436,11 +1436,12 @@ extern u8 *g_hudTextureSlots;     /* 8-byte slots; +0x4 = VRAM block */
 extern u8 *g_hudClutSlots;
 extern void *g_pHudAssetHeader[]; /* [0] = header base (+0x24 clut count, +0x44 tex count) */
 
-/* Begin2dDrawBatch's absolute accesses. The ROM reads and writes every one of
- * these words with the assembler's `lui; lw/sw %lo` macro pair, so each goes
- * through an offset-0 alias sized 16 that cc1 sees as small data (the #8036
- * construct, as ResetPerFrameDrawQueues above; relocations name the real
- * symbols). The HUD pointers and the back-buffer base are read through
+/* Begin2dDrawBatch's and End2dDrawBatch's absolute accesses. The ROM reads
+ * and writes every one of these words with the assembler's `lui; lw/sw %lo`
+ * macro pair, so each goes through an offset-0 alias sized 16 that cc1 sees as
+ * small data (the #8036 construct, as ResetPerFrameDrawQueues above;
+ * relocations name the real symbols). The frame DMA cursor's own alias,
+ * g_frameDmaCursorAbs, is declared above AppendFrameInitGsState. The HUD pointers and the back-buffer base are read through
  * one-member struct views: cc1 2.9 lets a union store alias a varying struct
  * but not a fixed scalar, and the ROM re-reads these after each slot store. */
 typedef struct { u8 *p; } HudPtrWord;
