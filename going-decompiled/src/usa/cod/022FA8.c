@@ -439,10 +439,12 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_001246D0);
 
 /* libcdvd's semaphores and busy flag. Written from the RPC end-callback
  * func_00124630 (interrupt context) as well as from sceCdInit, func_001253A8,
- * func_00125620, func_00124818 and func_00124780 (ROM writer census), so the
- * ones func_00124780 stores are volatile. That is also what the bytes need:
+ * func_00125620, func_00124818 and func_00124780 (ROM writer census), which
+ * makes `volatile` a plausible original declaration. Its placement here is a
+ * measured codegen device (RULING #8404), not derived from that census:
  * dropping `volatile` from D_001363A0, D_001363A8 or D_001363B0 alone leaves
- * func_00124780 3, 2 and 3 words off; D_001363AC needs none (0 either way). */
+ * func_00124780 3, 2 and 3 words off, while D_001363AC, which func_00124780
+ * also stores, matches either way and is left plain. */
 extern volatile s32 D_001363A0;
 extern volatile s32 D_001363A8;
 extern s32 D_001363AC;
