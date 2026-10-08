@@ -2878,7 +2878,7 @@ extern void func_00130288(s32 arg0, void *buf);
 extern char D_0013BA98[];
 
 /**
- * Wait for the IPU input DMA to drain and resynchronise the bit position
+ * Wait for the IPU output DMA (IPU_FROM) to drain and resynchronise the bit position
  * (called before each macroblock by IpuDecodeSlice). After IpuWaitReady,
  * while the IPU_FROM DMA (channel 3, QWC 0x1000B020) still has quadwords
  * and IPU_CTRL (0x10002010) shows no error (bit 14), ask callback entry 1
