@@ -638,7 +638,34 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", WaitVblankStartI
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B140);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B1E8);
+extern s32 func_0011BE20(void);
+extern s32 func_0011BCD0(const char *buf, s32 len);
+
+/**
+ * TTY write hook (called twice each by func_00118BC0 and func_00119AC0): for
+ * fd 1 or 2, open the DECI2 TTY channel on first use (func_0011BE20; the flag
+ * D_00134688 latches a successful open) and send len bytes of buf through
+ * func_0011BCD0.
+ *
+ * @return func_0011BCD0's result, or -1 for any other fd or a failed open
+ *
+ * func_0011BE20 takes no argument. The earlier best spelling (NOTE #9721, 9 of
+ * 31 words) passed it one, which made cc1 load $a0 in that jal's delay slot,
+ * where the ROM's is a nop, and kept the extra value live in a saved register.
+ * The ARITY fix alone closes it.
+ */
+s32 func_0011B1E8(s32 fd, const char *buf, s32 len) {
+    if (fd == 1 || fd == 2) {
+        if (D_00134688 == 0) {
+            if (func_0011BE20() == 0) {
+                return -1;
+            }
+            D_00134688 = 1;
+        }
+        return func_0011BCD0(buf, len);
+    }
+    return -1;
+}
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B268);
 
