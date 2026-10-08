@@ -3144,7 +3144,16 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", UpdateLevelObje
  * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
  * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
  * property and was measured false as the reason this member stays unmatched (FACT #9873).
- * Residual: the saved-register set; the rest UNMEASURED. */
+ * Residual: the saved-register set; the rest UNMEASURED.
+ * TODO(match) re-screened on the s136os arm at its unpinned flags (RULING #9910,
+ * -O2 -G8 -fopt-stack, gcse on), task #2039, solo compile + asm_unit.sh, reloc
+ * fields masked: this #else is 95 vs 103 words; NOTE #9567's best body (struct
+ * equate g_objectiveScan = g_pRainHeightmap + 0x34) reaches 103 = 103 words but
+ * still differs in 78 positions - NOTE #9567's residual A (the ROM keeps the FULL
+ * g_mapVertexData address in $4/$20 and reads 0x230($4); cc1 folds +0x230 into
+ * %lo and keeps only a %hi copy) survives gcse, and the prologue saves interleave
+ * differently. A function-scope `u8 *map` makes it worse (105 words). Bodies and
+ * figures in NOTE #10118. */
 s32 UpdateLevelObjectiveStates(void) {
     extern s32 EvaluateProgressCondition(s32 cond, s32 arg);  /* defined later in-unit */
     ObjectiveScan *scan = (ObjectiveScan *)(g_pRainHeightmap + 0x34);
@@ -3472,7 +3481,20 @@ s32 func_0029EB38(void) {
  * pair). RE-PROBED 2026-06-12, best 76.57%: the original keeps both %hi
  * halves live in registers and re-materialises the D_1395B8 base via addiu
  * before each reload, while the pinned cc1 folds the +0x1D element address
- * into the lui/lbu pair (pointer-local shapes scored worse). Left as asm. */
+ * into the lui/lbu pair (pointer-local shapes scored worse). Left as asm.
+ * TODO(match) re-screened on the s136os arm at its unpinned flags (RULING #9910,
+ * gcse on), task #2039, solo compile + asm_unit.sh, reloc fields masked; 35 =
+ * 35 words unless stated (the #else below was not re-measured). NOTE #9485's
+ * two-local body differs in 10 positions: gcse now gives the ROM's %hi(D_1395B8)
+ * copy and hoists %hi(g_cinematicUnlockedFlags) into the first bnez slot, but the gate's
+ * miss branch is `bltz` where the ROM has `bltzl` (likely slot = the D_1395B8
+ * re-form), and the join's registers are swapped ($3/$2 vs the ROM's $2/$3).
+ * Writing the join as an inline helper taking (D_1395B8, &g_cinematicUnlockedFlags)
+ * after an `&&` gate gets the ROM's `bltzl` but loses the %hi(cin) hoist (13
+ * positions); the same helper after NOTE #9485's NESTED gate is output-identical
+ * to that body (10). So the gate's form alone trades `bltzl` against the hoist;
+ * the join's spelling and the helper's parameter order are inert, and a shared
+ * function-scope cin pointer is worse (36 words). Bodies in NOTE #10118. */
 extern s16 D_257502 ROM_SPLIT;   /* cinematic-unlock status code (0x1F / 0x20) */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029EB68);
