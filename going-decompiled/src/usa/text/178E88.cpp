@@ -1982,81 +1982,83 @@ void RunFxDrawHooksLate(void) {
  * #else. Not forcing a low-confidence body. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", DrawBlobShadows);
 
-/* FadeOutToBlackBlocking(frames) - synchronous fade-to-black run OUTSIDE the normal
- * game loop (level transitions block on it). Each of `frames` iterations waits the
- * frame DMA fence + vblank, resets the frame arenas, re-emits the draw environment +
- * screen clear, sets GS TEST_1 (reg 0x42) and ramps the RGBAQ (reg 1) alpha from 0 up
- * to 0x80 across the frame count, appends the prebuilt black-overlay quad
- * (g_fadeQuadPacket) to the frame chain, then kicks the DMA chain and flips the arena.
- * The per-frame fence stamp (g_renderLayerMask+0x4) is bumped after every vblank wait.
- * A final fence/vblank/reset + draw-env/clear leaves the next real frame on a cleared
- * black screen. Direction is a fade-IN of the black overlay (= fade-out of the scene).
- *
- * Engine region (ee-gcc 2.96) - faithful #else. The alpha ramp integer-divides by the
- * decreasing remaining-frame count (i+1); the original's break-on-div-zero guard is
- * implicit in C since the divisor is always >= 1. */
-/* TODO(match) t493: sdk29 73.11% / engine96 65.00% (unit objdiff, objdiff_build.sh +
- * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
- * every other remaining arm). Residual on the better arm (sdk29): SIBCALL (first differing insn:
- * ROM `addiu sp,sp,-48` vs built `addiu sp,sp,-112`). Levers: cc1-small/absolute globals model
- * RUN: 66.84% (engine96); engine96 with sched1 MEASURED (flag not landed): 65.10%. */
-/* DLI lever MEASURED (task #1220; unit objdiff report, objdiff_build.sh, this #else body promoted
- * SOLO, sdk29 arm, colima-ee-x86; every other row in the unit unchanged). cc1 emits
- * `dli $5,0x8000000044`; the ROM holds SN Ps2EeAs's expansion at 0x27DA30. A RULING #8549
- * allowlist row for that site moves this body 73.11% -> 74.34% (94 differing rows both ways,
- * built 91 words vs ROM 98, NOTE #8789) (objdiff % is a gate figure, not a distance: a reorder scores as
- * insert+delete, FACT #8792, ASSERTED). The dli is NOT the only residual, so no row was landed and
- * this stays INCLUDE_ASM. Residual class, solo: PACKED-SAVE first - the first differing insn is
- * ROM `addiu sp,sp,-48` vs built `addiu sp,sp,-112` (6 saves at stride 8 vs 7 at stride 16; NOTE
- * #8789, NOTE #8777); SIBCALL second, reproduced solo (cc1 emits `j AppendScreenClearPacket` where
- * the ROM has only `jr $31`). t493's 'SIBCALL' above is a blanket-screen label. Not dli.
- * PACKED-SAVE on sdk29; engine96 + #8036 aliases + #8483 fence + row reaches 90.41 (26 of 98
- * words), residual SCHED1 + DIV-TRAP (NOTE #8789).
- * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
- * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
- * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
- * property and was measured false as the reason this member stays unmatched (FACT #9873).
- * Residual: the saved-register set; the rest UNMEASURED. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", FadeOutToBlackBlocking);
-#else
 extern u8   g_fadeQuadPacket[];       /* prebuilt black-overlay GS quad packet */
 extern void AppendDrawEnvContext2(void);
 extern void KickFrameDmaChain(void);
 extern void FlipFrameArena(void);
+#ifndef TARGET_NATIVE
+/* ADDRESSING-MODEL DEVICES (RULING #8620) for FadeOutToBlackBlocking: two
+ * assembler names for g_frameCounter (0x1B1518, FACT #8036's equate; neither
+ * emits an instruction, both relocations name g_frameCounter). The ROM reads
+ * the counter with the same-register `lui $3; lw $3,%lo($3)` pair, the
+ * assembler's expansion of a one-insn `lw` of a 16-sized symbol, and stores it
+ * back %gp_rel from the jal delay slot: g_frameCounterAbs is the read (as the
+ * real -G8 symbol it is a %gp_rel load: 41/98, built 96), g_frameCounterGp
+ * the store (through g_frameCounterAbs the store is the two-insn absolute
+ * form and cannot fill the delay slot: 83/98, built 104).
+ * On native both are the word at g_renderLayerMask+0x4, as before. */
+__asm__(".extern g_frameCounterAbs, 16\n\tg_frameCounterAbs = g_frameCounter");
+__asm__(".extern g_frameCounterGp, 4\n\tg_frameCounterGp = g_frameCounter");
+extern s32 g_frameCounterAbs, g_frameCounterGp;
+#else
+#define g_frameCounterAbs ((&g_renderLayerMask)[1])
+#define g_frameCounterGp  ((&g_renderLayerMask)[1])
+#endif
 
+/** FadeOutToBlackBlocking — synchronous fade-to-black run OUTSIDE the normal
+ *  game loop (level transitions block on it).
+ *  @param frames  number of fade frames; 0 or less skips straight to the end
+ *  Each iteration re-emits the draw environment + screen clear, sets GS TEST_1
+ *  (reg 0x42) and ramps the RGBAQ (reg 1) alpha from 0 up to 0x80 across the
+ *  frame count, appends the prebuilt black-overlay quad (g_fadeQuadPacket) to
+ *  the frame chain as a DMA ref tag pair, then waits the frame DMA fence +
+ *  vblank, bumps g_frameCounter, kicks the DMA chain and flips the arena. A
+ *  final fence/vblank/reset + draw-env/clear leaves the next real frame on a
+ *  cleared black screen. The alpha ramp integer-divides by the remaining frame
+ *  count (i+1), which is never 0; the ROM keeps cc1's divide-by-zero trap.
+ *  MATCHED (task #2026): s136os arm (SN 1.36 -fopt-stack, -O2 -G8 -fno-gcse),
+ *  spliced, with a RULING #8549 row in tools/ee/ps2eeas_dli_sites.txt for the
+ *  reg-0x42 value 0x8000000044 at 0x27DA30 (without it GNU as gives
+ *  `li 128; dsll32; ori`: 2/98). No devices besides the g_frameCounter names
+ *  above and the landed g_frameDmaCursorAbs/Gp (the tag stores re-read the
+ *  cursor through g_frameDmaCursorAbs, the bump stores through
+ *  g_frameDmaCursorGp from the jal delay slot, as in AppendFrameInitGsState).
+ *  The PACKED-SAVE and SIBCALL residuals recorded here before (task #1220,
+ *  NOTE #8789) were cc1 2.9 properties: the s136os arm saves the ROM's six
+ *  registers at stride 8 and keeps the final `jal AppendScreenClearPacket`. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_FadeOutToBlackBlocking)
+S136OS_SLOT(FadeOutToBlackBlocking);
+#else
 void FadeOutToBlackBlocking(s32 frames)
 {
     s32 i;
 
     WaitFrameDmaFence(1);
     WaitVblankGetField(0);
-    *(s32 *)((u8 *)&g_renderLayerMask + 4) += 1;
+    g_frameCounterGp = g_frameCounterAbs + 1;
     ResetFrameArenas();
 
     for (i = frames - 1; i >= 0; i--) {
-        u32 *cursor;
         AppendDrawEnvContext1();
         AppendScreenClearPacket(1);
         AppendDrawEnvContext2();
         AppendGsRegPacket(0x42, 0x8000000044ULL);
         AppendGsRegPacket(1, (u64)(0x80 - (i * 0x80) / (i + 1)) << 0x18);
-        cursor = g_frameDmaCursor[0];
-        cursor[0] = 0x30000014;
-        cursor[1] = (u32)g_fadeQuadPacket;
-        cursor[2] = 0;
-        cursor[3] = 0x50000014;
-        g_frameDmaCursor[0] = cursor + 4;
+        ((u32 *)g_frameDmaCursorAbs)[0] = 0x30000014;   /* DMATAG ref -> g_fadeQuadPacket */
+        ((void **)g_frameDmaCursorAbs)[1] = g_fadeQuadPacket;
+        ((u32 *)g_frameDmaCursorAbs)[2] = 0;
+        ((u32 *)g_frameDmaCursorAbs)[3] = 0x50000014;
+        g_frameDmaCursorGp = g_frameDmaCursorAbs + 0x10;
         WaitFrameDmaFence(1);
         WaitVblankGetField(0);
-        *(s32 *)((u8 *)&g_renderLayerMask + 4) += 1;
+        g_frameCounterGp = g_frameCounterAbs + 1;
         KickFrameDmaChain();
         FlipFrameArena();
     }
 
     WaitFrameDmaFence(1);
     WaitVblankGetField(0);
-    *(s32 *)((u8 *)&g_renderLayerMask + 4) += 1;
+    g_frameCounterGp = g_frameCounterAbs + 1;
     ResetFrameArenas();
     AppendDrawEnvContext1();
     AppendScreenClearPacket(1);

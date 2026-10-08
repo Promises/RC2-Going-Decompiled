@@ -118,3 +118,12 @@ usa      func_0027E368  0x0027E418  $5,0x8000000044          34058000 00052e38 3
 #
 usa      func_0027E1E8  0x0027E220  $5,0xff000000ff          3405ff00 00052e38 34a500ff
 usa      func_0027E1E8  0x0027E270  $19,0xff000000ff         3413ff00 00139e38 367300ff
+#
+# FadeOutToBlackBlocking (text/178E88) compiles `dli $5,0x8000000044`, the
+# reg-0x42 value (the same constant as func_0027C020's and func_0027E368's
+# rows), in reorder mode and followed by a noreorder `jal AppendGsRegPacket`.
+# GNU as gives `li 128; dsll32; ori 0x44`; the ROM has Ps2EeAs's
+# `ori; dsll 24; ori` at 0x27DA30..0x27DA38. Compiled from C on the s136os arm
+# (task #2026).
+#
+usa      FadeOutToBlackBlocking  0x0027DA30  $5,0x8000000044  34058000 00052e38 34a50044
