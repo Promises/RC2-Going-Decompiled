@@ -1545,17 +1545,20 @@ typedef struct McPortSlotRequest {
 } McPortSlotRequest;
 
 /**
- * McGetEntSpace (libmc): ask for the free directory-entry space of the card
- * in `port`/`slot`. Same RPC-wrapper shape as McClose (func_00127668): returns
- * -0x64 (-100) if the RPC client is not bound and -0xC8 (-200) if the libmc
+ * libmc sceMcUnformat (McGetEntSpace is the build label, kept because matched
+ * names are frozen): unformat the card in `port`/`slot`. RPC #0x11 is
+ * sceMcFuncNoUnformat in the vendored libmc.h (FACT #5885). Same RPC-wrapper
+ * shape as McClose (func_00127668): returns -0x64 (-100, sceMcErrUnbind) if
+ * the RPC client is not bound and -0xC8 (-200, sceMcErrSemapho) if the libmc
  * mutex cannot be taken, otherwise stores port and slot in the shared request
  * block and issues RPC #0x11. On RPC success records 0x11 as the pending
  * command (the completion path releases the mutex); on failure releases the
  * mutex itself. Returns the RPC result.
  *
- * Two parameters: the ROM's only caller (SaveLoadStateMachine) passes two and
- * the body reads two, although the vendored libmc.h (a later SDK) declares a
- * third. The request is written through a typed pointer: spelled as byte
+ * Two parameters, as libmc.h declares sceMcUnformat(int port, int slot); the
+ * ROM's only caller (SaveLoadStateMachine) passes two. Its call site is gated
+ * on the card's +0x14 word being 0, which FACT #5885 records but does not
+ * explain. The request is written through a typed pointer: spelled as byte
  * offsets from g_mcRpcRequest, cc1 rebases the two stores off a `+4` address
  * and the body is 7 of 52 words off.
  */
