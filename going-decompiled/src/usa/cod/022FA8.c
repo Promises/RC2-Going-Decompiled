@@ -782,7 +782,65 @@ s32 sceCdReadClock(CdClock *clock) {
     return value;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", sceGsResetGraph);
+/* libgraph's global parameter block (sceGsGParam), the object func_00125960
+ * returns the address of. */
+typedef struct GsGParam {
+    s16 interMode;       /* 1 = interlaced */
+    s16 outMode;
+    s16 ffMode;          /* field/frame mode */
+    s16 version;         /* GS revision; 1 selects the single-circuit display */
+    void *vsyncFunc;     /* installed V-sync callback (0 = none) */
+    s32 vsyncHandlerId;  /* its INTC handler id */
+} GsGParam;
+
+s32 *func_00125960(void);
+extern s32 func_0011B588(s32 cause);                           /* DisableIntc */
+extern s32 func_0011A920(s32 cause, s32 handlerId);            /* RemoveIntcHandler */
+extern u64 func_0011AF60(u64 imr);                             /* GsPutIMR */
+extern void func_0011A820(s16 interlace, s16 omode, s16 ffmode); /* SetGsCrt */
+
+/**
+ * libgraph's sceGsResetGraph: mode 0 resets the GS (CSR = 0x200), records
+ * the interlace, output and field/frame modes and the GS revision (CSR bits
+ * 16..23) in the GsGParam block, masks all GS interrupts (GsPutIMR 0xFF00),
+ * removes any installed V-sync callback (the callback cleared before its
+ * handler id; the other order swaps the two stores, 2 of 100 words), and
+ * programs the CRTC (SetGsCrt). Mode 1 only flushes the GS (CSR = 0x100).
+ * Mode 5 records the modes and revision without a reset and programs the
+ * CRTC. Other modes do nothing. The ffMode field is stored as a flag.
+ */
+void sceGsResetGraph(s16 mode, s16 inter, s16 omode, s16 ffmode) {
+    GsGParam *gp;
+    switch (mode) {
+    case 0:
+        gp = (GsGParam *)func_00125960();
+        *(volatile u64 *)0x12001000 = 0x200;
+        gp->interMode = inter;
+        gp->outMode = omode;
+        gp->version = (*(volatile u64 *)0x12001000 >> 16) & 0xFF;
+        func_0011AF60(0xFF00);
+        gp->ffMode = ffmode != 0;
+        if (gp->vsyncFunc != 0) {
+            func_0011B588(2);
+            func_0011A920(2, gp->vsyncHandlerId);
+            gp->vsyncFunc = 0;
+            gp->vsyncHandlerId = 0;
+        }
+        func_0011A820(inter & 1, omode & 0xFF, ffmode & 1);
+        break;
+    case 1:
+        *(volatile u64 *)0x12001000 = 0x100;
+        break;
+    case 5:
+        gp = (GsGParam *)func_00125960();
+        gp->interMode = inter;
+        gp->outMode = omode;
+        gp->ffMode = ffmode != 0;
+        gp->version = (*(volatile u64 *)0x12001000 >> 16) & 0xFF;
+        func_0011A820(inter & 1, omode & 0xFF, ffmode & 1);
+        break;
+    }
+}
 
 extern s32 D_00137E00;
 
@@ -794,17 +852,6 @@ s32 *func_00125960(void) {
 }
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012596C);
-
-/* libgraph's global parameter block (sceGsGParam), the object func_00125960
- * returns the address of. */
-typedef struct GsGParam {
-    s16 interMode;       /* 1 = interlaced */
-    s16 outMode;
-    s16 ffMode;          /* field/frame mode */
-    s16 version;         /* GS revision; 1 selects the single-circuit display */
-    void *vsyncFunc;     /* installed V-sync callback (0 = none) */
-    s32 vsyncHandlerId;  /* its INTC handler id */
-} GsGParam;
 
 extern s32 func_0011E0D8(const char *path, s32 flags, ...);  /* open  */
 extern s32 func_0011E4E0(s32 fd, void *buf, s32 size);       /* read  */
