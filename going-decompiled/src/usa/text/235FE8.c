@@ -189,6 +189,7 @@ __asm__(".extern g_audioStereoMode, 16");
 __asm__(".extern g_bProgressiveScan, 16");
 __asm__(".extern g_currentLanguage, 16");
 __asm__(".extern g_equippedArmor, 16");
+__asm__(".extern g_inventoryOwned, 16"); /* func_00343E80 only: see its g_inventoryOwnedLa */
 __asm__(".extern g_gameTime, 16");
 __asm__(".extern g_mapCurrentLevel, 16");
 __asm__(".extern g_miscExtras, 16");
@@ -248,12 +249,12 @@ extern void GuiElementSetVisible(GuiElement *e, s32 show);
 
 /* callees of the tail-call wrappers below (return values are discarded). */
 extern void func_002704E0(void);
-extern void func_00336F00(void *p);
+extern void func_00336F00(void *p, s32 flag);
 extern void func_00336678(void *p, s32 flag);
 extern void func_003368E8(void *p, s32 flag);
 extern void func_00337C48(void);
 extern s32 func_00343AD0(void *p);
-extern void func_00343E80(void *p);
+extern void func_00343E80(void *view, void *records);
 extern void func_00343F68(void *p);
 extern void func_0033BE60(void *p, s32 v);
 extern void func_0033BF90(void *p);
@@ -1186,17 +1187,43 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
 
 /* func_00336F00: shared GuiElement base destructor. Reinstall the base vtable
  * at +0x30, then (only when the element owns a pool at +0x2C) free each of its
- * four still-owned vector nodes back to the pool, guarded by per-node release
- * latches: pos(+0x0)/latch +0x14, unk08(+0x8)/latch +0x1C, scale(+0x4)/latch
- * +0x20, color(+0xC)/latch +0x18 (each free passes a0 = the pool, not the
- * element). Finally, if (flag & 1), run the dtor tail hook func_00337C48.
- * Left INCLUDE_ASM (no #else): the destructor takes a second (flag) arg, but the
- * 1-arg `func_00336F00` extern that the matched tail-callers (func_00337278 /
- * func_00337830) rely on - they call it with a1 left untouched - is part of the
- * matched (non-TARGET_NATIVE) build and cannot coexist with a 2-arg C definition
- * in the same TU. A #else body would require region-splitting that extern, which
- * the matched callers would then fail to satisfy under TARGET_NATIVE. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336F00);
+ * four vector nodes back to the pool unless its latch says it is not owned:
+ * pos(+0x0)/latch +0x14, unk08(+0x8)/latch +0x1C, scale(+0x4)/latch +0x18,
+ * color(+0xC)/latch +0x20 (each free passes a0 = the pool, not the element).
+ * Finally, if (flag & 1), run the dtor tail hook func_00337C48(p).
+ * Params: p = the element; flag = the delete flag (bit 0 frees the element).
+ * No return value. func_00337278 / func_00337830 pass flag through in $a1.
+ * MATCHED byte-exact on the s136os arm (task #1987), device-free. It was left
+ * INCLUDE_ASM only because the file-scope prototype was 1-arg and the matched
+ * forwarders were written against it; the ROM's forwarders leave $a1
+ * untouched, i.e. they take and forward the flag, so the prototype and both
+ * forwarders became 2-arg with their bytes unchanged. func_00337C48 is declared
+ * (void) for its other callers, which set no $a0; here the ROM passes p, so the
+ * call goes through a cast, as func_00337098 calls this function.
+ * GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+ * (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in tools/ee/s136os_functions.txt)
+ * and spliced over S136OS_SLOT by tools/ee/s136os_splice.sh. There is no asm
+ * fallback. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00336F00)
+S136OS_SLOT(func_00336F00);
+#else
+extern void func_00337D78(void *pool, void **node);
+void func_00336F00(void *p, s32 flag) {
+    *(void **)((char *)p + 0x30) = &g_GuiElementVtable;
+    if (*(void **)((char *)p + 0x2C) != 0) {
+        if (*(s32 *)((char *)p + 0x14) == 0)
+            func_00337D78(*(void **)((char *)p + 0x2C), *(void ***)((char *)p + 0x0));
+        if (*(s32 *)((char *)p + 0x1C) == 0)
+            func_00337D78(*(void **)((char *)p + 0x2C), *(void ***)((char *)p + 0x8));
+        if (*(s32 *)((char *)p + 0x18) == 0)
+            func_00337D78(*(void **)((char *)p + 0x2C), *(void ***)((char *)p + 0x4));
+        if (*(s32 *)((char *)p + 0x20) == 0)
+            func_00337D78(*(void **)((char *)p + 0x2C), *(void ***)((char *)p + 0xC));
+    }
+    if (flag & 1)
+        ((void (*)(void *))func_00337C48)(p);
+}
+#endif
 
 /* GuiElementInitTypeB: construct a type-B GUI element in place. Installs the
  * base GuiElement vtable (GuiElementInstallBaseVtable), then overwrites the same
@@ -1513,11 +1540,13 @@ void GuiListElementInit(GuiElement *e, s32 v3C, s32 v34, s32 tag, GuiPool *pool)
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337270);
 
-/* func_00337278: install the GuiListRow vtable at p+0x30, then call
- * func_00336F00(p). */
-void func_00337278(void *p) {
+/* func_00337278: GuiListRow destructor. Install the GuiListRow vtable at
+ * p+0x30, then run the base destructor func_00336F00(p, flag), passing the
+ * delete flag through in $a1 untouched (task #1987 gave both their 2-arg
+ * signatures; the bytes are unchanged). */
+void func_00337278(void *p, s32 flag) {
     *(void **)((char *)p + 0x30) = &g_GuiListRowVtable;
-    func_00336F00(p);
+    func_00336F00(p, flag);
     __asm__ __volatile__("");
 }
 
@@ -1901,10 +1930,12 @@ void GuiTextElementInit(GuiElement *e, s32 tag, GuiPool *pool) {
 }
 #endif
 
-/* func_00337830: install the D_1AD9F8 vtable at p+0x30, then call func_00336F00(p). */
-void func_00337830(void *p) {
+/* func_00337830: destructor of the D_1AD9F8 element class. Install its vtable
+ * at p+0x30, then run the base destructor func_00336F00(p, flag), passing the
+ * delete flag through in $a1 untouched (2-arg since task #1987; bytes unchanged). */
+void func_00337830(void *p, s32 flag) {
     *(void **)((char *)p + 0x30) = &D_1AD9F8;
-    func_00336F00(p);
+    func_00336F00(p, flag);
     __asm__ __volatile__("");
 }
 
@@ -8986,17 +9017,66 @@ s32 func_00343AD0(void *view) {
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00343AF8);
 
 /* func_00343E80(view, records): build the list view's visible row set. Walk
- * `records` (stride 0xA, signed item-id at +0x6) up to records+0xFA; for each
- * owned item (g_inventoryOwned[id] != 0) append the id to the view's row array
- * at +0x28 (capped at 0x19 entries, count at +0x10), then set the initial
- * highlighted row +0x14 = count/2 and run layout func_00343888(view, 0).
- * BLOCKED: the body needs a 2-arg (view, records) prototype, but the
- * already-matched thin forwarder func_00344458 relies on func_00343E80 being
- * seen as 1-arg (file-scope proto at line 89, visible under TARGET_NATIVE too)
- * so it passes its own $a1 through untouched. A #else 2-arg definition cascades
- * an arity fix through func_00344458 and up; left INCLUDE_ASM to preserve the
- * forwarder's byte-match. (Body is otherwise an integer ownership-filter loop.) */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00343E80);
+ * up to 25 `records` (stride 0xA, signed item id at +0x6), stopping at the
+ * first negative id; for each owned item (g_inventoryOwned[id] != 0) append the
+ * id to the view's row array at +0x28 (capped at 25 entries, count at +0x10).
+ * Then set the initial highlighted row +0x14 = count/2 and run the layout
+ * func_00343888(view, 0).
+ * Params: view = the list view; records = the record table (func_00344458
+ * forwards its caller's). No return value.
+ * MATCHED byte-exact on the s136os arm (task #1987). It was left INCLUDE_ASM
+ * only because the file-scope prototype was 1-arg; the forwarder func_00344458
+ * leaves $a1 untouched, i.e. it forwards the table, so both became 2-arg (the
+ * forwarder's bytes unchanged). An index loop (`i < 25`) is the ROM's shape:
+ * loop.c's strength reduction gives the signed `slt` against records+0xFA and
+ * drops the first bound test; a pointer loop gives `sltu` and keeps it.
+ * ADDRESSING-MODEL DEVICE (RULING #8620), two directives that emit nothing:
+ * the ROM forms &g_inventoryOwned as the adjacent `lui $9; addiu $9,$9` of the
+ * one-insn `la` macro, which cc1 emits only for a symbol it believes small,
+ * and the unit's unsized g_inventoryOwned[] makes cc1 split %hi/%lo itself
+ * (the lui lands in another register and the bltz slot: 4/44 words, solo
+ * s136os harness). So this function reads it through g_inventoryOwnedLa, an
+ * asm-label alias declared 8 bytes (cc1 then emits `la`), and the file-scope
+ * `.extern g_inventoryOwned, 16` makes the assembler expand that `la`
+ * absolute; without the `.extern` it goes $gp-relative (38/44). Each was
+ * removed alone; a 0x38-byte alias is split like the unsized one (4/44).
+ * GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+ * (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in tools/ee/s136os_functions.txt)
+ * and spliced over S136OS_SLOT by tools/ee/s136os_splice.sh. There is no asm
+ * fallback. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00343E80)
+S136OS_SLOT(func_00343E80);
+#else
+#ifndef TARGET_NATIVE
+extern u8 g_inventoryOwnedLa[8] __asm__("g_inventoryOwned");
+#else
+#define g_inventoryOwnedLa g_inventoryOwned
+#endif
+extern s32 func_00343888(void *w, s32 flags);
+/* The list view func_00343E80 fills (only the fields it touches). */
+typedef struct {
+    u8  _pad0[0x10];
+    s32 count;      /* 0x10 */
+    s32 cursor;     /* 0x14 */
+    u8  _pad18[0x10];
+    s32 rows[25];   /* 0x28 */
+} GuiRowListView;
+void func_00343E80(void *view_, void *records_) {
+    GuiRowListView *view = view_;
+    GuiWeaponSlotEntry *records = records_;
+    s32 i;
+    view->count = 0;
+    for (i = 0; i < 25 && records[i].weaponId >= 0; i++) {
+        s32 id = records[i].weaponId;
+        if (g_inventoryOwnedLa[id] != 0 && view->count < 25) {
+            view->rows[view->count] = id;
+            view->count++;
+        }
+    }
+    view->cursor = view->count / 2;
+    func_00343888(view, 0);
+}
+#endif
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00343F30);
 
@@ -9196,9 +9276,11 @@ void GuiTitledSpriteScreenInit(void *w, GuiPool *pool) {
 }
 #endif
 
-/* func_00344458: forward p+0x2C8 to func_00343E80. */
-void func_00344458(void *p) {
-    func_00343E80((char *)p + 0x2C8);
+/* func_00344458: forward the embedded list view at p+0x2C8 and the caller's
+ * record table to func_00343E80, which takes $a1 untouched. 2-arg since task
+ * #1987, agreeing with 1CA080.cpp's declaration (widget, data); bytes unchanged. */
+void func_00344458(void *p, void *records) {
+    func_00343E80((char *)p + 0x2C8, records);
     __asm__ __volatile__("");
 }
 

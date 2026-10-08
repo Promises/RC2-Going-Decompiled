@@ -594,3 +594,5 @@ usa text/178E88 func_0027EFA0
 usa text/178E88 func_0027F0A8
 usa text/178E88 AppendFrameInitGsState
 usa text/178E88 End2dDrawBatch
+usa text/235FE8 func_00336F00
+usa text/235FE8 func_00343E80
