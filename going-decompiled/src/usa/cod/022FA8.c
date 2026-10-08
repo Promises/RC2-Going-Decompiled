@@ -527,7 +527,35 @@ void func_00124818(void) {
  * be matched at the unit level without a re-split. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_001248B0);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_001248F8);
+extern s32 D_001363A4;  /* suppresses func_001248B0's callback while non-zero */
+extern s32 D_001363BC;  /* set once the 0x80000012 handler is installed */
+extern void func_001248B0(void);
+extern void func_0011CB90(s32 index, s32 key, s32 value);
+
+/**
+ * Install libcdvd's SIF command handler for command 0x80000012: with the
+ * callback suppressed (D_001363A4 = 1) and interrupts disabled
+ * (func_0011F5E0), store the handler func_001248B0 and a zero argument into
+ * that command's slot (func_0011CB90), restore interrupts only if they were
+ * on, lift the suppression and mark the handler installed (D_001363BC).
+ * Returns 1.
+ *
+ * The handler address is `func_001248B0 + 8`, exactly the ROM's relocation:
+ * splat starts func_001248B0 eight bytes early on the previous function's
+ * epilogue tail (see func_001248B0's comment), so +8 is its real entry.
+ */
+s32 func_001248F8(void) {
+    s32 wasEnabled;
+    D_001363A4 = 1;
+    wasEnabled = func_0011F5E0();
+    func_0011CB90((s32)0x80000012, (s32)((u8 *)func_001248B0 + 8), 0);
+    if (wasEnabled != 0) {
+        func_0011F628();
+    }
+    D_001363A4 = 0;
+    D_001363BC = 1;
+    return 1;
+}
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00124970);
 
@@ -618,17 +646,141 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", sceCdInit);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", sceCdDiskReady);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", sceCdMmode);
+extern s32 func_00124C98(s32 cmd);  /* S-command lock: 0 = busy */
+extern u32 D_00137580[];  /* S-command RPC receive buffer */
+extern void sceSifWriteBackDCache(void *buf, s32 size);  /* cache writeback/invalidate */
+extern u32 D_001379C0[];  /* S-command RPC send buffer */
+
+/**
+ * sceCdMmode: set the libcdvd media mode. Take the S-command lock with
+ * func_00124C98(0x22) (0 = busy: return 0), store `media` in the send buffer
+ * D_001379C0, write it back from the data cache and call RPC #0x22 on the
+ * S-command client D_00137DC8 with that 4-byte request and a 4-byte reply into
+ * D_00137580. Release the semaphore D_001363AC and return the reply word (read
+ * uncached); a failed RPC releases and returns 0.
+ *
+ * The buffer is held in a local taken before the lock call: the ROM forms its
+ * address (and keeps the %hi in $s1 for the store) ahead of the first call.
+ * Spelled with D_001379C0 at every use, cc1 forms it after the call and the
+ * whole body shifts (48 of 49 words).
+ */
+s32 sceCdMmode(s32 media) {
+    u32 *buf = D_001379C0;
+    s32 value;
+    if (func_00124C98(0x22) == 0) {
+        return 0;
+    }
+    *buf = media;
+    sceSifWriteBackDCache(buf, 4);
+    if (func_0011D620(D_00137DC8, 0x22, 0, buf, 4, D_00137580, 4, 0, 0) < 0) {
+        func_0011AC40(D_001363AC);
+        return 0;
+    }
+    value = *(s32 *)((u32)D_00137580 | 0x20000000);
+    func_0011AC40(D_001363AC);
+    return value;
+}
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_001253A4);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_001253A8);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", QueryCdStatusOverRpc);
+/**
+ * libcdvd S-command 4 with no send data: take the S-command lock with
+ * func_00124C98(3) (0 = busy: return -1), call RPC #4 on the S-command client
+ * D_00137DC8 with a 4-byte reply into D_00137580 (func_0011D620 =
+ * sceSifCallRpc), release the semaphore D_001363AC and return the reply word,
+ * read through the uncached 0x20000000 mirror. A failed RPC releases and
+ * returns -1.
+ */
+s32 QueryCdStatusOverRpc(void) {
+    s32 value;
+    if (func_00124C98(3) == 0) {
+        return -1;
+    }
+    if (func_0011D620(D_00137DC8, 4, 0, 0, 0, D_00137580, 4, 0, 0) < 0) {
+        func_0011AC40(D_001363AC);
+        return -1;
+    }
+    value = *(s32 *)((u32)D_00137580 | 0x20000000);
+    func_0011AC40(D_001363AC);
+    return value;
+}
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00125620);
+/**
+ * libcdvd S-command with no send data: take the S-command lock with
+ * func_00124C98(0x1E) (0 = busy: return 0), mark the pending end-callback state
+ * D_001363D4 = 8 for the duration of RPC #0x16 on the S-command client
+ * D_00137DC8 (4-byte reply into D_00137580), clear it again, release the
+ * semaphore D_001363AC and return the reply word (read uncached). A failed RPC
+ * releases, clears the state and returns 0.
+ *
+ * Both reads of D_001363AC go through a volatile lvalue. This is a CODEGEN
+ * DEVICE under RULING #8404, not a claim that the semaphore id changes
+ * asynchronously: its only writers in the ROM are func_00124780 (CreateSema)
+ * and sceCdInit, neither in interrupt context. It keeps cc1 from moving the
+ * argument load: plain on both reads, the failure path's load drops into the
+ * SignalSema call's delay slot (the ROM leaves a nop there) and the body
+ * shifts, 20 of 46 words; volatile on the failure path only, the success
+ * path issues the load ahead of the `or` that forms the uncached address,
+ * 2 of 46. Sibling S-commands (QueryCdStatusOverRpc, sceCdMmode) match with
+ * plain reads.
+ */
+s32 func_00125620(void) {
+    s32 value;
+    if (func_00124C98(0x1E) == 0) {
+        return 0;
+    }
+    D_001363D4 = 8;
+    if (func_0011D620(D_00137DC8, 0x16, 0, 0, 0, D_00137580, 4, 0, 0) < 0) {
+        func_0011AC40(*(volatile s32 *)&D_001363AC);
+        D_001363D4 = 0;
+        return 0;
+    }
+    D_001363D4 = 0;
+    value = *(s32 *)((u32)D_00137580 | 0x20000000);
+    func_0011AC40(*(volatile s32 *)&D_001363AC);
+    return value;
+}
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", sceCdReadClock);
+extern char D_0013B308[];  /* "Libcdvd call Clock read 1\n" */
+extern char D_0013B328[];  /* "Libcdvd call Clock read 2\n" */
+
+/* sceCdCLOCK: 8 bytes of BCD time (status, second, minute, hour, pad, day,
+ * month, year), byte-aligned, so a copy is the unaligned ldl/ldr/sdl/sdr pair. */
+typedef struct CdClock {
+    u8 bytes[8];
+} CdClock;
+
+/**
+ * sceCdReadClock: read the real-time clock into `clock`. Take the S-command
+ * lock with func_00124C98(0xF) (0 = busy: return 0), print "Libcdvd call Clock
+ * read 1" when the debug level D_00136390 is positive, call RPC #1 on the
+ * S-command client D_00137DC8 with a 0x10-byte reply into D_00137580, copy the
+ * 8 clock bytes at reply+4 (read uncached) to `clock`, print "... read 2",
+ * release the semaphore D_001363AC and return the reply's first word. A failed
+ * RPC releases and returns 0.
+ */
+s32 sceCdReadClock(CdClock *clock) {
+    s32 value;
+    if (func_00124C98(0xF) == 0) {
+        return 0;
+    }
+    if (D_00136390 > 0) {
+        Kprintf(D_0013B308);
+    }
+    if (func_0011D620(D_00137DC8, 1, 0, 0, 0, D_00137580, 0x10, 0, 0) < 0) {
+        func_0011AC40(D_001363AC);
+        return 0;
+    }
+    *clock = *(CdClock *)((u32)&D_00137580[1] | 0x20000000);
+    if (D_00136390 > 0) {
+        Kprintf(D_0013B328);
+    }
+    value = *(s32 *)((u32)D_00137580 | 0x20000000);
+    func_0011AC40(D_001363AC);
+    return value;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", sceGsResetGraph);
 
@@ -643,7 +795,53 @@ s32 *func_00125960(void) {
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012596C);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", GsDefDispEnvNeedsOffsetFix);
+/* libgraph's global parameter block (sceGsGParam), the object func_00125960
+ * returns the address of. */
+typedef struct GsGParam {
+    s16 interMode;       /* 1 = interlaced */
+    s16 outMode;
+    s16 ffMode;          /* field/frame mode */
+    s16 version;         /* GS revision; 1 selects the single-circuit display */
+    s32 vsyncFunc;       /* installed V-sync callback (0 = none) */
+    s32 vsyncHandlerId;  /* its INTC handler id */
+} GsGParam;
+
+extern s32 func_0011E0D8(const char *path, s32 flags, ...);  /* open  */
+extern s32 func_0011E4E0(s32 fd, void *buf, s32 size);       /* read  */
+extern s32 func_0011E360(s32 fd);                            /* close */
+extern s32 func_00115E68(const char *s);                     /* atoi  */
+extern char D_0013B348[];  /* "rom0:ROMVER" */
+
+/**
+ * Report whether this console's boot ROM is newer than 2001-06-08: open
+ * "rom0:ROMVER" (returning -1 if that fails), read it one byte at a time into
+ * a 256-byte buffer until a NUL or 256 bytes, close it, and return whether
+ * the 8-digit date that ends 9 bytes before the stop point parses (atoi) to
+ * more than 20010608.
+ *
+ * The counter and the cursor are initialised in one for-clause, counter
+ * first: the ROM zeroes the counter in the open test's delay slot and points
+ * the cursor at the buffer in the loop-entry branch's. Initialising the
+ * cursor in a separate statement before the loop swaps the two (2 of 40).
+ */
+s32 GsDefDispEnvNeedsOffsetFix(void) {
+    char buf[0x100];
+    char *p;
+    u32 len;
+    s32 fd;
+    fd = func_0011E0D8(D_0013B348, 1);
+    if (fd < 0) {
+        return -1;
+    }
+    for (len = 0, p = buf; len < 0x100; len++) {
+        func_0011E4E0(fd, p, 1);
+        if (*p++ == 0) {
+            break;
+        }
+    }
+    func_0011E360(fd);
+    return func_00115E68(&buf[len - 9]) > 20010608;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", GetGsDisplayOffsets);
 
@@ -651,11 +849,58 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", BuildGsDispEnv);
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00125D94);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00125D98);
+/**
+ * Put a display environment (sceGsPutDispEnv-shaped): write the five 64-bit GS
+ * privileged-register images in `env` to the hardware. PMODE (0x12000000)
+ * always; then, if GsGParam.version is 1, DISPFB1/DISPLAY1 (0x12000070/80) from
+ * env[2]/env[3] and env[4] to 0x120000C0 (EXTDATA in the GS register map);
+ * otherwise SMODE2 (0x12000020) from env[1], DISPFB2/DISPLAY2 (0x12000090/A0)
+ * from env[2]/env[3] and BGCOLOR (0x120000E0) from env[4]. env[1] is unused on
+ * the version-1 path.
+ */
+void func_00125D98(u64 *env) {
+    GsGParam *gp = (GsGParam *)func_00125960();
+    if (gp->version == 1) {
+        *(volatile u64 *)0x12000000 = env[0];
+        *(volatile u64 *)0x12000070 = env[2];
+        *(volatile u64 *)0x12000080 = env[3];
+        *(volatile u64 *)0x120000C0 = env[4];
+    } else {
+        *(volatile u64 *)0x12000000 = env[0];
+        *(volatile u64 *)0x12000020 = env[1];
+        *(volatile u64 *)0x12000090 = env[2];
+        *(volatile u64 *)0x120000A0 = env[3];
+        *(volatile u64 *)0x120000E0 = env[4];
+    }
+}
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00125E54);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", CalcGsZbufferBasePtr);
+/**
+ * Size of a frame buffer in GS pages (sceGszbufaddr-shaped; the symbol name
+ * reads it as the Z buffer's base): width in 64-pixel pages, height in
+ * 64-line pages when bit 1 of `psm` is set or 32-line pages otherwise, both
+ * rounded up. The page count is returned as is when the GsGParam's first
+ * and third halfwords (interMode, ffMode) read exactly 1 and 0, i.e.
+ * interlaced field mode, and doubled otherwise.
+ *
+ * That test is one 64-bit load masked with 0x0000FFFF0000FFFF, as in the ROM;
+ * two halfword compares would not produce it.
+ */
+s16 CalcGsZbufferBasePtr(s16 psm, s16 width, s16 height) {
+    GsGParam *gp = (GsGParam *)func_00125960();
+    s16 fbw = (width + 63) / 64;
+    s16 fbh;
+    if (psm & 2) {
+        fbh = (height + 63) / 64;
+    } else {
+        fbh = (height + 31) / 32;
+    }
+    if ((*(u64 *)gp & 0x0000FFFF0000FFFF) == 1) {
+        return fbw * fbh;
+    }
+    return fbw * fbh * 2;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", BuildGsDrawEnvPacket);
 
@@ -663,7 +908,32 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00126108);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", WaitVblankGetField);
+extern void WaitVblankStartIntc(void);
+extern s64 func_0011B140(void);  /* returns the GS CSR value */
+
+/**
+ * Wait for the next V-blank and return the field being displayed
+ * (sceGsSyncV-shaped). With no V-sync callback installed, wait with
+ * WaitVblankStartIntc and read the FIELD bit (13) of the GS CSR (0x12001000)
+ * directly; with one installed, func_0011B140 supplies the CSR value instead.
+ * In non-interlaced mode the field is always 1.
+ */
+s32 WaitVblankGetField(void) {
+    GsGParam *gp = (GsGParam *)func_00125960();
+    s64 field;
+    if (gp->vsyncFunc == 0) {
+        WaitVblankStartIntc();
+        if (gp->interMode == 1) {
+            return (*(volatile u64 *)0x12001000 >> 13) & 1;
+        }
+    } else {
+        field = (func_0011B140() >> 13) & 1;
+        if (gp->interMode == 1) {
+            return field;
+        }
+    }
+    return 1;
+}
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00126284);
 
@@ -681,7 +951,40 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00126730);
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00126DBC);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00126DC0);
+extern s32 func_0011B588(s32 cause);                           /* DisableIntc */
+extern s32 func_0011A920(s32 cause, s32 handlerId);            /* RemoveIntcHandler */
+extern s32 func_0011A900(s32 cause, void *handler, s32 next);  /* AddIntcHandler */
+extern s32 func_0011B5F0(s32 cause);                           /* EnableIntc */
+
+/**
+ * Install `func` as the V-sync (INTC cause 2) callback, or remove the current
+ * one when `func` is 0 (sceGsSyncVCallback-shaped); returns the previous
+ * callback. Removing disables the interrupt, removes the handler and clears
+ * both GsGParam fields; installing first removes any previous handler, then
+ * adds `func` and enables the interrupt.
+ *
+ * On removal the handler id is cleared before the callback: the other order
+ * swaps the two stores (2 of 40).
+ */
+s32 func_00126DC0(s32 func) {
+    GsGParam *gp = (GsGParam *)func_00125960();
+    s32 old = gp->vsyncFunc;
+    if (func == 0) {
+        func_0011B588(2);
+        func_0011A920(2, gp->vsyncHandlerId);
+        gp->vsyncHandlerId = 0;
+        gp->vsyncFunc = 0;
+    } else {
+        if (old != 0) {
+            func_0011B588(2);
+            func_0011A920(2, gp->vsyncHandlerId);
+        }
+        gp->vsyncFunc = func;
+        gp->vsyncHandlerId = func_0011A900(2, (void *)func, -1);
+        func_0011B5F0(2);
+    }
+    return old;
+}
 
 extern u32 func_001272A8(volatile u32 *chcr);  /* defined below */
 extern char D_0013B6F0[];  /* "libdma: sync timeout\n" */
