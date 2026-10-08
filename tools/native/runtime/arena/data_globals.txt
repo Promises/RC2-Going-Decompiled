@@ -771,6 +771,20 @@ D_1ADED8
 D_1ADEE8
 D_1ADEF0
 D_1ADEF8
+D_1ADF00
+D_1ADF04
+D_1ADF08
+D_1ADF0C
+D_1ADF10
+D_1ADF14
+D_1ADF18
+D_1ADF1C
+D_1ADF20
+D_1ADF24
+D_1ADF28
+D_1ADF2C
+D_1ADF30
+D_1ADF34
 D_1ADF38
 D_1ADF3C
 D_1ADF40
@@ -851,6 +865,7 @@ D_1AE180
 D_1AE198
 D_1AE19C
 D_1AE1A0
+D_1AE1A4
 D_1AE1D0
 D_1AE1D4
 D_1AE1D8
@@ -1193,6 +1208,7 @@ g_cameraTransitionState
 g_cameraTriggerLatch
 g_cameraZoneType
 g_cdReadMode
+g_changedSaveSectionCount
 g_cheatCodeSymbols
 g_cheatFlags
 g_cheatInputCount
@@ -1308,6 +1324,7 @@ g_itemEquippedSlot
 g_itemStateFlags
 g_lastMenuScreenId
 g_levelDialogToc
+g_levelObjectiveLists
 g_levelSelectEntries
 g_levelSelectRowLineHeight
 g_levelStagingState
@@ -1321,6 +1338,7 @@ g_loadedShipTextureIndex
 g_loadingScenesPlayed
 g_mapActiveSlot
 g_mapBitmapBuffer
+g_mapBlipTable
 g_mapCache
 g_mapCurrentLevel
 g_mapDataSet
@@ -1335,7 +1353,11 @@ g_mcRpcRequest
 g_mcRpcResult
 g_memoryArenaTable
 g_menuBgImageIndex
+g_menuButtonChainHeads
+g_menuButtons
 g_menuScreenBlock
+g_menuScreenReady
+g_menuSelectedButton
 g_menuSoundEnabled
 g_menuTransitionMode
 g_miscExtras
@@ -1401,6 +1423,7 @@ g_nSkillPointsMenuCursor
 g_nVendorBuyQuantity
 g_nVendorItemCount
 g_nanotech
+g_noticeOwner
 g_occlusionMode
 g_occlusionOverrideMode
 g_occlusionVisMask
@@ -1485,6 +1508,7 @@ g_renderLayerMask
 g_renderTaskList
 g_renderTaskWorkBuf
 g_respawnPlayerYaw
+g_saveClock
 g_saveDirTemplate
 g_saveFileFmt
 g_saveIconSysPath
@@ -1529,6 +1553,7 @@ g_skillPointFlags
 g_skillPointMetaTable
 g_skyShellAngles
 g_skyShellMatrix
+g_skyShellSpinTableScaled
 g_skyShellSpinTableStatic
 g_sndChannelVolumes
 g_sndIopLoadStatus
