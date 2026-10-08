@@ -95,6 +95,7 @@ __asm__(".extern g_screenFadeBlack, 16");
 __asm__(".extern g_vramTextureBase_28, 16");  /* func_0026FE58 */
 __asm__(".extern g_bRawReadFellBack_34, 16"); /* func_0026FE58 */
 __asm__(".extern g_cameraCallbackCount, 16"); /* func_00270220 */
+__asm__(".extern g_vramFrameBufB, 16");       /* ShowSplashImage, func_0026EAC8 */
 
 /* True small data (complete <=8-byte externs, %gp_rel). */
 extern s32 D_1A8630;             /* screen-sprite-FX alpha cap (set by the HUD fade) */
@@ -288,20 +289,34 @@ extern void *g_memoryArenaTable[];   /* +0x14 (index 5) = image chunk header */
 /* ShowSplashImage: decompress a still-image chunk and fade it in over 65 frames.
  * Uploads the image texture each frame, draws a full-screen tint quad whose
  * brightness ramps from 0x80 down past 0 (stepping by 2), and pumps the frame
- * DMA / vblank pipeline. Used for boot/menu stills. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", ShowSplashImage);
+ * DMA / vblank pipeline. Used for boot/menu stills.
+ *   wadId: the WAD entry holding the image chunk (decompressed into the
+ *          arena-table slot 5 buffer).
+ * MATCHED on the s136os arm (task #1901; the 2.9 arm's packed-save wall does
+ * not apply there). Devices and phrasing, each measured in a solo s136 compile:
+ * - g_vramFrameBufB is read as `lui $5 / lw $5,%lo($5)`, gas's expansion of a
+ *   cc1-small symbol the assembler knows is not small data: the unit-level
+ *   `.extern g_vramFrameBufB, 16` above (RULING #8620 family). Without it the
+ *   load is %gp_rel, one word short.
+ * - the brightness counter is set after the setup calls and the loop is a
+ *   `for`: a `do`/`while` with the counter set at its declaration puts
+ *   `li $16,0x80` after the `sd $31` (3 words) and issues the tint call's a1
+ *   before a2 (2 words; the ROM sets a2 first). The `for` alone fixes the
+ *   argument order, the late init alone fixes the prologue.
+ * GUARD: on EE this C is compiled alone by SN 2.95.3 v1.36 -fopt-stack
+ * (tools/ee/s136os_functions.txt) and spliced over the S136OS_SLOT line by
+ * tools/ee/s136os_splice.sh; on native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_ShowSplashImage)
+S136OS_SLOT(ShowSplashImage);
 #else
-/* TODO(match): functional equivalent - not byte-exact; three callee-saves at
-   8-byte slot spacing (the 0x20-vs-0x10 packed-save wall). */
 void ShowSplashImage(s32 wadId) {
     ImageChunkHeader *img = (ImageChunkHeader *)g_memoryArenaTable[5];
-    s32 brightness = 0x80;
+    s32 brightness;
 
     DecompressWad(wadId, img);
     func_0011AEA0(0);
 
-    do {
+    for (brightness = 0x80; brightness >= 0; brightness -= 2) {
         ResetFrameArenas();
         img = (ImageChunkHeader *)g_memoryArenaTable[5];
         AppendTextureUploadBuildTex0((char *)img + 0x10, g_vramFrameBufB,
@@ -309,14 +324,13 @@ void ShowSplashImage(s32 wadId) {
         AppendFrameInitGsState();
         DrawFullScreenTint(0, 0, 0, brightness);
         AppendDrawEnvContext2();
-        brightness -= 2;
         func_00285CE8();
         func_0011AEA0(0);
         KickFrameDmaChain();
         WaitFrameDmaFence(1);
         WaitGsPathsIdle(0, 0);
         WaitVblankGetField(0);
-    } while (brightness >= 0);
+    }
 }
 #endif
 
@@ -324,12 +338,18 @@ void ShowSplashImage(s32 wadId) {
  * Decompresses the image chunk, resets the frame arenas, installs the VIF1 DMA
  * handlers, builds and kicks a frame that uploads the image texture and clears
  * the screen, then waits for the frame to retire before tearing the handlers
- * back down. The single-frame sibling of ShowSplashImage's fade loop. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_0026EAC8);
+ * back down. The single-frame sibling of ShowSplashImage's fade loop.
+ *   wadId: the WAD entry holding the image chunk.
+ * MATCHED on the s136os arm (task #1901). The C is unchanged from the old
+ * #else arm; the one device is the unit-level `.extern g_vramFrameBufB, 16`
+ * shared with ShowSplashImage (without it the g_vramFrameBufB load is %gp_rel
+ * and the function one word short). The image pointer is re-read from the
+ * arena table after the setup calls, as the ROM does (`lw $2,0x14($16)`).
+ * GUARD: compiled alone by SN 2.95.3 v1.36 -fopt-stack and spliced over the
+ * S136OS_SLOT line (tools/ee/s136os_splice.sh); plain C on native. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0026EAC8)
+S136OS_SLOT(func_0026EAC8);
 #else
-/* TODO(match): functional equivalent - not byte-exact; two callee-saves at
-   8-byte slot spacing (the 0x20-vs-0x10 packed-save wall). */
 void func_0026EAC8(s32 wadId) {
     ImageChunkHeader *img = (ImageChunkHeader *)g_memoryArenaTable[5];
 
@@ -1024,17 +1044,21 @@ f32 func_002702D8(f32 cur, f32 target, f32 stiffness, f32 damping, f32 maxSpeed,
  * wrapped angle. delta is the shortest signed angular difference target-cur
  * (WrapAnglePiDiff); the velocity is integrated, clamped to maxSpeed and to
  * |delta|, and the result is cur + vel re-wrapped into (-pi,pi] (WrapAnglePiSum). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_002703C0);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002703C0)
+S136OS_SLOT(func_002703C0);
 #else
 extern f32 WrapAnglePiDiff(f32 a, f32 b);
 extern f32 WrapAnglePiSum(f32 a, f32 b);
-/* TODO(match): functional equivalent - not byte-exact. t512: sdk29 99.65% —
-   every body instruction identical, only the frame differs (ROM s0@0/ra@8/f20..
-   @0x10.. frame 0x40; 2.9 puts ra@0x10 and the FP saves 0x10 higher, frame 0x50:
-   PACKED-SAVE, 2 GPR saves); engine96 68.85% — SCHED-PROEPI (the arg mov.s/
-   store interleave) + SIBCALL (`j WrapAnglePiSum`) + operand-order scheduling
-   in the body. The ROM is "2.9 order with 8-byte slots"; neither arm has it. */
+extern f32 GetFloatAbs(f32 x);
+/* MATCHED on the s136os arm (task #1901): SN 1.36 -fopt-stack gives the ROM's
+ * 8-byte save slots, which were the whole 2.9-arm residual (t512: sdk29 99.65%,
+ * frame only). No device. The GetFloatAbs prototype above is required: it is
+ * otherwise declared only inside func_002702D8's guarded arm, which this
+ * function's solo s136 TU does not see, and the implicit-int call costs 17
+ * words (int return, cvt.s.w, 88 words built against the ROM's 71).
+ *   cur/target: angles in radians; stiffness/damping: spring gains;
+ *   maxSpeed: velocity cap (0 = none); vel: in/out angular velocity.
+ *   Returns the new wrapped angle. */
 f32 func_002703C0(f32 cur, f32 target, f32 stiffness, f32 damping, f32 maxSpeed,
                   f32 *vel) {
     f32 delta = WrapAnglePiDiff(target, cur);
