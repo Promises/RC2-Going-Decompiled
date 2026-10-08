@@ -557,3 +557,4 @@ usa text/198FA0 func_00299B18
 usa text/198FA0 BuildSaveGamePaths
 usa text/198FA0 func_0029EC70
 usa text/198FA0 SpawnMoby
+usa text/198FA0 CommitProgressCheckpoint

@@ -1633,27 +1633,64 @@ s32 DeserializeSaveSections(void *image, s32 slotMul, SaveSection *table) {
 }
 #endif
 
-/* CommitProgressCheckpoint(flag, areaParam): stage the progress checkpoint into
- * the in-RAM save image + arm a memcard write. Multi callee-save; 8-byte-packed
- * callee-save frame wall (matching build left as asm). Reads the RTC
- * (sceCdReadClock into the g_gsPixelOffsetY+0xC scratch), refreshes area
- * bookkeeping (func_00298A00 / func_00297FA0), then — when the current area is
- * valid and this checkpoint isn't suppressed — records boltCount/progress/
- * D_1A7BC8/clock/miscExtras into the g_areaTable write-slot record
- * (g_areaTable[+0x18]*0x1C, fields +0x30..+0x40), re-serializes the global +
- * per-area save images (SerializeSaveSections), and arms the write
- * (g_areaTable+0x164=0xF, +0x168=area). When areaParam >= 0 it temporarily
- * switches g_playerProgress to that area (marking it visited) across the
- * serialize, then restores. Returns nonzero once the write is armed (or on the
- * flag==0 early-out). The TARGET_NATIVE #else is faithful coverage. */
+/* ADDRESSING-MODEL DEVICES for CommitProgressCheckpoint (RULING #8620; the
+ * size-16 equate form of g_playerProgressAbs above). The ROM forms three
+ * addresses with an ADJACENT `lui`/`addiu` pair at every use and never keeps
+ * them in a register: the RTC scratch at 0x1A7360 (0x29C1E8, 0x29C1FC,
+ * 0x29C364) and g_levelVisitedMarkers (0x29C2C0, 0x29C3B0). That is cc1's
+ * one-instruction `la` macro, which cc1 emits only for an object it believes
+ * small (-G8), expanded absolute by the assembler because the name is sized
+ * 16 here. A large declaration instead gets a split `lui`..`addiu` the
+ * function keeps in a callee-saved register (93/145 words differ without the
+ * clock device, 3/145 without the markers one, task #1918). g_boltCount and
+ * D_1A7BC8 are read only here in this unit, always absolute (0x29C2F8,
+ * 0x29C310), so they are sized 16 directly (75/145 without). Nothing is moved
+ * and nothing is emitted; native reads the plain symbols.
+ * g_saveClockAbs is a NONZERO-offset equate (RULING #9574): offset 0xC from
+ * g_gsPixelOffsetY (0x1A7354), ROM `lui $4,%hi(D_1A7360)` at 0x29C1E8. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", CommitProgressCheckpoint);
+__asm__(".extern g_levelVisitedMarkersAbs, 16\n\tg_levelVisitedMarkersAbs = g_levelVisitedMarkers");
+__asm__(".extern g_saveClockAbs, 16\n\tg_saveClockAbs = g_gsPixelOffsetY + 0xC");
+__asm__(".extern g_boltCount, 16\n\t.extern D_1A7BC8, 16");
+#endif
+
+/** Stage a progress checkpoint into the in-RAM save images and arm a memcard write.
+ *
+ *  Reads the RTC into the 8-byte clock scratch at 0x1A7360 (sceCdReadClock, then
+ *  func_00131A98 on the same buffer) and refreshes the area bookkeeping
+ *  (func_00298A00, func_00297FA0 on the current level's 0x800-byte save region at
+ *  g_health+0xF8C). It then works on g_areaTable:
+ *   - no current area (+0x148 == -1), or that area's record (stride 0xA0) has a
+ *     negative +0x18: return flag == 0;
+ *   - ORs flag into the pending word +0x17C; if that stays 0, nothing to commit;
+ *   - flag == 0 sets bit 0x200 in g_gameStateFlags;
+ *   - with fewer than 3 retries (+0x15C) and no write armed (+0x164 < 0) it
+ *     commits: saves g_playerProgress to +0x150, and when areaParam >= 0 switches
+ *     g_playerProgress to it and marks that level visited, remembering the old
+ *     marker byte. It records bolts, progress, D_1A7BC8, the clock and
+ *     g_miscExtras into the write-slot record (index s16 +0x18, stride 0x1C,
+ *     fields +0x30..+0x47), serializes the global and per-area save images, puts
+ *     the marker and g_playerProgress back, and arms the write (+0x164 = 0xF,
+ *     +0x168 = current area).
+ *  @param flag       nonzero to force the commit; 0 also raises g_gameStateFlags bit 0x200
+ *  @param areaParam  level to record the checkpoint under, or < 0 for the current one
+ *  @return           1 when a write is armed (+0x164 == 0xF), else 0; on the
+ *                    no-area early-out, flag == 0
+ *
+ *  Built on the s136os arm with gcse ON (task #1918). The bytes need:
+ *   - three base locals, one per region the ROM re-forms the table address in
+ *     (`at`, `w`, and the final `r`): gcse keeps %hi(g_areaTable) in $19 across
+ *     them and re-forms %lo at each, as the ROM does. One local throughout is
+ *     142/145 words different. Under -fno-gcse there is no %hi copy at all
+ *     (140/145).
+ *   - `clk = w + 0x40` as its own local: the ROM computes the clock field's base
+ *     once ($12) and adds the record offset (67/145 without).
+ *   - the clock copied as an 8-byte byte-aligned struct: ldl/ldr + sdl/sdr. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_CommitProgressCheckpoint)
+S136OS_SLOT(CommitProgressCheckpoint);
 #else
-/* t511 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 58.56% -> PACKED-SAVE, first differing row @0: ROM `addiu sp, sp, -0x30` vs `addiu sp, sp, -0x50`;
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing, MATCH_ guard) 47.70% -> SCHED, first differing row @1: ROM `(nothing)` vs `lui v1, %hi(g_gsPixelOffsetY+0xc)`. */
-extern u8   g_health[];               /* +0xF8C = per-level save-region base */
-extern u8   g_gsPixelOffsetY[];       /* +0xC reused as the sceCdCLOCK scratch buffer */
+extern u8   g_health[];
+extern u8   g_gsPixelOffsetY[];
 extern s32  g_boltCount;
 extern s32  D_1A7BC8;                 /* extra checkpoint word (recorded at rec+0x3C) */
 extern u8   g_saveImageGlobal[];
@@ -1663,65 +1700,70 @@ extern void func_00131A98(void *clock);
 extern void func_00298A00(void);
 extern void func_00297FA0(void *saveRegion);
 extern s32  SerializeSaveSections(void *dst, s32 slotMul, SaveSection *table);
+typedef struct { u8 bytes[8]; } SaveClock8; /* byte-aligned: ldl/ldr, sdl/sdr */
+#ifndef TARGET_NATIVE
+extern SaveClock8 g_saveClockAbs;           /* 8 bytes: cc1-small, see the device above */
+extern u8         g_levelVisitedMarkersAbs[8];
+#else
+#define g_saveClockAbs (*(SaveClock8 *)(g_gsPixelOffsetY + 0xC))
+#define g_levelVisitedMarkersAbs g_levelVisitedMarkers
+#endif
 
 s32 CommitProgressCheckpoint(s32 flag, s32 areaParam) {
-    u8 *at    = g_areaTable;
-    u8 *clock = g_gsPixelOffsetY + 0xC;
-    s32 areaIdx;
-    u8 *rec;
-    s32 savedVisited;
+    u8 visited;
 
-    sceCdReadClock(clock);
-    func_00131A98(clock);
+    sceCdReadClock(&g_saveClockAbs);
+    func_00131A98(&g_saveClockAbs);
     func_00298A00();
-    func_00297FA0(g_health + 0xF8C + g_playerProgress * 0x800);
+    func_00297FA0(g_health + 0xF8C + g_playerProgressAbs * 0x800);
 
-    areaIdx = *(s32 *)(at + 0x148);
-    if (areaIdx == -1 || *(s16 *)(at + areaIdx * 0xA0 + 0x18) < 0) {
-        return flag == 0;
-    }
-
-    *(s32 *)(at + 0x17C) |= flag;
-    if (*(s32 *)(at + 0x17C) == 0) {
-        return *(s32 *)(at + 0x164) == 0xF;
-    }
-    if (flag == 0) {
-        g_nSaveLoadStatusCode[1] |= 0x200;   /* +0x4 word */
-    }
-    if (*(s32 *)(at + 0x15C) >= 3 || *(s32 *)(at + 0x164) >= 0) {
-        return *(s32 *)(at + 0x164) == 0xF;
-    }
-
-    /* commit: snapshot the live progress state into the write-slot record */
-    savedVisited = 0;
-    *(s32 *)(at + 0x150) = g_playerProgress;
-    if (areaParam >= 0) {
-        g_playerProgress = areaParam;
-        savedVisited = g_levelVisitedMarkers[g_playerProgress];
-        if (savedVisited == 0) {
-            g_levelVisitedMarkers[g_playerProgress] = 1;
+    {
+        u8 *at = g_areaTable;
+        s32 idx = *(s32 *)(at + 0x148);
+        if (idx == -1 || *(s16 *)(at + idx * 0xA0 + 0x18) < 0) {
+            return flag == 0;
+        }
+        *(s32 *)(at + 0x17C) |= flag;
+        if (*(s32 *)(at + 0x17C) != 0) {
+            if (flag == 0) {
+                g_gameStateFlags |= 0x200;
+            }
+            if (*(s32 *)(at + 0x15C) < 3 && *(s32 *)(at + 0x164) < 0) {
+                visited = 0;
+                *(s32 *)(at + 0x150) = g_playerProgressAbs;
+                if (areaParam >= 0) {
+                    g_playerProgressAbs = areaParam;
+                    visited = g_levelVisitedMarkersAbs[areaParam];
+                    if (visited == 0) {
+                        g_levelVisitedMarkersAbs[areaParam] = 1;
+                    }
+                }
+                {
+                    u8 *w = g_areaTable;
+                    u8 *clk = w + 0x40;
+                    *(s32 *)(w + *(s16 *)(w + 0x18) * 0x1C + 0x34) = g_boltCount;
+                    *(s32 *)(w + *(s16 *)(w + 0x18) * 0x1C + 0x30) = g_playerProgressAbs;
+                    *(s32 *)(w + *(s16 *)(w + 0x18) * 0x1C + 0x3C) = D_1A7BC8;
+                    *(SaveClock8 *)(clk + *(s16 *)(w + 0x18) * 0x1C) = g_saveClockAbs;
+                    *(s32 *)(w + *(s16 *)(w + 0x18) * 0x1C + 0x38) = g_miscExtras;
+                    SerializeSaveSections(g_saveImageGlobal, 0, g_saveSectionTableGlobal);
+                    SerializeSaveSections(g_saveImageArea, *(s32 *)(w + 0x150), g_saveSectionTableArea);
+                    if (areaParam >= 0) {
+                        g_levelVisitedMarkersAbs[g_playerProgress] = visited;
+                        g_playerProgressAbs = *(s32 *)(w + 0x150);
+                    }
+                    if (*(s32 *)(w + 0x164) < 0) {
+                        *(s32 *)(w + 0x164) = 0xF;
+                        *(s32 *)(w + 0x168) = *(s32 *)(w + 0x148);
+                    }
+                }
+            }
         }
     }
-
-    rec = at + *(s16 *)(at + 0x18) * 0x1C;
-    *(s32 *)(rec + 0x34) = g_boltCount;
-    *(s32 *)(rec + 0x30) = g_playerProgress;
-    *(s32 *)(rec + 0x3C) = D_1A7BC8;
-    *(u64 *)(rec + 0x40) = *(u64 *)clock;
-    *(s32 *)(rec + 0x38) = g_miscExtras;   /* asm stores the byte value as a word (sw) */
-
-    SerializeSaveSections(g_saveImageGlobal, 0, g_saveSectionTableGlobal);
-    SerializeSaveSections(g_saveImageArea, *(s32 *)(at + 0x150), g_saveSectionTableArea);
-
-    if (areaParam >= 0) {
-        g_levelVisitedMarkers[g_playerProgress] = (u8)savedVisited;
-        g_playerProgress = *(s32 *)(at + 0x150);
+    {
+        u8 *r = g_areaTable;
+        return *(s32 *)(r + 0x164) == 0xF;
     }
-    if (*(s32 *)(at + 0x164) < 0) {
-        *(s32 *)(at + 0x164) = 0xF;
-        *(s32 *)(at + 0x168) = *(s32 *)(at + 0x148);
-    }
-    return *(s32 *)(at + 0x164) == 0xF;
 }
 #endif
 
