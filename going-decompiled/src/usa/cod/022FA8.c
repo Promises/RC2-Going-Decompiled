@@ -1083,7 +1083,61 @@ s32 func_00126F38(u32 arg0) {
     return 0;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", ResetDmacChannels);
+extern s32 D_0013B708[];   /* per-channel "present" flags, parallel to D_00137E30 */
+extern s32 func_00127040(u8 *buf);  /* returns 0 (ROM: `jr $31; daddu $2,$0,$0`) */
+
+/* One EE DMA channel's register block (only the words ResetDmacChannels clears). */
+typedef struct {
+    u32 chcr;                  /* 0x00 */
+    u32 _pad04[3];
+    u32 madr;                  /* 0x10 */
+    u32 _pad14[7];
+    u32 tadr;                  /* 0x30 */
+    u32 _pad34[3];
+    u32 asr0;                  /* 0x40 */
+    u32 _pad44[3];
+    u32 asr1;                  /* 0x50 */
+    u32 _pad54[11];
+    u32 sadr;                  /* 0x80 */
+} DmaChannelRegs;
+
+/**
+ * ResetDmacChannels (libdma sceDmaReset): note whether the DMAC is enabled
+ * (D_CTRL 0x1000E000 bit 0), clear SADR, CHCR, TADR, MADR, ASR1 and ASR0 of
+ * every channel whose D_0013B708 flag is set (register blocks from the
+ * D_00137E30 table), clear the D_STAT interrupt status bits and keep only its
+ * mask half, then rebuild the DMAC control state from a zeroed 20-byte
+ * descriptor (func_00126F00 = clear, func_00127040 = apply). With mode 1 the
+ * DMAC enable bit is set again. Returns the enable bit as it was on entry.
+ *
+ * func_00127040 must be declared value-returning: as `void` cc1 puts the
+ * `mode == 1` constant in $v0 instead of the ROM's $v1 (2/56 words).
+ */
+s32 ResetDmacChannels(s32 mode) {
+    u8 desc[0x20];
+    s32 wasEnabled;
+    s32 i;
+    wasEnabled = *(volatile u32 *)0x1000E000 & 1;
+    for (i = 0; i < 10; i++) {
+        if (D_0013B708[i] != 0) {
+            volatile DmaChannelRegs *ch = (volatile DmaChannelRegs *)D_00137E30[i];
+            ch->sadr = 0;
+            ch->chcr = 0;
+            ch->tadr = 0;
+            ch->madr = 0;
+            ch->asr1 = 0;
+            ch->asr0 = 0;
+        }
+    }
+    *(volatile u32 *)0x1000E010 = 0xFF1F;
+    *(volatile u32 *)0x1000E010 = *(volatile u32 *)0x1000E010 & 0xFF1F0000;
+    func_00126F00(desc, 0x14);
+    func_00127040(desc);
+    if (mode == 1) {
+        *(volatile u32 *)0x1000E000 = *(volatile u32 *)0x1000E000 | 1;
+    }
+    return wasEnabled;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00127040);
 
@@ -1361,7 +1415,46 @@ void McDelayMillis(s32 millis) {
     func_0011AB40();
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", McSync);
+extern s32 sceSifCheckStatRpc(s32 *rpc);
+extern s32 g_mcPendingCmd;    /* 0x137E68: RPC function number of the call in flight */
+
+/**
+ * McSync (libmc): poll (mode != 0) or wait for (mode 0) the libmc RPC call in
+ * flight. Returns -1 if no call is pending, 0 if it is still running, else 1:
+ * then the pending command is cleared, the call's result (g_mcRpcResult) is
+ * stored through `result` when non-null, and the libmc mutex is released
+ * (func_0011AC40 = SignalSema). `cmd`, when non-null, receives the pending
+ * command number in both the running and the finished case. Waiting re-checks
+ * the RPC status every 60 ms (McDelayMillis).
+ *
+ * The finished flag reuses the status variable (`busy = busy == 0`); a
+ * separate `done` local and an early `return` give a different body (55/56).
+ */
+s32 McSync(s32 mode, s32 *cmd, s32 *result) {
+    s32 busy;
+    if (g_mcPendingCmd == 0) {
+        return -1;
+    }
+    busy = sceSifCheckStatRpc((s32 *)g_mcRpcClient);
+    if (mode == 0 && busy != 0) {
+        while (sceSifCheckStatRpc((s32 *)g_mcRpcClient) != 0) {
+            McDelayMillis(60);
+        }
+        busy = 0;
+    }
+    busy = busy == 0;
+    if (cmd != 0) {
+        *cmd = g_mcPendingCmd;
+    }
+    if (busy) {
+        g_mcPendingCmd = 0;
+        if (result != 0) {
+            *result = g_mcRpcResult;
+        }
+        func_0011AC40(g_mcMutexSema);
+    }
+    return busy;
+}
 
 extern s32 *D_00141B28;
 extern s32 *D_00141B2C;
@@ -3577,7 +3670,61 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00
  * INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012EB30);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012EE28);
+/* One register-shadow record: the packed register value, its field mask and
+ * two caller words. 0x18 bytes. */
+typedef struct {
+    u64 key;                   /* 0x00: func_0012EAA0(index, value) */
+    u64 mask;                  /* 0x08: D_00137F78[index].mask */
+    s32 value;                 /* 0x10 */
+    s32 extra;                 /* 0x14 */
+} RegShadowEntry;
+
+typedef struct {
+    u8 _pad0[0x44];
+    RegShadowEntry *entries;   /* 0x44: up to 64 records */
+    s32 count;                 /* 0x48 */
+} RegShadowTable;
+
+/* The 10 packed-register field descriptors func_0012EAA0 indexes. */
+typedef struct {
+    u64 base;
+    u64 mask;
+} RegFieldDesc;
+extern RegFieldDesc D_00137F78[];
+extern u64 func_0012EAA0(u32 index, u64 value);
+
+/**
+ * Look up the packed register value func_0012EAA0(index, value) in the
+ * shadow table at obj->field_0x40 and return the matching record's `value`
+ * word (0 if none). The table is then written at the index the search stopped
+ * on (the match, or one past the end) when that is below 64: key, a4, a3 and
+ * the field's mask go in, and the record count is incremented — on a hit as
+ * well as on an append, exactly as the ROM does.
+ *
+ * The comparison is spelled `key == entries[i].key`: the other way round cc1
+ * swaps the two `bnel` operands (2/61 words).
+ */
+s32 func_0012EE28(s32 *obj, u32 index, u64 value, s32 a3, s32 a4) {
+    RegShadowTable *tbl = (RegShadowTable *)obj[0x10];
+    RegShadowEntry *entries = tbl->entries;
+    s32 found = 0;
+    u64 key = func_0012EAA0(index, value);
+    s32 i;
+    for (i = 0; i < tbl->count; i++) {
+        if (key == entries[i].key) {
+            found = entries[i].value;
+            break;
+        }
+    }
+    if (i < 64) {
+        tbl->count++;
+        entries[i].key = key;
+        entries[i].extra = a4;
+        entries[i].value = a3;
+        entries[i].mask = D_00137F78[index].mask;
+    }
+    return found;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012EF20);
 
@@ -3746,14 +3893,38 @@ s32 func_0012FA70(s32 *arg0, s32 index, s32 arg2, s32 arg3) {
     return old;
 }
 
-/* func_0012FA98(arg0, arg1): if arg0 and its table arg0->field_0x40 are non-null,
- * fetch the destructor at table[*arg1*2 + 3] and, if set, call
- * dtor(arg0, arg1, table[*arg1*2 + 4]); return its result or 0. The natural body
- * reaches 92% — but the original keeps `ret` in $7 (a3) where ee-gcc allocates
- * a2, and emits a plain `beqz` on the callback test where ee-gcc picks the
- * branch-likely `beqzl` (annulling its delay slot). Both are scheduling/reg-
- * alloc forms this cc1 won't reproduce. Left as INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012FA98);
+/* One handler slot of the table at obj->field_0x40 (installed by
+ * func_0012FA70): the callback and the word passed back to it. */
+typedef struct {
+    s32 (*fn)(s32 *obj, s32 *req, s32 arg);
+    s32 arg;
+} HandlerSlot;
+
+typedef struct {
+    u8 _pad0[0xC];
+    HandlerSlot slot[1];       /* 0x0C: indexed by the request's first word */
+} HandlerTable;
+
+/**
+ * func_0012FA98(obj, req): if obj and its handler table obj->field_0x40 are
+ * non-null and the slot named by req[0] has a callback, call
+ * callback(obj, req, slot.arg) and return its result; otherwise return 0.
+ *
+ * The earlier note here ("ret kept in $7 and a plain beqz are forms this cc1
+ * won't reproduce", 92%) described a spelling, not a wall: indexing a typed
+ * slot array (`tbl->slot[*req].fn`, `.arg`) instead of `tbl[*req * 2 + 3]`
+ * gives the ROM's allocation and branch exactly.
+ */
+s32 func_0012FA98(s32 *obj, s32 *req) {
+    s32 ret = 0;
+    if (obj != 0) {
+        HandlerTable *tbl = (HandlerTable *)obj[0x10];
+        if (tbl != 0 && tbl->slot[*req].fn != 0) {
+            ret = tbl->slot[*req].fn(obj, req, tbl->slot[*req].arg);
+        }
+    }
+    return ret;
+}
 
 extern s32 func_0012FA98(s32 *obj, s32 *req);
 
