@@ -1381,7 +1381,7 @@ typedef struct DbcDataRequest {
  *
  * Written as an OLD-STYLE (K&R) definition on purpose: its callers in this
  * library compiled WITHOUT a prototype in scope. func_00128FD0 passes the
- * 8-byte Pad2CmdHeader in one register with no narrowing, which a prototyped
+ * 64-bit command header in one register with no narrowing, which a prototyped
  * `s32 cmd` would have forced (dsll32/dsra32); see func_001287A8.
  */
 s32 func_001286C8(port, cmd, size, data)
@@ -1418,11 +1418,14 @@ s32 func_001286C8(port, cmd, size, data)
  * Returns the server's result word (re-read after the copy).
  *
  * OLD-STYLE (K&R) definition, like func_001286C8: the ROM's callers saw no
- * prototype. func_00128F50 passes the whole 64-bit Pad2CmdHeader, while
- * func_00128B28 / func_00128C18 pass its low word as an int, which the ROM
- * sign-extends at the call (dsll32/dsra32). One prototype cannot give both;
- * a `u64 cmd` prototype measured 59/60 words different here and a union
- * parameter the same, against 0 for this definition.
+ * prototype. func_00128F50 passes the whole 64-bit header (Pad2Cmd.all),
+ * while func_00128B28 / func_00128C18 pass its low word as an int, which the
+ * ROM sign-extends at the call (dsll32/dsra32). One prototype cannot give
+ * both: a `u64 cmd` prototype makes this function narrow its argument itself
+ * (59 of 60 words) and a union parameter fails the same way, against 0 for
+ * this definition. A native compiler converts the `u64` argument to `s32`
+ * through the visible old-style definition (clang accepts it; a struct
+ * argument would be a hard error there).
  */
 s32 func_001287A8(port, cmd, size, data)
     s32 port;
@@ -1638,11 +1641,14 @@ typedef struct Pad2CmdHeader {
     u64 version : 8;
 } Pad2CmdHeader;
 
-/* The header viewed as the 32-bit command word func_00128B28 / func_00128C18
- * pass (see func_001287A8 for why the two kinds of caller differ). */
+/* The header as the value handed to func_001286C8 / func_001287A8: callers
+ * func_00128B28 / func_00128C18 pass the 32-bit `word`, which the ROM
+ * sign-extends at the call; func_00128F50 / func_00128FD0 pass the whole
+ * doubleword `all`, unnarrowed (see func_001287A8 for why both exist). */
 typedef union Pad2Cmd {
     Pad2CmdHeader bits;
     s32 word;
+    u64 all;
 } Pad2Cmd;
 
 /**
@@ -1844,14 +1850,14 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00
  * holds as the requested length, as the ROM does.
  */
 s32 func_00128F50(s32 port, u8 *data) {
-    Pad2CmdHeader hdr;
+    Pad2Cmd cmd;
     s32 size;
     s32 ret;
-    hdr.cmd = 2;
-    hdr.mode = 2;
-    hdr.sub = 3;
-    hdr.version = 1;
-    ret = func_001287A8(port, hdr, &size, data);
+    cmd.bits.cmd = 2;
+    cmd.bits.mode = 2;
+    cmd.bits.sub = 3;
+    cmd.bits.version = 1;
+    ret = func_001287A8(port, cmd.all, &size, data);
     if (ret < 0) {
         return ret;
     }
@@ -1877,19 +1883,19 @@ typedef struct Pad2SendBuffer {
  * the second memcpy (it sits in that call's delay slot).
  */
 s32 func_00128FD0(s32 port, s32 len0, u8 *src0, s32 len1, u8 *src1) {
-    Pad2CmdHeader hdr;
+    Pad2Cmd cmd;
     Pad2SendBuffer buf;
     s32 size;
     size = 0x28;
-    hdr.cmd = 0xB;
-    hdr.mode = 1;
-    hdr.sub = 3;
-    hdr.version = 1;
+    cmd.bits.cmd = 0xB;
+    cmd.bits.mode = 1;
+    cmd.bits.sub = 3;
+    cmd.bits.version = 1;
     buf.len1 = len1;
     memcpy(buf.data, src1, len1);
     buf.len0 = len0;
     memcpy(buf.data + len1, src0, len0);
-    return func_001286C8(port, hdr, &size, (u8 *)&buf);
+    return func_001286C8(port, cmd.all, &size, (u8 *)&buf);
 }
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_001290BC);
