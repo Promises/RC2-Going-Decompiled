@@ -1822,7 +1822,7 @@ extern s32 D_1A8D20[2];         /* gp small-data table indexed by g_bPalMode */
 extern s32 PlayGlobalSound(s32 id, s32 a, s32 b);
 extern void func_00280C98(s16 *layout, s16 clipX0, s16 clipX1, s16 left, s16 right,
                           s16 anchorX, s16 y, s16 lineHeight, s32 flags);
-extern void func_00280BB8(void *layout, u64 color, const char *text, s32 arg4);
+extern void func_00280BB8(void *layout, u64 color, const char *text, s32 arg4); /* DECL-LEVER(#1833): defined s32 colour; the ROM caller passes it zero-extended */
 extern s32 func_001157AC(const char *s); /* SDK strlen */
 
 /**
