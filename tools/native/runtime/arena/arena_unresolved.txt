@@ -3,7 +3,8 @@
 # live in symbol_addrs, not a documented or co-located alias), or
 # an address outside the data window. Each line names its reason;
 # a missing address needs Track-B recovery into symbol_addrs.
-# Format: <symbol>  # <reason>.  Count: 13
+# Format: <symbol>  # <reason>.  Count: 14
+D_00130A90  # address 0x130A90 is outside the data window [0x133B80,0x26EA00) (core.text)
 D_002907C0  # address 0x2907C0 is outside the data window [0x133B80,0x26EA00) (.text)
 D_100080  # address 0x100080 is outside the data window [0x133B80,0x26EA00) (.vutext)
 D_10E9E0  # address 0x10E9E0 is outside the data window [0x133B80,0x26EA00) (.vutext)
