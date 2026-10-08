@@ -5844,14 +5844,94 @@ void MapBuildBitmapFrom4bpp(void *destArg, void *srcA, void *srcB) {
 }
 #endif
 
-/* TODO(match): functional equivalent - not byte-exact (64.83%); induction-var/
- * strength-reduction wall - the original's later cc1 keeps the loop index `i`
- * live (count-up `slt i,count`, recomputing i*2 in the branch delay slot) where
- * the pinned 2.9-ee-991111 cc1 strength-reduces it to an `i*3 += 3` accumulator
- * and rewrites the bound test as a count-down, diverging the whole loop frame.
- * The div-by-3 trap idiom (beql/break 0,7) and the 4bpp nibble unpack otherwise
- * reproduce exactly. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00297E80);
+/*
+ * func_00297E80(dst, row, srcA, srcB) — decode one row of a run-length-coded
+ * 4bpp map image into `dst` (MapBuildBitmapFrom4bpp passes the scratchpad at
+ * 0x70000000), one nibble per pixel, two pixels per byte. srcB is a table of
+ * s16 end offsets into srcA, one per row; row 0 starts at srcA + 0x200, row r
+ * at srcA + srcB[r - 1]. The row's data is a stream of 12-bit codes packed
+ * 1.5 bytes apart: a pixel value nibble then an 8-bit run length (0 means 256).
+ * Code i starts at nibble 3*i — on an even nibble the value is the low nibble
+ * of the first byte, on an odd one the high nibble. Each run is written as
+ * value-doubled bytes; an odd run leaves a half byte, which the next run's
+ * first pixel completes in its high nibble. Returns nothing.
+ *
+ * Byte-exact on the s136os arm (task #1988). The old TODO here blamed the 2.9
+ * cc1's strength reduction of `i*3` (64.83% there); SN 1.36 keeps `i` live as
+ * the ROM does, so no device is needed for the loop. Each lever priced by
+ * removing it alone (solo s136 compile, relocated fields masked; N/70 words
+ * differ):
+ *  - R5900 SHORT-LOOP PAD (SCHEDULING DEVICE, RULING #8435): the run-fill loop
+ *    is 3 instructions plus its delay slot, and the ROM's assembler padded it
+ *    with 3 `nop`s before the backward `bgtz` (0x297F58..0x297F60). It is tied
+ *    to `dst` ALONE: without the pad 18/70 at 67 words; tied to the run counter
+ *    instead (R5900_SHORT_LOOP_PAD3(run, dst)) the asm insn lengthens the
+ *    counter's life and global alloc swaps it with the count/pair register
+ *    ($8 <-> $9): 12/70. Emits only nops; empty on native;
+ *  - `value` (p[0]) is loaded before `count` (p[1]) in the source, which issues
+ *    the p[1] load first as the ROM does: 2/70 the other way;
+ *  - the doubled byte is its own `pair` local, not formed in the store: 25/70.
+ */
+/* GUARD (task #1988): on EE this C is the image's body, compiled alone by SN
+ * 2.95.3 v1.36 -fopt-stack (tools/ee/s136os_functions.txt) and spliced over the
+ * S136OS_SLOT line by tools/ee/s136os_splice.sh; the 2.9 compile sees only the
+ * slot, so a build that skips the splice loses the function. On native it is
+ * plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00297E80)
+S136OS_SLOT(func_00297E80);
+#else
+void func_00297E80(void *dstArg, s32 row, void *srcAArg, void *srcBArg) {
+    u8  *dst  = (u8 *)dstArg;
+    u8  *srcA = (u8 *)srcAArg;
+    s16 *srcB = (s16 *)srcBArg;
+    s32  half = 0;
+    u8  *src;
+    s32  n, i;
+
+    if (row != 0) {
+        src = srcA + srcB[row - 1];
+    } else {
+        src = srcA + 0x200;
+    }
+    n = ((srcA + srcB[row]) - src) * 2 / 3;
+    for (i = 0; i < n; i++) {
+        s32 t     = i * 3;
+        u8 *p     = src + (t >> 1);
+        u32 value = p[0];
+        u32 count = p[1];
+        s32 run;
+        u8  pair;
+
+        if (t & 1) {
+            value >>= 4;
+        } else {
+            count = ((count << 4) | (value >> 4)) & 0xFF;
+            value &= 0xF;
+        }
+        run  = count ? (s32)count : 0x100;
+        pair = value | (value << 4);
+        if (half) {
+            *dst |= value << 4;
+            half = 0;
+            run--;
+            dst++;
+        }
+        if (run != 0) {
+            do {
+                *dst = pair;
+                run -= 2;
+                R5900_SHORT_LOOP_PAD3_TIED(dst);
+                dst++;
+            } while (run > 0);
+            if (run != 0) {
+                dst--;
+                half = 1;
+                *dst = value;
+            }
+        }
+    }
+}
+#endif
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/191238", func_00297F98);
 
