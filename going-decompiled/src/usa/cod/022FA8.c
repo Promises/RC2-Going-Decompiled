@@ -2425,7 +2425,8 @@ typedef struct {
     s32 pending;               /* 0x120: an unpaired field picture */
     s32 horizontalSize;        /* 0x124 */
     s32 verticalSize;          /* 0x128 */
-    u8  _pad12C[0x134 - 0x12C];
+    s32 mbWidth;               /* 0x12C: picture width in macroblocks */
+    s32 mbHeight;              /* 0x130 */
     s32 bitRateValue;          /* 0x134 */
     s32 vbvBufferSize;         /* 0x138 */
     s32 progressiveSequence;   /* 0x13C */
@@ -2558,7 +2559,52 @@ s32 func_0012B568(s32 *ipu) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012B678);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012B780);
+extern void func_0012C9C8(s32 *ipu);
+extern s32 func_0012CA48(s32 *arg0);
+extern void func_00130288(s32 arg0, void *buf);
+extern char D_0013BB10[];
+extern char D_0013BB38[];
+
+/**
+ * Start a slice (mpeg2decode's start_of_slice): clear lastDecodeZero, align
+ * to the next start code and peek it. Anything but a slice start code
+ * (0x101..0x1AF) is reported (D_0013BB10 through func_00130250) and ends the
+ * picture (returns 2). Otherwise skip the code, read the slice header
+ * (func_0012CA48, which returns slice_vertical_position_extension) and the
+ * first macroblock_address_increment (func_0012B568); a bad increment is
+ * reported (D_0013BB38) and returns 1. Then set the macroblock address
+ * *mba from the slice's vertical position and the increment, reset *mbaInc
+ * to 1, set field1B0 and clear the motion-vector predictors pmv[][][]
+ * (mbaMax is unused). Returns 0 to decode the slice's macroblocks.
+ *
+ * The predictor clears are the reference's two chained assignments, whose
+ * store order is the ROM's; as eight statements in index order 8 of the 75
+ * words differ.
+ */
+s32 func_0012B780(IpuDecoder *dec, s32 mbaMax, s32 *mba, s32 *mbaInc, s32 pmv[2][2][2]) {
+    u32 code;
+    s32 vertPosExt;
+    dec->lastDecodeZero = 0;
+    func_0012C9C8((s32 *)dec);
+    code = func_0012C680((s32 *)dec, 32);
+    if (code < 0x101 || code > 0x1AF) {
+        func_00130250(dec, D_0013BB10, code);
+        return 2;
+    }
+    IpuSkipBits((s32 *)dec, 32);
+    vertPosExt = func_0012CA48((s32 *)dec);
+    *mbaInc = func_0012B568((s32 *)dec);
+    if (dec->lastDecodeZero) {
+        func_00130288((s32)dec, D_0013BB38);
+        return 1;
+    }
+    *mba = ((vertPosExt << 7) + (code & 255) - 1) * dec->mbWidth + *mbaInc - 1;
+    *mbaInc = 1;
+    dec->field1B0 = 1;
+    pmv[0][0][0] = pmv[0][0][1] = pmv[1][0][0] = pmv[1][0][1] = 0;
+    pmv[0][1][0] = pmv[0][1][1] = pmv[1][1][0] = pmv[1][1][1] = 0;
+    return 0;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012B8B0);
 
