@@ -683,7 +683,113 @@ s32 sceCdMmode(s32 media) {
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_001253A4);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_001253A8);
+/* sceCdRMode: the read mode sceCdRead takes. */
+typedef struct {
+    u8 tryCount;
+    u8 spindleCtrl;
+    u8 dataPattern;   /* 0 = 2048-byte sectors, 1 = 2328, 2 = 2340 */
+    u8 _pad3;
+} CdReadMode;
+
+/* The sceCdRead request sent to the IOP (RPC #1 on D_00137550). */
+typedef struct {
+    u32 lbn;
+    u32 sectors;
+    void *buf;
+    u8 tryCount;
+    u8 spindleCtrl;
+    u8 dataPattern;
+    u8 _padF;
+    void *readInfo;   /* D_00137480 */
+    s32 *status;      /* D_00137540 */
+} CdReadRequest;
+
+/* libcdvd flags: bit 0 skips the ready check, bit 1 the buffer writeback.
+ * `volatile` here is a CODEGEN DEVICE (RULING #8404), not a claim that the
+ * flags change asynchronously: its only writer in the ROM is sceCdInit's
+ * clear (`sw $0, %lo(D_001363B4)`, census of asm/usa). A volatile load is
+ * not copied into a branch delay slot by reorg, which leaves the ROM's
+ * `b; nop` before the second test in func_001253A8; plain, cc1 fills that
+ * slot with the load (2 of 120 words differ). */
+extern volatile s32 D_001363B4;
+extern CdReadRequest D_00136480;
+extern u8 D_00137480[0x90];
+extern s32 D_00137540;
+extern char D_0013B2E0[];      /* "call cdread cmd\n" */
+extern char D_0013B2F8[];      /* "cdread end\n" */
+extern void func_001246D0(void);
+
+/**
+ * libcdvd's sceCdRead (its debug messages, D_0013B2E0/D_0013B2F8, read
+ * "call cdread cmd" and "cdread end"): read `sectors` sectors from `lbn`
+ * into `buf` with read mode `mode`. Unless flag bit 0 is set, give up (0)
+ * when the drive reports not-ready (func_00124AF0 returns 6); take the
+ * N-command lock (func_00124980(4), 0 = busy: return 0); fill the request
+ * D_00136480; size the buffer by the data pattern (2328- or 2340-byte
+ * sectors, else 2048) and write it back from the cache unless flag bit 1
+ * is set, along with the request, the read-info block and the status word;
+ * mark the command in flight (D_001363D4, D_001363B0) and issue RPC #1
+ * asynchronously with func_001246D0's real entry (+0x10) as the end
+ * callback. A failed RPC clears the in-flight marks, releases the lock and
+ * returns 0. Returns 1 once the read is queued.
+ *
+ * The data-pattern switch carries an explicit `case 0` on the default body:
+ * without it cc1 drops the ROM's `slti` split of the decision tree (76 of
+ * 120 words differ).
+ */
+s32 func_001253A8(u32 lbn, u32 sectors, void *buf, CdReadMode *mode) {
+    CdReadRequest *req = &D_00136480;
+    s32 size;
+    if (!(D_001363B4 & 1) && func_00124AF0() == 6) {
+        return 0;
+    }
+    if (func_00124980(4) == 0) {
+        return 0;
+    }
+    req->lbn = lbn;
+    req->sectors = sectors;
+    req->buf = buf;
+    req->tryCount = mode->tryCount;
+    req->spindleCtrl = mode->spindleCtrl;
+    req->dataPattern = mode->dataPattern;
+    req->readInfo = D_00137480;
+    req->status = &D_00137540;
+    switch (mode->dataPattern) {
+    case 1:
+        size = sectors * 0x918;
+        break;
+    case 2:
+        size = sectors * 0x924;
+        break;
+    case 0:
+    default:
+        size = sectors << 11;
+        break;
+    }
+    D_00137540 = 0;
+    if (!(D_001363B4 & 2)) {
+        sceSifWriteBackDCache(buf, size);
+    }
+    sceSifWriteBackDCache(D_00137480, 0x90);
+    sceSifWriteBackDCache(req, 0x18);
+    sceSifWriteBackDCache(&D_00137540, 4);
+    if (D_00136390 > 0) {
+        Kprintf(D_0013B2E0);
+    }
+    D_001363D4 = 1;
+    D_001363B0 = 1;
+    if (func_0011D620(D_00137550, 1, 1, req, 0x18, 0, 0,
+                      (s32)((u8 *)func_001246D0 + 0x10), D_00137480) < 0) {
+        D_001363D4 = 0;
+        D_001363B0 = 0;
+        func_0011AC40(D_001363A8);
+        return 0;
+    }
+    if (D_00136390 > 0) {
+        Kprintf(D_0013B2F8);
+    }
+    return 1;
+}
 
 /**
  * libcdvd S-command 4 with no send data: take the S-command lock with
