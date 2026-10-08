@@ -661,12 +661,59 @@ void func_003506A8(FmvPtsQueue *q, u8 **pPtr0, s32 *pLen0, u8 **pPtr1, s32 *pLen
 }
 #endif
 
-/* func_00350778: account n arrived elementary-stream bytes (fill the
- * 0x28-byte packet header, then advance the payload ring cursors, ring
- * size re-snapped to 1KB). Best attempt 68%: identical structure but the
- * pinned cc1 colours the s/rem/take temporaries a3/t0/a1 where the
- * original has a2/a3/v0-with-copy - the register-coloring wall. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00350778);
+/**
+ * Account `n` freshly stored elementary-stream bytes to the pts queue.
+ * Until the stream has started, the first bytes fill the 0x28-byte packet
+ * header (hdrFill); the stream starts once the header is full, or at once for
+ * a headerless (mode 4) stream. What is left of `n` advances the payload ring:
+ * the ring size is snapped down to a 1KB multiple and written back, the write
+ * offset wraps modulo it, and the consumed/received totals grow by `n`.
+ * @param q  the arena's pts queue (arena + FMV_PTS_OFS)
+ * @param n  bytes just copied into the ring (func_003510C0's `stored`)
+ * @return   nothing meaningful: the ROM falls off the end with the received
+ *           total left in $v0, and its only caller ignores it. The `s32`
+ *           stays because the file-scope declaration every caller sees says
+ *           so; func_003510C0 is matched against that declaration.
+ *
+ * Byte-exact on the s136os arm (task #2037), no devices. The cc1 2.9 arm's
+ * old note ("68%, the register-coloring wall": a3/t0/a1 for what the ROM
+ * colours a2/a3/v0-with-copy) does not apply to SN 1.36. Two phrasings decide
+ * the bytes: the clamp is a ternary on a separate `room` local (the ROM's
+ * `movz` on `room < n` and the `move $3,$2` copy into `take`; an in-place
+ * `if (n < take) take = n` gives `slt n,take; movn` in other registers), and
+ * the header branch is the then-arm with mode 4 the else-arm (the ROM's
+ * fall-through order; the other order inverts the `beq`).
+ *
+ * GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+ * (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00350778)
+S136OS_SLOT(func_00350778);
+#else
+s32 func_00350778(FmvPtsQueue *q, s32 n) {
+    s32 size;
+    if (q->started == 0) {
+        if (q->mode != 4) {
+            s32 room = 0x28 - q->hdrFill;
+            s32 take = (room < n) ? room : n;
+            q->hdrFill += take;
+            if (q->hdrFill >= 0x28) {
+                q->started = 1;
+            }
+            n -= take;
+        } else {
+            q->started = 1;
+        }
+    }
+    size = (q->ringSize / 0x400) * 0x400;
+    q->ringSize = size;
+    q->ringOfs = (q->ringOfs + n) % size;
+    q->consumed += n;
+    q->received += n;
+}
+#endif
 
 /**
  * True once the pts ring has at least 0x1000 bytes queued (enough for the
