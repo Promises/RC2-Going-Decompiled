@@ -85,6 +85,7 @@ func_00126730 = 0x00126730; // type:func
 func_00126DC0 = 0x00126DC0; // type:func
 func_00128F50 = 0x00128F50; // type:func
 func_001290E0 = 0x001290E0; // type:func
+func_0011F9E8 = 0x0011F9E8; // type:func
 // cod/015180 - valid-instruction debris (dead sq/sqc2/nop and addiu-sp/nop runs)
 func_00129120 = 0x00129120; // type:func size:0x28
 func_00129148 = 0x00129148; // type:func

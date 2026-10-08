@@ -3412,7 +3412,25 @@ void func_0011F938(void) {
     }
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F9E4);
+/* 0x11F9E4 is one 0xCDCDCDCD fill word that spimdisasm fused onto the head of
+ * func_0011F9E8; the start-only `type:func` pin on 0x11F9E8 (FACT #7390's
+ * method) carves it off as this 0x4 fragment. */
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F9E4);
+
+/**
+ * Copy nbytes bytes from src to dst and return 0 — the byte-wise twin of the
+ * word-copy routine func_0011F888. Reached only through data: it is the handler
+ * of D_00135568's fourth row {0x5A, func_0011F9E8}, a syscall-0x5A copy routine
+ * like row 0's; func_0011F938's install loop stops at row 2, and no ROM
+ * instruction references the row or the routine directly.
+ */
+s32 func_0011F9E8(u8 *dst, u8 *src, u32 nbytes) {
+    u32 i;
+    for (i = 0; i < nbytes; i++) {
+        *dst++ = *src++;
+    }
+    return 0;
+}
 
 /**
  * Shutdown hook thunk: void tail call to the func_0011F130 dispatcher. ee-gcc
