@@ -537,50 +537,113 @@ s32 func_002D5A10(void) {
 }
 #endif
 
+/* ADDRESSING-MODEL DEVICES (RULING #8620 class; directive-only, emit nothing)
+ * for the two title-screen glyph rows below, func_002D5A48 and func_002D5D10.
+ * Each ROM read of these is the assembler's absolute macro (lui into the
+ * destination, or lui $1 for an FPR load); gas forms that only when the
+ * symbol's `.extern` size above the use exceeds -G8, and cc1 sizes each one
+ * 4. At FILE SCOPE so the unit's 2.9 TU declares them too, and the s136os
+ * splice does not carry the TU's end-of-file `, 4` lines in front of the
+ * blocks (the same placement rule as the g_guiInstance device above
+ * func_002D5EC8, which this repeats for the earlier rows). The gp-relative
+ * siblings (D_1ABAD0/D8/E0, D_1ABB08/10/18/20) keep cc1's size. Each line is
+ * load-bearing: removing one alone costs 22..103 of the row's words. */
+#ifndef TARGET_NATIVE
+__asm__(".extern g_guiInstance, 16");
+__asm__(".extern g_swapGadgetItemIndex, 16");
+__asm__(".extern D_1ABAD4, 16");
+__asm__(".extern D_1ABADC, 16");
+__asm__(".extern D_1ABAE4, 16");
+__asm__(".extern D_1ABB0C, 16");
+__asm__(".extern D_1ABB14, 16");
+__asm__(".extern D_1ABB1C, 16");
+/* An empty volatile fence on the pinned glyph scale (RULING #8483): it fixes
+ * the scale's 1.0 between the x and y conversions, as the ROM issues it, and
+ * keeps cc1 from folding the 1.0 into the argument copy. Empty natively, where
+ * "f" is not a register constraint. */
+#define GLYPH_SCALE_FENCE(x) __asm__ __volatile__("" : "+f"(x))
+#else
+#define GLYPH_SCALE_FENCE(x) ((void)0)
+#endif
+
 /* Draw the title-screen language-select glyph row: three packed-colour glyphs
  * (font-atlas keys 0x96/0x97/0x98) blitted at the base cursor (D_1ABAD8,
  * D_1ABADC), followed by two localized strings (textIds 0x2BF8, 0x2BE5) drawn at
  * base + per-string offset in colour 0x80F0F0F0. The whole row is skipped when
  * the GUI singleton is absent. Returns 0.
  *
- * The matching (INCLUDE_ASM) arm stays the source of truth: the byte-exact build
- * hoists the shared 0.0f into the callee-save $f20 and interleaves the gp/abs FP
- * constant loads in a schedule the portable arm does not attempt to reproduce. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D5A48);
+ * Every glyph blit passes scale 1.0, the sprite y-fudge
+ * (g_swapGadgetItemIndex+0x8E) and a 0.0 last argument; the GUI singleton and
+ * the cursor are re-read for each call, as the ROM does. The first string is
+ * drawn by func_002801B8 (DrawFont1CenteredLabel), the second by func_00280090
+ * (DrawFont1RightJustifiedLabel).
+ *
+ * MATCHED on the s136os arm (SN 2.95.3 v1.36 -fopt-stack, task #1929). Each
+ * piece priced by removing it alone (solo s136 screen, relocated fields
+ * masked, words differing of 112, built length in brackets):
+ *   - the `.extern ,16` devices above: g_guiInstance 103 (109),
+ *     g_swapGadgetItemIndex 90 (109), D_1ABADC 93 (107), D_1ABAD4 41 (111),
+ *     D_1ABAE4 23 (111);
+ *   - scale pinned to $f14 (EE_REG, RULING #8598; DrawHelpTopicMenu's device in
+ *     1CA080.cpp): the ROM rebuilds 1.0 into $f14 for every call, while cc1
+ *     shares one 1.0 in a callee-saved FPR. 108 (115) without it;
+ *   - GLYPH_SCALE_FENCE before the first blit: without it the pin's self-copy
+ *     leaves a (use $f14) at the head of the block, and sched2 then issues the
+ *     atlas add before the codepoint load, against the ROM. 4 without it; 2 as
+ *     a non-volatile fence, 4 as an untied barrier;
+ *   - the first x conversion formed before the scale: 8;
+ *   - both text colours 64-bit (the ROM's ori/dsll/ori): 32 (110).
+ * A literal 0.0f last argument compiles the same as the rotation local; the
+ * local stays because it is what lives in $f20 across the calls. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002D5A48)
+S136OS_SLOT(func_002D5A48);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern s32 GuiFontAtlasLookupGlyph(void *atlas, s32 codepoint);
 extern void func_003017F8(s32 glyph, s32 color, f32 x, f32 y, f32 scale, f32 a5, f32 a6);
 extern s32 GetLocalizedString(s32 id);
+#ifndef TARGET_NATIVE
+/* The ROM symbols with their ROM signatures (as 1CA080.cpp declares them): the
+ * colour is a 64-bit value, built zero-extended (ori/dsll/ori). Native keeps the
+ * unit-wide 32-bit declarations: a second type for one extern "C" name does not
+ * compile there. */
+extern void func_002801B8(s32 x, s32 y, u64 color, s32 str, s32 wrap);
+extern void func_00280090(s32 x, s32 y, u64 color, s32 str, s64 wrap);
+#else
 extern s32 func_002801B8(s32 x, s32 y, u32 color, s32 str, s32 wrap);
 extern void func_00280090(s32 a, s32 b, s32 c, s32 d, s32 e);
+#endif
 /* (end of this body's declarations) */
-/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
- * objdiff): sdk29 54.99% / engine96 47.12%; better arm sdk29; 115 differing
- * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
- * insn: ROM `addiu sp,sp,-48` vs `addiu sp,sp,-64`. Not iterated in t495. */
 s32 func_002D5A48(void) {
     /* GUI singleton; the font atlas lives at g_guiInstance + 0x8710. */
     extern char *g_guiInstance;
-    /* Base cursor + per-string offsets for this row (gp/abs runtime globals). */
+    /* Base cursor + per-string offsets for this row. */
     extern s32 D_1ABAD0, D_1ABAD4, D_1ABAD8, D_1ABADC, D_1ABAE0, D_1ABAE4;
-    /* Glyph-blit shape parameter (abs float @0x1B2328, role unconfirmed). */
-    extern f32 D_1B2328;
-    char *atlas;
+    /* +0x8E holds the global sprite y-fudge (f32). */
+    extern s32 g_swapGadgetItemIndex;
+    f32 rotation;
+    f32 x;
+    register f32 scale EE_REG("$f14");
     s32 glyph;
 
     Begin2dDrawBatch(0);
     if (g_guiInstance != 0) {
-        atlas = g_guiInstance + 0x8710;
-
-        glyph = GuiFontAtlasLookupGlyph(atlas, 0x96);
-        func_003017F8(glyph, 0x60442D00, (f32)D_1ABAD8, (f32)D_1ABADC, 1.0f, D_1B2328, 0.0f);
-        glyph = GuiFontAtlasLookupGlyph(atlas, 0x97);
-        func_003017F8(glyph, 0x60241700, (f32)D_1ABAD8, (f32)D_1ABADC, 1.0f, D_1B2328, 0.0f);
-        glyph = GuiFontAtlasLookupGlyph(atlas, 0x98);
-        func_003017F8(glyph, 0x55F0C070, (f32)D_1ABAD8, (f32)D_1ABADC, 1.0f, D_1B2328, 0.0f);
+        rotation = 0.0f;
+        glyph = GuiFontAtlasLookupGlyph(g_guiInstance + 0x8710, 0x96);
+        x = (f32)D_1ABAD8;
+        scale = 1.0f;
+        GLYPH_SCALE_FENCE(scale);
+        func_003017F8(glyph, 0x60442D00, x, (f32)D_1ABADC, scale,
+                      *(f32 *)((u8 *)&g_swapGadgetItemIndex + 0x8E), rotation);
+        glyph = GuiFontAtlasLookupGlyph(g_guiInstance + 0x8710, 0x97);
+        scale = 1.0f;
+        func_003017F8(glyph, 0x60241700, (f32)D_1ABAD8, (f32)D_1ABADC, scale,
+                      *(f32 *)((u8 *)&g_swapGadgetItemIndex + 0x8E), rotation);
+        glyph = GuiFontAtlasLookupGlyph(g_guiInstance + 0x8710, 0x98);
+        scale = 1.0f;
+        func_003017F8(glyph, 0x55F0C070, (f32)D_1ABAD8, (f32)D_1ABADC, scale,
+                      *(f32 *)((u8 *)&g_swapGadgetItemIndex + 0x8E), rotation);
 
         func_002801B8(D_1ABAD8 + D_1ABAD0, D_1ABADC + D_1ABAD4, 0x80F0F0F0,
                       GetLocalizedString(0x2BF8), -1);
@@ -669,47 +732,65 @@ s32 func_002D5C58(void *focus) {
 
 /* Draw the title-screen menu header glyph row: three packed-colour glyphs
  * (font-atlas keys 0x8B/0x8C/0x8D) blitted at the base cursor (D_1ABB10,
- * D_1ABB14) — the first two carry the shape parameter D_1ABB20, the third 0.0f —
- * then two localized strings (textIds 0x2BF7, 0x2BE5) at base + per-string offset
- * in colour 0x80F0F0F0. Skipped when the GUI singleton is absent. Returns 0.
+ * D_1ABB14), the first two with the shape parameter D_1ABB20 and the third
+ * with 0.0f, then two localized strings (textIds 0x2BF7, 0x2BE5) at base +
+ * per-string offset in colour 0x80F0F0F0, both drawn by func_002801B8
+ * (DrawFont1CenteredLabel). Skipped when the GUI singleton is absent.
+ * Returns 0.
  *
- * Sibling of func_002D5A48 over a different cursor/offset/colour set. The
- * matching (INCLUDE_ASM) arm stays the byte-exact source of truth; the portable
- * arm does not attempt to reproduce its gp/abs FP-load schedule. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D5D10);
+ * Sibling of func_002D5A48 over a different cursor/offset/colour set, and
+ * matched the same way (s136os arm, task #1929), with the same devices: the
+ * `.extern ,16` block above func_002D5A48, scale pinned to $f14,
+ * GLYPH_SCALE_FENCE before the first blit, the first x formed before the scale,
+ * 64-bit text colours. Each priced by removing it alone (solo s136 screen,
+ * words differing of 109, built length in brackets): g_guiInstance 101 (106),
+ * g_swapGadgetItemIndex 89 (106), D_1ABB14 92 (104), D_1ABB0C 40 (108),
+ * D_1ABB1C 22 (108); the pin 109 (112); the fence 2 (4 non-volatile, 2 as an
+ * untied barrier); the early x 8; the u64 colour 31 (107). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002D5D10)
+S136OS_SLOT(func_002D5D10);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern s32 GuiFontAtlasLookupGlyph(void *atlas, s32 codepoint);
 extern void func_003017F8(s32 glyph, s32 color, f32 x, f32 y, f32 scale, f32 a5, f32 a6);
 extern s32 GetLocalizedString(s32 id);
+#ifndef TARGET_NATIVE
+/* The ROM symbol with its ROM signature: 64-bit colour (see func_002D5A48). */
+extern void func_002801B8(s32 x, s32 y, u64 color, s32 str, s32 wrap);
+#else
 extern s32 func_002801B8(s32 x, s32 y, u32 color, s32 str, s32 wrap);
+#endif
 /* (end of this body's declarations) */
-/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
- * objdiff): sdk29 55.10% / engine96 43.66%; better arm sdk29; 75 differing
- * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
- * insn: ROM `addiu sp,sp,-32` vs `addiu sp,sp,-64`. Not iterated in t495. */
 s32 func_002D5D10(void) {
     /* GUI singleton; the font atlas lives at g_guiInstance + 0x8710. */
     extern char *g_guiInstance;
-    /* Base cursor + per-string offsets for this row (gp/abs runtime globals). */
+    /* Base cursor + per-string offsets for this row. */
     extern s32 D_1ABB08, D_1ABB0C, D_1ABB10, D_1ABB14, D_1ABB18, D_1ABB1C;
-    /* Glyph-blit shape parameters (abs/gp floats, roles unconfirmed). */
-    extern f32 D_1B2328, D_1ABB20;
-    char *atlas;
+    /* Glyph-blit shape parameter (gp-relative float, role unconfirmed). */
+    extern f32 D_1ABB20;
+    /* +0x8E holds the global sprite y-fudge (f32). */
+    extern s32 g_swapGadgetItemIndex;
+    f32 x;
+    register f32 scale EE_REG("$f14");
     s32 glyph;
 
     Begin2dDrawBatch(0);
     if (g_guiInstance != 0) {
-        atlas = g_guiInstance + 0x8710;
-
-        glyph = GuiFontAtlasLookupGlyph(atlas, 0x8B);
-        func_003017F8(glyph, 0x60442D00, (f32)D_1ABB10, (f32)D_1ABB14, 1.0f, D_1B2328, D_1ABB20);
-        glyph = GuiFontAtlasLookupGlyph(atlas, 0x8C);
-        func_003017F8(glyph, 0x55F0C070, (f32)D_1ABB10, (f32)D_1ABB14, 1.0f, D_1B2328, D_1ABB20);
-        glyph = GuiFontAtlasLookupGlyph(atlas, 0x8D);
-        func_003017F8(glyph, (s32)0x80FFDE8D, (f32)D_1ABB10, (f32)D_1ABB14, 1.0f, D_1B2328, 0.0f);
+        glyph = GuiFontAtlasLookupGlyph(g_guiInstance + 0x8710, 0x8B);
+        x = (f32)D_1ABB10;
+        scale = 1.0f;
+        GLYPH_SCALE_FENCE(scale);
+        func_003017F8(glyph, 0x60442D00, x, (f32)D_1ABB14, scale,
+                      *(f32 *)((u8 *)&g_swapGadgetItemIndex + 0x8E), D_1ABB20);
+        glyph = GuiFontAtlasLookupGlyph(g_guiInstance + 0x8710, 0x8C);
+        scale = 1.0f;
+        func_003017F8(glyph, 0x55F0C070, (f32)D_1ABB10, (f32)D_1ABB14, scale,
+                      *(f32 *)((u8 *)&g_swapGadgetItemIndex + 0x8E), D_1ABB20);
+        glyph = GuiFontAtlasLookupGlyph(g_guiInstance + 0x8710, 0x8D);
+        scale = 1.0f;
+        func_003017F8(glyph, (s32)0x80FFDE8D, (f32)D_1ABB10, (f32)D_1ABB14, scale,
+                      *(f32 *)((u8 *)&g_swapGadgetItemIndex + 0x8E), 0.0f);
 
         func_002801B8(D_1ABB10 + D_1ABB08, D_1ABB14 + D_1ABB0C, 0x80F0F0F0,
                       GetLocalizedString(0x2BF7), -1);
