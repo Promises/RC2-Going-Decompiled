@@ -2253,7 +2253,7 @@ func_00339398 = 0x00339398; // type:func - GUI widget method func_0029C448 forwa
 DrawBestiaryEntry = 0x002CED10; // CONFIRMED mechanism - render one bestiary catalog entry - name/desc + 4 stat bars + defeat count - PROBABLE retail enemy bestiary
 UpdateBestiaryMenuInput = 0x002CEAB8; // CONFIRMED mechanism - L/R nav of the bestiary cursor over entries 1 to 0x3f skipping zero-kill, back exits
 DrawBestiaryPagingArrows = 0x002CF558; // CONFIRMED - draw the L/R paging glyphs + corner brackets for the bestiary screen
-IncrementBestiaryKillCount = 0x002A7930; // CONFIRMED - match entity class id in g_bestiaryEntryTable, bump g_bestiaryKillCounts u16 (cap 9998), award on a progress gate
+IncrementBestiaryKillCount = 0x002A7930; // CONFIRMED - match entity class id in g_bestiaryEntryTable, bump g_bestiaryKillCounts u16 (saturates at 0x270F = 9999 - ROM sltiu 0x270F at 0x2A7A80, FACT #5514), award on a progress gate
 UpdateExtrasMenuInput = 0x002D1158; // CONFIRMED mechanism - 5-item carousel - confirm enters a sub-screen or plays making-of/credits reels via EnqueueCinematic - PROBABLE retail Extras
 DrawExtrasMenu = 0x002D14F0; // CONFIRMED mechanism - 5-visible carousel renderer for the Extras menu
 UpdatePlanetWarpMenuInput = 0x002D1F28; // CONFIRMED mechanism - 8-item menu - confirm RequestLevelExit to fixed planet ids - PROBABLE retail planet/level warp
@@ -2276,7 +2276,7 @@ BuildCheatMenuItemList = 0x002CD510; // CONFIRMED - build the cheats-screen item
 g_bestiaryCursor = 0x001AB9E8; // CONFIRMED - selected bestiary catalog entry (1 to 0x3f)
 g_bestiaryPrevEntry = 0x001AB9EC; // CONFIRMED - precomputed previous valid bestiary entry
 g_bestiaryNextEntry = 0x001AB9F0; // CONFIRMED - precomputed next valid bestiary entry
-g_bestiaryKillCounts = 0x00188510; // CONFIRMED - u16[2] per-entry defeat counters (stride 4, cap 0x270e)
+g_bestiaryKillCounts = 0x00188510; // CONFIRMED - u16[2] per-entry defeat counters (stride 4, saturates at 0x270F = 9999, FACT #5514)
 g_bestiaryEntryTable = 0x002645F0; // CONFIRMED - 0x18-stride catalog table - up to 4 class ids + name/desc/hint str ids + 4 stat-bar bytes
 g_extrasMenuCursor = 0x001ABA44; // CONFIRMED - Extras menu cursor 0 to 4
 g_planetWarpCursor = 0x001ABA68; // CONFIRMED - planet-warp menu cursor 0 to 7
