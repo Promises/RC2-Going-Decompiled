@@ -2568,17 +2568,6 @@ void func_0012B198(s32 arg0) {
     *reg = (*reg & 0xFF7FFFFF) | (arg0 << 23);
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012B1C0);
-
-/* func_0012B3C0(arg0): thin wrapper — forwards to func_0012C508(arg0, 3) and
- * returns its result. (The prior "sibling-call wall" note was wrong: ee-gcc 2.9
- * has NO sibling-call optimization, so this compiles to the original's jal +
- * real frame — byte-exact.) */
-extern s32 func_0012C508(s32 arg0, s32 arg1);
-s32 func_0012B3C0(s32 arg0) {
-    return func_0012C508(arg0, 3);
-}
-
 /* The MPEG-2 decoder context of the IPU video player. The header parsers in
  * this unit follow the MSSG mpeg2decode reference syntax field for field, which
  * is where the names below come from; fields no function here shows stay
@@ -2653,6 +2642,80 @@ typedef struct {
     s32 newGop;                /* 0x854: set by each GOP header */
     s32 *callbacks;            /* 0x858: handed to func_0012FAE8 while waiting */
 } IpuDecoder;
+
+extern void IpuWaitReady(s32 *ipu);
+extern s32 func_0012FA98(s32 *obj, s32 *req);
+extern void func_00130288(s32 arg0, void *buf);
+extern char D_0013BA98[];
+
+/**
+ * Wait for the IPU input DMA to drain and resynchronise the bit position
+ * (called before each macroblock by func_0012B8B0). After IpuWaitReady,
+ * while the IPU_FROM DMA (channel 3, QWC 0x1000B020) still has quadwords
+ * and IPU_CTRL (0x10002010) shows no error (bit 14), ask callback entry 1
+ * for more input whenever the IPU_TO channel (4) is idle (QWC 0, CHCR STR
+ * clear). Then reload bitBuffer from IPU_TOP and bitsValid from IPU_BP (32,
+ * or what is left of the current word when TOP is valid).
+ *
+ * On an IPU error: report it (D_0013BA98), run callback entries 2 and 3
+ * around a reset command (IPU_CTRL = 0x40000000), stop channel 3 with the
+ * DMAC held (D_ENABLEW bit 16, interrupts disabled), clear its QWC and
+ * return 0. Returns 1 otherwise.
+ *
+ * IPU_BP is read through a volatile pointer BEFORE the plain IPU_TOP read,
+ * as in func_0012C508; TOP first leaves 13 of the 127 words different.
+ */
+s32 func_0012B1C0(IpuDecoder *dec) {
+    s32 ok = 1;
+    s32 kick[8];
+    s32 req[8];
+    s64 top;
+    u32 bp;
+    s32 wasEnabled;
+
+    IpuWaitReady((s32 *)dec);
+    while (*(volatile u32 *)0x1000B020 != 0 && !(*(volatile u32 *)0x10002010 & 0x4000)) {
+        if (*(volatile u32 *)0x1000B420 == 0 && !(*(volatile u32 *)0x1000B400 & 0x100)) {
+            kick[0] = 1;
+            func_0012FA98(dec->callbacks, kick);
+        }
+    }
+    bp = *(volatile u32 *)0x10002020;
+    top = *(s64 *)0x10002030;
+    dec->bitBuffer = top;
+    if (top < 0) {
+        dec->bitsValid = (bp & 0x1F) ? 32 - (bp & 0x1F) : 0;
+    } else {
+        dec->bitsValid = 32;
+    }
+    if (*(volatile u32 *)0x10002010 & 0x4000) {
+        func_00130288((s32)dec, D_0013BA98);
+        req[0] = 2;
+        func_0012FA98(dec->callbacks, req);
+        *(u32 *)0x10002010 = 0x40000000;
+        req[0] = 3;
+        func_0012FA98(dec->callbacks, req);
+        wasEnabled = func_0011F5E0();
+        *(volatile u32 *)0x1000F590 = *(volatile u32 *)0x1000F520 | 0x10000;
+        *(volatile u32 *)0x1000B000 = 0;
+        *(volatile u32 *)0x1000F590 = *(volatile u32 *)0x1000F520 & ~0x10000;
+        if (wasEnabled) {
+            func_0011F628();
+        }
+        ok = 0;
+        *(volatile u32 *)0x1000B020 = 0;
+    }
+    return ok;
+}
+
+/* func_0012B3C0(arg0): thin wrapper — forwards to func_0012C508(arg0, 3) and
+ * returns its result. (The prior "sibling-call wall" note was wrong: ee-gcc 2.9
+ * has NO sibling-call optimization, so this compiles to the original's jal +
+ * real frame — byte-exact.) */
+extern s32 func_0012C508(s32 arg0, s32 arg1);
+s32 func_0012B3C0(s32 arg0) {
+    return func_0012C508(arg0, 3);
+}
 
 /**
  * Derive the dual-prime motion vectors (mpeg2decode's Dual_Prime_Arithmetic)
@@ -2790,7 +2853,94 @@ s32 func_0012B780(IpuDecoder *dec, s32 mbaMax, s32 *mba, s32 *mbaInc, s32 pmv[2]
     return 0;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012B8B0);
+extern s32 func_0012B1C0(IpuDecoder *dec);
+extern s32 func_0012BB60(IpuDecoder *dec, s32 *macroblockType, s32 *motionType,
+                         s32 *dctType, s32 pmv[2][2][2], s32 mvFieldSel[2][2],
+                         s32 dmvector[2]);
+extern s32 func_00129450(IpuDecoder *dec, s32 mba, s32 mbaInc, s32 macroblockType,
+                         s32 motionType, s32 pmv[2][2][2], s32 mvFieldSel[2][2],
+                         s32 dmvector[2]);
+extern void func_0012A1C8(IpuDecoder *dec, s32 slot);
+extern char D_0013BB58[];
+s32 func_0012BAA0(IpuDecoder *dec, s32 pmv[2][2][2], s32 *motionType,
+                  s32 mvFieldSel[2], s32 *macroblockType);
+
+/**
+ * Decode one slice (mpeg2decode's slice): start it (func_0012B780, whose
+ * nonzero result is returned as is), then for each macroblock up to mbaMax
+ * clear the current 0x140-byte record's word 0x6CC and resynchronise the
+ * IPU (func_0012B1C0, 0 ends the picture with 2). With no increment pending,
+ * a zero 23-bit peek or a bad code ends the slice (3); otherwise decode the
+ * next increment (func_0012B568). An address past mbaMax is reported
+ * (D_0013BB58) and returns 2. A coded macroblock (increment 1) is decoded by
+ * func_0012BB60 (failure: 1), a skipped one by func_0012BAA0 (failure: 2);
+ * both are then motion-compensated by func_00129450 (failure: 2). From the
+ * second macroblock on, the previous record (mbSlot ^ 1) is flushed through
+ * func_0012A1C8. Every failure clears lastDecodeZero.
+ *
+ * Returns 0 once mbaMax macroblocks are done.
+ */
+s32 func_0012B8B0(IpuDecoder *dec, s32 mbaMax) {
+    s32 pmv[2][2][2];
+    s32 mvFieldSel[2][2];
+    s32 dmvector[2];
+    s32 mba, mbaInc;
+    s32 macroblockType, motionType, dctType;
+    s32 ret;
+
+    mba = 0;
+    mbaInc = 0;
+    ret = func_0012B780(dec, mbaMax, &mba, &mbaInc, pmv);
+    if (ret != 0) {
+        return ret;
+    }
+    dec->lastDecodeZero = 0;
+    for (;;) {
+        if (mba >= mbaMax) {
+            return 0;
+        }
+        *(s32 *)((u8 *)dec + dec->mbSlot * 0x140 + 0x6CC) = 0;
+        if (func_0012B1C0(dec) == 0) {
+            return 2;
+        }
+        if (mbaInc == 0) {
+            if (func_0012C680((s32 *)dec, 23) == 0 || dec->lastDecodeZero) {
+                dec->lastDecodeZero = 0;
+                return 3;
+            }
+            mbaInc = func_0012B568((s32 *)dec);
+            if (dec->lastDecodeZero) {
+                goto resync;
+            }
+        }
+        if (mba >= mbaMax) {
+            func_00130288((s32)dec, D_0013BB58);
+            return 2;
+        }
+        if (mbaInc == 1) {
+            if (func_0012BB60(dec, &macroblockType, &motionType, &dctType, pmv,
+                              mvFieldSel, dmvector) == 0) {
+            resync:
+                dec->lastDecodeZero = 0;
+                return 1;
+            }
+        } else if (func_0012BAA0(dec, pmv, &motionType, mvFieldSel[0], &macroblockType) == 0) {
+            goto fail;
+        }
+        if (func_00129450(dec, mba, mbaInc, macroblockType, motionType, pmv,
+                          mvFieldSel, dmvector) == 0) {
+        fail:
+            dec->lastDecodeZero = 0;
+            return 2;
+        }
+        if (mba != 0) {
+            func_0012A1C8(dec, dec->mbSlot ^ 1);
+        }
+        mba++;
+        dec->mbSlot ^= 1;
+        mbaInc--;
+    }
+}
 
 /* A decoded-picture buffer, as far as func_0012D350 shows it. */
 typedef struct {
