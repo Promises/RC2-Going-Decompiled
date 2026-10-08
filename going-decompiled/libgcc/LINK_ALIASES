@@ -15,9 +15,3 @@
 __ieee754_sqrt  e_sqrt
 matherr  func_00131400
 __errno  func_00115200
-# Old address names of two libc members (task #1884). Game asm and C still
-# call strcmp and strncpy as func_00115544 / func_00115AC0; cod/015180.c used
-# to define these with INCLUDE_ASM_ALIAS, but the bodies now come from the
-# library. Row form here is <old name> <library symbol>.
-func_00115544  strcmp
-func_00115AC0  strncpy

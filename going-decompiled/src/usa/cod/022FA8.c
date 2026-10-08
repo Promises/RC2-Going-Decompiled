@@ -1385,7 +1385,6 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", McGetInfo);
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00127E40);
 
 extern u8    D_00141BB0[];   /* libmc GetDir send-buffer (1044 bytes) */
-extern char *func_00115AC0(char *dst, const char *src, s32 n);  /* strncpy */
 
 /**
  * func_00127E48 = McGetDir (libmc): request a memory-card directory listing for
@@ -1437,7 +1436,7 @@ s32 func_00127E48(s32 port, s32 slot, const char *name, s32 mode,
     *(s32 *)(req + 0x08) = mode;
     *(s32 *)(req + 0x0C) = maxent;
     *(void **)(req + 0x10) = table;
-    func_00115AC0((char *)(req + 0x14), name, 0x3FF);
+    strncpy((char *)(req + 0x14), name, 0x3FF); /* 0x115AC0, linked from newlib's r5900 strncpy.S (task #1884) */
     req[0x413] = 0;
 
     if (maxent >= 0) {

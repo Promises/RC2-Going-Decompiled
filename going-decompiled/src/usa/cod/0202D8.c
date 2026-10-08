@@ -20,15 +20,15 @@ void func_00120368(void) {
     D_00135D34();
 }
 
-extern s32 func_00115544(const char *a, const char *b);
-
 /**
- * Compare the two strings arg0 and arg1 with func_00115544 (strcmp); return
- * arg2 when they are equal, otherwise 0.
+ * Compare the two strings arg0 and arg1 with strcmp (0x115544, linked from
+ * newlib's r5900 strcmp.S since task #1884; the ROM's jal target is the same
+ * address under its old name func_00115544); return arg2 when they are equal,
+ * otherwise 0.
  */
 s32 func_00120390(const char *arg0, const char *arg1, s32 arg2) {
     s32 result = arg2;
-    if (func_00115544(arg0, arg1) != 0) {
+    if (strcmp(arg0, arg1) != 0) {
         result = 0;
     }
     return result;

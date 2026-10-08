@@ -170,5 +170,5 @@ assembled by Ps2EeAs and archived into the same build/<region>/lib/libgcc.a
 (task #1884, RULING #9817). The first four are linked as one `ld-r` group,
 r5900_memcmp_strcmp, because .cod's SUBALIGN(8) cannot place a lone member at a
 4 mod 8 address. Provenance, notices and the per-member checks are in
-going-decompiled/libc/PROVENANCE. LINK_ALIASES carries the two old address
-names game code still calls them by (func_00115544, func_00115AC0).
+going-decompiled/libc/PROVENANCE. The two game call sites that used their old
+address names (func_00115544, func_00115AC0) now call strcmp and strncpy.
