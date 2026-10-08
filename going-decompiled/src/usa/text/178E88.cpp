@@ -2218,64 +2218,59 @@ void func_0027DF80(void) {
  * scissor +0x18, colour +0x14) then band B (step +0x20, scissor +0x28, colour
  * +0x24) — emitting each band's scissor packet and a colour fill clamped to the
  * screen bottom, until the cursor passes the screen height.
+ *
+ * MATCHED (task #2026): s136os arm (SN 1.36 -fopt-stack, -O2 -G8 -fno-gcse),
+ * spliced, with two RULING #8549 rows in tools/ee/ps2eeas_dli_sites.txt for
+ * the 0xff000000ff scissor mask (0x27E220 in $5, 0x27E270 in $19; without
+ * them GNU as expands each dli as `li 255; dsll32; ori`: 4/96). No devices.
+ * Spelling, priced by changing each alone (solo s136os compile of this unit,
+ * word compare against the ROM .s, relocated fields masked):
+ *   - the descriptor re-read through D_1A8758 at every use, as the ROM's
+ *     %gp_rel loads after each call do (through one local pointer: 84/96,
+ *     built 92);
+ *   - the bottom clamp as a ternary, which cc1 keeps inside the loop as the
+ *     ROM's per-band `addiu; slt; movz` (the if-form's height-1 is hoisted
+ *     and the frame grows: 82/96, built 97);
+ *   - the strip loop reads the screen width through its own copy of the
+ *     context pointer, the ROM's `daddu $20,$18` (one shared pointer: 8/96).
  */
-/* TODO(match) t493: sdk29 66.35% / engine96 54.94% (unit objdiff, objdiff_build.sh +
- * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
- * every other remaining arm). Residual on the better arm (sdk29): UNKNOWN-addiu (first differing
- * insn: ROM `addiu sp,sp,-48` vs built `addiu sp,sp,-128`). Levers: engine96 with sched1 MEASURED
- * (flag not landed): 67.19%. */
-/* DLI lever MEASURED (task #1220; unit objdiff report, objdiff_build.sh, this #else body
- * promoted SOLO, sdk29 arm, colima-ee-x86; every other row in the unit unchanged). cc1 emits
- * `dli $5,0xff000000ff` and `dli $22,0xff000000ff`; the ROM holds SN Ps2EeAs's expansion at
- * 0x27E220 ($5) and 0x27E270 (in $19, not $22). A RULING #8549 allowlist row for the $5 site
- * moves this body 66.35% -> 67.60%. The dli is NOT the only residual: the second site is in
- * another register, so no row was landed and this stays INCLUDE_ASM. Residual class: REGALLOC
- * at the second dli site, plus non-dli codegen. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027E1E8);
-#else
 extern u8 *D_1A8758;   /* active scissor-strip layout descriptor */
 extern void func_0027E4D0(s32 y0, s32 y1, s32 x0, s32 x1, u64 color);
-
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0027E1E8)
+S136OS_SLOT(func_0027E1E8);
+#else
 void func_0027E1E8(void) {
-    u8 *desc = D_1A8758;
-    s32 height = *(s16 *)(g_gsScreenContext + 0x152);
-    s32 y;
+    u8 *ctx = g_gsScreenContext;
+    s32 height = *(s16 *)(ctx + 0x152);
+    s32 y = 0;
+    u32 color;
 
-    if (*(u64 *)(desc + 0x8) != 0) {
-        AppendGsRegPacket(0x42, *(u64 *)(desc + 0x8) & 0x000000FF000000FFULL);
-    }
-    if (*(u32 *)(desc + 0x4) & 0xFF000000) {
-        func_0027E4D0(0, height, 0, *(s16 *)(g_gsScreenContext + 0x150),
-                      (u64)*(u32 *)(desc + 0x4));
-    }
+    if (*(u64 *)(D_1A8758 + 0x8) != 0)
+        AppendGsRegPacket(0x42, *(u64 *)(D_1A8758 + 0x8) & 0x000000FF000000FFULL);
+    color = *(u32 *)(D_1A8758 + 0x4);
+    if (color & 0xFF000000)
+        func_0027E4D0(0, height, 0, *(s16 *)(ctx + 0x150), color);
     if (height > 0) {
-        y = 0;
+        u8 *stripCtx = g_gsScreenContext;
         do {
-            if (*(u64 *)(desc + 0x18) != 0) {
-                AppendGsRegPacket(0x42, *(u64 *)(desc + 0x18) & 0x000000FF000000FFULL);
+            if (*(u64 *)(D_1A8758 + 0x18) != 0)
+                AppendGsRegPacket(0x42, *(u64 *)(D_1A8758 + 0x18) & 0x000000FF000000FFULL);
+            color = *(u32 *)(D_1A8758 + 0x14);
+            if (color & 0xFF000000) {
+                s32 y1 = y + *(s32 *)(D_1A8758 + 0x10);
+                y1 = (y1 < height - 1) ? y1 : height - 1;
+                func_0027E4D0(y, y1, 0, *(s16 *)(stripCtx + 0x150), color);
             }
-            if (*(u32 *)(desc + 0x14) & 0xFF000000) {
-                s32 y1 = y + *(s32 *)(desc + 0x10);
-                if (y1 >= height - 1) {
-                    y1 = height - 1;
-                }
-                func_0027E4D0(y, y1, 0, *(s16 *)(g_gsScreenContext + 0x150),
-                              (u64)*(u32 *)(desc + 0x14));
+            y += *(s32 *)(D_1A8758 + 0x10);
+            if (*(u64 *)(D_1A8758 + 0x28) != 0)
+                AppendGsRegPacket(0x42, *(u64 *)(D_1A8758 + 0x28) & 0x000000FF000000FFULL);
+            color = *(u32 *)(D_1A8758 + 0x24);
+            if (color & 0xFF000000) {
+                s32 y1 = y + *(s32 *)(D_1A8758 + 0x20);
+                y1 = (y1 < height - 1) ? y1 : height - 1;
+                func_0027E4D0(y, y1, 0, *(s16 *)(stripCtx + 0x150), color);
             }
-            y += *(s32 *)(desc + 0x10);
-            if (*(u64 *)(desc + 0x28) != 0) {
-                AppendGsRegPacket(0x42, *(u64 *)(desc + 0x28) & 0x000000FF000000FFULL);
-            }
-            if (*(u32 *)(desc + 0x24) & 0xFF000000) {
-                s32 y1 = y + *(s32 *)(desc + 0x20);
-                if (y1 >= height - 1) {
-                    y1 = height - 1;
-                }
-                func_0027E4D0(y, y1, 0, *(s16 *)(g_gsScreenContext + 0x150),
-                              (u64)*(u32 *)(desc + 0x24));
-            }
-            y += *(s32 *)(desc + 0x20);
+            y += *(s32 *)(D_1A8758 + 0x20);
         } while (y < height);
     }
 }

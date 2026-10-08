@@ -108,3 +108,13 @@ usa      func_0026FC88  0x0026FE1C  $3,0x8000000000000000   2403ffff 00031ffc
 #
 usa      func_0027E368  0x0027E388  $5,0xff000000ff          3405ff00 00052e38 34a500ff
 usa      func_0027E368  0x0027E418  $5,0x8000000044          34058000 00052e38 34a50044
+#
+# func_0027E1E8 (text/178E88) compiles `dli 0xff000000ff`, the SCISSOR mask,
+# twice: in $5 before the first `jal AppendGsRegPacket` (reorder mode, followed
+# by `li $4,66` and a noreorder `jal`) and in $19, hoisted above the strip loop
+# (followed by an `lw`). GNU as gives `li 255; dsll32; ori 0xff`; the ROM has
+# Ps2EeAs's `ori; dsll 24; ori` at 0x27E220..0x27E228 and 0x27E270..0x27E278.
+# Compiled from C on the s136os arm (task #2026).
+#
+usa      func_0027E1E8  0x0027E220  $5,0xff000000ff          3405ff00 00052e38 34a500ff
+usa      func_0027E1E8  0x0027E270  $19,0xff000000ff         3413ff00 00139e38 367300ff
