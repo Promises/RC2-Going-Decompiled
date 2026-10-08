@@ -513,6 +513,7 @@ usa cod/0321A0 snd_BankLoadAsync
 usa cod/0321A0 func_00133250
 usa cod/0321A0 CdStartRead
 usa cod/0321A0 snd_CheckLoadInProgress
+usa cod/0321A0 snd_FlushCommandRing
 usa cod/033970 func_001339F0
 usa cod/033970 CdReadSync
 usa cod/033970 LoadLevelToc

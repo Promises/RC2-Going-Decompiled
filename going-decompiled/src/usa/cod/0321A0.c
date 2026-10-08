@@ -843,21 +843,34 @@ s32 snd_CommitRingEntry(void) {
     return snd_Pump();
 }
 
-/* snd_FlushCommandRing: DMA-kick + SIF-RPC flush of the active 989snd command
- * ring buffer, then flip to the other buffer. Not matched — the multi-callee-
- * save frame hits the same 16-byte save-slot layout wall as snd_SetupDmaTransfer
- * (near-miss). Portable #else body (no branch-likely delay slots, so a faithful
- * transcription; all control flow is plain bnez/b).
+/**
+ * snd_FlushCommandRing - DMA-kick and SIF-RPC flush of the active 989snd
+ * command ring buffer, then flip to the other buffer and reset it.
  *
  * The ring is double-buffered by D_001A74C0 (0/1): D_001A74A0[i] points at a
  * buffer whose leading word is its entry count, D_001A74B8[i] is that buffer's
- * DMA/receive area, D_001A74A8[i] tracks remaining free space (reset to 0xFFC).
- * func_0011D620 is the sceSifCallRpc-shaped primitive (client, fno, mode, send
- * buf/size, recv buf/size, end callback/param). */
+ * DMA/receive area, D_001A74A8[i] tracks its remaining free space (reset to
+ * 0xFFC). Waits for the command channel D_001A7040 to go idle (reporting
+ * D_001A7578 unless D_001A74F8 silences it), then fires RPC function 0x4D in
+ * mode 1 (NOWAIT): send the used part of the buffer, receive into the DMA
+ * area, (count * 4) + 8 bytes, no end callback. func_0011D620 is the
+ * sceSifCallRpc-shaped primitive (client, fno, mode, send buf/size, recv
+ * buf/size, end callback/param). No parameters, no return value.
+ *
+ * Compiled by the s136os arm (tools/ee/s136os_functions.txt), which packs the
+ * callee saves 8 bytes apart as the ROM does. The flip is spelled through a
+ * fresh local `next` (`D_001A74C0 != 1`) because the earlier
+ * `(D_001A74C0 ^ 1) != 0 ? 1 : 0` allocates the tail in $2 where the ROM has
+ * $3 (9 of 69 words, NOTE #9892). The ROM's empty slot after the loop-entry
+ * `b` (`addiu $16,$gp,%gp_rel(D_001A74A8); b; nop`) is not C: GNU as would
+ * swap cc1's 1-word `la` into that slot, and asm_unit.sh's small-`la` slot pin
+ * (RULING #9966) keeps it out, as the SN ee-as did. Without that rule the
+ * member is 67 words, not 69. No device in the body.
+ */
 extern u8  *D_001A74B8[2]; /* per-buffer DMA/receive buffers */
 /* D_001A74A8, D_001A7578 and func_0011D620 are declared above. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", snd_FlushCommandRing);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_snd_FlushCommandRing)
+S136OS_SLOT(snd_FlushCommandRing);
 #else
 void snd_FlushCommandRing(void) {
     s32 idx = D_001A74C0;
@@ -876,17 +889,19 @@ void snd_FlushCommandRing(void) {
     /* fire the ring-flush RPC (function 0x4D) for the active buffer */
     idx = D_001A74C0;
     func_0011D620(D_001A7040, 0x4D, 1,
-                  D_001A74A0[idx],              /* send buffer   */
-                  0x1000 - D_001A74A8[idx],     /* send size     */
-                  D_001A74B8[idx],              /* receive buffer*/
-                  (*D_001A74A0[idx] << 2) + 8,  /* receive size  */
+                  D_001A74A0[idx],              /* send buffer    */
+                  0x1000 - D_001A74A8[idx],     /* send size      */
+                  D_001A74B8[idx],              /* receive buffer */
+                  (*D_001A74A0[idx] << 2) + 8,  /* receive size   */
                   0, 0);                        /* no completion callback */
 
     /* flip to the other buffer and reset it for refilling */
-    idx = (D_001A74C0 ^ 1) != 0 ? 1 : 0;
-    D_001A74C0 = idx;
-    *D_001A74A0[idx] = 0;
-    D_001A74A8[idx] = 0xFFC;
+    {
+        s32 next = D_001A74C0 != 1;
+        D_001A74C0 = next;
+        *D_001A74A0[next] = 0;
+        D_001A74A8[next] = 0xFFC;
+    }
 }
 #endif
 
