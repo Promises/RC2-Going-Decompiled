@@ -192,9 +192,9 @@ void func_00350910(s32 *st);
 #endif
 extern s32 func_001338C8(void);
 extern s32 func_0012EE28(void); /* DECL-LEVER(#2011): defined (obj, index, value, a3, a4) in cod/022FA8; func_00352570 below forwards its own incoming argument registers through a bare `jal` (the ROM sets none), which this argument-less declaration reproduces */
-#ifndef TARGET_NATIVE
-extern s32 func_003517C0(void *stream);
-#endif
+/* The bitstream ring's free-span query (defined below): its real five-argument
+ * signature on every arm. func_00352590 forwards all five. */
+s32 func_003517C0(void *stream, s32 *ptr0, s32 *len0, s32 *ptr1, s32 *len1);
 extern s32 func_003518B8(void *stream, s32 n);
 extern s32 func_00351FB0(void *stream);
 extern s32 func_00351B10(void *dmaq);
@@ -223,13 +223,8 @@ extern char D_1AE7E8[];   /* DMA-add-queue-full error string */
 extern char D_1AE820[];   /* decode-thread stop diagnostic */
 extern char D_1AE838[];   /* host frame-read error string */
 extern void func_00350868(u8 *stream, u8 *src, s32 len, s32 dstOfs);
-/* func_003517C0: deferred-native FMV stream func whose #else bodies model it
-   with inconsistent arg counts across call sites (true signature needs the asm;
-   FMV native backend is deferred). Declared with the stream pointer typed and the
-   rest variadic (C++ reads an empty `()` as `(void)`), so the corpus compiles;
-   resolve when the FMV native path is built. (func_003518B8 was the other one;
-   it has its real signature since task #1801, declared above for both arms.) */
-extern s32 func_003517C0(void *stream, ...);
+/* (func_003517C0 and func_003518B8 have their real signatures, declared above
+   for every arm: func_003518B8 since task #1801, func_003517C0 since #2037.) */
 extern s32 func_00352638(u8 *obj, u64 a, u64 b, s32 pos, s32 n);
 extern s32 func_003522C0(void *dmaq, ...);  /* FMV DMA-add-queue enqueue (deferred native; ret ignored) */
 extern void ZeroQwords(void *p, s32 n);
@@ -1530,11 +1525,70 @@ s32 FmvStreamStartDma(u8 *stream) {
 }
 #endif
 
-/* WALL: deferred-native body had a signature inconsistency with its
-   forwarder/caller (caught by the TARGET_NATIVE compile sweep). Left bare
-   INCLUDE_ASM (no #else); revisit with the asm when the FMV native backend
-   is built. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003517C0);
+/**
+ * Report the bitstream ring's free space as up to two contiguous spans, under
+ * the object's semaphore. The write position is (head + queued) blocks plus
+ * the pending bytes, wrapped into the ring; the free space is the ring less
+ * the queued blocks, less two blocks of headroom, less the pending bytes. If
+ * it fits before the ring's end it is one span (span 1 empty); otherwise span
+ * 0 runs to the end and span 1 restarts at srcBase.
+ * @param stream  the FmvBitstreamObj (FmvStream + 0x48)
+ * @param ptr0    out: span 0 start (physical address)
+ * @param len0    out: span 0 length in bytes
+ * @param ptr1    out: span 1 start, or 0
+ * @param len1    out: span 1 length, or 0
+ * @return SignalSema's result (the ROM returns the release call's $v0)
+ *
+ * The callers (func_00350F88 and func_003526A8, both through func_00352590)
+ * mask both pointers into the 0x20000000 window and scatter into them with
+ * func_003511A8. The old "signature inconsistency" wall was the project's
+ * one-argument declaration, not the function: the ROM reads $a1..$a4 here and
+ * func_00352590 passes them through untouched.
+ *
+ * Byte-exact on the s136os arm (task #2037), no devices. The headroom is a
+ * separate `used` local computed FIRST, before the room and before the
+ * wrapped position: that is the ROM's early `addiu $6,$4,2` and its
+ * `subu ringSize,used` (with `room` written as one expression, cc1 folds the
+ * +2 into `addu -2; subu`; computed after the position, the colouring
+ * changes). The ring's byte size is read signed: the ROM's `div` is signed.
+ *
+ * GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+ * (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_003517C0)
+S136OS_SLOT(func_003517C0);
+#else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern s32 func_0011AC60(s32 sema);    /* WaitSema (acquire) */
+extern s32 func_0011AC40(s32 sema);    /* SignalSema (release) */
+/* (end of this body's declarations) */
+s32 func_003517C0(void *stream, s32 *ptr0, s32 *len0, s32 *ptr1, s32 *len1) {
+    FmvBitstreamObj *o = (FmvBitstreamObj *)stream;
+    s32 used;     /* queued blocks plus two blocks of headroom */
+    s32 room;     /* free bytes */
+    s32 wrapped;  /* write position, wrapped into the ring */
+
+    func_0011AC60(o->sema);
+    used = o->queued + 2;
+    room = ((o->ringSize - used) << 11) - o->pendingBytes;
+    wrapped = (((o->head + o->queued) << 11) + o->pendingBytes) % (s32)o->ringBytes;
+    if ((s32)o->ringBytes - wrapped >= room) {
+        *ptr0 = o->srcBase + wrapped;
+        *len0 = room;
+        *ptr1 = 0;
+        *len1 = 0;
+    } else {
+        *ptr0 = o->srcBase + wrapped;
+        *len0 = o->ringBytes - wrapped;
+        *ptr1 = o->srcBase;
+        *len1 = room - (o->ringBytes - wrapped);
+    }
+    return func_0011AC40(o->sema);
+}
+#endif
 
 /**
  * func_003518B8: account `n` freshly fed bytes to the IPU_TO bitstream object
@@ -2092,10 +2146,14 @@ s32 func_00352570(void) {
 }
 
 /**
- * Forward to the bitstream feeder of the stream object embedded at +0x48.
+ * Forward the free-span query (func_003517C0) to the bitstream object embedded
+ * at +0x48; the four out-pointers pass through in $a1..$a4 untouched (the ROM
+ * only rewrites $a0). Declared with the real five arguments since task #2037:
+ * the one-argument form it had compiles to the same bytes on this arm, but
+ * contradicted the definition the s136os TU sees.
  */
-s32 func_00352590(FmvStream *obj) {
-    return func_003517C0((u8 *)obj + 0x48);
+s32 func_00352590(FmvStream *obj, s32 *ptr0, s32 *len0, s32 *ptr1, s32 *len1) {
+    return func_003517C0((u8 *)obj + 0x48, ptr0, len0, ptr1, len1);
 }
 
 /**
@@ -2227,11 +2285,12 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/250080", func_0
  * PARKED #70 (#else not confident): the asm sets up 4 stack out-param pointers
  * (sp+0x10/+0x14/+0x18/+0x1C) before `jal func_00352590`, then reads sp+0x14/+0x1C
  * (sum<4 -> early-out) and sp+0x10/+0x18 (masked &0xFFFFFFF | 0x20000000 into DMATAGs
- * for func_003511A8), also copying D_1AE818 (unaligned lwl/lwr) to sp+0x0 — but Ghidra
- * decompiles func_00352590 as a 1-param forwarder `FUN_003517c0(p+0x48)`, contradicting
- * the 4-out-param wiring. Resolve func_00352590.s + func_003517c0 (does it write the 4
- * slots?) + func_003511A8's arg arity before writing a faithful #else. Not forcing a
- * low-confidence body.
+ * for func_003511A8), also copying D_1AE818 (unaligned lwl/lwr) to sp+0x0. Ghidra
+ * decompiles func_00352590 as a 1-param forwarder `FUN_003517c0(p+0x48)`; that part is
+ * resolved since task #2037: func_00352590 forwards all five arguments and
+ * func_003517C0 (byte-exact on the s136os arm) does write the 4 slots (span pointers
+ * and lengths). func_003511A8's arity is still to check before writing a faithful
+ * #else. Not forcing a low-confidence body.
  * Save stride NOT re-measured for this member on the s136os arm: it has no C arm to compile
  * (NOTE #9871). Of the 111 labeled members that were, 0 reproduce the 16-byte save stride there
  * (FACT #9873), so the stride is not evidence that this member is walled. Residual: UNMEASURED. */
