@@ -1584,7 +1584,8 @@ void func_00337310(GuiElement *e, s32 alpha0, s32 alpha1) {
  * at *(self[+0x10]) is non-zero, draws a background bar (func_0027F168 =
  * DrawFlatRect2d) from (ptrA.x, ptrA.y) of width valCf = (f32)(u32)self[+0x3C],
  * and a fill bar of width min(ptrB.x, valCf) — clamping ptrB.x to valCf first.
- * Both share height (int)(ptrA.y + ptrB.y) and colour D_1AD9C8; the &params blocks
+ * Both share height (int)(ptrA.y + ptrB.y) and depth word D_1AD9C8 (the ROM passes
+ * its sign-extended word as DrawFlatRect2d's s64 z, task #1978); the &params blocks
  * carry self[+0x44] (bg) / self[+0xC][0..1] (fill). ptrA = self[+0], ptrB =
  * self[+4]. Struct/idiom layout Ghidra-verified (unsigned-int->float + min.s).
  * Faithful TARGET_NATIVE #else (engine 2.96 = no byte-match). */
@@ -1596,11 +1597,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337350);
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
    not byte-exact, so the arm stays #else. */
 extern void *D_1AD9C8;
-extern void func_0027F168(s32 x0, s32 y0, s32 x1, s32 y1, void *colour, void *params);
+extern void func_0027F168(s32 x0, s32 y0, s32 x1, s32 y1, s64 z, const s32 *colors);
 
 void func_00337350(void *self) {
     u8   *s = (u8 *)self;
-    void *colour = D_1AD9C8;
+    s64   z = (s32)(unsigned long)D_1AD9C8;
     f32  *gate = *(f32 **)(s + 0x10);
 
     if (*gate != 0.0f) {
@@ -1619,14 +1620,14 @@ void func_00337350(void *self) {
         bxClamped = ptrB[0];
         y1 = (s32)(ay + ptrB[1]);
         rp[1] = rp[0];
-        func_0027F168((s32)ax, (s32)ay, (s32)(ax + valCf), y1, colour, rp);
+        func_0027F168((s32)ax, (s32)ay, (s32)(ax + valCf), y1, z, rp);
 
         {
             s32 *ptr9 = *(s32 **)(s + 0x0C);
             rp[0] = ptr9[0];
             rp[1] = ptr9[1];
         }
-        func_0027F168((s32)ax, (s32)ay, (s32)(ax + bxClamped), y1, colour, rp);
+        func_0027F168((s32)ax, (s32)ay, (s32)(ax + bxClamped), y1, z, rp);
     }
 }
 #endif

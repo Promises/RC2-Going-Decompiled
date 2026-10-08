@@ -1234,47 +1234,62 @@ void ResetPerFrameDrawQueues(void) {
     g_bWaterPoolActive = 0;
 }
 
+/* g_frameDmaCursorAbs / g_frameDmaCursorGp: two more assembler names for
+ * g_frameDmaCursor (FACT #8036's equate). Sized 16, g_frameDmaCursorAbs is the
+ * cc1-small view gas expands absolutely (`lui; lw/sw %lo`, $at for a store),
+ * the form the 2D packet code below uses for nearly every cursor access; sized
+ * 4, g_frameDmaCursorGp is assembled %gp_rel, the form those functions use for
+ * a cursor store in a branch delay slot (the text/1DFF80 / 188858.c
+ * precedent). ADDRESSING-MODEL DEVICES (RULING #8620): they emit nothing, the
+ * relocations name g_frameDmaCursor, and the object has no *Abs/*Gp symbol. */
+#ifndef TARGET_NATIVE
+__asm__(".extern g_frameDmaCursorAbs, 16\n\tg_frameDmaCursorAbs = g_frameDmaCursor");
+__asm__(".extern g_frameDmaCursorGp, 4\n\tg_frameDmaCursorGp = g_frameDmaCursor");
+extern s32 g_frameDmaCursorAbs, g_frameDmaCursorGp;
+#else
+#define g_frameDmaCursorAbs   (*(s32 *)&g_frameDmaCursor[0])
+#define g_frameDmaCursorGp    (*(s32 *)&g_frameDmaCursor[0])
+#endif
+
 extern u8 D_1391D0[]; /* prebuilt GS init packet A */
 extern u8 D_139120[]; /* prebuilt GS init packet B */
 
-/* TODO(match) t493: sdk29 33.27% / engine96 20.83% (unit objdiff, objdiff_build.sh +
- * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
- * every other remaining arm). Residual on the better arm (sdk29): SIBCALL (first differing insn:
- * ROM `lui a0,0x0  [HI16 0x001B2228]` vs built `lui t2,0x0  [HI16 0x001B2228]`). Levers: sibcall
- * guard RUN: sdk29 42.44% / engine96 39.32%; cc1-small/absolute globals model RUN: 38.80% (sdk29);
- * -fno-strict-aliasing MEASURED (flag not landed): 35.32% sdk29; engine96 with sched1 MEASURED
- * (flag not landed): 18.31%. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", AppendFrameInitGsState);
+/* AppendFrameInitGsState - append the per-frame GS-state init to the frame DMA
+ * chain: two DMATAG-ref qwords that splice in the prebuilt packets D_1391D0
+ * and D_139120, then a GS register write (reg 0x3D) whose value packs the
+ * three scene-render words at g_sceneActorMobys+0x674 (+0x230 | +0x234<<8 |
+ * +0x238<<16, each sign-extended). No return value.
+ * MATCHED (task #1978): s136os arm (SN 1.36 -fopt-stack, -O2 -G8 -fno-gcse),
+ * spliced. The ROM re-reads the cursor before every tag word and stores the
+ * final bump %gp_rel in the jal delay slot. Each device priced by removing it
+ * alone (solo s136os compile of this unit with only this guard opened,
+ * asm_unit.sh -G8, word compare against the ROM .s with relocated fields
+ * masked; the closed body reads 0/59):
+ *   - the cursor through g_frameDmaCursorAbs (ADDRESSING-MODEL DEVICE): as
+ *     g_frameDmaCursor[0] 54/59, built 50;
+ *   - the jal-slot bump through g_frameDmaCursorGp (ADDRESSING-MODEL DEVICE):
+ *     absolute 7/59, built 61.
+ * Record of the cc1 2.9 / 2.96 attempts (t493, unit objdiff, objdiff_build.sh
+ * + unit_report.sh): sdk29 33.27% / engine96 20.83%. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_AppendFrameInitGsState)
+S136OS_SLOT(AppendFrameInitGsState);
 #else
-/**
- * Append the per-frame GS-state init to the frame DMA chain: two DMATAG-ref
- * qwords that splice in the prebuilt packets D_1391D0 and D_139120, followed by
- * a GS register write (reg 0x3D) whose value packs the three scene-render words
- * at g_sceneActorMobys+0x674 (+0x230 | +0x234<<8 | +0x238<<16).
- */
 void AppendFrameInitGsState(void) {
-    u8 *p = (u8 *)g_frameDmaCursor[0];
     u8 *sceneState = g_sceneActorMobys + 0x674;
-    u64 value;
 
-    *(u32 *)(p + 0x00) = 0x30000013; /* DMATAG ref -> D_1391D0 */
-    *(void **)(p + 0x04) = D_1391D0;
-    *(u32 *)(p + 0x08) = 0;
-    *(u32 *)(p + 0x0C) = 0x50000013;
-    g_frameDmaCursor[0] = (u32 *)(p + 0x10);
-
-    *(u32 *)(p + 0x10) = 0x3000000B; /* DMATAG ref -> D_139120 */
-    *(void **)(p + 0x14) = D_139120;
-    *(u32 *)(p + 0x18) = 0;
-    *(u32 *)(p + 0x1C) = 0x5000000B;
-
-    value = (u64)(u32)*(s32 *)(sceneState + 0x230)
-          | ((u64)(u32)*(s32 *)(sceneState + 0x234) << 8)
-          | ((u64)(u32)*(s32 *)(sceneState + 0x238) << 16);
-
-    g_frameDmaCursor[0] = (u32 *)(p + 0x20);
-    AppendGsRegPacket(0x3D, value);
+    ((u32 *)g_frameDmaCursorAbs)[0] = 0x30000013; /* DMATAG ref -> D_1391D0 */
+    ((void **)g_frameDmaCursorAbs)[1] = D_1391D0;
+    ((u32 *)g_frameDmaCursorAbs)[2] = 0;
+    ((u32 *)g_frameDmaCursorAbs)[3] = 0x50000013;
+    g_frameDmaCursorAbs += 0x10;
+    ((u32 *)g_frameDmaCursorAbs)[0] = 0x3000000B; /* DMATAG ref -> D_139120 */
+    ((void **)g_frameDmaCursorAbs)[1] = D_139120;
+    ((u32 *)g_frameDmaCursorAbs)[2] = 0;
+    ((u32 *)g_frameDmaCursorAbs)[3] = 0x5000000B;
+    g_frameDmaCursorGp = g_frameDmaCursorAbs + 0x10;
+    AppendGsRegPacket(0x3D, (s64)*(s32 *)(sceneState + 0x230)
+                          | (s64)*(s32 *)(sceneState + 0x234) << 8
+                          | (s64)*(s32 *)(sceneState + 0x238) << 16);
 }
 #endif
 
@@ -1434,16 +1449,16 @@ typedef struct { s32 v; } HudIntWord;
 typedef union { s16 vram; s32 word; } HudSlotWord;
 typedef struct { s32 id; HudSlotWord block; } HudVramSlot;
 #ifndef TARGET_NATIVE
-__asm__(".extern g_frameDmaCursorAbs, 16\n\tg_frameDmaCursorAbs = g_frameDmaCursor");
 __asm__(".extern g_vramDynamicBaseAbs, 16\n\tg_vramDynamicBaseAbs = g_vramDynamicBase");
 __asm__(".extern g_2dBatchOpenTagAbs, 16\n\tg_2dBatchOpenTagAbs = g_2dBatchOpenTag");
+__asm__(".extern g_2dBatchCloseTagAbs, 16\n\tg_2dBatchCloseTagAbs = g_2dBatchCloseTag");
 __asm__(".extern g_uiTextureCountAbs, 16\n\tg_uiTextureCountAbs = g_uiTextureCount");
 __asm__(".extern g_vramAllocCursorAbs, 16\n\tg_vramAllocCursorAbs = g_vramAllocCursor");
 __asm__(".extern g_pHudAssetHeaderAbs, 16\n\tg_pHudAssetHeaderAbs = g_pHudAssetHeader");
 __asm__(".extern g_hudTextureSlotsAbs, 16\n\tg_hudTextureSlotsAbs = g_hudTextureSlots");
 __asm__(".extern g_vramFrameBufBAbs, 16\n\tg_vramFrameBufBAbs = g_vramFrameBufB");
 __asm__(".extern g_hudClutSlotsAbs, 16\n\tg_hudClutSlotsAbs = g_hudClutSlots");
-extern s32 g_frameDmaCursorAbs, g_2dBatchOpenTagAbs;
+extern s32 g_2dBatchOpenTagAbs, g_2dBatchCloseTagAbs;
 extern s32 g_vramDynamicBaseAbs, g_uiTextureCountAbs, g_vramAllocCursorAbs;
 extern HudPtrWord g_pHudAssetHeaderAbs, g_hudTextureSlotsAbs, g_hudClutSlotsAbs;
 extern HudIntWord g_vramFrameBufBAbs;
@@ -1454,9 +1469,9 @@ extern HudIntWord g_vramFrameBufBAbs;
 #define R5900_SHORT_LOOP_PAD1(v, next) \
     __asm__(".set noreorder\n\tnop\n\t.set reorder" : "+r"(v) : "r"(next))
 #else
-#define g_frameDmaCursorAbs   (*(s32 *)&g_frameDmaCursor[0])
 #define g_vramDynamicBaseAbs  g_vramDynamicBase
 #define g_2dBatchOpenTagAbs   (*(s32 *)&g_2dBatchOpenTag)
+#define g_2dBatchCloseTagAbs  (*(s32 *)&g_2dBatchCloseTag)
 #define g_uiTextureCountAbs   g_uiTextureCount
 #define g_vramAllocCursorAbs  g_vramAllocCursor
 #define g_pHudAssetHeaderAbs  (*(HudPtrWord *)&g_pHudAssetHeader[0])
@@ -1569,54 +1584,56 @@ extern void *g_2dBatchCloseTag; /* saved DMA cursor at batch close */
 extern void FlushPendingTexUploads(void);
 extern void AppendTexFlushDefaultTex0(void);
 
-/* TODO(match) t493: sdk29 35.71% / engine96 32.45% (unit objdiff, objdiff_build.sh +
- * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
- * every other remaining arm). Residual on the better arm (sdk29): GPREL-FORM (first differing
- * insn: ROM `lui v0,0x0  [HI16 0x001B2228]` vs built `addiu sp,sp,-64`). Levers:
- * cc1-small/absolute globals model RUN: 47.45% (engine96); engine96 with sched1 MEASURED (flag not
- * landed): 32.98%. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", End2dDrawBatch);
+/* End2dDrawBatch - close the 2D draw batch opened by Begin2dDrawBatch by
+ * back-patching the DMA chain: reserve a close tag at the current cursor,
+ * patch the open tag to jump past it, flush pending texture uploads (which
+ * append their own packets), splice a tag that jumps back into the batch body,
+ * then complete the close tag to continue the chain. Every spliced tag is a
+ * DMATAG next (0x20000000) qword. No return value.
+ * MATCHED (task #1978): s136os arm (SN 1.36 -fopt-stack, -O2 -G8 -fno-gcse),
+ * spliced. The ROM re-reads the cursor and both tag words at every use. Each
+ * device priced by removing it alone (solo s136os compile of this unit with
+ * only this guard opened, asm_unit.sh -G8, word compare against the ROM .s
+ * with relocated fields masked; the closed body reads 0/66):
+ *   - the close tag through g_2dBatchCloseTagAbs (new, ADDRESSING-MODEL
+ *     DEVICE, RULING #8620 / FACT #8036, beside g_2dBatchOpenTagAbs): plain
+ *     62/66, built 61;
+ *   - the open tag through g_2dBatchOpenTagAbs: plain 59/66, built 61;
+ *   - the empty tied fence on `cur` after the close-tag store (RULING #8483):
+ *     without it 10/66 (sched1 hoists the open-tag load above that store).
+ * Record of the cc1 2.9 / 2.96 attempts (t493, unit objdiff, objdiff_build.sh
+ * + unit_report.sh): sdk29 35.71% / engine96 32.45%. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_End2dDrawBatch)
+S136OS_SLOT(End2dDrawBatch);
 #else
-/**
- * Close the 2D draw batch opened by Begin2dDrawBatch by back-patching the DMA
- * chain. Reserves a close tag at the current cursor, patches the open tag to
- * jump past it, flushes pending texture uploads (which append their own
- * packets), splices a tag that jumps back into the batch body, and finally
- * completes the close tag to continue the chain. All spliced tags are DMATAG
- * next (0x20000000) qwords.
- */
 void End2dDrawBatch(void) {
-    u8 *openTag = (u8 *)g_2dBatchOpenTag;
-    u8 *cur;
-    u8 *mid;
+    s32 cur = g_frameDmaCursorAbs;
 
-    g_2dBatchCloseTag = g_frameDmaCursor[0];
-    cur = (u8 *)g_frameDmaCursor[0];
-    g_frameDmaCursor[0] = (u32 *)(cur + 0x10); /* reserve the close tag */
+    g_2dBatchCloseTagAbs = cur;
+    __asm__("" : "+r"(cur));
+    g_frameDmaCursorAbs = cur + 0x10; /* reserve the close tag */
 
     /* back-patch the open tag to jump over the reserved close tag */
-    *(u32 *)(openTag + 0x0) = 0x20000000;
-    *(void **)(openTag + 0x4) = g_frameDmaCursor[0];
-    *(u32 *)(openTag + 0x8) = 0;
-    *(u32 *)(openTag + 0xC) = 0;
+    ((u32 *)g_2dBatchOpenTagAbs)[0] = 0x20000000;
+    ((s32 *)g_2dBatchOpenTagAbs)[1] = g_frameDmaCursorAbs;
+    ((u32 *)g_2dBatchOpenTagAbs)[2] = 0;
+    ((u32 *)g_2dBatchOpenTagAbs)[3] = 0;
 
     FlushPendingTexUploads();
     AppendTexFlushDefaultTex0();
 
     /* after the tex flush, splice a tag that jumps back into the batch body */
-    mid = (u8 *)g_frameDmaCursor[0];
-    *(u32 *)(mid + 0x0) = 0x20000000;
-    *(void **)(mid + 0x4) = openTag + 0x10;
-    *(u32 *)(mid + 0x8) = 0;
-    *(u32 *)(mid + 0xC) = 0;
-    g_frameDmaCursor[0] = (u32 *)(mid + 0x10);
+    ((u32 *)g_frameDmaCursorAbs)[0] = 0x20000000;
+    ((s32 *)g_frameDmaCursorAbs)[1] = g_2dBatchOpenTagAbs + 0x10;
+    ((u32 *)g_frameDmaCursorAbs)[2] = 0;
+    ((u32 *)g_frameDmaCursorAbs)[3] = 0;
+    g_frameDmaCursorAbs += 0x10;
 
     /* finalise the close tag to continue the chain */
-    *(u32 *)((u8 *)g_2dBatchCloseTag + 0x0) = 0x20000000;
-    *(void **)((u8 *)g_2dBatchCloseTag + 0x4) = g_frameDmaCursor[0];
-    *(u32 *)((u8 *)g_2dBatchCloseTag + 0x8) = 0;
-    *(u32 *)((u8 *)g_2dBatchCloseTag + 0xC) = 0;
+    ((u32 *)g_2dBatchCloseTagAbs)[0] = 0x20000000;
+    ((s32 *)g_2dBatchCloseTagAbs)[1] = g_frameDmaCursorAbs;
+    ((u32 *)g_2dBatchCloseTagAbs)[2] = 0;
+    ((u32 *)g_2dBatchCloseTagAbs)[3] = 0;
 }
 #endif
 
@@ -2552,21 +2569,6 @@ extern u8 D_1AC930[]; /* prebuilt GIFtag template (16 bytes) */
 typedef struct { unsigned long long _q[2]; } __attribute__((aligned(16))) u_long128;
 #else
 typedef unsigned long u_long128 __attribute__((mode(TI)));
-#endif
-
-/* g_frameDmaCursorGp: a second assembler name for g_frameDmaCursor (FACT #8036's
- * equate, the text/1DFF80 / 188858.c precedent), sized 4 so gas makes its
- * accesses %gp_rel, where g_frameDmaCursorAbs (sized 16, above) is absolute.
- * The 2D packet appenders below store the cursor %gp_rel only in a branch delay
- * slot and absolutely everywhere else. An ADDRESSING-MODEL DEVICE (RULING
- * #8620): it emits nothing, the relocation names g_frameDmaCursor, and the
- * object has no g_frameDmaCursorGp symbol. Used by func_0027EFA0 and
- * func_0027F0A8. */
-#ifndef TARGET_NATIVE
-__asm__(".extern g_frameDmaCursorGp, 4\n\tg_frameDmaCursorGp = g_frameDmaCursor");
-extern s32 g_frameDmaCursorGp;
-#else
-#define g_frameDmaCursorGp (*(s32 *)&g_frameDmaCursor[0])
 #endif
 
 /* func_0027EFA0 (AppendGouraudQuad2d) - append a 4-vertex textured-primitive
