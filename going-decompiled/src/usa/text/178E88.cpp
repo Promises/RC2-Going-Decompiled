@@ -142,6 +142,18 @@ extern u8 g_fullScreenTintPacket[];
 /* GS window pixel offsets (absolute %hi/%lo). */
 extern s32 g_gsPixelOffsetX[];
 extern s32 g_gsPixelOffsetY[];
+#ifndef TARGET_NATIVE
+/* Absolute views of the GS-window pixel offsets (the #8036 construct, RULING
+ * #8620, as text/24D728 has them): func_0027F168 reads each with the
+ * assembler's same-register lui/lw pair, i.e. cc1 saw small data. Sized 16 for
+ * the assembler; relocations name the real symbols. */
+__asm__(".extern g_gsPixelOffsetXAbs, 16\n\tg_gsPixelOffsetXAbs = g_gsPixelOffsetX");
+__asm__(".extern g_gsPixelOffsetYAbs, 16\n\tg_gsPixelOffsetYAbs = g_gsPixelOffsetY");
+extern s32 g_gsPixelOffsetXAbs, g_gsPixelOffsetYAbs;
+#else
+#define g_gsPixelOffsetXAbs g_gsPixelOffsetX[0]
+#define g_gsPixelOffsetYAbs g_gsPixelOffsetY[0]
+#endif
 
 /* Active display geometry + the GS screen context the viewport is derived from
  * (RecomputeScreenViewportFromGsContext). g_screenHeight is the base of {height, halfW, halfH}. */
@@ -2619,38 +2631,32 @@ void func_0027F0A8(const u64 *corners, u64 tex0) {
 /* DrawFlatRect2d - build four packed XYZ2 corner words for an integer cell
  * rect (x1,y1)-(x2,y2) at depth `z` (each coord scaled *16, GS-window-offset,
  * biased -8) and hand them to the flat-sprite appender with TEX0 `tex0`.
- * Near-miss: the operations are byte-for-byte the same (sll/addu/dsll/or/sd),
- * but the pinned cc1 schedules the four corner builds and their stack stores in
- * a different order / register assignment than the original. Correct C
- * preserved as the portable body. */
-/* TODO(match) t493: sdk29 74.79% / engine96 57.72% (unit objdiff, objdiff_build.sh +
- * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
- * every other remaining arm). Residual on the better arm (sdk29): SCHED+REGNUM (first differing
- * insn: ROM `lw v0,0(v0)  [LO16 0x001A7354]` vs built `lui v1,0x0  [HI16 0x001A7350]`). Levers:
- * sibcall guard RUN: sdk29 64.72% / engine96 57.72%; cc1-small/absolute globals model RUN: 76.33%
- * (sdk29); engine96 with sched1 MEASURED (flag not landed): 50.44%.
- * Task #946 (cc1 2.9 probes, match.sh): non-volatile dataflow barriers `__asm__("" : "+r"(v))`
- * take t889's 6-row floor (3,888 barrier-free variants, NOTE #8245) to 2 rows. The barriers
- * go on the final vx1 / vx2 / vy2 and on y1*16 + offY (before the -8). Coordinates are computed
- * in the order x1, y1, x2, y2, then the corners in index order (body in task #946's NOTE).
- * Remaining is 1 adjacent swap: the ROM ORs vz into corner 0 before starting corner 1 (x2|vy1),
- * cc1 the reverse. The 2-row form came from 6,144 barrier-placement variants. A further 2,304
- * corner-order / OR-form / barrier variants on top of it did not move it, and volatile barriers
- * between the corner statements scored worse (11+ rows). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027F168);
+ * No return value.
+ * MATCHED (task #1877): s136os arm (SN 1.36 -fopt-stack, -O2 -G8 -fno-gcse),
+ * spliced. The coordinates are formed x1, y1, x2, y2 and the corners stored in
+ * index order (the ROM's own order); the offsets are read through
+ * g_gsPixelOffsetXAbs/YAbs. Each priced by removing it alone (solo s136os
+ * compile of this unit, word compare against the ROM .s, relocated fields
+ * masked): plain g_gsPixelOffsetX[0]/Y[0] 9/39 words (cc1 hoists the %hi into
+ * a spare register instead of the same-register lui/lw pair); master's
+ * x2/y2-first order 9/39.
+ * Record of the cc1 2.9 / 2.96 attempts (t493, unit objdiff, objdiff_build.sh +
+ * unit_report.sh): sdk29 74.79% / engine96 57.72%; task #946 got cc1 2.9 to one
+ * adjacent swap with non-volatile barriers, none needed here. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0027F168)
+S136OS_SLOT(func_0027F168);
 #else
 void func_0027F168(s32 x1, s32 y1, s32 x2, s32 y2, s64 z, u64 tex0) {
     u64 corners[4];
-    s64 vx2 = x2 * 0x10 + g_gsPixelOffsetX[0] - 8;
-    s64 vy2 = (s64)(y2 * 0x10 + g_gsPixelOffsetY[0] - 8) << 0x10;
-    s64 vx1 = x1 * 0x10 + g_gsPixelOffsetX[0] - 8;
-    s64 vy1 = (s64)(y1 * 0x10 + g_gsPixelOffsetY[0] - 8) << 0x10;
+    s64 vx1 = x1 * 0x10 + g_gsPixelOffsetXAbs - 8;
+    s64 vy1 = (s64)(y1 * 0x10 + g_gsPixelOffsetYAbs - 8) << 0x10;
+    s64 vx2 = x2 * 0x10 + g_gsPixelOffsetXAbs - 8;
+    s64 vy2 = (s64)(y2 * 0x10 + g_gsPixelOffsetYAbs - 8) << 0x10;
     s64 vz = z << 0x20;
     corners[0] = vx1 | vy1 | vz;
-    corners[3] = vx2 | vy2 | vz;
     corners[1] = vx2 | vy1 | vz;
     corners[2] = vx1 | vy2 | vz;
+    corners[3] = vx2 | vy2 | vz;
     func_0027F0A8(corners, tex0);
 }
 #endif
