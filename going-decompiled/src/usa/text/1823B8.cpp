@@ -46,10 +46,16 @@ _Static_assert(__builtin_offsetof(UiSpritePacket, alpha) == 0x88, "alpha");
  * dependencies crossed that seam ($f1 written 0x282434 / consumed by
  * `div.s $f22,$f1,$f0` at 0x282444, the 0x958(sp) slot, and
  * `bnez $v0,.L00282750` at 0x282414 whose target is now interior to this
- * function). The body is GS/VIF packet construction (sq/lq copies, many
- * callee-saves, div/mfhi loop) over the 0xA00-byte frame — tier-3 hardware,
- * so it stays INCLUDE_ASM; it is now at least a whole function rather than a
- * fragment. */
+ * function); it is now a whole function rather than a fragment.
+ *
+ * Still INCLUDE_ASM because no byte-exact C has been written, NOT because it
+ * is hardware code. The ROM body has 0 COP2/VU0-macro and 0 MMI ops (its three
+ * lq/sq are Vec4 struct copies), and its callee saves are 8 bytes apart, the
+ * SN 1.36 -fopt-stack prologue of the s136os arm: ordinary compiled C
+ * (FACT #9771; census control: the handwritten 1812A8.s blob scores 379).
+ * Only the NATIVE port needs the platform render backend, through
+ * ProjectAndClipBillboardQuad; that work is parked (RULING #9559) and says
+ * nothing about the EE byte match. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1823B8", func_002823B8);
 
 /* MIS-SPLIT fragment: a bare `addiu $29,$29,0x100; nop` stack-restore tail that
@@ -90,10 +96,15 @@ void func_00282798(UiSpritePacket *p, s32 texId, s32 blend, u64 fix) {
 
 /* func_00282838: 0x30 bytes of dead debris (six bare `addiu $sp` / nop pairs
  * trailing the previous routine) carved off the real function func_00282868 in
- * task #472. func_00282868 is a billboard/sprite packet builder — sq/lq
- * 0x10-byte copies, 5 callee-saved regs incl. $f20-$f23, VU0 vector ops
- * (Vec4SubVu0/Vec3CrossVu0/Vec4ScaleVu0/Vec4AddVu0), and a GS-register append
- * loop. Tier-3 hardware (GS/VIF/VU0); TODO(hle): needs the platform render backend. */
+ * task #472. func_00282868 (DrawBillboardSprite) builds one camera-facing
+ * billboard: func_00282798 context, four colours and STs, a basis from CALLS to
+ * the VU0 helper functions (Vec4SubVu0/Vec3RescaleToLenVu0/Vec3CrossVu0), an
+ * optional roll, four corners transformed through func_00283A70, then
+ * func_00281540. Its own body has 0 COP2/VU0-macro and 0 MMI ops (one lq/sq
+ * Vec4 copy, one u_long128 zero) and saves $16..$20/$31 8 bytes apart plus
+ * $f20..$f23: ordinary compiled C on the s136os arm (FACT #9771), with a
+ * measured near-miss body in NOTE #9786. Only its NATIVE port needs the
+ * platform render backend (parked, RULING #9559); the EE byte match does not. */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1823B8", func_00282838);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1823B8", func_00282868);
@@ -127,10 +138,13 @@ void func_00282A78(void) {
 /* Billboard/quad sprite packet builder: transforms a position against the
  * camera (Vec4SubVu0 / Vec3CrossVu0 / Vec3RescaleToLenVu0 / Vec4ScaleVu0 /
  * Vec4AddVu0 VU0 ops), clamps the projected corner coords to [0,1], and emits a
- * UI sprite primitive via func_00282798 + func_00281540. Uses sq/lq 0x10-byte
- * SIMD copies and 9 callee-saved regs incl. $f20-$f23 over a 0x150 frame.
- * Tier-3 hardware (VU0 + GS packet). TODO(hle): needs the platform render
- * backend; left as INCLUDE_ASM to avoid fabricating a non-byte-exact body. */
+ * UI sprite primitive via func_00282798 + func_00281540. One lq/sq Vec4 copy;
+ * $16..$23, $30, $31 saved 8 bytes apart from 0xE0 plus $f20..$f23 over a
+ * 0x150 frame. Left as INCLUDE_ASM because no byte-exact C has been written,
+ * NOT because it is hardware code: the body has 0 COP2/VU0-macro and 0 MMI ops
+ * and the packed saves are the s136os arm's (FACT #9771) — the VU0 work is in
+ * the helper functions it calls. Only the NATIVE port needs the platform
+ * render backend (parked, RULING #9559). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1823B8", func_00282A80);
 
 /* MIS-SPLIT fragment: three bare `addiu $sp` /nop stack-restore tails (0x150,
@@ -142,8 +156,12 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1823B8", func_0
  * computes its camera-space distance/scale, derives screen-space sprite corner
  * coords (FloatToInt/IntToFloat), and writes a full GS sprite DMA packet to
  * g_frameDmaCursor (GIFtag + TEX0 + UV/XYZ registers via sd stores), bracketed
- * by AppendGsRegPacket scissor/alpha setup. Tier-3 hardware: GS register packet
- * + DMA-cursor advance, sq/lq SIMD copies, 9 callee-saves. TODO(hle): needs the
- * platform render backend; left as INCLUDE_ASM (no byte-exact C, no speculative
- * native body for an opaque GS/DMA packet builder). */
+ * by AppendGsRegPacket scissor/alpha setup. Two claims, kept apart:
+ * - NATIVE: its semantics write GS packet words through g_frameDmaCursor, so a
+ *   native body needs the platform render backend. That is TRUE and parked
+ *   (RULING #9559); there is no speculative native body.
+ * - EE byte match: does NOT need it. The packet words are written with plain
+ *   integer stores; the body has 0 COP2/VU0-macro and 0 MMI ops and saves
+ *   8 bytes apart (s136os arm) — ordinary compiled C (FACT #9771). It stays
+ *   INCLUDE_ASM only because no byte-exact C has been written. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1823B8", DrawGlowSprites);
