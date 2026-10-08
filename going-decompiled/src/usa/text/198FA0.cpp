@@ -3490,8 +3490,10 @@ s32 func_0029EB38(void) {
  * miss branch is `bltz` where the ROM has `bltzl` (likely slot = the D_1395B8
  * re-form), and the join's registers are swapped ($3/$2 vs the ROM's $2/$3).
  * Writing the join as an inline helper taking (D_1395B8, &g_cinematicUnlockedFlags)
- * after an `&&` gate gets the ROM's `bltzl` but loses the %hi(cin) hoist (13
- * positions); the same helper after NOTE #9485's NESTED gate is output-identical
+ * after an `&&` gate gets the ROM's `bltzl` opcode but loses the %hi(cin)
+ * hoist (13 positions with %lo addends masked; 14 byte-level, because the
+ * bltzl's offset is 6 against the ROM's 7, per FACT #10123's correction of
+ * NOTE #10118); the same helper after NOTE #9485's NESTED gate is output-identical
  * to that body (10). So the gate's form alone trades `bltzl` against the hoist;
  * the join's spelling and the helper's parameter order are inert, and a shared
  * function-scope cin pointer is worse (36 words). Bodies in NOTE #10118. */
