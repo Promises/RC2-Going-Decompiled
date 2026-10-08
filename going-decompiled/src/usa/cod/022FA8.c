@@ -1247,13 +1247,141 @@ s32 func_00128440(s32 arg0) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_001284B0);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00128578);
+extern void func_0011B3D0(void *arg0, void *arg1);
+extern char D_0013B8C8[];  /* "sceDbcGetDepNumber: rpc error\n" */
+
+/* The 0x40-byte port-state block the IOP-side libdbc server DMAs into
+ * D_00143580 (func_0011B3D0 is handed its 0x80-byte span). Declared as bytes:
+ * the ROM copies it with unaligned ldl/ldr+sdl/sdr pairs, i.e. a struct copy
+ * whose alignment cc1 could not assume to be 8. */
+typedef struct DbcPortStates {
+    u8 bytes[0x40];
+} DbcPortStates;
+extern DbcPortStates D_00143580;
+extern s32 D_00143600[];  /* 16 per-port connection states (copy of the above) */
+
+/**
+ * libdbc sceDbcGetDepNumber (named by the ROM's own error string, D_0013B8C8):
+ * refresh the cached port-state table, then ask the IOP server (RPC 0x80000903
+ * on client D_00143108) for the device's dependency number on `port`.
+ *
+ * The DMA'd state block D_00143580 is first handed to func_0011B3D0 (start,
+ * start + 0x80), then copied to D_00143600 with interrupts disabled
+ * (func_0011F5E0 / func_0011F628; the re-enable is unconditional here).
+ * Returns -12 if port `port` is not in state 1 (connected), 0 after printing
+ * the error on an RPC failure, else the reply word D_00143180[1].
+ */
+s32 func_00128578(s32 port) {
+    func_0011B3D0(&D_00143580, (u8 *)&D_00143580 + 0x80);
+    func_0011F5E0();
+    *(DbcPortStates *)D_00143600 = D_00143580;
+    func_0011F628();
+    if (D_00143600[port] != 1) {
+        return -12;
+    }
+    D_00143180[0] = port;
+    if (func_0011D620(&D_00143108, 0x80000903, 0, D_00143180, 0x400,
+                      D_00143180, 0x400, 0, 0) < 0) {
+        func_00128898(D_0013B8C8);
+        return 0;
+    }
+    return D_00143180[1];
+}
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_001286C0);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_001286C8);
+extern s32 D_00143130;      /* second libdbc RPC client (asynchronous sends) */
+extern char D_0013B990[];   /* "sceDbcSendData2: rpc error\n" */
+extern char D_0013B9B0[];   /* "sceDbcReceiveData: rpc error\n" */
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_001287A8);
+/* The data-transfer view of the shared RPC buffer D_00143180 used by
+ * sceDbcSendData2 / sceDbcReceiveData: port, command word, payload size, the
+ * payload itself, and the server's result word at +0x8C. */
+typedef struct DbcDataRequest {
+    s32 port;
+    s32 cmd;
+    s32 size;
+    u8 data[0x80];
+    s32 result;
+} DbcDataRequest;
+
+/**
+ * libdbc sceDbcSendData2 (named by its error string, D_0013B990): queue
+ * `*size` bytes of `data` with command word `cmd` for `port` on the second
+ * RPC client D_00143130 (RPC 0x8000091B, mode 1 = no-wait). Returns 0 without
+ * sending if that client's previous call is still in flight
+ * (sceSifCheckStatRpc == 1), 0 after printing the error on an RPC failure,
+ * else 1. The size is re-read from `*size` on every loop test, as the ROM does.
+ *
+ * Written as an OLD-STYLE (K&R) definition on purpose: its callers in this
+ * library compiled WITHOUT a prototype in scope. func_00128FD0 passes the
+ * 8-byte Pad2CmdHeader in one register with no narrowing, which a prototyped
+ * `s32 cmd` would have forced (dsll32/dsra32); see func_001287A8.
+ */
+s32 func_001286C8(port, cmd, size, data)
+    s32 port;
+    s32 cmd;
+    s32 *size;
+    u8 *data;
+{
+    DbcDataRequest *req = (DbcDataRequest *)D_00143180;
+    s32 i;
+    req->port = port;
+    req->cmd = cmd;
+    req->size = *size;
+    for (i = 0; i < *size; i++) {
+        req->data[i] = data[i];
+    }
+    if (sceSifCheckStatRpc(&D_00143130) == 1) {
+        return 0;
+    }
+    if (func_0011D620(&D_00143130, 0x8000091B, 1, D_00143180, 0x400,
+                      D_00143180, 0x400, 0, 0) < 0) {
+        func_00128898(D_0013B990);
+        return 0;
+    }
+    return 1;
+}
+
+/**
+ * libdbc sceDbcReceiveData (named by its error string, D_0013B9B0): send
+ * command word `cmd` with the requested length `*size` for `port` (RPC
+ * 0x8000091A, blocking, client D_00143108). Returns 0 after printing the error
+ * on an RPC failure; otherwise, if the server's result is non-negative, writes
+ * the reply length back to `*size` and copies that many reply bytes to `data`.
+ * Returns the server's result word (re-read after the copy).
+ *
+ * OLD-STYLE (K&R) definition, like func_001286C8: the ROM's callers saw no
+ * prototype. func_00128F50 passes the whole 64-bit Pad2CmdHeader, while
+ * func_00128B28 / func_00128C18 pass its low word as an int, which the ROM
+ * sign-extends at the call (dsll32/dsra32). One prototype cannot give both;
+ * a `u64 cmd` prototype measured 59/60 words different here and a union
+ * parameter the same, against 0 for this definition.
+ */
+s32 func_001287A8(port, cmd, size, data)
+    s32 port;
+    s32 cmd;
+    s32 *size;
+    u8 *data;
+{
+    DbcDataRequest *req = (DbcDataRequest *)D_00143180;
+    s32 i;
+    req->port = port;
+    req->cmd = cmd;
+    req->size = *size;
+    if (func_0011D620(&D_00143108, 0x8000091A, 0, req, 0x400,
+                      req, 0x400, 0, 0) < 0) {
+        func_00128898(D_0013B9B0);
+        return 0;
+    }
+    if (req->result >= 0) {
+        *size = req->size;
+        for (i = 0; i < req->size; i++) {
+            data[i] = req->data[i];
+        }
+    }
+    return req->result;
+}
 
 /**
  * Compiled-out VARARGS debug print stub (libmc area): the body is empty but
@@ -1268,9 +1396,24 @@ extern s32 D_00137E80;
 /* Sub-object of a resource-table entry (dual instance at +0x0/+0x80 of the
  * object; func_00128DB0 selects between the two by their +0x7C word). */
 typedef struct ResSubObj {
-    u8 pad[0x7C];
+    u8 state;      /* 0x000: device state byte (func_00128C18's result) */
+    u8 pad1;
+    u8 length;     /* 0x002: bytes of `data` that are valid */
+    u8 pad3;
+    s32 valid;     /* 0x004: non-zero once the instance holds a frame */
+    u8 pad8[0x14];
+    u8 data[0x60]; /* 0x01C: payload; the button bitmap follows the first `length` bytes */
     s32 unk7C;     /* 0x07C — selection key (larger wins) */
 } ResSubObj;
+
+/* Where one button's value sits in the controller's report (func_00128E98
+ * fills 40 of these from the device's button profile bitmap). */
+typedef struct Pad2ButtonInfo {
+    s32 present;   /* 1 if the profile says the device has this button */
+    s32 width;     /* bits of report data: 8 (analog, indices 16..31 and 35..38) or 1 */
+    s32 byteIndex; /* report byte that holds it */
+    s32 bitIndex;  /* bit within that byte for a 1-bit button, else 0 */
+} Pad2ButtonInfo;
 
 /* 16-entry resource table, stride 0x330: +0x4 active flag, +0x8 handle,
  * +0xC object pointer. Struct-typed so func_00128D58's per-field array
@@ -1280,7 +1423,8 @@ typedef struct ResTableEntry {
     s32 active;       /* 0x004 */
     s32 handle;       /* 0x008 */
     ResSubObj *obj;   /* 0x00C */
-    u8 pad[0x330 - 16];
+    Pad2ButtonInfo buttons[40]; /* 0x010: decoded button profile (func_00128E98) */
+    u8 pad[0x330 - 0x290];
 } ResTableEntry;
 extern ResTableEntry D_00143640[];
 
@@ -1310,16 +1454,140 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", sceDbcPortOpen);
  * size:0x8; the real function begins at func_00128A50. Pure padding, no C. */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00128A48);
 
-/* func_00128A50: real function recovered from the splat mis-split above (indexes
- * the 0x330-stride table D_00143640, dispatches to func_00128D58/DB0/E98 + a
- * memcpy). Boundary now correct; body not yet decompiled. Left as INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00128A50);
+extern s32 func_00128D58(s32 index);
+extern ResSubObj *func_00128DB0(s32 index);
+extern s32 func_00128E18(s32 index);
+extern s32 func_00128E98(u8 *profile, Pad2ButtonInfo *info);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00128B28);
+/**
+ * Read the latest frame of controller `index` (shape of libpad2's
+ * scePad2Read(int, unsigned char *)): returns -1 if the table slot is unused
+ * (+0x0 == 0) or its socket cannot be (re)opened via func_00128D58. Otherwise
+ * picks the newer of the two DMA'd instances (func_00128DB0) and, if it holds
+ * `length` bytes, copies them to `out` and decodes the button profile that
+ * follows them into the slot's button table (func_00128E98). Returns -1 if the
+ * instance holds no valid frame, else the frame length.
+ *
+ * Recovered from a splat mis-split: the 8 bytes before it are padding
+ * (func_00128A48). The `src != 0` test on an array member's address is the
+ * ROM's own `beqz` on obj+0x1C.
+ */
+s32 func_00128A50(s32 index, u8 *out) {
+    ResSubObj *obj;
+    u8 *src;
+    if (D_00143640[index].unk0 == 0) {
+        return -1;
+    }
+    if (D_00143640[index].active == 0) {
+        if (func_00128D58(index) < 0) {
+            return -1;
+        }
+    }
+    obj = func_00128DB0(index);
+    if (obj->length != 0) {
+        src = obj->data;
+        if (src != 0) {
+            memcpy(out, src, obj->length);
+            func_00128E98(obj->data + obj->length, D_00143640[index].buttons);
+        }
+    }
+    if (obj->valid == 0) {
+        return -1;
+    }
+    return obj->length;
+}
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00128C18);
+/* The 64-bit command header libpad2 sends through sceDbcSendData2 /
+ * sceDbcReceiveData. A u64 container is what the ROM builds: the top field's
+ * clear mask is the 64-bit constant 0xFFFFFFFF00FFFFFF (li/dsll/ori/dsll/ori),
+ * which a 32-bit container would load as lui/ori. */
+typedef struct Pad2CmdHeader {
+    u64 cmd : 14;
+    u64 mode : 2;
+    u64 sub : 8;
+    u64 version : 8;
+} Pad2CmdHeader;
 
-extern s32 func_00128578(s32 index);
+/* The header viewed as the 32-bit command word func_00128B28 / func_00128C18
+ * pass (see func_001287A8 for why the two kinds of caller differ). */
+typedef union Pad2Cmd {
+    Pad2CmdHeader bits;
+    s32 word;
+} Pad2Cmd;
+
+/**
+ * Fetch controller `index`'s button profile (shape of libpad2's
+ * scePad2GetButtonProfile(int, unsigned char *)): opens the socket on demand
+ * (func_00128D58; -1 if that fails), receives command 2/3/2 into `profile`
+ * (func_001287A8, whose negative result is returned as is), decodes it into
+ * the slot's button table (func_00128E98) and returns the profile length.
+ *
+ * The header is uninitialised before its four fields are set, as in the ROM
+ * (whose `and` masks read the incoming register): the struct lives in $16.
+ */
+s32 func_00128B28(s32 index, u8 *profile) {
+    Pad2Cmd cmd;
+    s32 size;
+    s32 ret;
+    if (D_00143640[index].active == 0) {
+        if (func_00128D58(index) < 0) {
+            return -1;
+        }
+    }
+    cmd.bits.cmd = 2;
+    cmd.bits.mode = 3;
+    cmd.bits.sub = 2;
+    cmd.bits.version = 1;
+    ret = func_001287A8(index, cmd.word, &size, profile);
+    if (ret < 0) {
+        return ret;
+    }
+    func_00128E98(profile, D_00143640[index].buttons);
+    return size;
+}
+
+/**
+ * Return controller `index`'s state byte (shape of libpad2's
+ * scePad2GetState(int)); 0 if the socket cannot be opened. When
+ * func_00128E18 reports the DMA'd pair changed, the byte comes from the newer
+ * instance (func_00128DB0) — and if that instance holds no frame and the
+ * socket cannot be reopened, the slot is marked inactive and 0 is returned.
+ * Otherwise it is fetched with command 0xC/2/1 through func_001287A8 (0 on a
+ * negative result).
+ *
+ * `value` is a single addressable byte at sp+0 with `size` at sp+4, as in the
+ * ROM; a `u8 value[4]` array instead measured a 0x60 frame against 0x50.
+ */
+s32 func_00128C18(s32 index) {
+    Pad2Cmd cmd;
+    u8 value;
+    s32 size;
+    ResSubObj *obj;
+    if (D_00143640[index].active == 0) {
+        if (func_00128D58(index) < 0) {
+            return 0;
+        }
+    }
+    if (func_00128E18(index) != 0) {
+        obj = func_00128DB0(index);
+        if (obj->valid == 0) {
+            if (func_00128D58(index) < 0) {
+                D_00143640[index].active = 0;
+                return 0;
+            }
+        }
+        value = obj->state;
+    } else {
+        cmd.bits.cmd = 0xC;
+        cmd.bits.mode = 2;
+        cmd.bits.sub = 1;
+        cmd.bits.version = 1;
+        if (func_001287A8(index, cmd.word, &size, &value) < 0) {
+            return 0;
+        }
+    }
+    return value;
+}
 
 /**
  * func_00128D58(index): acquire a resource via func_00128578(index); on
@@ -1341,8 +1609,6 @@ s32 func_00128D58(s32 index) {
     D_00143640[index].active = 1;
     return h;
 }
-
-extern void func_0011B3D0(void *arg0, void *arg1);
 
 /**
  * func_00128DB0(index): run func_0011B3D0 over table entry `index`'s object
@@ -1392,13 +1658,109 @@ s32 func_00128E18(s32 index) {
     return 1;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00128E98);
+/**
+ * Decode a device's 40-bit button profile (5 bytes at `profile`, LSB first)
+ * into the report layout table `info[40]`. Every button the profile marks
+ * present gets the next report position: buttons 16..31 and 35..38 (the
+ * analog ones) take a whole byte (width 8); the others pack eight to a byte
+ * (width 1, bitIndex 0..7). Absent buttons get all zeroes. Returns 1.
+ *
+ * `i` is declared first: declaring it after the other counters swaps its
+ * register with `bitIndex`'s ($6/$7), 10 of 44 words.
+ */
+s32 func_00128E98(u8 *profile, Pad2ButtonInfo *info) {
+    s32 i;
+    s32 bit = 0;
+    s32 byteIndex = 0;
+    s32 bitIndex = 0;
+    for (i = 0; i < 40; i++) {
+        if ((*profile >> bit) & 1) {
+            info->present = 1;
+            info->byteIndex = byteIndex;
+            info->bitIndex = bitIndex;
+            if ((i >= 16 && i < 32) || (i >= 35 && i < 39)) {
+                info->width = 8;
+                byteIndex++;
+            } else {
+                bitIndex++;
+                info->width = 1;
+                if ((bitIndex & 7) == 0) {
+                    byteIndex++;
+                    bitIndex = 0;
+                }
+            }
+        } else {
+            info->present = 0;
+            info->byteIndex = 0;
+            info->bitIndex = 0;
+        }
+        bit++;
+        if ((bit & 7) == 0) {
+            profile++;
+            bit = 0;
+        }
+        info++;
+    }
+    return 1;
+}
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00128F48);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00128F50);
+/**
+ * Receive command 2/2/3 for controller `port` into `data` through
+ * func_001287A8 and return the received length, or func_001287A8's negative
+ * result. Passes the whole header (no narrowing; see func_001287A8). `size`
+ * is not initialised before the call: func_001287A8 forwards whatever it
+ * holds as the requested length, as the ROM does.
+ */
+s32 func_00128F50(s32 port, u8 *data) {
+    Pad2CmdHeader hdr;
+    s32 size;
+    s32 ret;
+    hdr.cmd = 2;
+    hdr.mode = 2;
+    hdr.sub = 3;
+    hdr.version = 1;
+    ret = func_001287A8(port, hdr, &size, data);
+    if (ret < 0) {
+        return ret;
+    }
+    return size;
+}
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00128FD0);
+/* The 0x30-byte payload func_00128FD0 sends: the two lengths, then the second
+ * block followed by the first. */
+typedef struct Pad2SendBuffer {
+    s32 len0;
+    s32 len1;
+    u8 data[0x28];
+} Pad2SendBuffer;
+
+/**
+ * Send two data blocks to controller `port` in one command 0xB/1/3
+ * (func_001286C8, asynchronous): the payload is {len0, len1, src1[len1],
+ * src0[len0]} and its size is always passed as 0x28. Returns func_001286C8's
+ * result (1 = queued, 0 = busy or RPC error).
+ *
+ * Statement order is the ROM's: `size` before the header fields (else the
+ * `li 40` / `lui 0x100` pair swaps, 20 of 59 words), and `len0` stored before
+ * the second memcpy (it sits in that call's delay slot).
+ */
+s32 func_00128FD0(s32 port, s32 len0, u8 *src0, s32 len1, u8 *src1) {
+    Pad2CmdHeader hdr;
+    Pad2SendBuffer buf;
+    s32 size;
+    size = 0x28;
+    hdr.cmd = 0xB;
+    hdr.mode = 1;
+    hdr.sub = 3;
+    hdr.version = 1;
+    buf.len1 = len1;
+    memcpy(buf.data, src1, len1);
+    buf.len0 = len0;
+    memcpy(buf.data + len1, src0, len0);
+    return func_001286C8(port, hdr, &size, (u8 *)&buf);
+}
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_001290BC);
 
