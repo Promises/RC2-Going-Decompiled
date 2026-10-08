@@ -8107,32 +8107,41 @@ void func_00342978(void *p) {
     __asm__ __volatile__("");
 }
 
-/* func_00342998: immediate-mode draw of the active column's icon row on screen
- * `w`. For each of the *(w+0x1CC) items, reuse the shared icon element (w+0x17C):
- * position it as a vertical list from the anchor (*(w+0x228)) — x = anchor.x +
- * D_1AE0F8, y = anchor.y + D_1AE0FC + D_1AE100*i — pick its texture from the
- * column's entry table (entry = *(w+0x1C8))[i] keyed on the selected column
- * (*(w+0x31C)), tint the item that matches the column's current index
- * (*(w+selCol*4+0x1B8)) dim (0x70FFFEED) and the rest bright (0x60F0F0B0), and
- * submit it (func_00337630). Empty column (count<=0) draws nothing. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342998);
+/**
+ * func_00342998: immediate-mode draw of the selected column's icon row on screen `w`.
+ *
+ * For each of the *(w+0x1CC) items it reuses the shared icon element (w+0x17C):
+ * positions it as a vertical list from the anchor *(w+0x228) (x = anchor.x +
+ * D_1AE0F8, y = anchor.y + D_1AE0FC + D_1AE100 * i), picks its texture from the
+ * entry table *(w+0x1C8) keyed on the selected column *(w+0x31C) — column 2:
+ * entry 5 is (0xEA9E, 5), others (entry, 0); column 0: entry 6 is (0xEA97, 0),
+ * others (*(w+0x1C4), entry); any other column (*(w+0x1C4), entry) — tints the
+ * item matching the column's current index *(w + column*4 + 0x1B8) 0x70FFFEED and
+ * the rest 0x60F0F0B0, and submits it (func_00337630). A count <= 0 draws nothing.
+ * Every field is re-read where it is used, as the ROM does (the callees may move it).
+ *
+ * Matched byte-exact on the s136os arm (task #1969), device-free:
+ * - `icon` and the column constant `two` are loop-body locals: loop.c hoists both
+ *   to the preheader after the count test, which is where the ROM computes
+ *   `$17 = w+0x17C` and `li $20,2` (declared at function scope they are set
+ *   before it, and a literal 2 is re-materialised inside the loop);
+ * - the tint index is spelled `(column << 2)` off `w` so the add is `w + idx`;
+ * - func_00337630 is declared void here: its definition sits in its own guarded
+ *   arm, so this member's solo s136os TU would otherwise call it implicit-int and
+ *   the dead $v0 moves the loop-bound reload from $2 to $3 (3 words).
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00342998)
+S136OS_SLOT(func_00342998);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00342998, unit objdiff): 55.38%,
-   91/121 insns differ. Residual: UNKNOWN-addiu + movn/movz (first differing insn: 'addiu sp, sp, -0x40' vs 'addiu sp, sp, -0x50').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
 extern f32 D_1AE0F8, D_1AE0FC, D_1AE100;
+extern void func_00337630(GuiElement *e);
 void func_00342998(void *w) {
-    GuiElement *icon = (GuiElement *)((char *)w + 0x17C);
-    s32 count = *(s32 *)((char *)w + 0x1CC);
     s32 i;
 
-    for (i = 0; i < count; i++) {
+    for (i = 0; i < *(s32 *)((char *)w + 0x1CC); i++) {
+        GuiElement *icon = (GuiElement *)((char *)w + 0x17C);
+        s32 two = 2;
         f32 *anchor = *(f32 **)((char *)w + 0x228);
-        s32 selCol = *(s32 *)((char *)w + 0x31C);
-        s32 *table = *(s32 **)((char *)w + 0x1C8);
-        s32 entry = table[i];
         s32 *color;
 
         GuiElementSetPos(icon,
@@ -8140,25 +8149,27 @@ void func_00342998(void *w) {
                          (anchor[1] + D_1AE0FC) + D_1AE100 * (f32)i,
                          0.0f, 0.0f);
 
-        if (selCol == 2) {
-            if (entry == 5) {
+        if (*(s32 *)((char *)w + 0x31C) == two) {
+            if ((*(s32 **)((char *)w + 0x1C8))[i] == 5) {
                 GuiSpriteSetTexture(icon, 0xEA9E, 5);
             } else {
-                GuiSpriteSetTexture(icon, entry, 0);
+                GuiSpriteSetTexture(icon, (*(s32 **)((char *)w + 0x1C8))[i], 0);
             }
-        } else if (selCol == 0) {
-            if (entry == 6) {
+        } else if (*(s32 *)((char *)w + 0x31C) == 0) {
+            if ((*(s32 **)((char *)w + 0x1C8))[i] == 6) {
                 GuiSpriteSetTexture(icon, 0xEA97, 0);
             } else {
-                GuiSpriteSetTexture(icon, *(s32 *)((char *)w + 0x1C4), entry);
+                GuiSpriteSetTexture(icon, *(s32 *)((char *)w + 0x1C4),
+                                    (*(s32 **)((char *)w + 0x1C8))[i]);
             }
         } else {
-            GuiSpriteSetTexture(icon, *(s32 *)((char *)w + 0x1C4), entry);
+            GuiSpriteSetTexture(icon, *(s32 *)((char *)w + 0x1C4),
+                                (*(s32 **)((char *)w + 0x1C8))[i]);
         }
 
         color = GuiElementGetColor(icon);
-        *color = (i == *(s32 *)((char *)w + selCol * 4 + 0x1B8)) ? 0x70FFFEED
-                                                                : 0x60F0F0B0;
+        *color = (*(s32 *)((char *)w + (*(s32 *)((char *)w + 0x31C) << 2) + 0x1B8) == i)
+                     ? 0x70FFFEED : 0x60F0F0B0;
         func_00337630(icon);
     }
 }
