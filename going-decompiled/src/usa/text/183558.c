@@ -1343,13 +1343,15 @@ f32 func_002845D8(f32 x) {
  * `abs.s` is plain `__builtin_fabsf` (NARROWS FACT #7899). The earlier
  * "abs.s has no cc1 pattern" comment here was wrong. 2*pi is `pi + pi` in
  * $f1, not a second constant. Three devices, each priced by removing it
- * alone (FACT #9990, solo screen, sdk29 and s136 agree):
- *   - `pi` pinned to $f14 (#8598): without it, DIFF 3/14 (allocation);
- *   - `twopi` pinned to $f1 (#8598): without it, DIFF 2/14 (allocation);
+ * alone (task #1976: in-unit sdk29 build, verify_match_unit.sh against the
+ * ROM; FACT #9990's solo screen agrees on both arms):
+ *   - `pi` pinned to $f14 (#8598): without it, 3/14 words differ (allocation);
+ *   - `twopi` pinned to $f1 (#8598): without it, 2/14 words differ
+ *     (allocation);
  *   - R5900_FPR_PAD1(pi) (#8435): the ROM's nop after `mtc1 $1,$f14`. An
- *     empty "+f" fence there instead gives DIFF 10/14, which is exactly that
- *     nop missing. With no asm at all it is DIFF 12/14: 2*pi folds into a
- *     second li.s.
+ *     empty "+f" fence there instead builds 13 words, missing exactly that
+ *     nop. With no asm at all it builds 16 words, 12/16 differ: 2*pi folds
+ *     into a second li.s.
  * A $f0 pin on `d` is NOT load-bearing (#9990 a6 vs d1), so there is none.
  * `!(d < pi)` is the ROM's `c.lt.s` with the add/sub on the fall-through
  * path.
