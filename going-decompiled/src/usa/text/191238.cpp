@@ -3517,6 +3517,48 @@ extern u8 D_001A7210[];
 #define g_iopStagingBaseAbs (*(s32 *)(D_001A7210 + 0x68))
 #endif
 
+/* The level-asset directory inside g_discToc (func_00294B50 starts the load). */
+typedef struct {
+    s32 lbn;          /* +0x0  main span, LBN offset from baseLbn */
+    s32 sectors;      /* +0x4  main span length; 0 = no entry */
+    s32 preLbn;       /* +0x8  pre-span loaded first (func_00294B50) */
+    s32 preSectors;   /* +0xC  nonzero: the pre-span is DMA'd to the IOP first */
+    s32 _unk10;
+} LevelTocEntryT;
+typedef struct {
+    u8 _pad0[0x4B3C];
+    s32 baseLbn;                /* +0x4B3C */
+    s32 _unk4B40;
+    LevelTocEntryT levels[1];   /* +0x4B44, stride 0x14 */
+} LevelDiscTocT;
+/* g_discToc viewed as the directory. Spelled as a cast at every use: a
+ * `LevelDiscTocT *` local holding it changes the schedule (func_00294B50). */
+#define LEVEL_DISC_TOC ((LevelDiscTocT *)g_discToc)
+
+/* ADDRESSING-MODEL DEVICES (RULING #8620, the offset-0 size-16 form of
+ * FACT #8036's equate): func_00294B50 stores D_1A9334 and D_1A9338 as absolute
+ * `lui $1` / `sw` macro pairs (0x294B90, 0x294B98) while D_1A9330 beside them is
+ * %gp_rel. A small extern equated at size 16 gives exactly that; the relocations
+ * still name D_1A9334 / D_1A9338. Emits nothing; top level, EE only.
+ * CODEGEN DEVICE (RULING #8404's class, not an asynchronous-object claim): the
+ * D_1A9338 view is `volatile` so cc1's reorg does not move that store into the
+ * `bltz` delay slot that follows it. cc1 counts the store as one instruction,
+ * asm_unit then hoists the two-word macro back out and leaves a `nop`, where the
+ * ROM fills the slot with the next block's `lui $2` (0x294BA4). Writers of
+ * D_1A9338: this function only (USA src); it is read back through the load
+ * record by func_00294A30 / func_002949E0. */
+#ifndef TARGET_NATIVE
+__asm__(".extern g_loadReqSlotAbs, 16\n\tg_loadReqSlotAbs = D_1A9334");
+__asm__(".extern g_loadReqDestAbs, 16\n\tg_loadReqDestAbs = D_1A9338");
+extern s32 g_loadReqSlotAbs;
+extern void *volatile g_loadReqDestAbs;
+#else
+extern s32 D_1A9334;
+extern void *D_1A9338;
+#define g_loadReqSlotAbs D_1A9334
+#define g_loadReqDestAbs D_1A9338
+#endif
+
 /* func_00294A30(rec, flag): one step of a chained disc-load, used as the load
  * callback. rec = {level, slot, buffer}. On flag==0 it ends the chain
  * (rec[0] = -1). Otherwise it looks up the level's disc-TOC entry and, if the
@@ -3564,27 +3606,13 @@ S136OS_SLOT(func_00294A30);
 extern void func_0011AEA0(s32 a);
 extern s32 StartFileLoadWithCallback(void *dest, s32 startSector, s32 count,
                                      void *callback, void *state);
-/* The level-asset directory inside g_discToc (func_00294B50 starts the load). */
-typedef struct {
-    s32 lbn;          /* +0x0  main span, LBN offset from baseLbn */
-    s32 sectors;      /* +0x4  main span length; 0 = no entry */
-    s32 preLbn;       /* +0x8  pre-span loaded first (func_00294B50) */
-    s32 preSectors;   /* +0xC  nonzero: the pre-span is DMA'd to the IOP first */
-    s32 _unk10;
-} LevelTocEntryT;
-typedef struct {
-    u8 _pad0[0x4B3C];
-    s32 baseLbn;                /* +0x4B3C */
-    s32 _unk4B40;
-    LevelTocEntryT levels[1];   /* +0x4B44, stride 0x14 */
-} LevelDiscTocT;
 
 void func_00294A30(s32 *rec, s32 flag) {
     if (flag == 0) {
         rec[0] = -1;
         return;
     }
-    if (((LevelDiscTocT *)g_discToc)->levels[rec[0]].preSectors != 0) {
+    if (LEVEL_DISC_TOC->levels[rec[0]].preSectors != 0) {
         s32 block[4];   /* sceSifDmaData: EE source, IOP address, size, mode */
         s32 handle;
         s32 st;
@@ -3593,7 +3621,7 @@ void func_00294A30(s32 *rec, s32 flag) {
 
         block[0] = (s32)dest;
         block[1] = g_iopStagingBaseAbs + rec[1] * 0xC800;
-        block[2] = ((LevelDiscTocT *)g_discToc)->levels[rec[0]].preSectors << 11;
+        block[2] = LEVEL_DISC_TOC->levels[rec[0]].preSectors << 11;
         block[3] = 0;
         *(s32 *)(dest + 0x14) = 0xC000;
         hdr[10] = 0xC000;   /* dest + 0x40 */
@@ -3606,62 +3634,84 @@ void func_00294A30(s32 *rec, s32 flag) {
         } while (st >= 0);
     }
     StartFileLoadWithCallback((void *)rec[2],
-        ((LevelDiscTocT *)g_discToc)->levels[rec[0]].lbn + ((LevelDiscTocT *)g_discToc)->baseLbn,
-        ((LevelDiscTocT *)g_discToc)->levels[rec[0]].sectors, (void *)func_002949E0, rec);
+        LEVEL_DISC_TOC->levels[rec[0]].lbn + LEVEL_DISC_TOC->baseLbn,
+        LEVEL_DISC_TOC->levels[rec[0]].sectors, (void *)func_002949E0, rec);
 }
 #endif
 
 /**
  * func_00294B50 — begin an asynchronous level-asset load for level `level`.
  *
- * No-ops (returns 0) if the level's TOC entry is empty (g_discToc + level*0x14,
- * field +0x4B48 == 0) or a load is already in flight (D_1A9330 != -1). Otherwise
- * latches the request state (D_1A9330 = level, D_1A9334 = arg2, D_1A9338 = ctx),
- * arms the respawn slot for arg2 (g_respawnPlayerYaw[0x1F + arg2] = -1) when
- * valid, and kicks StartFileLoadWithCallback. Two variants: when the entry's
- * +0x4B50 field is set and `variant` is 0, load the +0x4B4C span with the
- * func_00294A30 completion callback; otherwise load the +0x4B44 span with
- * func_002949E0. Start LBN is the span base plus the shared prefix
- * g_discToc[+0x4B3C]. Returns StartFileLoadWithCallback's result.
- */
-#ifndef TARGET_NATIVE
-/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
- * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 41.64% SIBCALL / engine96
- * 34.44% SIBCALL; best arm sdk29, first differing insn there: '' vs 'daddu a5, a0, zero' */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00294B50);
+ * No-ops (returns 0) if the level's TOC entry is empty (sectors == 0) or a load
+ * is already in flight (D_1A9330 != -1). Otherwise latches the request record
+ * (D_1A9330 = level, D_1A9334 = slot, D_1A9338 = dest), clears the slot's
+ * pending-class word (D_152CD0 + 0x34 + slot*4 = -1) when slot >= 0, and starts
+ * StartFileLoadWithCallback with the record as callback state. Two variants:
+ * when the entry has a pre-span (preSectors != 0) and `variant` is 0, load the
+ * pre-span with the func_00294A30 completion callback (which ships it to the
+ * IOP and then loads the main span); otherwise load the main span with
+ * func_002949E0. Start LBN is the span's lbn plus the directory's baseLbn.
+ * Returns StartFileLoadWithCallback's result, or 0 on either early exit (the
+ * ROM sets $v0 on all three paths, FACT #8196).
+ *
+ * Byte-exact on the s136os arm (task #1962). Each lever priced by removing it
+ * alone (solo s136 compile, relocated fields masked; N/61 words differ):
+ *  - the in-flight test wraps the body (`if (D_1A9330 == -1) { ... }`) and the
+ *    call result goes through `r`; an early `return 0` instead: 48/61, 59 words;
+ *  - the TOC is read through LevelDiscTocT, cast at every use: byte offsets,
+ *    44/61; one `LevelDiscTocT *toc` local for all of them, 55/61;
+ *  - g_loadReqSlotAbs / g_loadReqDestAbs (the equates above): the plain
+ *    D_1A9334 store 47/61, the plain D_1A9338 store 45/61;
+ *  - the `volatile` on g_loadReqDestAbs: 44/61, 62 words (the `bltz` slot nop);
+ *  - the pending word is written through `row`, formed as D_152CD0 - -(slot*4)
+ *    like func_002949E0's: `D_152CD0 + slot*4 + 0x34` folds the 0x34 into the
+ *    %lo, 2/61.
+ * The return type is s32 because the ROM returns a value; func_00294C48 and
+ * func_00295478 (callers that ignore it) now declare it s32 too. */
+/* GUARD (task #1962): on EE this C is the image's body, compiled alone by SN
+ * 2.95.3 v1.36 -fopt-stack (tools/ee/s136os_functions.txt) and spliced over the
+ * S136OS_SLOT line by tools/ee/s136os_splice.sh; the 2.9 compile sees only the
+ * slot, so a build that skips the splice loses the function. On native it is
+ * plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00294B50)
+S136OS_SLOT(func_00294B50);
 #else
+/* Prototypes this body needs whose declarations sit in other guarded arms:
+ * the s136os arm compiles this arm alone, so it must see them here. */
 extern s32 g_discToc[];
-extern s32 g_respawnPlayerYaw[];
-extern s32 D_1A9330, D_1A9334;
-extern void *D_1A9338;
+extern s32 D_1A9330;
+extern u8 D_152CD0[];
 extern void func_00294A30(s32 *rec, s32 flag);   /* load-chain step (used as a callback ptr) */
 extern s32 StartFileLoadWithCallback(void *dest, s32 startSector, s32 count,
                                      void *callback, void *state);
 
-void func_00294B50(s32 level, s32 arg2, void *dest, s32 variant) {
-    u8 *toc = (u8 *)g_discToc + level * 0x14;
+s32 func_00294B50(s32 level, s32 slot, void *dest, s32 variant) {
+    s32 r;
 
-    if (*(s32 *)(toc + 0x4B48) == 0) {
-        return;
+    if (LEVEL_DISC_TOC->levels[level].sectors == 0) {
+        return 0;
     }
-    if (D_1A9330 != -1) {
-        return;
+    if (D_1A9330 == -1) {
+        D_1A9330 = level;
+        g_loadReqSlotAbs = slot;
+        g_loadReqDestAbs = dest;
+        if (slot >= 0) {
+            u8 *row = D_152CD0;
+            row -= -(slot * 4);
+            *(s32 *)(row + 0x34) = -1;
+        }
+        if (LEVEL_DISC_TOC->levels[level].preSectors != 0 && variant == 0) {
+            r = StartFileLoadWithCallback(dest,
+                LEVEL_DISC_TOC->levels[level].preLbn + LEVEL_DISC_TOC->baseLbn,
+                LEVEL_DISC_TOC->levels[level].preSectors, (void *)func_00294A30, &D_1A9330);
+        } else {
+            r = StartFileLoadWithCallback(dest,
+                LEVEL_DISC_TOC->levels[level].lbn + LEVEL_DISC_TOC->baseLbn,
+                LEVEL_DISC_TOC->levels[level].sectors, (void *)func_002949E0, &D_1A9330);
+        }
+        return r;
     }
-    D_1A9330 = level;
-    D_1A9334 = arg2;
-    D_1A9338 = dest;
-    if (arg2 >= 0) {
-        g_respawnPlayerYaw[0x1F + arg2] = -1;   /* +0x48 + arg2*4 + 0x34 */
-    }
-    if (*(s32 *)(toc + 0x4B50) != 0 && variant == 0) {
-        StartFileLoadWithCallback(dest,
-            *(s32 *)(toc + 0x4B4C) + g_discToc[0x4B3C / 4],
-            *(s32 *)(toc + 0x4B50), (void *)func_00294A30, &D_1A9330);
-        return;
-    }
-    StartFileLoadWithCallback(dest,
-        *(s32 *)(toc + 0x4B44) + g_discToc[0x4B3C / 4],
-        *(s32 *)(toc + 0x4B48), (void *)func_002949E0, &D_1A9330);
+    return 0;
 }
 #endif
 
@@ -3713,7 +3763,7 @@ void func_00294B50(s32 level, s32 arg2, void *dest, s32 variant) {
 extern s32 g_discToc[];
 extern s32 g_respawnPlayerYaw[];
 extern u8 D_152CD0[];  /* gadget cache slot table: +0x34 pending class per slot, +0x40 slot buffers */
-extern void func_00294B50(s32 idx, s32 slot, void *dest, s32 a3);
+extern s32 func_00294B50(s32 idx, s32 slot, void *dest, s32 a3);
 void func_00294C48(s32 classId, s32 slot) {
     s32 *toc = g_discToc;
     s32 idx = 0;
@@ -4232,7 +4282,7 @@ extern s16 D_152CE4 __attribute__((section(".data")));  /* == g_loadingScenesPla
 #else
 extern s16 D_152CE4;
 #endif
-extern void func_00294B50(s32 idx, s32 a1, void *dest, s32 a3);
+extern s32 func_00294B50(s32 idx, s32 a1, void *dest, s32 a3);
 void func_00295478(s32 classId, void *dest) {
     s32 *base = g_discToc;
     s32 idx = 0;
