@@ -181,7 +181,7 @@ extern s32  g_vramDynamicBase;    /* 0x1A72D4 VRAM dynamic region base */
 extern f32  g_screenFadeBlack;    /* 0x1B1520 black-fade level 0..1 */
 extern void StopAllSoundEmitters(void);     /* 0x2E6E18 */
 extern void WaitFrameDmaFence(s32);
-extern u32  WaitVblankGetField(s32);
+extern s32  WaitVblankGetField(s32);
 extern void ResetFrameArenas(void);         /* text/1FCF48 */
 extern void FadeOutToBlackBlocking(s32);    /* defined below as INCLUDE_ASM */
 extern void func_002FCFC8(void);            /* text/1FCF48 SelectSceneArenaRegion */
