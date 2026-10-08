@@ -6581,30 +6581,45 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
  * at +0x680), row +0x578 scaled 0.9; the button gets glyph 0x5D. A sprite (+0x2DC)
  * is textured 0xEAA2 scaled 32x32 colour 0x60F0F0B0. Three more value rows
  * (+0x470/D_1ADEE8, +0x4C8/D_1ADEF0, +0x520/D_1ADEF8) are inited/coloured and
- * pointed at the +0x6C0/+0x6D8/+0x6F0 buffers. Finally func_0033FAB0(w, 0). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiStatsPanelScreenInit);
+ * pointed at the +0x6C0/+0x6D8/+0x6F0 buffers. Finally func_0033FAB0(w, 0).
+ * Params: w = the panel; pool = the GUI pool (may be 0). No return value.
+ * MATCHED byte-exact on the s136os arm (task #2027), device-free. Solo s136os
+ * harness, words differing / built words, ROM 227 + 1 alignment pad; each item
+ * priced by removing it alone from the closing body:
+ *  - element pointers assigned after the pool block, not at the top: 103;
+ *  - the record zeroed [1],[2],[3],[0] (cc1 issues the last store of a group
+ *    first, giving the ROM's 0,4,8,C): 5;
+ *  - each seed float stored through a fresh read of +0x2D8: 197;
+ *  - the last three GuiTextElementInit calls pass *(GuiPool **)w, which the
+ *    ROM re-reads (`lw a2,0(s8)`), not the pool argument: 9;
+ *  - GuiTextElementInit declared void: 3. Its definition sits in its own
+ *    guarded arm, so this function's solo TU otherwise calls it as implicit
+ *    int, and the unused $v0 moved the two pointer spills (FACT #9266 lever 1).
+ * Master's #else as written read 224 / 226 (task #1987, NOTE #10015).
+ * GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+ * (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in tools/ee/s136os_functions.txt)
+ * and spliced over S136OS_SLOT by tools/ee/s136os_splice.sh. There is no asm
+ * fallback. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_GuiStatsPanelScreenInit)
+S136OS_SLOT(GuiStatsPanelScreenInit);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiStatsPanelScreenInit, unit objdiff): 61.44%,
-   166/264 insns differ. Residual: UNKNOWN-sd + gp/abs-mixed symbol (first differing insn: 'sd s7, 0x58(sp)' vs 'sd s2, 0x30(sp)').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
 s32 func_0033FAB0(void *w, s32 flags); /* returns bit 6 of flags (198FA0.cpp reads it) */
 extern void GuiDialogBoxInitBorder(void *w, void *pool, void *borderCfg);
 extern char *g_guiInstance;
+extern void GuiTextElementInit(GuiElement *e, s32 tag, GuiPool *pool);
 extern u8 D_1ADED8[8], D_1ADC60[], D_1ADEE8[], D_1ADEF0[], D_1ADEF8[];
 void GuiStatsPanelScreenInit(void *w, GuiPool *pool) {
-    GuiElement *t318 = (GuiElement *)((char *)w + 0x318);
-    GuiElement *t370 = (GuiElement *)((char *)w + 0x370);
-    GuiElement *t3C8 = (GuiElement *)((char *)w + 0x3C8);
-    GuiElement *t628 = (GuiElement *)((char *)w + 0x628);
-    GuiElement *t5D0 = (GuiElement *)((char *)w + 0x5D0);
-    GuiElement *e420 = (GuiElement *)((char *)w + 0x420);
-    GuiElement *t578 = (GuiElement *)((char *)w + 0x578);
-    GuiElement *sprite = (GuiElement *)((char *)w + 0x2DC);
-    GuiElement *t470 = (GuiElement *)((char *)w + 0x470);
-    GuiElement *t4C8 = (GuiElement *)((char *)w + 0x4C8);
-    GuiElement *t520 = (GuiElement *)((char *)w + 0x520);
+    GuiElement *t318;
+    GuiElement *t370;
+    GuiElement *t3C8;
+    GuiElement *t628;
+    GuiElement *t5D0;
+    GuiElement *e420;
+    GuiElement *t578;
+    GuiElement *sprite;
+    GuiElement *t470;
+    GuiElement *t4C8;
+    GuiElement *t520;
     void *rec;
 
     /* +0x0 = pool is stored unconditionally (beqz delay slot). */
@@ -6612,15 +6627,25 @@ void GuiStatsPanelScreenInit(void *w, GuiPool *pool) {
     if (pool != 0) {
         rec = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
         *(void **)((char *)w + 0x2D8) = rec;
-        *(s32 *)((char *)rec + 0x0) = 0;
         *(s32 *)((char *)rec + 0x4) = 0;
         *(s32 *)((char *)rec + 0x8) = 0;
         *(s32 *)((char *)rec + 0xC) = 0;
+        *(s32 *)((char *)rec + 0x0) = 0;
     }
+    t318 = (GuiElement *)((char *)w + 0x318);
+    t370 = (GuiElement *)((char *)w + 0x370);
+    t3C8 = (GuiElement *)((char *)w + 0x3C8);
+    t628 = (GuiElement *)((char *)w + 0x628);
+    t5D0 = (GuiElement *)((char *)w + 0x5D0);
+    e420 = (GuiElement *)((char *)w + 0x420);
+    t578 = (GuiElement *)((char *)w + 0x578);
+    sprite = (GuiElement *)((char *)w + 0x2DC);
+    t470 = (GuiElement *)((char *)w + 0x470);
+    t4C8 = (GuiElement *)((char *)w + 0x4C8);
+    t520 = (GuiElement *)((char *)w + 0x520);
 
-    rec = *(void **)((char *)w + 0x2D8);
-    *(f32 *)((char *)rec + 0x0) = 255.0f;
-    *(f32 *)((char *)rec + 0x4) = 200.0f;
+    (*(f32 **)((char *)w + 0x2D8))[0] = 255.0f;
+    (*(f32 **)((char *)w + 0x2D8))[1] = 200.0f;
     GuiDialogBoxInitBorder((char *)w + 0x8, pool, D_1ADED8);
 
     GuiTextElementInit(t318, (s32)D_1ADC60, pool);
@@ -6655,9 +6680,9 @@ void GuiStatsPanelScreenInit(void *w, GuiPool *pool) {
     *GuiElementGetColor(sprite) = 0x60F0F0B0;
     GuiElementSetGlyph(e420, (s32)(g_guiInstance + 0x8710), 0x5D);
 
-    GuiTextElementInit(t470, (s32)D_1ADEE8, pool);
-    GuiTextElementInit(t4C8, (s32)D_1ADEF0, pool);
-    GuiTextElementInit(t520, (s32)D_1ADEF8, pool);
+    GuiTextElementInit(t470, (s32)D_1ADEE8, *(GuiPool **)w);
+    GuiTextElementInit(t4C8, (s32)D_1ADEF0, *(GuiPool **)w);
+    GuiTextElementInit(t520, (s32)D_1ADEF8, *(GuiPool **)w);
     *GuiElementGetColor(t470) = (s32)0x80F0F0F0;
     *GuiElementGetColor(t4C8) = (s32)0x80F0F0F0;
     *GuiElementGetColor(t520) = (s32)0x80F0F0F0;
@@ -7803,24 +7828,46 @@ S136OS_SLOT(func_00341C28);
  * title text buffer (+0x1D0), and builds the list at +0x13C:
  * GuiListElementInit(0x20 px wide, tag D_1AE018), 5 px tall (SetVisibleRows),
  * meter max 100 (SetItemCount), value 0, colour pairs (0x6049C1FF/0x60001EFF, 0x50F0C070 x2), +0x44=0x80000000
- * +0x38=0. Finally records +0x220=6 / +0x21C=4 and runs func_00341F40(w,0,0). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiScrollListScreenInit);
+ * +0x38=0. Finally records +0x220=6 / +0x21C=4 and runs func_00341F40(w,0,0).
+ * Params: w = the screen; pool = the GUI pool (may be 0). No return value.
+ * MATCHED byte-exact on the s136os arm (task #2027) with ONE device. Solo
+ * s136os harness, words differing / built words, ROM 177 + 1 alignment pad;
+ * each item priced by removing it alone from the closing body:
+ *  - element pointers (other than the header's) assigned after the pool
+ *    block: 175 (built 179 words);
+ *  - the record zeroed [1],[2],[3],[0]: 5;
+ *  - the two record zero stores after the block made through fresh reads of
+ *    +0x1C0: 33;
+ *  - +0x1C8 written before +0x1CC: 3; +0x21C before +0x220: 5;
+ *  - DEVICE, an EMPTY operand-tied fence (RULING #8483) on the 0x80000000
+ *    argument and the list pointer before func_00337B88: 3. Without it cc1
+ *    issues `move a0,s0` before `lui a1,0x8000` and its delay-slot filler
+ *    takes the lui; the ROM issues the lui first with the move in the slot.
+ *    The fence orders lui, (fence), move, and cc1 itself fills the slot with
+ *    the move (`.set noreorder` in its own output). A fence on the constant
+ *    alone also reaches the bytes, but only because GNU as then fills the
+ *    jal's reorder-mode slot after #NO_APP, which Ps2EeAs never does (FACT
+ *    #10035) - so that spelling was rejected. Declaring the implicit callees
+ *    void changes nothing here. Unmoved without a device (task #2012): no
+ *    cast, (s32)(1u << 31), -0x7FFFFFFF - 1, the pointer re-formed from w,
+ *    a block-local constant.
+ * GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+ * (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in tools/ee/s136os_functions.txt)
+ * and spliced over S136OS_SLOT by tools/ee/s136os_splice.sh. There is no asm
+ * fallback. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_GuiScrollListScreenInit)
+S136OS_SLOT(GuiScrollListScreenInit);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiScrollListScreenInit, unit objdiff): 67.42%,
-   114/197 insns differ. Residual: UNKNOWN-sd + gp/abs-mixed symbol (first differing insn: 'sd s4, 0x20(sp)' vs 'sd s1, 0x8(sp)').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
 s32 func_00341F40(void *w, s32 flags, void *table);
 extern char *g_guiInstance;
 extern u8 D_1ADF78[], D_1ADF98[], D_1ADFA0[], D_1AE008[], D_1ADFB0[], D_1AE018[];
 void GuiScrollListScreenInit(void *w, GuiPool *pool) {
     GuiElement *header = (GuiElement *)((char *)w + 0xF0);
-    GuiElement *btn0 = (GuiElement *)((char *)w + 0x0);
-    GuiElement *btn1 = (GuiElement *)((char *)w + 0x4C);
-    GuiElement *title = (GuiElement *)((char *)w + 0x98);
-    GuiElement *sprite = (GuiElement *)((char *)w + 0x184);
-    GuiElement *list = (GuiElement *)((char *)w + 0x13C);
+    GuiElement *btn0;
+    GuiElement *btn1;
+    GuiElement *title;
+    GuiElement *sprite;
+    GuiElement *list;
     void *rec;
 
     GuiElementInit(header, (s32)D_1ADF78, pool);
@@ -7832,16 +7879,20 @@ void GuiScrollListScreenInit(void *w, GuiPool *pool) {
     if (pool != 0) {
         rec = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
         *(void **)((char *)w + 0x1C0) = rec;
-        *(s32 *)((char *)rec + 0x0) = 0;
         *(s32 *)((char *)rec + 0x4) = 0;
         *(s32 *)((char *)rec + 0x8) = 0;
         *(s32 *)((char *)rec + 0xC) = 0;
+        *(s32 *)((char *)rec + 0x0) = 0;
     }
+    btn0 = (GuiElement *)((char *)w + 0x0);
+    btn1 = (GuiElement *)((char *)w + 0x4C);
+    title = (GuiElement *)((char *)w + 0x98);
+    sprite = (GuiElement *)((char *)w + 0x184);
+    list = (GuiElement *)((char *)w + 0x13C);
 
     *(s32 *)((char *)w + 0x210) = 1;
-    rec = *(void **)((char *)w + 0x1C0);
-    *(s32 *)((char *)rec + 0x0) = 0;
-    *(s32 *)((char *)rec + 0x4) = 0;
+    (*(s32 **)((char *)w + 0x1C0))[0] = 0;
+    (*(s32 **)((char *)w + 0x1C0))[1] = 0;
 
     GuiElementInit(btn0, (s32)D_1ADF98, pool);
     GuiElementInit(btn1, (s32)D_1ADFA0, pool);
@@ -7862,8 +7913,8 @@ void GuiScrollListScreenInit(void *w, GuiPool *pool) {
     *GuiElementGetColor(title) = (s32)0x80F0F0F0;
     *(u8 *)((char *)w + 0x1D0) = 0;
     GuiElementSetText(title, (s32)((char *)w + 0x1D0));
-    *(f32 *)((char *)w + 0x1CC) = 0.0f;
     *(f32 *)((char *)w + 0x1C8) = 0.0f;
+    *(f32 *)((char *)w + 0x1CC) = 0.0f;
     *(s32 *)((char *)w + 0x224) = 0;
 
     GuiListElementInit(list, 0x20, 0, (s32)D_1AE018, pool);
@@ -7872,11 +7923,17 @@ void GuiScrollListScreenInit(void *w, GuiPool *pool) {
     GuiListSetScrollPos(list, 0);
     GuiListSetColorPair0(list, 0x6049C1FF, 0x60001EFF);
     GuiListSetColorPair1(list, 0x50F0C070, 0x50F0C070);
-    func_00337B88(list, (s32)0x80000000);
+    {
+        s32 plus44 = (s32)0x80000000;
+        /* SCHEDULING DEVICE (RULING #8483, empty, emits nothing): orders the
+         * lui before the move so cc1 fills the jal slot with the move. */
+        __asm__("" : "+r"(plus44), "+r"(list));
+        func_00337B88(list, plus44);
+    }
     func_00337B68(list, 0);
 
-    *(s32 *)((char *)w + 0x220) = 6;
     *(s32 *)((char *)w + 0x21C) = 4;
+    *(s32 *)((char *)w + 0x220) = 6;
     func_00341F40(w, 0, 0);
 }
 #endif
@@ -9841,34 +9898,47 @@ S136OS_SLOT(func_003448C0);
  * glyphs the buttons 0x9E..0xA1/0x5D/0x5E, row +0x310 scaled 0.9 (flag 1), sets
  * the localized/in-place row texts, scales the sprite 32x32 (colour 0x60F0F0B0),
  * records +0x4AC/+0x4B0/+0x4B4=0 / +0x4B8=3, and finally func_003453D0(w, 0) (the
- * weapon-select body builder). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiInfoPanelScreenInit);
+ * weapon-select body builder).
+ * Params: w = the panel; pool = the GUI pool (may be 0). No return value.
+ * MATCHED byte-exact on the s136os arm (task #2027), device-free. Solo s136os
+ * harness, words differing / built words, ROM 301 + 1 alignment pad; each item
+ * priced by removing it alone from the closing body:
+ *  - element pointers assigned after the pool block, not at the top: 163;
+ *  - the record zeroed [1],[2],[3],[0]: 5;
+ *  - each seed float stored through a fresh read of +0x4A0: 102;
+ *  - GuiSpriteElementInit declared void: 5. Its definition sits in its own
+ *    guarded arm, so the solo TU otherwise calls it as implicit int; that
+ *    put the +0x4B8 constant 3 in $v1 where the ROM has $v0 (task #2012's
+ *    2-word residual, NOTE #10061, which no store order could fix).
+ * Master's #else as written read 164 / 301 (NOTE #10015).
+ * GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+ * (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in tools/ee/s136os_functions.txt)
+ * and spliced over S136OS_SLOT by tools/ee/s136os_splice.sh. There is no asm
+ * fallback. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_GuiInfoPanelScreenInit)
+S136OS_SLOT(GuiInfoPanelScreenInit);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiInfoPanelScreenInit, unit objdiff): 46.67%,
-   281/369 insns differ. Residual: UNKNOWN-addiu + gp/abs-mixed symbol (first differing insn: 'addiu sp, sp, -0x90' vs 'addiu sp, sp, -0x80').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
 s32 func_003453D0(void *w, s32 inputMask);
+extern void GuiSpriteElementInit(GuiElement *e, s32 tag, GuiPool *pool);
 extern char *g_guiInstance;
 extern u8 D_1ADBE8[], D_1ADBF0[], D_1ADBF8[], D_1ADC00[], D_1ADF98[], D_1ADFA0[];
 extern u8 D_1ADEE8[], D_1ADEF0[], D_1ADEF8[], D_1ADD38[], D_1AE228[], D_1ADD30[];
 extern u8 D_1AE008[], D_1ADFB0[];
 void GuiInfoPanelScreenInit(void *w, GuiPool *pool) {
-    GuiElement *e0 = (GuiElement *)((char *)w + 0x0);
-    GuiElement *e1 = (GuiElement *)((char *)w + 0x4C);
-    GuiElement *e2 = (GuiElement *)((char *)w + 0x98);
-    GuiElement *e3 = (GuiElement *)((char *)w + 0xE4);
-    GuiElement *e4 = (GuiElement *)((char *)w + 0x130);
-    GuiElement *e5 = (GuiElement *)((char *)w + 0x17C);
-    GuiElement *t368 = (GuiElement *)((char *)w + 0x368);
-    GuiElement *t3C0 = (GuiElement *)((char *)w + 0x3C0);
-    GuiElement *t418 = (GuiElement *)((char *)w + 0x418);
-    GuiElement *t2B8 = (GuiElement *)((char *)w + 0x2B8);
-    GuiElement *t310 = (GuiElement *)((char *)w + 0x310);
-    GuiElement *t1C8 = (GuiElement *)((char *)w + 0x1C8);
-    GuiElement *t220 = (GuiElement *)((char *)w + 0x220);
-    GuiElement *sprite = (GuiElement *)((char *)w + 0x278);
+    GuiElement *e0;
+    GuiElement *e1;
+    GuiElement *e2;
+    GuiElement *e3;
+    GuiElement *e4;
+    GuiElement *e5;
+    GuiElement *t368;
+    GuiElement *t3C0;
+    GuiElement *t418;
+    GuiElement *t2B8;
+    GuiElement *t310;
+    GuiElement *t1C8;
+    GuiElement *t220;
+    GuiElement *sprite;
     void *rec;
 
     /* +0x4A4 = pool is stored unconditionally (beqz delay slot). */
@@ -9876,16 +9946,29 @@ void GuiInfoPanelScreenInit(void *w, GuiPool *pool) {
     if (pool != 0) {
         rec = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
         *(void **)((char *)w + 0x4A0) = rec;
-        *(s32 *)((char *)rec + 0x0) = 0;
         *(s32 *)((char *)rec + 0x4) = 0;
         *(s32 *)((char *)rec + 0x8) = 0;
         *(s32 *)((char *)rec + 0xC) = 0;
+        *(s32 *)((char *)rec + 0x0) = 0;
     }
+    e0 = (GuiElement *)((char *)w + 0x0);
+    e1 = (GuiElement *)((char *)w + 0x4C);
+    e2 = (GuiElement *)((char *)w + 0x98);
+    e3 = (GuiElement *)((char *)w + 0xE4);
+    e4 = (GuiElement *)((char *)w + 0x130);
+    e5 = (GuiElement *)((char *)w + 0x17C);
+    t368 = (GuiElement *)((char *)w + 0x368);
+    t3C0 = (GuiElement *)((char *)w + 0x3C0);
+    t418 = (GuiElement *)((char *)w + 0x418);
+    t2B8 = (GuiElement *)((char *)w + 0x2B8);
+    t310 = (GuiElement *)((char *)w + 0x310);
+    t1C8 = (GuiElement *)((char *)w + 0x1C8);
+    t220 = (GuiElement *)((char *)w + 0x220);
+    sprite = (GuiElement *)((char *)w + 0x278);
 
     *(s32 *)((char *)w + 0x4A8) = 1;
-    rec = *(void **)((char *)w + 0x4A0);
-    *(f32 *)((char *)rec + 0x0) = 250.0f;
-    *(f32 *)((char *)rec + 0x4) = 207.0f;
+    (*(f32 **)((char *)w + 0x4A0))[0] = 250.0f;
+    (*(f32 **)((char *)w + 0x4A0))[1] = 207.0f;
 
     GuiElementInit(e0, (s32)D_1ADBE8, pool);
     GuiElementInit(e1, (s32)D_1ADBF0, pool);
