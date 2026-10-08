@@ -1994,9 +1994,8 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
  * gives the ROM's `slti`/`bnezl` decision tree instead of two `beq` tests
  * (48 -> 26); the colour word read into a local before the call, which loads
  * it ahead of GetUiTextureTex0 into $s1 as the ROM does (26 -> 0).
- * func_0027F790 is defined s32 (178E88.cpp) but declared void here to agree
- * with this unit's two other declarations; nothing reads its result, and the
- * body measured 0 of 102 with either declaration.
+ * func_0027F790 is declared s32, as 178E88.cpp defines it (nothing reads the
+ * result; the body measured 0 of 102 with s32 or void).
  * GUARD: on EE this C is the image's body, compiled alone by the s136os arm
  * (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in tools/ee/s136os_functions.txt)
  * and spliced over S136OS_SLOT by tools/ee/s136os_splice.sh. There is no asm
@@ -2004,7 +2003,7 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
 #if !defined(TARGET_NATIVE) && !defined(S136OS_GuiTextElementDraw)
 S136OS_SLOT(GuiTextElementDraw);
 #else
-extern void func_0027F790(void);
+extern s32 func_0027F790(void);
 extern void func_0027F7A0(void);
 extern f32 func_002804C0(const char *str, s32 maxChars, s32 count, f32 inputScale);
 extern u64 GetUiTextureTex0(s32 slot);
@@ -5862,7 +5861,11 @@ extern u8 D_1A7BBB;
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
    not byte-exact, so the arm stays #else. */
 extern void func_0027F7A0(void);
-extern void func_0027F790(void);
+/* s32 as defined in 178E88.cpp (was void; RULING #9118's direction, task
+ * #1987): nothing here reads the result, and this body measured byte-identical
+ * with either declaration in a solo s136os compile (0 of 90 words) and in the
+ * unit build (gate cmp 0). */
+extern s32 func_0027F790(void);
 void func_0033E9B8(void *w) {
     char buf[128];
     CaptionIdPair ids;
