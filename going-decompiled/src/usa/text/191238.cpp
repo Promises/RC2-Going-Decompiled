@@ -6647,22 +6647,34 @@ void *func_002988C8(s32 idx) {
  * $6=level). On the EE this is register-identical to any ordering (EABI keeps FP
  * and GPR banks separate); the order only matters for the native/#else build,
  * whose ABI is positional.
+ *
+ * MATCHED on the s136os arm (task #2020; SN 2.95.3 v1.36 -fopt-stack). Two
+ * load-bearing choices, each priced on the solo s136 screen by undoing it alone
+ * (positional words different of 56, relocated fields masked):
+ *   - the level read is g_playerProgressAbs, the absolute `lui; lw` the ROM
+ *     issues (RULING #8620 device in the unit header); plain g_playerProgress
+ *     goes gp-relative: 52/56 (55 words).
+ *   - each parameter word is read through its OWN call's result, so the first
+ *     call's pointer stays live across the second call (the ROM keeps it in
+ *     $17 and loads block[0] / block[2] after the second jal). Loading the
+ *     float before the second call (this arm's earlier spelling) spills it to
+ *     an FPR and drops a save: 41/56 (54 words); one pointer local reused for
+ *     both pairs keeps the shape but re-orders the s-registers: 13/56.
+ * GUARD (task #2020): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before.
  */
-#ifndef TARGET_NATIVE
-/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
- * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 66.89% PACKED-SAVE /
- * engine96 32.48% GPREL-DECL; best arm sdk29, first differing insn there: 'addiu sp, sp,
- * -0x50' vs 'addiu sp, sp, -0x60' */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00298918);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00298918)
+S136OS_SLOT(func_00298918);
 #else
 /* Prototypes this body needs whose declarations sit in other guarded arms:
  * the s136os arm compiles this arm alone, so it must see them here. */
 extern void * func_002988C8(s32 idx);
 void func_00298918(f32 fa, f32 fb, void *outX, void *outY, s32 level) {
-    f32 v0, v1, v2, v3;
-
     if (level == -1) {
-        level = g_playerProgress;
+        level = g_playerProgressAbs;
     }
     if (level < 0) {
         level = 0;
@@ -6670,12 +6682,10 @@ void func_00298918(f32 fa, f32 fb, void *outX, void *outY, s32 level) {
     if (level >= 21) {
         level = 0;
     }
-    v0 = ((f32 *)func_002988C8(level))[0];
-    v1 = ((f32 *)func_002988C8(level))[1];
-    *(f32 *)outX = (v0 + v1 * fa) * (1.0f / 512.0f);
-    v2 = ((f32 *)func_002988C8(level))[2];
-    v3 = ((f32 *)func_002988C8(level))[3];
-    *(f32 *)outY = (v2 + v3 * fb) * (1.0f / 512.0f);
+    *(f32 *)outX = (((f32 *)func_002988C8(level))[0]
+                    + ((f32 *)func_002988C8(level))[1] * fa) / 512.0f;
+    *(f32 *)outY = (((f32 *)func_002988C8(level))[2]
+                    + ((f32 *)func_002988C8(level))[3] * fb) / 512.0f;
 }
 #endif
 
