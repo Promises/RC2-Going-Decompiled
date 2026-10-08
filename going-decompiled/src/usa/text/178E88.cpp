@@ -41,6 +41,15 @@ typedef struct { s32 f[10]; } CamSlotRecord; /* 0x28-byte slot descriptor */
 /* Active language index (u8 at 0x1A7BBC); selects the per-language slot inside
  * the streaming text-table directory relocated by func_00279D88. */
 extern u8 g_currentLanguage;
+#ifndef TARGET_NATIVE
+/* Absolute view of g_currentLanguage (the #8036 construct, RULING #8620): the
+ * ROM reads it with lui/lbu %hi/%lo in func_00279D88, where cc1 would use
+ * $gp; sized 16 for the assembler, relocations name g_currentLanguage. */
+__asm__(".extern g_currentLanguageAbs, 16\n\tg_currentLanguageAbs = g_currentLanguage");
+extern u8 g_currentLanguageAbs;
+#else
+#define g_currentLanguageAbs g_currentLanguage
+#endif
 
 /* Per-glyph width lookup over a fixed-stride font table. Each table entry is
  * 4 bytes; the signed byte at +3 is the glyph advance width. func_0027F7A8
@@ -254,42 +263,50 @@ void func_00279CF0(s32 a, s32 b, s32 c, s32 d, s32 e, s32 f, s32 g, s32 h,
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00279D68);
 
+/* The text-streaming directory at g_cameraSlotActive+0xD0. */
+typedef struct {
+    u8   _pad0[8];
+    u8  *dataBase;   /* +0x08 streamed load buffer */
+    s32 *records;    /* +0x0C first 16-byte record of this language's table */
+    s32  count;      /* +0x10 record count */
+} TextStreamDir;
+
 /* func_00279D88 - relocate the freshly-streamed per-language text table. The
- * streaming directory lives at g_cameraSlotActive+0xD0: word[2] (+0x8) is the
- * load buffer base `dataBase`; the per-language offset word at
- * dataBase[g_currentLanguage] selects this language's sub-table `tbl`. tbl[0] is
- * the record count N; the N records begin at tbl+8 (16 bytes each). The first
- * word of every record holds a buffer-relative offset which is fixed up in place
- * by adding the sub-table base `tbl` so it becomes an absolute pointer. The
- * directory's cursor (+0xC) is set to the first record and the count cached at
- * +0x10. The count cache is written unconditionally (the original stores it in
- * the blez delay slot); when N <= 0 no records are relocated.
- * Near-miss: cc1 keeps the loop bound and the record cursor live across a
- * branch-likely (bnel) reload of +0xC each iteration; expressed straight here. */
-/* TODO(match) t493: sdk29 68.59% / engine96 40.76% (unit objdiff, objdiff_build.sh +
- * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
- * every other remaining arm). Residual on the better arm (sdk29): GPREL-FORM (first differing
- * insn: ROM `lui v0,0x0  [HI16 0x001B7E30]` vs built `lui a0,0x0  [HI16 0x001B7E30]`). Levers:
- * cc1-small/absolute globals model RUN: 53.69% (sdk29). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00279D88);
+ * per-language offset word at dataBase[g_currentLanguage] selects this
+ * language's sub-table `tbl`: tbl[0] is the record count N and the N 16-byte
+ * records begin at tbl+8. The directory's records pointer is set to tbl+8 and
+ * its count to N (written unconditionally: the ROM stores it in the blez delay
+ * slot), then the first word of every record, a table-relative offset, gets the
+ * table base added so it becomes an absolute pointer. No params, no return.
+ * Each iteration re-reads the records pointer and the count from the
+ * directory, as the ROM does (the bnel delay-slot reload).
+ * MATCHED (task #1877): s136os arm (SN 1.36 -fopt-stack, -O2 -G8 -fno-gcse),
+ * spliced. Two devices, each priced by removing it alone (solo s136os compile
+ * of this unit, word compare against the ROM .s, relocated fields masked):
+ *   - g_currentLanguageAbs: read as g_currentLanguage, cc1 emits a $gp lbu
+ *     where the ROM has lui/lbu (16/29 words differ);
+ *   - the table base is formed from a COPY of the reloaded records pointer
+ *     (base = records; base -= 2): written as records - 2 inline, combine
+ *     folds the -8 onto the loaded offset instead of the pointer (1/29). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00279D88)
+S136OS_SLOT(func_00279D88);
 #else
 void func_00279D88(void) {
-    u8 *dir = g_cameraSlotActive + 0xD0;
-    s32 *dataBase = *(s32 **)(dir + 0x8);
-    s32 offset = dataBase[g_currentLanguage];
-    s32 *tbl = (s32 *)((u8 *)dataBase + offset);
-    s32 count = tbl[0];
-    s32 *records = tbl + 2;            /* tbl + 8 bytes */
+    TextStreamDir *dir = (TextStreamDir *)(g_cameraSlotActive + 0xD0);
+    u8 *dataBase = dir->dataBase;
+    u8 *tbl = dataBase + ((s32 *)dataBase)[g_currentLanguageAbs];
+    s32 count = *(s32 *)tbl;
     s32 i;
 
-    *(s32 **)(dir + 0xC) = records;
-    *(s32 *)(dir + 0x10) = count;     /* count cache: written even when N <= 0 */
-    if (count > 0) {
-        for (i = 0; i < count; i++) {
-            s32 *rec = records + i * 4; /* 16-byte stride */
-            rec[0] += (s32)tbl;         /* relocate offset -> absolute pointer */
-        }
+    dir->records = (s32 *)(tbl + 8);
+    dir->count = count;
+    for (i = 0; i < dir->count; i++) {
+        s32 *records = dir->records;
+        s32 *base = records;
+        s32 offset = records[i * 4];
+        s32 *rec = &records[i * 4];
+        base -= 2;
+        *rec = offset + (s32)base;
     }
 }
 #endif

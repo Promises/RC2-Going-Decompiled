@@ -516,3 +516,4 @@ usa text/178E88 RunFxDrawHooksLate
 usa text/178E88 func_00280090
 usa text/178E88 func_00280120
 usa text/178E88 func_002801B8
+usa text/178E88 func_00279D88
