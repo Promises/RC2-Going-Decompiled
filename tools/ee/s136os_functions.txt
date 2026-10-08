@@ -499,6 +499,7 @@ usa text/188858 BeginSubtitleDisplay
 usa text/188858 UploadTextureToGs
 usa text/188858 func_0028C1E8
 usa text/188858 ReloadAllHudBankTextures
+usa text/188858 func_0028C4C8
 usa text/248B50 func_00348BF8
 usa text/248B50 SetPopupTitleText
 usa text/250080 func_003506A8

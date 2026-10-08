@@ -4216,30 +4216,50 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/188858", func_0
  *     and the widget is "settled" (+0x6C >= 0x18), eases +0x74 toward +0x78:
  *     re-arms the +0x7C show timer (0xB4), derives an easing step
  *         step = max( FloatToInt(func_002835C0(delta*0.04) * 5.0), delta/5 )
- *     clamped to [1,0x79] (delta = |+0x74 - +0x78|), advances the sub-step byte
- *     accumulator (+0x73) and, once it passes 3, moves +0x74 by (accum>>1)
- *     toward the target and drains the accumulator by twice that.
+ *     clamped to [1,0x79] (delta = |+0x74 - +0x78|, nothing happens when it is
+ *     0), advances the sub-step byte accumulator (+0x73) and, once it reaches
+ *     3, moves +0x74 by (accum/2) toward the target and drains the accumulator
+ *     by twice that.
  * (3) Drives the two digit-roll byte counters (+0x70/+0x71): while the +0x7C
- *     show timer has >= 5 frames left they ramp up (cap 8 each); otherwise they
- *     wind back down and re-arm the settle flag (+0x6C = 1).
+ *     show timer has >= 5 frames left they ramp up (+0x70 first, cap 8 each);
+ *     otherwise, if either is non-zero, the settle flag (+0x6C) is set to 1 and
+ *     they wind back down (+0x71 first).
  * (4) Refreshes the icon animation frame via func_0028E7E8(w+0x40).
  *
- * The FP easing (IntToFloat/func_002835C0/FloatToInt) is reproduced op-for-op;
- * the real R5900 helpers do the arithmetic (cmp-oracle validates the result).
+ * w  the counter HudElement (fields as in the HudElement map above).
+ *
+ * MATCHED on the s136os arm (task #1878) at the unit's -O2 default
+ * (S136EXTRA="", RULING #9450), with no device. Each spelling below was priced
+ * by reverting it alone in the solo s136os harness (words differing / ROM 115):
+ *   - |delta| via __builtin_abs: gcc's expand_abs emits the ROM's
+ *     bgez/negu branch; `if (delta < 0) delta = -delta` if-converts to movz (92/115).
+ *   - the `delta != 0` guard is the ROM's `beql $16,$0` (91/115, 4 words short).
+ *   - max as `div5 = (stepF >= div5) ? stepF : div5; step = div5;` gives the
+ *     ROM's movz into div5's register plus the step copy (72/115).
+ *   - the half is computed into `step` again (`roll[3] / 2`), so it reuses
+ *     step's register ($4); a fresh local takes $3 (7/115). It is spelled
+ *     `/ 2`: `>> 1` re-shapes the whole block (58/115). With it, the
+ *     accumulator test needs no special spelling.
+ *   - +0x74 is stored in each arm (cross-jumped to one sw), not selected (76/115).
+ *   - the timer block tests `>= 5` first and sets +0x6C once, before the
+ *     wind-down (one sw, one shared `sb +0x70` tail) (27/115).
+ *
+ * GUARD (task #1269): on EE this C is the image's body, compiled alone by SN
+ * 2.95.3 v1.36 -fopt-stack (tools/ee/s136os_functions.txt) and spliced over the
+ * S136OS_SLOT line by tools/ee/s136os_splice.sh. On native it is plain C.
  * [SEEDABLE] pure per-widget state machine over w's byte/word fields. */
 extern float IntToFloat(s32 x);       /* 0x284690: mtc1;cvt.s.w  int -> float */
 extern s32   FloatToInt(float x);     /* 0x2846A0: cvt.w.s;mfc1  float -> int */
 extern float func_002835C0(float x);
 s32 func_0028E7E8(void *iconSlot);  /* returns frame index; real def below in this unit */
 
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028C4C8);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0028C4C8)
+S136OS_SLOT(func_0028C4C8);
 #else
 void func_0028C4C8(HudElement *w) {
-    u8  *b   = (u8 *)w;
-    u8  *cnt = b + 0x70;                 /* byte counter block ($18 = w+0x70) */
+    u8  *b      = (u8 *)w;
+    u8  *roll   = b + 0x70;              /* [0] +0x70, [1] +0x71 digit-roll bytes, [3] +0x73 accumulator */
     s32 *valPtr = *(s32 **)(b + 0xC);
-    s32  cur, target, showTimer;
 
     /* (1) clamp the target from the live value pointer */
     if (valPtr != 0) {
@@ -4251,53 +4271,41 @@ void func_0028C4C8(HudElement *w) {
     }
 
     /* (2) ease the displayed value toward the target */
-    cur    = *(s32 *)(b + 0x74);
-    target = *(s32 *)(b + 0x78);
-    if (cur != target) {
+    if (*(s32 *)(b + 0x74) != *(s32 *)(b + 0x78)) {
         *(s32 *)(b + 0x7C) = 0xB4;
         if (*(s32 *)(b + 0x6C) >= 0x18) {
-            s32 delta = cur - target;
-            s32 stepF, div5, step, accum;
-            if (delta < 0) delta = -delta;
+            s32 delta = __builtin_abs(*(s32 *)(b + 0x74) - *(s32 *)(b + 0x78));
+            if (delta != 0) {
+                s32 stepF = FloatToInt(func_002835C0(IntToFloat(delta) * 0.04f) * 5.0f);
+                s32 div5  = delta / 5;
+                s32 step;
 
-            stepF = FloatToInt(func_002835C0(IntToFloat(delta) * 0.04f) * 5.0f);
-            div5  = delta / 5;
-            step  = (stepF < div5) ? div5 : stepF;      /* max(stepF, delta/5) */
-            if (step >= 0x7A)   step = 0x79;
-            else if (step <= 0) step = 1;
+                div5 = (stepF >= div5) ? stepF : div5;
+                step = div5;
+                if (step >= 0x7A)   step = 0x79;
+                else if (step <= 0) step = 1;
 
-            accum = (cnt[3] + step) & 0xFF;
-            cnt[3] = (u8)accum;
-            if (accum >= 3) {
-                s32 aa   = *(s32 *)(b + 0x74);
-                s32 tt   = *(s32 *)(b + 0x78);
-                s32 half = accum >> 1;
-                *(s32 *)(b + 0x74) = (tt < aa) ? (aa - half) : (aa + half);
-                cnt[3] = (u8)(cnt[3] - (half << 1));
+                roll[3] += step;
+                if (roll[3] >= 3) {
+                    s32 shown;
+                    step = roll[3] / 2;          /* the half step, in step's register */
+                    shown = *(s32 *)(b + 0x74);
+                    if (*(s32 *)(b + 0x78) < shown) *(s32 *)(b + 0x74) = shown - step;
+                    else                            *(s32 *)(b + 0x74) = shown + step;
+                    roll[3] -= step << 1;
+                }
             }
         }
     }
 
     /* (3) digit-roll counters keyed on the +0x7C show timer */
-    showTimer = *(s32 *)(b + 0x7C);
-    if (showTimer < 5) {
-        u8 hi = cnt[1];
-        u8 lo = cnt[0];
-        if (hi != 0) {
-            *(s32 *)(b + 0x6C) = 1;
-            cnt[1] = hi - 1;
-        } else if (lo != 0) {
-            *(s32 *)(b + 0x6C) = 1;
-            cnt[0] = lo - 1;
-        }
+    if (*(s32 *)(b + 0x7C) >= 5) {
+        if (roll[0] < 8)      roll[0]++;
+        else if (roll[1] < 8) roll[1]++;
     } else {
-        u8 lo = cnt[0];
-        if (lo < 8) {
-            cnt[0] = lo + 1;
-        } else {
-            u8 hi = cnt[1];
-            if (hi < 8) cnt[1] = hi + 1;
-        }
+        if (roll[1] != 0 || roll[0] != 0) *(s32 *)(b + 0x6C) = 1;
+        if (roll[1] != 0)      roll[1]--;
+        else if (roll[0] != 0) roll[0]--;
     }
 
     /* (4) refresh the icon animation frame */
