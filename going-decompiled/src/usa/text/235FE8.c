@@ -7693,16 +7693,21 @@ void GuiScrollListScreenInit(void *w, GuiPool *pool) {
  * zeroed stack pair (so a -0.0 component is stored as +0.0), applies the
  * direction, and stores table[col + row * colCount] +6 into +0x224.
  *
- * Matched byte-exact on the s136os arm (task #1969), device-free:
+ * Matched byte-exact on the s136os arm (task #1969), device-free. Costs are
+ * solo s136os compiles with one lever removed:
  * - the offset pair is a `= {0}` initialiser, which cc1 lowers to the ROM's
- *   `jal memset` (an explicit memset() of the 8-byte local is inlined as stores);
+ *   `jal memset` (an explicit memset() of the 8-byte local is inlined as stores:
+ *   91 words against the ROM's 95);
  * - the null-table test wraps the body so the early exit is the shared epilogue
- *   (`beqz $18` to the `move $2,$0` return) instead of a separate return block;
- * - the up/left wraps pre-decrement the field into a 64-bit local: widening the
- *   s32 result is cc1's extendsidi2, emitted as the ROM's `move $2,$3` ahead of
- *   `bgez $2`, with the store in the delay slot. An s32 local, a (long) cast on
- *   the test, a 0L constant or a store-then-test spelling all drop that move
- *   (93 words against the ROM's 95).
+ *   (`beqz $18` to the `move $2,$0` return) instead of a separate return block
+ *   (an early `return 0` is 97 words);
+ * - the up/left wraps store the field twice: the pre-decrement stores it (the
+ *   `sw $3` in the `bgez` slot), then the wrapped value is stored at the join.
+ *   reorg moves that join store into the delay slot of the `b` to the tail and
+ *   points `bgez` at the `b`, so the value lives in a copy (`move $2,$3`).
+ *   Stored only in the wrap branch it is 93 words (no copy). A 64-bit `cur`
+ *   with that single store reproduces the 95 words but branches `bgez` past the
+ *   `b`: 2 words differ, both branch offsets.
  */
 #if !defined(TARGET_NATIVE) && !defined(S136OS_func_00341F40)
 S136OS_SLOT(func_00341F40);
@@ -7721,12 +7726,13 @@ s32 func_00341F40(void *w, s32 flags, void *table) {
                          0.0f, 0.0f);
 
         if (flags & 0x1000) {                   /* up: row-- wrap to rowCount-1 */
-            long cur;
+            s32 cur;
             PlayGlobalSound(3, 0, 0);
             cur = --*(s32 *)((char *)w + 0x218);
             if (cur < 0) {
-                *(s32 *)((char *)w + 0x218) = *(s32 *)((char *)w + 0x220) - 1;
+                cur = *(s32 *)((char *)w + 0x220) - 1;
             }
+            *(s32 *)((char *)w + 0x218) = cur;
         } else if (flags & 0x4000) {            /* down: row++ wrap to 0 */
             s32 cur;
             PlayGlobalSound(3, 0, 0);
@@ -7736,12 +7742,13 @@ s32 func_00341F40(void *w, s32 flags, void *table) {
             }
             *(s32 *)((char *)w + 0x218) = cur;
         } else if (flags & 0x8000) {            /* left: col-- wrap to colCount-1 */
-            long cur;
+            s32 cur;
             PlayGlobalSound(3, 0, 0);
             cur = --*(s32 *)((char *)w + 0x214);
             if (cur < 0) {
-                *(s32 *)((char *)w + 0x214) = *(s32 *)((char *)w + 0x21C) - 1;
+                cur = *(s32 *)((char *)w + 0x21C) - 1;
             }
+            *(s32 *)((char *)w + 0x214) = cur;
         } else if (flags & 0x2000) {            /* right: col++ wrap to 0 */
             s32 cur;
             PlayGlobalSound(3, 0, 0);
@@ -8137,9 +8144,11 @@ void func_00342978(void *p) {
  * Matched byte-exact on the s136os arm (task #1969), device-free:
  * - `icon` and the column constant `two` are loop-body locals: loop.c hoists both
  *   to the preheader after the count test, which is where the ROM computes
- *   `$17 = w+0x17C` and `li $20,2` (declared at function scope they are set
- *   before it, and a literal 2 is re-materialised inside the loop);
- * - the tint index is spelled `(column << 2)` off `w` so the add is `w + idx`;
+ *   `$17 = w+0x17C` and `li $20,2`. `icon` at function scope is set before the
+ *   test (12 words); a literal 2 is re-materialised inside the loop (99 words
+ *   against the ROM's 101);
+ * - the tint index is spelled `(column << 2)` off `w` so the add is `w + idx`
+ *   (`column * 4`: 1 word);
  * - func_00337630 is declared void here: its definition sits in its own guarded
  *   arm, so this member's solo s136os TU would otherwise call it implicit-int and
  *   the dead $v0 moves the loop-bound reload from $2 to $3 (3 words).
