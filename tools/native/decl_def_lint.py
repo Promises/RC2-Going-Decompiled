@@ -86,7 +86,8 @@ Vec3RescaleToLenVu0 with 9 declaration sites agreeing with its definition and
 5 disagreeing; editing the definition would have broken the 9.
 Exit: 0 clean (only ANNOTATED rows), 1 any other row, 2 the parse could not
 run (fails CLOSED: a unit that does not compile, a missing dump, a clang
-error). Rows are printed one per declaration SITE, never one per symbol.
+error). Rows are printed one per declaration SITE, never one per symbol; a
+site's RETURN-DISCARDED is a second row of its own (task #1860).
 
 BLIND SPOTS (a clean run is not a proof of absence):
   - Declarations with no C definition in the region (the callee is still
@@ -111,7 +112,7 @@ ARITY-EXTRA (trailing arguments the definition never reads), POINTEE, and a
 NOPROTO declaration whose call cannot be mis-promoted.
 
 COST (XPS, clang 23.1.1): ~30 s for the 44 units; --base ~50 s (two trees);
---selftest ~10 s (32 arms, tasks #1425/#1461/#1860).
+--selftest ~10 s (33 arms, tasks #1425/#1461/#1860).
 
 UNITS (task #1425). Unit arguments SELECT rows; they never narrow the parse.
 The whole TARGET_NATIVE population is always parsed, and a row is kept when
@@ -603,7 +604,15 @@ def lint_rows(units):
                 st = "FIXABLE"
             else:
                 st = "DESIGN-CALL"
-            rows.append((st, reg, name, where, defwhere, "; ".join(err)))
+            # RETURN-DISCARDED is a row of its OWN (task #1860), so a site's
+            # other kinds keep the --base key they had before the class became
+            # an error: folded in, fixing only the return half of a site that
+            # also disagrees otherwise (DebugPrintStub's void + VARIADIC) would
+            # change its key and read as NEW
+            for part in ([e for e in err if not e.startswith("RETURN-DISCARDED ")],
+                         [e for e in err if e.startswith("RETURN-DISCARDED ")]):
+                if part:
+                    rows.append((st, reg, name, where, defwhere, "; ".join(part)))
         elif lev:
             rows.append(("STALE-LEVER", reg, name, where, defwhere,
                          "annotated, but agrees with the definition at the ABI level"))
@@ -865,6 +874,7 @@ void Unmatched(float *dst, float len, const float *src) { dst[0] = src[0] * len;
 void Matched(float *dst, float len, const float *src) { dst[0] = src[0] * len; }
 void Sink(int x) { (void)x; }
 int  Value(void) { return 1; }
+int  Count(int n) { return n; }
 """
 
 
@@ -1113,6 +1123,17 @@ def selftest():
           r"RETURN-DISCARDED void vs int$"]),
         ("d10 control: a PRE-EXISTING RETURN-DISCARDED at base and tip -> no NEW, PASS",
          vd, "/* moved */\n" + vd, "kind", False, (), [r"^NEW", r"^GONE"]),
+        # a site disagreeing TWO ways (void return + too few args). Fixing the
+        # return half alone must read GONE only: folded into one row, its key
+        # would change from (ARITY-MISSING, RETURN-DISCARDED) to
+        # (ARITY-MISSING) and read NEW (DebugPrintStub's shape at 1B4218.cpp).
+        ("d11 a two-way site with only its RETURN-DISCARDED half fixed -> GONE RETURN-DISCARDED, "
+         "no NEW, PASS",
+         "void Count(void);\nvoid f(void) { Count(); }\n",
+         "int Count(void);\nvoid f(void) { Count(); }\n", "kind", False,
+         [r"^GONE -1  usa Count  decl going-decompiled/src/usa/text/use\.c  RETURN-DISCARDED  "
+          r"\[count base 1 -> tip 0: every site is gone; base line numbers\]$"],
+         [r"^NEW"]),
     ]
     ok = all([_diff_arm(*d) for d in diffs]) and ok
     n = len(arms) + len(diffs)
