@@ -5855,86 +5855,111 @@ void MapBuildBitmap(void *dst, u8 *src, s32 arg3) {
  * and CopyQwords those to dst. Between bands any scratch beyond 0x2000 (RLE that
  * overran the band, from `skip`) is carried down to the start of the next band's
  * scratch and the write pointer rewound by 0x2000. Loops until dst reaches
- * dst+0x8000. The matching build keeps the asm (a strength-reduction near-miss);
- * this #else is the portable equivalent.
+ * dst+0x8000. Returns nothing.
  *
  * NOTE(faithful): the bit-pack inner loop writes its partial accumulator to the
  * output byte after every OR (8 stores/byte, only the last observable) exactly
- * as the original emits eight `sb`s; kept verbatim for op-for-op fidelity.
+ * as the original emits eight `sb`s.
+ *
+ * Byte-exact on the s136os arm (task #1915). The ROM's 9 callee saves at 8-byte
+ * stride are what SN 1.36 -fopt-stack emits; the old t496 "PACKED-SAVE" label
+ * described the 2.9 arm. Each lever below was priced by removing it alone (solo
+ * s136 compile, relocated fields masked; N/140 words differ):
+ *  - scratchEnd is a plain local, not `u8 *const`: a const local is folded to
+ *    the constant in C++, so the bit-pack loop re-forms 0x70002000 in its own
+ *    register instead of comparing against $21: 109/140, 142 words;
+ *  - ctrl is walked one byte at a time (`*ctrl++` twice), not ctrl[0]/ctrl[1]
+ *    plus `ctrl += 2`: 121/140;
+ *  - the bit-pack accumulator is an int (no `andi 0xff` per step): 99/140;
+ *  - wp is set to the scratch base after the first FillMemory32 call, which
+ *    gives wp $18 and src $19 as in the ROM: 26/140;
+ *  - the carry-down pointers s/d are set before the `scratchEnd < wp` guard,
+ *    so their `lui`s sit above the branch: 4/140;
+ *  - src steps after the pad in the reload loop, so the step fills the
+ *    `beqz` delay slot: 5/140.
+ * Two SCHEDULING DEVICES (RULING #8435; the tree's R5900_SHORT_LOOP_PAD3_TIED
+ * and R5900_SHORT_LOOP_PAD1, defined above): the reload loop (lbu, sltiu,
+ * beqz + slot) and the carry-down loop are R5900 short loops, and the ROM's
+ * assembler padded them with 3 nops and 1 nop before the backward branch.
+ * Neither cc1 nor our assemblers emit those pads. PAD3 is tied to `run` (the
+ * value the branch tests): without it 100/140, 138 words. PAD1 is tied to `d`
+ * so it sits after the compare and before the step: without it 24/140.
+ * Both emit only nops and are empty on native.
+ * The ROM's lui/addiu fields at 0x298134, 0x2981BC, 0x298258, 0x298284 and
+ * 0x2982B8 carry splat relocations against D_6FFFE000 / D_70000001; they are
+ * the constants 0x7000, +1 and -0x2000, and cc1's immediates are the same
+ * words.
  */
 #ifdef TARGET_NATIVE
 extern void FillMemory32(void *dst, u32 word, s32 nbytes);
 extern void CopyQwords(void *dst, const void *src, s32 nbytes);
 #endif
-#ifndef TARGET_NATIVE
-/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
- * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 39.02% PACKED-SAVE /
- * engine96 52.71% IDIOM-LIKELY; best arm engine96, first differing insn there: 'ori v0, zero,
- * 0x8000' vs '' */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002980D8);
+/* t496 probe (unit objdiff on the all-promoted probe files): sdk29 39.02% PACKED-SAVE /
+ * engine96 52.71% IDIOM-LIKELY ('ori v0, zero, 0x8000' vs '').
+ * GUARD (task #1915): on EE this C is the image's body, compiled alone by SN
+ * 2.95.3 v1.36 -fopt-stack (tools/ee/s136os_functions.txt) and spliced over the
+ * S136OS_SLOT line by tools/ee/s136os_splice.sh; the 2.9 compile sees only the
+ * slot, so a build that skips the splice loses the function. On native it is
+ * plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002980D8)
+S136OS_SLOT(func_002980D8);
 #else
 /* Prototypes this body needs whose declarations sit in other guarded arms:
  * the s136os arm compiles this arm alone, so it must see them here. */
 extern void CopyQwords(void *dst, const void *src, s32 nbytes);
 void func_002980D8(void *dstArg, u8 *src, s32 ctrlArg) {
-    u8 *const scratch    = (u8 *)0x70000000;
-    u8 *const scratchEnd = (u8 *)0x70002000;    /* $21 */
-    u8       *dst        = (u8 *)dstArg;         /* $23 */
-    u8 *const dstEnd     = (u8 *)dstArg + 0x8000; /* $30 */
-    u8       *ctrl       = (u8 *)ctrlArg;        /* $17 */
-    u8       *bits       = src + 1;              /* $19 */
-    s32       toggle     = 1;                    /* $22 */
-    s32       run;                               /* $16 */
-    u8       *wp;                                /* $18 */
+    u8 *const scratch    = (u8 *)0x70000000;   /* scratchpad pixel band */
+    u8       *scratchEnd = (u8 *)0x70002000;   /* not const: see above, $21 */
+    u8       *dst        = (u8 *)dstArg;
+    u8 *const dstEnd     = dst + 0x8000;
+    u8       *ctrl       = (u8 *)ctrlArg;
+    s32       toggle     = 1;
+    s32       run;
+    u8       *wp;
 
     /* Seed the toggle run from the first src byte, then clear the scratch band. */
-    run = *src >> 1;
+    run = *src++ >> 1;
     FillMemory32(scratch, 0, 0x2400);
     wp = scratch;
 
     for (;;) {
         u8 *dstNext = dst + 0x400;
-        s32 skip    = *ctrl;
+        u8 *s;
+        u8 *d;
 
         /* Decode (skip, run-count) pairs into pixel bytes until scratch fills. */
-        for (;;) {
-            s32 count = ctrl[1];
-            ctrl += 2;
+        do {
+            s32 skip  = *ctrl++;
+            s32 count = *ctrl++;
             wp += skip;                 /* leave `skip` pixels at their fill value */
-
             while (count != 0) {
                 count--;
                 while (run == 0) {      /* reload: each byte flips toggle; 0 = carry */
-                    u8 b = *bits++;
+                    run = *src;
                     toggle = !toggle;
-                    run = b;
+                    R5900_SHORT_LOOP_PAD3_TIED(run);
+                    src++;
                 }
                 *wp = (u8)toggle;
                 run--;
                 wp++;
             }
-
-            if (wp >= scratchEnd) {
-                break;
-            }
-            skip = *ctrl;
-        }
+        } while (wp < scratchEnd);
 
         /* Bit-pack the 0x2000 pixel bytes -> 0x400 bytes (pixel k -> bit k). */
         {
             u8 *rp = scratch;
             u8 *pk = scratch;
             do {
-                u8 v = rp[0];
+                s32 v = *rp++;
                 *pk = v;
-                v |= rp[1] << 1;  *pk = v;
-                v |= rp[2] << 2;  *pk = v;
-                v |= rp[3] << 3;  *pk = v;
-                v |= rp[4] << 4;  *pk = v;
-                v |= rp[5] << 5;  *pk = v;
-                v |= rp[6] << 6;  *pk = v;
-                v |= rp[7] << 7;  *pk = v;
-                rp += 8;
+                v |= *rp++ << 1;  *pk = v;
+                v |= *rp++ << 2;  *pk = v;
+                v |= *rp++ << 3;  *pk = v;
+                v |= *rp++ << 4;  *pk = v;
+                v |= *rp++ << 5;  *pk = v;
+                v |= *rp++ << 6;  *pk = v;
+                v |= *rp++ << 7;  *pk = v;
                 pk++;
             } while (rp < scratchEnd);
         }
@@ -5947,12 +5972,13 @@ void func_002980D8(void *dstArg, u8 *src, s32 ctrlArg) {
 
         /* Carry any scratch past 0x2000 down to the start of the next band. */
         FillMemory32(scratch, 0, 0x2000);
+        s = (u8 *)0x70002000;
+        d = scratch;
         if (scratchEnd < wp) {
-            u8 *s = scratchEnd;
-            u8 *d = scratch;
             do {
                 *d = *s;
                 s++;
+                R5900_SHORT_LOOP_PAD1(d);
                 d++;
             } while (s < wp);
         }
