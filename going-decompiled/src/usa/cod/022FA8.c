@@ -778,7 +778,7 @@ s32 sceCdRead(u32 lbn, u32 sectors, void *buf, CdReadMode *mode) {
     }
     D_001363D4 = 1;
     D_001363B0 = 1;
-    if (func_0011D620(D_00137550, 1, 1, req, 0x18, 0, 0,
+    if (sceSifCallRpc(D_00137550, 1, 1, req, 0x18, 0, 0,
                       (s32)((u8 *)func_001246D0 + 0x10), D_00137480) < 0) {
         D_001363D4 = 0;
         D_001363B0 = 0;
