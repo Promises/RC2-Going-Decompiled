@@ -2568,6 +2568,8 @@ s32 func_00131400(s64 *arg0) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00131424);
 
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00131430);
+
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0013153C);
 
 extern s32 func_0011E0D8(const char *path, s32 mode);
