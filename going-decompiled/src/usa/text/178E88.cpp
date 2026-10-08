@@ -196,7 +196,7 @@ extern void StopAllSoundEmitters(void);     /* 0x2E6E18 */
 extern void WaitFrameDmaFence(s32);
 extern s32  WaitVblankGetField(s32);
 extern void ResetFrameArenas(void);         /* text/1FCF48 */
-extern void FadeOutToBlackBlocking(s32);    /* defined below as INCLUDE_ASM */
+extern void FadeOutToBlackBlocking(s32);    /* defined below */
 extern void func_002FCFC8(void);            /* text/1FCF48 SelectSceneArenaRegion */
 
 /* SceneTransitionTeardownA: fence + vblank wait, bump the frame counter, set up
