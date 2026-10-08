@@ -2,7 +2,7 @@
 # storage symbol: g_dataArena  ==  __gamedata_start (linker)
 # seed: memcpy snapshot[rom_addr] -> g_dataArena[rom_addr - base]
 #       for rom_addr in [base, base+span).
-# base 0x133E70  span 0x14AA90  placed 1577  (const 11)
+# base 0x133E70  span 0x14AA90  placed 1583  (const 11)
 # columns: <symbol> <rom_addr> <arena_offset> [const]
 #   'const' tag = static rodata/string literal (see data_const.txt);
 #   NOT mutable state - the tester's effect-diff must EXCLUDE these.
@@ -134,6 +134,12 @@ D_0013B888 0x13B888 0x7A18
 D_0013B8C8 0x13B8C8 0x7A58
 D_0013B990 0x13B990 0x7B20
 D_0013B9B0 0x13B9B0 0x7B40
+D_0013BB78 0x13BB78 0x7D08
+D_0013BBF8 0x13BBF8 0x7D88
+D_0013BC20 0x13BC20 0x7DB0
+D_0013BC50 0x13BC50 0x7DE0
+D_0013BC70 0x13BC70 0x7E00
+D_0013BC90 0x13BC90 0x7E20
 D_0013BD48 0x13BD48 0x7ED8
 D_0013BDC8 0x13BDC8 0x7F58
 D_0013BDE8 0x13BDE8 0x7F78
