@@ -1369,7 +1369,8 @@ void ComputeListenerOcclusionProbe(Vec4 *out) {
  * matches on cc1 2.9; the only delta there is frame layout - it packs the callee saves
  * (s0,s1,s2,ra) at a 16-byte stride (0x50 frame) where the original uses an
  * 8-byte stride (0x30 frame) (the 8-byte-packed save wall, same as
- * func_002E6D98).
+ * func_002E6D98 on cc1 2.9; func_002E6D98 is byte-exact on the s136os arm since
+ * task #2030).
  * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): this member's prologue - the
  * ROM's save set at its 8-byte stride, and its frame - is reproduced exactly (NOTE #9871), so
  * the save-slot wall named above is a cc1 2.9 property and was measured false as the reason
@@ -2256,27 +2257,51 @@ s32 func_002E6D78(s32 slotIndex, s32 pitch) {
  * pointer to `count` entries of 0x90 bytes, each with a callback at +0x4. */
 typedef struct EmitterHook {
     /* 0x00 */ u8  pad00[0x4];
-    /* 0x04 */ void (*callback)(void);
+    /* 0x04 */ void (*callback)(struct EmitterHook *self);
     /* 0x08 */ u8  pad08[0x88];
 } EmitterHook;
 
-/* Run every registered emitter hook callback in order, skipping null slots.
- * NEAR-MISS (~82%, structurally identical): the original (later SN cc1) packs
- * its 4 callee saves 8-byte while this cc1 packs them 16-byte (the 8-byte-packed
- * save wall) -> only the save offsets + frame size differ.  The C is faithful. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E6D98);
+/* Run every registered emitter hook callback in table order, skipping entries
+ * whose callback is NULL. Each callback receives its own hook entry: the ROM
+ * forms the entry address in $4, loads the callback through it and calls with
+ * $4 untouched (NOTE #9648; the callbacks' own use of $4 was not traced). The
+ * count at +0x1730 is re-read after every call. Called only from
+ * UpdateLevelExitScene (twice); the splat name is kept because nothing beyond
+ * this body says what the hooks are. No params, no return.
+ *
+ * GUARD (task #2030): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback. On native it is plain C.
+ * What it took (solo s136 screen, words differing of 30):
+ *   - `i` zeroed before the `if`, the table copied and `offset` zeroed inside it,
+ *     and a do-while: this gives the ROM's base copy ($3 -> $18) and puts `i = 0`
+ *     in the blez slot (NOTE #9648's for-loop body formed the base straight into
+ *     $18: 5/30);
+ *   - the entry address as integer + loaded word, so the addu is `$17,$2`;
+ *   - DEVICE: `offset` is REGISTER-PINNED to $17 by EE_REG (RULING #8598; empty
+ *     on native). Without it the allocator gives i $17 and offset $16, the ROM's
+ *     pair swapped: 8/30. Pin-free spellings left that swap (8/30: declaration
+ *     and increment orders, `offset` declared outside the `if`, `i += 1`, `++i`);
+ *     pinning `i` to $16 instead moves the count reload to $3 (3/30). A $3 pin on
+ *     the base was tried and measured dead weight (0/30 without it). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002E6D98)
+S136OS_SLOT(func_002E6D98);
 #else
 void func_002E6D98(void) {
     u8 *base = g_listenerPosHistory;
-    s32 i;
-    s32 offset;
-    for (i = 0, offset = 0; i < *(s32 *)(base + 0x1730); i++, offset += 0x90) {
-        EmitterHook *hook =
-            (EmitterHook *)(*(u8 **)(base + 0x1734) + offset);
-        if (hook->callback != NULL) {
-            hook->callback();
-        }
+    s32 i = 0;
+    if (*(s32 *)(base + 0x1730) > 0) {
+        u8 *table = base;
+        register s32 offset EE_REG("$17") = 0;
+        do {
+            EmitterHook *hook = (EmitterHook *)(offset + *(s32 *)(table + 0x1734));
+            if (hook->callback != NULL) {
+                hook->callback(hook);
+            }
+            i++;
+            offset += 0x90;
+        } while (i < *(s32 *)(table + 0x1730));
     }
 }
 #endif
