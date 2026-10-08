@@ -44,12 +44,14 @@ extern s32 D_1AE790; /* GIF-DMA "frame consumed" pending flag */
 
 /* FMV_ARENA_BASE_GP: ADDRESSING-MODEL DEVICE (RULING #9073 under RULING #8620; emits
  * no code). An offset-0 assembler equate of g_pFmvArenaBase with no `.extern` size,
- * so the one access spelled through it assembles gp-relative while every access
+ * so an access spelled through it assembles gp-relative while every access
  * spelled g_pFmvArenaBase keeps the `.extern g_pFmvArenaBase, 16` absolute form
- * above. It reproduces the ROM's delay-slot read in FmvDecodeThreadEntry,
- * 0x0035283C `lw $2,%gp_rel(g_pFmvArenaBase)($28)`; the relocation names the real
- * symbol. At FILE SCOPE (task #1434), not in the member's arm, so the s136os splice
- * admits it (FACT #9057). EE only: on native it is g_pFmvArenaBase. */
+ * above. It reproduces two of the ROM's delay-slot reads,
+ * `lw $2,%gp_rel(g_pFmvArenaBase)($28)`: FmvDecodeThreadEntry's at 0x0035283C
+ * (task #1434) and FmvDisplayWorkerLoop's at 0x003528F8 (task #1888); the
+ * relocation names the real symbol. At FILE SCOPE (task #1434), not in a member's
+ * arm, so the s136os splice admits it (FACT #9057). EE only: on native it is
+ * g_pFmvArenaBase. */
 #ifndef TARGET_NATIVE
 __asm__("g_pFmvArenaBaseGp = g_pFmvArenaBase");
 extern u8 *g_pFmvArenaBaseGp;
@@ -2245,8 +2247,43 @@ s32 FmvDecodeThreadEntry(FmvStream *obj) {
 }
 #endif
 
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", FmvDisplayWorkerLoop);
+/**
+ * FmvDisplayWorkerLoop: the FMV frame-display worker loop. Pulls the next
+ * decoded picture from the host (func_0012F9A8/func_0012F950), waits (yielding)
+ * for a free display slot (FmvFrameQueueGetWriteSlot), builds the per-tile GIF
+ * display chain for each frame tile (func_00350B60) unless host word +0x8 is
+ * set, commits the slot (FmvFrameQueuePush), and yields. Exits when the host
+ * signals end-of-stream or the FSM reports stop.
+ * @param host the host frame-reader object (+0x0/+0x4 the two DMA addresses
+ *             handed to func_00350B60, +0x8 a skip-tiles flag)
+ * @return 1 on end-of-stream, -1 when func_00352620 reports stop
+ *
+ * MATCHED on the s136os arm (task #1888). Three things close it, each measured
+ * by undoing it alone on a solo s136 compile (relocated fields masked):
+ *  - the host words are read through `host` itself. Through a separate
+ *    `s32 *` copy declared in the loop, cc1 spills the copy to the stack and
+ *    reloads it: 93/110 words (112 built).
+ *  - the queue push takes the arena base from a join: the skip path reads it
+ *    through FMV_ARENA_BASE_GP, the tile path through g_pFmvArenaBase. The ROM
+ *    reads it gp-relative in the `bnez` delay slot (0x003528F8
+ *    `lw $2,%gp_rel(g_pFmvArenaBase)($28)`) and absolute after the tile loop
+ *    (0x0035298C). FMV_ARENA_BASE_GP is an ADDRESSING-MODEL DEVICE (RULING
+ *    #9073 under RULING #8620; the file-scope offset-0 equate defined at the
+ *    top of this file, emits no code, its relocation names the real symbol).
+ *    Without it, either spelling of the push: 75/110 (112 built).
+ *  - the tile offsets are written `tile * 0x138C0` and `tile * 0xD0000`:
+ *    loop.c strength-reduces them and zeroes the two new induction registers
+ *    in the preheader, after the blez, as the ROM does. Written as running
+ *    `+=` accumulators they are zeroed before the guard in swapped registers:
+ *    11/110.
+ * GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+ * (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in tools/ee/s136os_functions.txt)
+ * and spliced over S136OS_SLOT by tools/ee/s136os_splice.sh (task #1888). There
+ * is no asm fallback: a build that skips the splice drops the function. On
+ * native it is plain C, and FMV_ARENA_BASE_GP is g_pFmvArenaBase.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_FmvDisplayWorkerLoop)
+S136OS_SLOT(FmvDisplayWorkerLoop);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
@@ -2259,22 +2296,12 @@ extern void func_0012F9C8(u8 *obj);
 extern char D_1AE820[];
 extern char D_1AE838[];
 /* (end of this body's declarations) */
-/* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 85.53% / engine96 55.33%. Residual: PACKED-SAVE (10 callee saves) + 43 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
-/* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
-   saves (s0..s2/ra) plus a delay-slot %gp_rel read of the arena base mixed
-   with its absolute form. Revisit with the gameplay-TU compiler.
-
-   The FMV frame-display worker loop: pulls the next decoded picture from the
-   host (func_0012F9A8/func_0012F950), waits (yielding) for a free display
-   slot (FmvFrameQueueGetWriteSlot), builds the per-tile GIF display chain for each frame
-   tile (func_00350B60), commits the slot (FmvFrameQueuePush), and yields. Exits
-   when the host signals end-of-stream or the FSM reports stop. */
 s32 FmvDisplayWorkerLoop(u8 *host) {
     s32 result = 1;
 
     for (;;) {
         u8 *slot;
-        s32 *streamObj = (s32 *)host;
+        u8 *arena;
 
         if (func_0012F9A8(host) != 0) {
             break;
@@ -2290,23 +2317,21 @@ s32 FmvDisplayWorkerLoop(u8 *host) {
         if (func_0012F950(host, (s32)slot, 0x340) < 0) {
             func_003504C8(D_1AE838);
         }
-        if (streamObj[2] == 0) {
-            u32 madr = streamObj[0];
-            u32 tadr = streamObj[1];
-            s32 tile = 0;
-            s32 gifOfs = 0;
-            s32 frameOfs = 0;
+        if (((s32 *)host)[2] != 0) {
+            arena = FMV_ARENA_BASE_GP;
+        } else {
+            u32 madr = ((s32 *)host)[0];
+            u32 tadr = ((s32 *)host)[1];
+            s32 tile;
 
-            while (tile < *(s32 *)(g_pFmvArenaBase + 0xD9178)) {
-                func_00350B60(*(u8 **)(g_pFmvArenaBase + 0xD916C) + gifOfs + 0x40,
-                              *(u8 **)(g_pFmvArenaBase + 0xD9168) + frameOfs, madr, tadr,
+            for (tile = 0; tile < *(s32 *)(g_pFmvArenaBase + 0xD9178); tile++) {
+                func_00350B60(*(u8 **)(g_pFmvArenaBase + 0xD916C) + tile * 0x138C0 + 0x40,
+                              *(u8 **)(g_pFmvArenaBase + 0xD9168) + tile * 0xD0000, madr, tadr,
                               tile);
-                frameOfs += 0xD0000;
-                gifOfs += 0x138C0;
-                tile++;
             }
+            arena = g_pFmvArenaBase;
         }
-        FmvFrameQueuePush(g_pFmvArenaBase + 0xD9168);
+        FmvFrameQueuePush(arena + 0xD9168);
         func_00350100();
     }
     func_0012F9C8(host);
