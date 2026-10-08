@@ -3297,20 +3297,23 @@ s32 func_002802E8(s32 x, s32 arg1, s32 arg2, const char *str, s32 maxChars) {
  * slot 1), and forwards to the positioned font-draw func_0027FCB0 with the D_263B10
  * glyph metrics. The centered variant of func_0027FFF0.
  *
- * Engine region (ee-gcc 2.96) - faithful #else. */
-/* TODO(match) t493: sdk29 40.65% / engine96 11.90% (unit objdiff, objdiff_build.sh +
- * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
- * every other remaining arm). Residual on the better arm (sdk29): SIBCALL (first differing insn:
- * ROM `addiu sp,sp,-80` vs built `addiu sp,sp,-128`). Levers: engine96 with sched1 MEASURED (flag
- * not landed): 12.25%. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280380);
+ * No return value.
+ * MATCHED (task #1877): s136os arm (SN 1.36 -fopt-stack, -O2 -G8 -fno-gcse),
+ * spliced. Both float coordinates are named locals formed after the measure
+ * (cc1 still schedules the y conversion ahead of the call, as the ROM has it);
+ * with the conversions inline in the call (master) the FPR roles invert and
+ * 46/48 words differ, and with y formed before the measure 47/48.
+ * Record of the cc1 2.9 / 2.96 attempts (t493, unit objdiff, objdiff_build.sh +
+ * unit_report.sh): sdk29 40.65% / engine96 11.90%. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00280380)
+S136OS_SLOT(func_00280380);
 #else
 void func_00280380(s32 a, s32 b, s32 c, const char *str, s32 maxChars, f32 scale) {
     s32 advance = func_0027F900(str, maxChars, scale);
+    f32 y = (f32)b;
+    f32 x = (f32)(a - (advance >> 1));
     u64 tex0 = GetUiTextureTex0(1);
-    func_0027FCB0((f32)(a - (advance >> 1)), (f32)b, c, (s32)str, maxChars, scale,
-                  tex0, D_263B10);
+    func_0027FCB0(x, y, c, (s32)str, maxChars, scale, tex0, D_263B10);
 }
 #endif
 

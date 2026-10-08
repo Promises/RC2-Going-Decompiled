@@ -521,3 +521,4 @@ usa text/178E88 DrawFullScreenTint
 usa text/178E88 func_002804C0
 usa text/178E88 func_0027F168
 usa text/178E88 func_0027F858
+usa text/178E88 func_00280380
