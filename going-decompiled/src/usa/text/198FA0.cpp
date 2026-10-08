@@ -94,7 +94,7 @@ extern volatile s32 g_loadedArmorVariant;     /* armor variant whose model is re
 extern volatile s32 g_loadedHeldItemModelId;  /* held-item model resident in the dialog scene (-1 = none) */
 extern char g_levelDialogToc;                 /* level dialog/scene TOC block (byte-addressed here) */
 extern s32 D_1A790C;                          /* small-data flag cleared by func_0029C418 */
-extern s32 D_1A9A90;                          /* small-data GUI state, set to -1 by func_0029CA88 */
+extern s32 g_menuSelectedButton;              /* front-end menu's latched selected button, -1 = none */
 
 /* Save/load status pair at 0x1A7420: [0] = popup status code (enum selecting
  * the on-screen save/load message body), [1] = pending-action flag word. */
@@ -204,7 +204,7 @@ __asm__(".extern D_1A7B10, 16");
 
 /* Gating globals + widget method for the func_0029CCB8 popup-poll wrapper. */
 extern s32 D_1A9A88;                 /* 0x1A9A88 GUI-active gate (gp small-data) */
-extern s32 D_1A9A8C;                 /* 0x1A9A8C GUI-ready gate (gp small-data) */
+extern s32 g_menuScreenReady;                 /* 0x1A9A8C front-end menu screen ready (latched by func_0029C818) */
 extern s32 g_nNanotechBonusHealTimer;/* 0x189FFC; +0x4 is a separate s16 sub-state */
 extern s16 D_18A000 ROM_SPLIT;       /* 0x18A000 nanotech sub-state half (g_nNanotechBonusHealTimer+0x4) */
 extern s32 func_0033B720(void *widget); /* GUI popup-poll method */
@@ -247,10 +247,10 @@ typedef struct LevelObjective {
 } LevelObjective;
 
 /* Per-current-level objective-list head table, indexed by MapCache.currentLevel.
- * Each entry is a LevelObjective* (NULL = no objectives for that level).
- * (Kept as the splat auto-name D_258B20 / EU D_258BA0 so the carved-unit reloc
- * resolves without a global re-split rename.) */
-extern LevelObjective *D_258B20[]; /* 0x258B20 objective-list head table */
+ * Each entry is a LevelObjective* (NULL = no objectives for that level); 28
+ * entries, one per level id (0x258B20..0x258B8F). Named in symbol_addrs
+ * (task #1973); the EU twin is still the splat auto-name D_258BA0. */
+extern LevelObjective *g_levelObjectiveLists[]; /* 0x258B20 objective-list head table */
 
 /* MapCache.currentLevel lives at g_mapVertexData + 0x230 (see symbol comment). */
 extern u8 g_mapVertexData[]; /* 0x1C4F20 MapCache base (byte-addressed here) */
@@ -313,7 +313,7 @@ typedef struct WeaponUpgradeRecord {
     s32 _pad0[3];   /* 0x0 map x/y at +0/+4, a copy of an object's +0xF8 at +8 */
     s32 upgradeLevel; /* 0xC - blip state (misnamed), not an upgrade level */
 } WeaponUpgradeRecord;
-extern WeaponUpgradeRecord D_139A28[]; /* 0x139A28 per-level map-blip table (stride 0x10) */
+extern WeaponUpgradeRecord g_mapBlipTable[]; /* 0x139A28 per-level map-blip table (stride 0x10) */
 
 /* One entry of a save-section descriptor table. The serialized layout each
  * entry contributes is an 8-byte header { tag, len } followed by `len` payload
@@ -1372,7 +1372,7 @@ extern int memcmp(); /* K&R decl: avoids the ee-gcc builtin-prototype conflict w
 #define AREA_SELECTED_INDEX_OFF 0x14C
 #define AREA_LOAD_RESULT_OFF 0x24
 extern u8  g_areaTable[];        /* 0x1393E0 per-area record table (stride 0xA0) */
-extern s32 D_1A99A0;             /* 0x1A99A0 changed-section counter (bumped on memcmp differ) */
+extern s32 g_changedSaveSectionCount;             /* 0x1A99A0 changed-section counter (bumped on memcmp differ) */
 
 /* SerializeSaveSections(dst, slot, table): write the section table `table` into
  * the save-image buffer `dst` for memory-card `slot`. The image begins with an
@@ -1517,7 +1517,7 @@ void FillSaveSlotInfo(u8 *image, s32 slot, s32 dir) {
  * Steps: (1) CRC-verify via VerifySaveHeaderChecksum. (2) Clear every
  * descriptor's matchResult. (3) Walk the image sections: for each, find the
  * descriptor with the same tag; if found, record matchResult (1 / -1 / -2 by
- * length comparison), bump the changed-section counter D_1A99A0 when the bytes
+ * length comparison), bump the changed-section counter g_changedSaveSectionCount when the bytes
  * differ, and copy min(lengths) bytes into srcPtr+slotMul*descLen (tag-0x1770
  * zero-fill sections are not copied back). A section with no descriptor counts
  * as a mismatch. (4) Also count a mismatch if the bytes consumed differ from
@@ -1620,7 +1620,7 @@ s32 DeserializeSaveSections(void *image, s32 slotMul, SaveSection *table) {
             }
             payload = (u8 *)(hdr + 2);
             if (memcmp(dest, payload, copyLen) != 0) {
-                D_1A99A0++;
+                g_changedSaveSectionCount++;
             }
             if (table[i].tag != 0x1770) {
                 ((SaveCopyFn)func_00283460)(dest, payload, copyLen);
@@ -1992,9 +1992,20 @@ void func_0029C678(void *state, void *a1, void *text, s32 font, s32 centre,
 }
 #endif
 
+/* The four front-end menu buttons of the widget at g_guiInstance+0x3F7B0
+ * (0x256398, stride 0x18). Declared at file scope because func_0029C700 and
+ * func_0029C818 both reference it and each s136os TU sees only its own arm. */
+typedef struct {
+    s32 _pad00;
+    s32 labelId;      /* 0x04 */
+    u32 color;        /* 0x08 */
+    u8  _pad0C[0xC];
+} MenuButton;         /* 0x18 */
+extern MenuButton g_menuButtons[];
+
 /* func_0029C700: refresh the four front-end menu buttons of the widget at
  * g_guiInstance+0x3F7B0 (called by func_0029C818 when the screen becomes
- * ready). For each button i, FindChainTailFreeSlot walks chain D_1A9AD0[i]
+ * ready). For each button i, FindChainTailFreeSlot walks chain g_menuButtonChainHeads[i]
  * of the 0x28-stride record table D_262920. When it yields a record, the
  * button takes that record's label id and a colour (0x6029A1FF when the
  * record's count is positive, else 0x60F0F0B0) and is set to state 0;
@@ -2005,11 +2016,10 @@ void func_0029C678(void *state, void *a1, void *text, s32 font, s32 centre,
  * struct arrays, not through byte offsets: the ROM hoists D_262920+0x24 and
  * D_262920 as two separate loop bases, and walks the buttons with a single
  * pointer at +8 (`sw label,-4($18)`, `sw colour,0($18)`). A u8* cast of
- * D_256398 gives two pointers and %lo-folded offsets (13 words differ).
- * g_menuButtons is a bare asm-label alias of D_256398 (as FillSaveSlotInfo's
- * g_areaSaveSlotRecords): func_0029C818's arm declares D_256398 as u8[], and
- * the native TU sees both arms. D_1A9AD0 is declared as a 4-byte object so
- * cc1 forms its address %gp_rel, as the ROM does (`addiu $20,$28,...`). */
+ * g_menuButtons gives two pointers and %lo-folded offsets (13 words differ).
+ * g_menuButtonChainHeads is an s32[4] in the ROM but is declared here as a
+ * 4-byte object so cc1 forms its address %gp_rel, as the ROM does
+ * (`addiu $20,$28,...`). */
 #if !defined(TARGET_NATIVE) && !defined(S136OS_func_0029C700)
 S136OS_SLOT(func_0029C700);
 #else
@@ -2019,29 +2029,17 @@ typedef struct {
     u8  _pad1E[6];
     s32 count;        /* 0x24 */
 } ChainRecord;        /* 0x28, the D_262920 table */
-typedef struct {
-    s32 _pad00;
-    s32 labelId;      /* 0x04 */
-    u32 color;        /* 0x08 */
-    u8  _pad0C[0xC];
-} MenuButton;         /* 0x18, the D_256398 entries */
 extern s32  FindChainTailFreeSlot(s32 head);
 extern void func_0033BA18(void *widget, s32 index, s32 state);
-extern s32  D_1A9AD0;              /* first of 4 chain heads (gp small-data) */
+extern s32  g_menuButtonChainHeads;              /* first of 4 chain heads (gp small-data) */
 extern ChainRecord D_262920[];
-#ifndef TARGET_NATIVE
-extern MenuButton g_menuButtons[] __asm__("D_256398");
-#else
-extern u8 D_256398[];
-#define g_menuButtons ((MenuButton *)D_256398)
-#endif
 
 void func_0029C700(void) {
     s32 i;
 
     if (g_guiInstance != 0) {
         for (i = 0; i < 4; i++) {
-            s32 slot = FindChainTailFreeSlot((&D_1A9AD0)[i]);
+            s32 slot = FindChainTailFreeSlot((&g_menuButtonChainHeads)[i]);
 
             if (slot >= 0) {
                 g_menuButtons[i].labelId = D_262920[slot].labelId;
@@ -2057,11 +2055,11 @@ void func_0029C700(void) {
 
 /* func_0029C818: front-end screen readiness poll. No-op unless the GUI is up.
  * The new ready state is func_0026F7D8() != 0 when func_0026F7D0() is set,
- * else 0; if it equals the latched gate D_1A9A8C nothing happens. On a change
+ * else 0; if it equals the latched gate g_menuScreenReady nothing happens. On a change
  * it invalidates the GUI state (func_0029CA88) and latches the new value, and
  * only on a transition to 1 configures the front-end screen: primes
  * g_guiInstance+0x3CD48 with D_1A9A98, builds the button row of the widget at
- * g_guiInstance+0x3F7B0 (func_0033BA48 from D_1A9AC0 / D_256398), sets its
+ * g_guiInstance+0x3F7B0 (func_0033BA48 from D_1A9AC0 / g_menuButtons), sets its
  * scale to 36.0 and its index to -1, then refreshes the menu items
  * (func_0029C700). No params, no return value. EU twin func_0029C3C0.
  *
@@ -2081,7 +2079,6 @@ extern void func_0029C700(void);
 extern void func_0029CA88(void);
 extern s32  D_1A9A98;
 extern s32  D_1A9AC0;
-extern u8   D_256398[];
 
 void func_0029C818(void) {
     s32 ready;
@@ -2091,12 +2088,12 @@ void func_0029C818(void) {
         if (func_0026F7D0() != 0) {
             ready = (func_0026F7D8() != 0);
         }
-        if (D_1A9A8C != ready) {
+        if (g_menuScreenReady != ready) {
             func_0029CA88();
-            D_1A9A8C = ready;
+            g_menuScreenReady = ready;
             if (ready == 1) {
                 func_0034A1D0(g_guiInstance + 0x3CD48, &D_1A9A98);
-                func_0033BA48(g_guiInstance + 0x3F7B0, &D_1A9AC0, D_256398);
+                func_0033BA48(g_guiInstance + 0x3F7B0, &D_1A9AC0, g_menuButtons);
                 func_0033BA10(g_guiInstance + 0x3F7B0, 36.0f);
                 func_0033BA28(g_guiInstance + 0x3F7B0, -1);
                 func_0029C700();
@@ -2108,9 +2105,9 @@ void func_0029C818(void) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029C8F0);
 
-/** Invalidate the D_1A9A90 GUI state (set to -1). */
+/** Clear the front-end menu's latched selection (g_menuSelectedButton = -1). */
 void func_0029CA88(void) {
-    D_1A9A90 = -1;
+    g_menuSelectedButton = -1;
 }
 
 /* func_0029CA98: the GUI pump, run each frame through func_0029DC70. Skipped
@@ -2258,7 +2255,7 @@ void func_0029CC48(void) {
  * func_0029CCB8 — GUI popup-poll gate. When the GUI is up and every gating
  * flag permits (D_1A9A88 set, D_18A000 = the s16 sub-state half at
  * g_nNanotechBonusHealTimer+4 clear, the popup-busy gate D_1A8C64 clear,
- * D_1A9A8C set, g_guiInstance non-null), forwards the widget at
+ * g_menuScreenReady set, g_guiInstance non-null), forwards the widget at
  * g_guiInstance+0x3F7B0 to func_0033B720. No params, no return value.
  *
  * Byte-exact on sdk29 (-O2 -G8 -fno-gcse, task #888). Two things carry it:
@@ -2275,7 +2272,7 @@ void func_0029CC48(void) {
 void func_0029CCB8(void) {
     /* All five gates must permit before the popup-poll runs:
      *  D_1A9A88 set, the nanotech sub-state half at +0x4 clear, the popup-busy
-     *  gate D_1A8C64 clear, D_1A9A8C set, and the GUI instance up. */
+     *  gate D_1A8C64 clear, g_menuScreenReady set, and the GUI instance up. */
     if (D_1A9A88 == 0) {
         return;
     }
@@ -2285,7 +2282,7 @@ void func_0029CCB8(void) {
     if (D_1A8C64 != 0) {
         return;
     }
-    if (D_1A9A8C == 0) {
+    if (g_menuScreenReady == 0) {
         return;
     }
     if (g_guiInstance == 0) {
@@ -3146,7 +3143,7 @@ s32 UpdateLevelObjectiveStates(void) {
     ObjectiveScan *scan = (ObjectiveScan *)(g_pRainHeightmap + 0x34);
     LevelObjective *rec;
 
-    rec = D_258B20[*(s32 *)(g_mapVertexData + 0x230)];
+    rec = g_levelObjectiveLists[*(s32 *)(g_mapVertexData + 0x230)];
     scan->head = rec;
     if (rec == NULL) {
         return 0;
@@ -3197,9 +3194,9 @@ s32 UpdateLevelObjectiveStates(void) {
  * Cases: 0 always; 1 level available, 2 item owned, 3 item NEW, 8 platinum
  * bolt, 9 cinematic bit (the flag addresses are read from the ROM; these
  * meanings come from the symbol names and are not verified); 4 map-blip record
- * `arg` has a nonzero state, 5 that state is >= 2 (D_139A28 below; NOT weapon
+ * `arg` has a nonzero state, 5 that state is >= 2 (g_mapBlipTable below; NOT weapon
  * upgrades, FACT #8397; the older "objective active/complete" is unsupported
- * too, since the case reads D_139A28 and not LevelObjective.state); 6 flag
+ * too, since the case reads g_mapBlipTable and not LevelObjective.state); 6 flag
  * byte D_1395B8[arg] (what the flags mean, "dialog" included, is
  * undetermined, NOTE #8400); 7 call arg as a predicate function; 10 bit `arg`
  * of the D_1395B8 byte keyed by g_mapCurrentLevel (0x1C5150; "current level"
@@ -3233,12 +3230,12 @@ s32 EvaluateProgressCondition(s32 cond, s32 arg) {
         if (arg >= 0x72) {
             return 0;
         }
-        return D_139A28[arg].upgradeLevel != 0;
+        return g_mapBlipTable[arg].upgradeLevel != 0;
     case 5: /* map-blip record's state field >= 2 */
         if (arg >= 0x72) {
             return 0;
         }
-        return (D_139A28[arg].upgradeLevel < 2) ? 0 : 1;
+        return (g_mapBlipTable[arg].upgradeLevel < 2) ? 0 : 1;
     case 6:
         return D_1395B8[arg] != 0;
     case 7: /* call `arg` as a predicate function pointer */

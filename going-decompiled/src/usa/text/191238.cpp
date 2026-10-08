@@ -6286,7 +6286,7 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/191238", func_0
  * func_00298A00 — snapshot the current level's map-blip positions.
  *
  * For each blip index in the current level's slice [D_264DD0[L], D_264DD0[L+1])
- * of the map-blip table D_139A28 (L = g_playerProgress, ignored unless < 19),
+ * of the map-blip table g_mapBlipTable (L = g_playerProgress, ignored unless < 19),
  * copies the blip's moby world x/y (Moby +0x10/+0x14) and its heading yaw
  * (facing[2], Moby +0xF8) into the record's +0/+4/+8. The moby pointers live in
  * a table at 0x1C11A0, which has no symbol of its own: the ROM addresses it as
@@ -6311,7 +6311,7 @@ typedef struct MapBlipRecord {
     f32 heading;  /* +0x8 moby heading yaw (facing[2]) */
     s32 state;    /* +0xC */
 } MapBlipRecord;
-extern MapBlipRecord D_139A28[];  /* 0x139A28 per-level map-blip table */
+extern MapBlipRecord g_mapBlipTable[];  /* 0x139A28 per-level map-blip table */
 extern s32 D_264DD0[];            /* 0x264DD0 level -> first blip index */
 extern u8  g_collTriBuffer[];     /* 0x1C0180; +0x1020 is the blip moby table */
 void func_00298A00(void) {
@@ -6323,9 +6323,9 @@ void func_00298A00(void) {
         for (; i < end; i++) {
             Moby *moby = ((Moby **)(g_collTriBuffer + 0x1020))[i];
             if (moby != 0) {
-                D_139A28[i].x = moby->bsphereScratch[0];
-                D_139A28[i].y = moby->bsphereScratch[1];
-                D_139A28[i].heading = moby->facing[2];
+                g_mapBlipTable[i].x = moby->bsphereScratch[0];
+                g_mapBlipTable[i].y = moby->bsphereScratch[1];
+                g_mapBlipTable[i].heading = moby->facing[2];
             }
         }
     }
