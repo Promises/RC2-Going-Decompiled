@@ -1255,8 +1255,8 @@ void func_00284380(const Vec4f src, Vec4f dst) {
  * @param out          16-byte-aligned output, 4 quadwords
  *
  * COP2 ops: lqc2 x3; vmulx.xyzw x2, vmr32.xyzw, vaddw.x, vaddw.y (identity
- * rows); vadd.xyzw (2q), vmulw/vmulx/vmuly/vmulz (the products), 12 lane
- * vadd/vsub lane ops folding them into the rows; vmulx/vmuly/vmulz.xyz (scale);
+ * rows); vadd.xyzw (2q), vmulw/vmulx/vmuly/vmulz (the products), 15 lane
+ * vadd/vsub lane ops (6 vadd, 9 vsub) folding them into the rows; vmulx/vmuly/vmulz.xyz (scale);
  * vaddx.w (row 3 w = 1); sqc2 x4.
  *
  * MATCHED on plain cc1 2.9 (task #2004) under RULING #10010 rev 2 as narrowed
