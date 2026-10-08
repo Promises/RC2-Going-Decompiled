@@ -2148,7 +2148,86 @@ struct D350Node *func_0011D350(u32 key, struct D350Table *table) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", rename);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", sceSifBindRpc);
+/* An SIF RPC client (the SDK's sceSifClientData). */
+typedef struct SifRpcClient {
+    s32 pktAddr;    /* the packet of the request in flight */
+    s32 rpcId;
+    s32 semaId;     /* semaphore a waiting call blocks on, -1 for none */
+    s32 mode;
+    s32 command;
+    s32 buff;
+    s32 cbuff;
+    s32 endFunc;
+    s32 endParam;
+    void *serve;    /* set by the IOP's reply once the bind reached a server */
+} SifRpcClient;
+
+/* An RPC bind request packet (the SDK's SifRpcBindPkt). */
+typedef struct SifRpcBindPacket {
+    s32 header[4];
+    s32 recId;
+    s32 pktAddr;
+    s32 rpcId;
+    s32 client;
+    s32 server;     /* the server id asked for */
+} SifRpcBindPacket;
+
+extern RpcPacketTable D_0013E900;
+
+/**
+ * sceSifBindRpc: bind `client` to the IOP RPC server `rpcNumber`. Takes an
+ * RPC packet (func_0011D140), records it and its id in the client, fills in
+ * the bind request and sends it (command 0x80000009). Unless `mode` bit 0
+ * (no-wait) is set, blocks on a fresh semaphore until the reply has been
+ * handled, then deletes the semaphore.
+ *
+ * @return 0 if sent (and, when waiting, answered); -1 if no packet was
+ *         free, -2 if the send failed, -3 if the semaphore could not be
+ *         created
+ *
+ * Reading the packet's id into the client before storing the packet
+ * pointer gives the ROM's schedule (the load issues first, ahead of the
+ * annulled branch slot that otherwise inverts the null test).
+ */
+s32 sceSifBindRpc(SifRpcClient *client, u32 rpcNumber, u32 mode) {
+    struct SemaParam sema;
+    SifRpcBindPacket *bind;
+
+    client->command = 0;
+    client->serve = 0;
+    bind = (SifRpcBindPacket *)func_0011D140(&D_0013E900);
+    if (bind == 0) {
+        return -1;
+    }
+    client->rpcId = bind->rpcId;
+    client->pktAddr = (s32)bind;
+    bind->server = rpcNumber;
+    bind->pktAddr = (s32)bind;
+    bind->client = (s32)client;
+    if (!(mode & 1)) {
+        sema.maxCount = 1;
+        sema.initCount = 0;
+        client->semaId = func_0011AC20((s32 *)&sema);
+        if (client->semaId < 0) {
+            func_0011D1E8((s32 *)bind);
+            return -3;
+        }
+        if (func_0011CD20(0x80000009, (s32)bind, 0x40, 0, 0, 0) == 0) {
+            func_0011D1E8((s32 *)bind);
+            func_0011AC30(client->semaId);
+            return -2;
+        }
+        func_0011AC60(client->semaId);
+        func_0011AC30(client->semaId);
+        return 0;
+    }
+    client->semaId = -1;
+    if (func_0011CD20(0x80000009, (s32)bind, 0x40, 0, 0, 0) == 0) {
+        func_0011D1E8((s32 *)bind);
+        return -2;
+    }
+    return 0;
+}
 
 /* SIF RPC server-side records, as func_0011D590 sees them (the layouts of the
  * SDK's sceSifQueueData, sceSifServeData and the call message). Every field
@@ -2416,12 +2495,9 @@ extern s32 func_0011D620(void *a0, s32 a1, s32 a2, void *a3, s32 a4,
                          void *a5, s32 a6, s32 a7, s32 a8);
 extern s32 D_00134744;
 
-/* The IOP-heap RPC client (sceSifClientData): only `serve` (+0x24), set once
- * the bind has reached the server, is read here. */
-typedef struct IopHeapClient {
-    u8 _pad0[0x24];
-    void *serve;
-} IopHeapClient;
+/* The IOP-heap RPC client: only `serve` (+0x24), set once the bind has
+ * reached the server, is read here. */
+typedef SifRpcClient IopHeapClient;
 extern IopHeapClient D_00140140;
 
 extern s32 sceSifBindRpc(IopHeapClient *client, u32 rpcNumber, u32 mode);
