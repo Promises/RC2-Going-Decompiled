@@ -2571,6 +2571,7 @@ extern s32 D_00134DA8[4]; /* two {syscall number, handler} pairs (ROM:
                            * the same shape as SyscallPatchEntry */
 extern s32 D_00134DA0;    /* cached end-of-walk pointer (func_0011F6C0 side) */
 extern s32 *func_0011F6C0(s32 *first, s32 *last, s32 value);
+extern void func_0011F818(s32 syscall, s32 handler); /* defined later in-unit */
 
 /**
  * Locate the kernel's syscall table and cache its base in D_00134DA0.
@@ -2591,9 +2592,6 @@ extern s32 *func_0011F6C0(s32 *first, s32 *last, s32 value);
  * that table. ps2sdk's name for it, SetSyscall, is external knowledge.
  */
 void func_0011F718(void) {
-#ifdef TARGET_NATIVE
-    extern s32 func_0011F818(s32 a, s32 b);  /* defined later in-unit */
-#endif
     s32 p;
     s32 q;
     s32 a;
@@ -2618,12 +2616,26 @@ void func_0011F718(void) {
 }
 
 /**
- * func_0011F818 = EE kernel syscall 0x74 (same primitive as func_0011F868).
- * SCE library syscall stub (see func_0011AA20): load the syscall number into
- * $v1 and trap. Called from the device/handler init path (func_0011F718) with
- * a 2-word argument. Exact SDK name UNCONFIRMED.
+ * func_0011F818 = EE kernel syscall 0x74. SCE library syscall stub (see
+ * func_0011AA20): load the syscall number into $v1 and trap. Called twice by
+ * func_0011F718.
+ * SetSyscall: install `handler` as the kernel's entry for syscall number
+ * `syscall`. func_0011F718 shows this in-ROM: it finds its two handlers in the
+ * kernel table at 0x83 * 4 and 0x5A * 4. This is the fourth copy, alongside
+ * 0x11F048, 0x11F868 and 0x11FA50, so the splat name is kept.
+ * Return type narrowed s32 -> void under RULING #9779 (task #1853):
+ *  - ROM: the stub is `addiu $v1,$0,0x74; syscall; jr $ra; nop` and writes no
+ *    $v0.
+ *  - SDK: ps2sdk's prototype is `void SetSyscall(int, void *)` (external
+ *    knowledge). The vendored eekernel.h has no prototype for 0x74.
+ *  - Callers: the ROM has exactly 2 `jal` sites, both in func_0011F718, and
+ *    neither reads $v0. The address is taken nowhere: there is no data word
+ *    0x0011F818, no %lo, and it is not in any syscall-patch table.
+ *  - The other three copies are already void.
+ * The EE call in func_0011F718 was implicit int before this change, and the
+ * unit object is byte-identical either way.
  */
-s32 func_0011F818(s32 a, s32 b) {
+void func_0011F818(s32 syscall, s32 handler) {
 #ifndef TARGET_NATIVE
     __asm__ volatile("addiu $3, $0, 0x74\n\tsyscall 0" ::: "$3", "memory");
 #else  /* EE kernel syscall - not executable on the native host */
