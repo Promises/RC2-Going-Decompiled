@@ -25,7 +25,11 @@
  * plain-2.9 C with two #8598 FPR pins and one #8435 FPR-tied nop pad, the one
  * device route FACT #9990's both-arms screen of all 68 bodies found.
  * func_00283638 (`sq $0`) is compiled from C on the matching build through
- * RULING #8479's $0 register pin (task #1370). Everything else stays
+ * RULING #8479's $0 register pin (task #1370). func_00283D10,
+ * MatrixIdentityVu0, func_00284098 and func_00284408 are compiled from C whose
+ * EE arm is a filler- and directive-free VU0 macro-mode template (RULING #10010
+ * rev 2 as narrowed by RULING #10038's Group B, task #2004); they match only
+ * with asm_unit.sh's R1 no-fill (RULING #10043). Everything else stays
  * INCLUDE_ASM for the matching build.
  *
  * Per docs/PORTING.md these are tier-2 "pure-computation" functions: each VU0
@@ -804,39 +808,79 @@ f32 Atan2fPoly(f32 y, f32 x) {
 }
 #endif
 
-/** Build a 3x3 identity matrix (3 rows of 16 bytes) at dst (VU0 vmulx/vmr32/vaddw). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283D10);
-#else
-/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
- * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `vmulx.xyzw
- * $vf1xyzw,$vf0xyzw,$vf0x` vs `lui at,0x3f80`. Residual HANDWRITTEN-COP2: VU0 macro-mode ops
- * (lqc2/sqc2/v*), no C route in either cc1 [screen: COP2=8]. */
+/**
+ * Build a 3x3 identity matrix (3 rows of 16 bytes, w lanes 0) at dst.
+ * @param dst  16-byte-aligned output, 3 quadwords
+ *
+ * COP2 ops: vmulx.xyzw x2 (zero rows), vmr32.xyzw (row 2 = 0,0,1,0),
+ * vaddw.x / vaddw.y (the 1s), sqc2 x3.
+ *
+ * MATCHED on plain cc1 2.9 (task #2004) under RULING #10010 rev 2 as narrowed
+ * by RULING #10038 (Group B): the EE arm is a filler- and directive-free
+ * __asm__ __volatile__ template of VU0 macro-mode ops only, addresses through
+ * "r" operands; cc1 emits the `j $31` and asm_unit.sh's R1 (RULING #10043)
+ * keeps the assembler from moving the last op into its slot, as the held
+ * Ps2EeAs never fills one (FACT #10035) - so the slot is the ROM's nop.
+ * $vf registers are named only inside the template: cc1 2.9 cannot name them
+ * (FACT #10009) and never allocates them.
+ */
 void func_00283D10(Vec4f dst) {
+#ifndef TARGET_NATIVE
+    __asm__ __volatile__("vmulx.xyzw $vf1,$vf0,$vf0x\n\t"
+                         "vmulx.xyzw $vf2,$vf0,$vf0x\n\t"
+                         "vmr32.xyzw $vf3,$vf0\n\t"
+                         "vaddw.x $vf1,$vf1,$vf0w\n\t"
+                         "vaddw.y $vf2,$vf2,$vf0w\n\t"
+                         "sqc2 $vf1,0x0(%0)\n\t"
+                         "sqc2 $vf2,0x10(%0)\n\t"
+                         "sqc2 $vf3,0x20(%0)"
+                         : : "r"(dst) : "memory");
+#else
     Vec4f *r = (Vec4f *)dst;
     int i, j;
     for (i = 0; i < 3; i++)
         for (j = 0; j < 4; j++)
             r[i][j] = (i == j) ? 1.0f : 0.0f;
-}
 #endif
+}
 
-/** Build a 4x4 identity matrix at dst (VU0 vmulx/vmr32/vmove/vaddw). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", MatrixIdentityVu0);
-#else
-/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
- * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `vmulx.xyzw
- * $vf1xyzw,$vf0xyzw,$vf0x` vs `lui at,0x3f80`. Residual HANDWRITTEN-COP2: VU0 macro-mode ops
- * (lqc2/sqc2/v*), no C route in either cc1 [screen: COP2=10]. */
+/**
+ * Build a 4x4 identity matrix at dst.
+ * @param dst  16-byte-aligned output, 4 quadwords
+ *
+ * COP2 ops: vmulx.xyzw x2 (zero rows), vmr32.xyzw (row 2 = 0,0,1,0),
+ * vmove.xyzw (row 3 = vf0 = 0,0,0,1), vaddw.x / vaddw.y (the 1s), sqc2 x4.
+ *
+ * MATCHED on plain cc1 2.9 (task #2004) under RULING #10010 rev 2 as narrowed
+ * by RULING #10038 (Group B): the EE arm is a filler- and directive-free
+ * __asm__ __volatile__ template of VU0 macro-mode ops only, addresses through
+ * "r" operands; cc1 emits the `j $31` and asm_unit.sh's R1 (RULING #10043)
+ * keeps the assembler from moving the last op into its slot, as the held
+ * Ps2EeAs never fills one (FACT #10035) - so the slot is the ROM's nop.
+ * $vf registers are named only inside the template: cc1 2.9 cannot name them
+ * (FACT #10009) and never allocates them.
+ */
 void MatrixIdentityVu0(Vec4f dst) {
+#ifndef TARGET_NATIVE
+    __asm__ __volatile__("vmulx.xyzw $vf1,$vf0,$vf0x\n\t"
+                         "vmulx.xyzw $vf2,$vf0,$vf0x\n\t"
+                         "vmr32.xyzw $vf3,$vf0\n\t"
+                         "vmove.xyzw $vf4,$vf0\n\t"
+                         "vaddw.x $vf1,$vf1,$vf0w\n\t"
+                         "vaddw.y $vf2,$vf2,$vf0w\n\t"
+                         "sqc2 $vf1,0x0(%0)\n\t"
+                         "sqc2 $vf2,0x10(%0)\n\t"
+                         "sqc2 $vf3,0x20(%0)\n\t"
+                         "sqc2 $vf4,0x30(%0)"
+                         : : "r"(dst) : "memory");
+#else
     Vec4f *r = (Vec4f *)dst;
     int i, j;
     for (i = 0; i < 4; i++)
         for (j = 0; j < 4; j++)
             r[i][j] = (i == j) ? 1.0f : 0.0f;
-}
 #endif
+}
 
 /**
  * Build a 4x4 uniform-scale matrix with scale 's' on the diagonal (x,y,z) and
@@ -997,22 +1041,53 @@ void func_00284048(Vec4f dst, const Vec4f src) {
 }
 #endif
 
-/** Transpose the 3x3 rotation part of src into dst, clearing each row's w; row 3 untouched. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00284098);
-#else
-/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 28.00% / engine96 arm 0.00% (unit objdiff,
- * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `lqc2 $vf1,0(a1)` vs `daddu
- * a2,zero,zero`. Residual HANDWRITTEN-COP2: VU0 macro-mode ops (lqc2/sqc2/v*), no C route in
- * either cc1 [screen: COP2=18]. */
+/**
+ * Transpose the 3x3 rotation part of src into dst, clearing each row's w;
+ * dst's row 3 is not written.
+ * @param dst  16-byte-aligned output, 3 quadwords
+ * @param src  16-byte-aligned input, 3 quadwords (w lanes ignored)
+ *
+ * COP2 ops: lqc2 x3, vaddx/vaddy/vaddz into single lanes (9, one per element
+ * of the transpose), vsubw.w x3 (w = vf0.w - vf0.w = 0), sqc2 x3.
+ *
+ * MATCHED on plain cc1 2.9 (task #2004) under RULING #10010 rev 2 as narrowed
+ * by RULING #10038 (Group B): the EE arm is a filler- and directive-free
+ * __asm__ __volatile__ template of VU0 macro-mode ops only, addresses through
+ * "r" operands; cc1 emits the `j $31` and asm_unit.sh's R1 (RULING #10043)
+ * keeps the assembler from moving the last op into its slot, as the held
+ * Ps2EeAs never fills one (FACT #10035) - so the slot is the ROM's nop.
+ * $vf registers are named only inside the template: cc1 2.9 cannot name them
+ * (FACT #10009) and never allocates them.
+ */
 void func_00284098(Vec4f dst, const Vec4f src) {
+#ifndef TARGET_NATIVE
+    __asm__ __volatile__("lqc2 $vf1,0x0(%1)\n\t"
+                         "lqc2 $vf2,0x10(%1)\n\t"
+                         "lqc2 $vf3,0x20(%1)\n\t"
+                         "vaddx.x $vf4,$vf0,$vf1x\n\t"
+                         "vaddy.y $vf5,$vf0,$vf2y\n\t"
+                         "vaddz.z $vf6,$vf0,$vf3z\n\t"
+                         "vaddy.x $vf5,$vf0,$vf1y\n\t"
+                         "vaddx.y $vf4,$vf0,$vf2x\n\t"
+                         "vaddz.x $vf6,$vf0,$vf1z\n\t"
+                         "vaddx.z $vf4,$vf0,$vf3x\n\t"
+                         "vaddz.y $vf6,$vf0,$vf2z\n\t"
+                         "vaddy.z $vf5,$vf0,$vf3y\n\t"
+                         "vsubw.w $vf4,$vf0,$vf0w\n\t"
+                         "vsubw.w $vf5,$vf0,$vf0w\n\t"
+                         "vsubw.w $vf6,$vf0,$vf0w\n\t"
+                         "sqc2 $vf4,0x0(%0)\n\t"
+                         "sqc2 $vf5,0x10(%0)\n\t"
+                         "sqc2 $vf6,0x20(%0)"
+                         : : "r"(dst), "r"(src) : "memory");
+#else
     int i, j;
     for (i = 0; i < 3; i++)
         for (j = 0; j < 3; j++)
             dst[i * 4 + j] = src[j * 4 + i];
     dst[3] = 0.0f; dst[7] = 0.0f; dst[11] = 0.0f;
-}
 #endif
+}
 
 /** Multiply two 3x3 matrices (3 rows each): dst = a * b. VU0 vmulax/vmadday/vmaddz. */
 #ifndef TARGET_NATIVE
@@ -1171,21 +1246,68 @@ void func_00284380(const Vec4f src, Vec4f dst) {
 #endif
 
 /**
- * Build a 4x4 transform from quaternion (src=$4), per-axis scale (scale=$5) and
- * translation (translation=$6), writing to out=$7. The rotation matrix is formed
- * from the quaternion, each row scaled by the corresponding scale component, and
- * the translation row set to (translation.x, translation.y, translation.z, 1)
- * (asm loads vf17 from a2, sets .w=1, stores to row3). VU0 quat->matrix +
- * vmulx/vmuly/vmulz per row.
+ * Build a 4x4 transform from a quaternion, a per-axis scale and a translation.
+ * The rotation matrix is formed from the quaternion, each row scaled by the
+ * matching scale component, and row 3 set to (translation.xyz, 1).
+ * @param src          16-byte-aligned quaternion (x, y, z, w)
+ * @param scale        16-byte-aligned per-row scale (xyz used)
+ * @param translation  16-byte-aligned translation (xyz used)
+ * @param out          16-byte-aligned output, 4 quadwords
+ *
+ * COP2 ops: lqc2 x3; vmulx.xyzw x2, vmr32.xyzw, vaddw.x, vaddw.y (identity
+ * rows); vadd.xyzw (2q), vmulw/vmulx/vmuly/vmulz (the products), 12 lane
+ * vadd/vsub lane ops folding them into the rows; vmulx/vmuly/vmulz.xyz (scale);
+ * vaddx.w (row 3 w = 1); sqc2 x4.
+ *
+ * MATCHED on plain cc1 2.9 (task #2004) under RULING #10010 rev 2 as narrowed
+ * by RULING #10038 (Group B): the EE arm is a filler- and directive-free
+ * __asm__ __volatile__ template of VU0 macro-mode ops only, addresses through
+ * "r" operands; cc1 emits the `j $31` and asm_unit.sh's R1 (RULING #10043)
+ * keeps the assembler from moving the last op into its slot, as the held
+ * Ps2EeAs never fills one (FACT #10035) - so the slot is the ROM's nop.
+ * $vf registers are named only inside the template: cc1 2.9 cannot name them
+ * (FACT #10009) and never allocates them.
  */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00284408);
-#else
-/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
- * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `lqc2 $vf8,0(a0)` vs `lwc1
- * $f7,4(a0)`. Residual HANDWRITTEN-COP2: VU0 macro-mode ops (lqc2/sqc2/v*), no C route in either
- * cc1 [screen: COP2=36]. */
 void func_00284408(const Vec4f src, const Vec4f scale, const Vec4f translation, Vec4f out) {
+#ifndef TARGET_NATIVE
+    __asm__ __volatile__("lqc2 $vf8,0x0(%0)\n\t"
+                         "lqc2 $vf1,0x0(%1)\n\t"
+                         "vmulx.xyzw $vf14,$vf0,$vf0x\n\t"
+                         "vmulx.xyzw $vf15,$vf0,$vf0x\n\t"
+                         "vmr32.xyzw $vf16,$vf0\n\t"
+                         "lqc2 $vf17,0x0(%2)\n\t"
+                         "vaddw.x $vf14,$vf14,$vf0w\n\t"
+                         "vaddw.y $vf15,$vf15,$vf0w\n\t"
+                         "vadd.xyzw $vf9,$vf8,$vf8\n\t"
+                         "vmulw.xyz $vf10,$vf9,$vf8w\n\t"
+                         "vmulx.xyz $vf11,$vf9,$vf8x\n\t"
+                         "vmuly.yz $vf12,$vf9,$vf8y\n\t"
+                         "vmulz.z $vf13,$vf9,$vf8z\n\t"
+                         "vaddz.x $vf15,$vf0,$vf10z\n\t"
+                         "vsuby.x $vf16,$vf0,$vf10y\n\t"
+                         "vaddx.y $vf16,$vf0,$vf10x\n\t"
+                         "vsuby.x $vf14,$vf14,$vf12y\n\t"
+                         "vsubx.y $vf15,$vf15,$vf11x\n\t"
+                         "vsubx.z $vf16,$vf16,$vf11x\n\t"
+                         "vsubz.y $vf14,$vf11,$vf10z\n\t"
+                         "vaddy.z $vf14,$vf11,$vf10y\n\t"
+                         "vsubx.z $vf15,$vf12,$vf10x\n\t"
+                         "vaddy.x $vf15,$vf15,$vf11y\n\t"
+                         "vaddz.x $vf16,$vf16,$vf11z\n\t"
+                         "vaddz.y $vf16,$vf16,$vf12z\n\t"
+                         "vsubz.x $vf14,$vf14,$vf13z\n\t"
+                         "vsubz.y $vf15,$vf15,$vf13z\n\t"
+                         "vsuby.z $vf16,$vf16,$vf12y\n\t"
+                         "vmulx.xyz $vf14,$vf14,$vf1x\n\t"
+                         "vmuly.xyz $vf15,$vf15,$vf1y\n\t"
+                         "vmulz.xyz $vf16,$vf16,$vf1z\n\t"
+                         "vaddx.w $vf17,$vf0,$vf0x\n\t"
+                         "sqc2 $vf14,0x0(%3)\n\t"
+                         "sqc2 $vf15,0x10(%3)\n\t"
+                         "sqc2 $vf16,0x20(%3)\n\t"
+                         "sqc2 $vf17,0x30(%3)"
+                         : : "r"(src), "r"(scale), "r"(translation), "r"(out) : "memory");
+#else
     f32 x = src[0], y = src[1], z = src[2], w = src[3];
     f32 xx = 2*x*x, yy = 2*y*y, zz = 2*z*z;
     f32 xy = 2*x*y, xz = 2*x*z, yz = 2*y*z;
@@ -1199,8 +1321,8 @@ void func_00284408(const Vec4f src, const Vec4f scale, const Vec4f translation, 
     r[1][0] *= scale[1]; r[1][1] *= scale[1]; r[1][2] *= scale[1]; r[1][3] = 0.0f;
     r[2][0] *= scale[2]; r[2][1] *= scale[2]; r[2][2] *= scale[2]; r[2][3] = 0.0f;
     r[3][0] = translation[0]; r[3][1] = translation[1]; r[3][2] = translation[2]; r[3][3] = 1.0f;
-}
 #endif
+}
 
 /**
  * Unpack a compact pose record at src ($4) into three float vectors at dst ($5):
