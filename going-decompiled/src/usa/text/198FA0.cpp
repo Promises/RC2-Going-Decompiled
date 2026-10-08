@@ -3606,9 +3606,10 @@ __asm__(".extern g_mobyTableBase, 16");
  *     Indexing UpdateFuncs by (u8)slot instead is 5/156 words different.
  *   - the table index computed as its own statement after the +0x62 store and
  *     before the tint store (the ROM's g_mobyTableBase load sits there);
- *   - the stores in this source order. SN 1.36 cc1 issues the last store of each
- *     constant register first (FACT #9254's store-order rule), so the source puts
- *     +0x6D/+0xA5/+0xA7 last to get the ROM's order. */
+ *   - the stores in this source order. Measured here, SN 1.36 cc1 issued the
+ *     last store of each constant register (0xFF, 0x7F, 0x80) first and the
+ *     rest in source order (compare FACT #9254), so the source puts
+ *     +0x6D/+0xA5/+0xA7 last to get the ROM's order (24 -> 18 words). */
 #if !defined(TARGET_NATIVE) && !defined(S136OS_InitMobyFromClass)
 S136OS_SLOT(InitMobyFromClass);
 #else
