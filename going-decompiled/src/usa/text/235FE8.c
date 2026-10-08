@@ -9991,15 +9991,45 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00345890);
 
 /*
  * func_00345F00 / func_00345FF0 / func_003460E0 / func_003461D0 — four sibling
- * GUI-screen builders. Each fills a 0x5C-byte screen descriptor on the stack
- * from the owning object `obj`'s config fields plus a per-builder label const
- * and a 7-entry block of layout globals, then hands the descriptor to
- * func_003380B8 (the populator that instantiates the screen's GUI elements).
- * The four differ ONLY in their label const + their global block; the descriptor
- * shape and the obj field offsets are identical. Save-wall blocked for matching
- * ($16-$19/$31 packed 8-byte); provided as TARGET_NATIVE #else arms, cmp-oracle'd
- * (cmp_235FE8_iso.c mocks func_003380B8 and byte-compares the built descriptor
- * vs the original asm).
+ * GUI-screen builders, all called by func_003462C0. Each fills a 0x5C-byte
+ * screen descriptor (GuiScreenDesc) on the stack from the owning object `obj`'s
+ * config fields, a per-builder label table and a 7-global layout block, then
+ * hands the descriptor to func_003380B8 (the populator that instantiates the
+ * screen's GUI elements).
+ *
+ *   obj   the owning screen object (child elements at +0x130/+0x17C/+0x220/
+ *         +0x278, config words at +0x4A0/+0x4AC/+0x4B0/+0x4B4, current screen
+ *         type at +0x4B8)
+ *   returns nothing; the descriptor is a stack temporary
+ *
+ * The four differ ONLY in their label table, their global block and the screen
+ * type index the +0x54 flag is compared against (00345F00 -> 2, 00345FF0 -> 1,
+ * 003460E0 -> 3, 003461D0 -> 0); the descriptor shape and obj offsets are
+ * identical.
+ *
+ * MATCHED byte-exact on the s136os arm (task #1895), all four from ONE body
+ * shape. Nothing in it is a device; the two non-obvious choices are both
+ * PHRASING, measured in a solo s136os compile (vmu-equivalent word compare
+ * against the frozen .s) on func_00345F00:
+ *   - STATEMENT ORDER is not offset order. The ROM issues every load first and
+ *     then the stores; the stores whose values live in $16-$19 go first and the
+ *     rest follow in source order. Which values get $16-$19 is decided by their
+ *     live ranges in the first schedule, so the order of the cfg0 and +0x4A0
+ *     stores moves the allocation: offset order is 55/60 words different, the
+ *     ROM's store order written as statements 34/60 (the figure task #1522
+ *     recorded for its inline helper), and this order 0/60. It also closes
+ *     func_003461D0, whose shorter `== 0` test (no xori) shifted every live
+ *     range by one.
+ *   - `enable` is set at the top and stored late: the constant must be formed
+ *     early (the ROM's `li $18,1` sits right after the +0x4A0 load) yet stay
+ *     live into $16-$19. Storing a literal 1 in the same place: 14/60.
+ *
+ * GUARD (task #1895): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; rows in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C (cmp-oracle'd by
+ * cmp_235FE8_iso.c, which mocks func_003380B8 and byte-compares the descriptor).
  */
 typedef struct GuiScreenDesc {
     void *label;        /* 0x00  &labelConst */
@@ -10042,38 +10072,33 @@ extern s32 D_1AE320, D_1AE324; extern u8 D_1AE328[8], D_1AE330[8], D_1AE338[8], 
 extern s32 D_1AE350, D_1AE354; extern u8 D_1AE358[8], D_1AE360[8], D_1AE368[8], D_1AE370[8], D_1AE378[8];
 extern s32 D_1AE380, D_1AE384; extern u8 D_1AE388[8], D_1AE390[8], D_1AE398[8], D_1AE3A0[8], D_1AE3A8[8];
 
-/* Shared descriptor builder (the four siblings are one shape; see doc above).
- * task #1522: native-only, so on EE the four builders' #else bodies call an
- * undefined GuiBuildScreenDesc (an s136os compile emits a jal to it;
- * verify_match_unit: UNVERIFIABLE, no address). Promoting a builder needs this
- * helper visible on EE (measured as a static inline there: 34-35/60 words differ
- * per builder, register allocation and the schedule it drives) AND a home for
- * func_003380B8, which landing_gate's ORPHAN_LATENT set otherwise gains. The
- * store order below is the ROM's. */
-#ifdef TARGET_NATIVE
-static void GuiBuildScreenDesc(u8 *obj, void *label, s32 cfg0, s32 cfg1,
-                               void *l0, void *l1, void *l2, void *l3, void *l4,
-                               s32 typeIndex) {
+/* Screen type 2 (label table D_25E308, layout block D_1AE2F0..D_1AE318). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00345F00)
+S136OS_SLOT(func_00345F00);
+#else
+void func_00345F00(void *obj) {
     GuiScreenDesc d;
-    /* Field order is the ROM's store order (task #1522), not offset order. */
-    d.objCfg4B4 = *(s32 *)(obj + 0x4B4);
-    d.cfg0 = cfg0;
-    d.objCfg4A0 = *(s32 *)(obj + 0x4A0);
-    d.layout0 = l0;
-    d.enable = 1;
-    d.typeActive = (*(s32 *)(obj + 0x4B8) == typeIndex);
-    d.objCfg4AC = *(s32 *)(obj + 0x4AC);
-    d.objCfg4B0 = *(s32 *)(obj + 0x4B0);
-    d.layout4 = l4;
-    d.cfg1 = cfg1;
-    d.label = label;
-    d.child220 = obj + 0x220;
-    d.child130 = obj + 0x130;
-    d.child17C = obj + 0x17C;
-    d.child278 = obj + 0x278;
-    d.layout3 = l3;
-    d.layout2 = l2;
-    d.layout1 = l1;
+    u8 *o = (u8 *)obj;
+    s32 enable;
+    enable = 1;
+    d.objCfg4B4 = *(s32 *)(o + 0x4B4);
+    d.typeActive = (*(s32 *)(o + 0x4B8) == 2);
+    d.objCfg4AC = *(s32 *)(o + 0x4AC);
+    d.objCfg4B0 = *(s32 *)(o + 0x4B0);
+    d.layout4 = D_1AE318;
+    d.cfg0 = D_1AE2F0;
+    d.cfg1 = D_1AE2F4;
+    d.label = D_25E308;
+    d.child220 = o + 0x220;
+    d.child130 = o + 0x130;
+    d.child17C = o + 0x17C;
+    d.child278 = o + 0x278;
+    d.objCfg4A0 = *(s32 *)(o + 0x4A0);
+    d.layout3 = D_1AE310;
+    d.layout2 = D_1AE308;
+    d.layout1 = D_1AE300;
+    d.layout0 = D_1AE2F8;
+    d.enable = enable;
     d._z40 = 0;
     d._z38 = 0;
     d._z2C = 0;
@@ -10083,55 +10108,111 @@ static void GuiBuildScreenDesc(u8 *obj, void *label, s32 cfg0, s32 cfg1,
 }
 #endif
 
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00345F00);
+/* Screen type 1 (label table D_1AA850, layout block D_1AE320..D_1AE348). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00345FF0)
+S136OS_SLOT(func_00345FF0);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00345F00, unit objdiff): 25.22%,
-   58/60 insns differ. Residual: UNKNOWN-addiu (first differing insn: 'addiu sp, sp, -0x90' vs 'lw a2, %gp_rel(D_1AE2F0)(gp)').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
-void func_00345F00(void *obj) {
-    GuiBuildScreenDesc((u8 *)obj, D_25E308, D_1AE2F0, D_1AE2F4,
-                       D_1AE2F8, D_1AE300, D_1AE308, D_1AE310, D_1AE318, 2);
-}
-#endif
-
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00345FF0);
-#else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00345FF0, unit objdiff): 25.22%,
-   58/60 insns differ. Residual: UNKNOWN-addiu (first differing insn: 'addiu sp, sp, -0x90' vs 'lw a2, %gp_rel(D_1AE320)(gp)').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
 void func_00345FF0(void *obj) {
-    GuiBuildScreenDesc((u8 *)obj, D_1AA850, D_1AE320, D_1AE324,
-                       D_1AE328, D_1AE330, D_1AE338, D_1AE340, D_1AE348, 1);
+    GuiScreenDesc d;
+    u8 *o = (u8 *)obj;
+    s32 enable;
+    enable = 1;
+    d.objCfg4B4 = *(s32 *)(o + 0x4B4);
+    d.typeActive = (*(s32 *)(o + 0x4B8) == 1);
+    d.objCfg4AC = *(s32 *)(o + 0x4AC);
+    d.objCfg4B0 = *(s32 *)(o + 0x4B0);
+    d.layout4 = D_1AE348;
+    d.cfg0 = D_1AE320;
+    d.cfg1 = D_1AE324;
+    d.label = D_1AA850;
+    d.child220 = o + 0x220;
+    d.child130 = o + 0x130;
+    d.child17C = o + 0x17C;
+    d.child278 = o + 0x278;
+    d.objCfg4A0 = *(s32 *)(o + 0x4A0);
+    d.layout3 = D_1AE340;
+    d.layout2 = D_1AE338;
+    d.layout1 = D_1AE330;
+    d.layout0 = D_1AE328;
+    d.enable = enable;
+    d._z40 = 0;
+    d._z38 = 0;
+    d._z2C = 0;
+    d._z34 = 0;
+    d._z50 = 0;
+    func_003380B8(&d);
 }
 #endif
 
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003460E0);
+/* Screen type 3 (label table D_1AA890, layout block D_1AE350..D_1AE378). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_003460E0)
+S136OS_SLOT(func_003460E0);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_003460E0, unit objdiff): 25.22%,
-   58/60 insns differ. Residual: UNKNOWN-addiu (first differing insn: 'addiu sp, sp, -0x90' vs 'lw a2, %gp_rel(D_1AE350)(gp)').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
 void func_003460E0(void *obj) {
-    GuiBuildScreenDesc((u8 *)obj, D_1AA890, D_1AE350, D_1AE354,
-                       D_1AE358, D_1AE360, D_1AE368, D_1AE370, D_1AE378, 3);
+    GuiScreenDesc d;
+    u8 *o = (u8 *)obj;
+    s32 enable;
+    enable = 1;
+    d.objCfg4B4 = *(s32 *)(o + 0x4B4);
+    d.typeActive = (*(s32 *)(o + 0x4B8) == 3);
+    d.objCfg4AC = *(s32 *)(o + 0x4AC);
+    d.objCfg4B0 = *(s32 *)(o + 0x4B0);
+    d.layout4 = D_1AE378;
+    d.cfg0 = D_1AE350;
+    d.cfg1 = D_1AE354;
+    d.label = D_1AA890;
+    d.child220 = o + 0x220;
+    d.child130 = o + 0x130;
+    d.child17C = o + 0x17C;
+    d.child278 = o + 0x278;
+    d.objCfg4A0 = *(s32 *)(o + 0x4A0);
+    d.layout3 = D_1AE370;
+    d.layout2 = D_1AE368;
+    d.layout1 = D_1AE360;
+    d.layout0 = D_1AE358;
+    d.enable = enable;
+    d._z40 = 0;
+    d._z38 = 0;
+    d._z2C = 0;
+    d._z34 = 0;
+    d._z50 = 0;
+    func_003380B8(&d);
 }
 #endif
 
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003461D0);
+/* Screen type 0 (label table D_1AA830, layout block D_1AE380..D_1AE3A8). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_003461D0)
+S136OS_SLOT(func_003461D0);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_003461D0, unit objdiff): 25.05%,
-   57/59 insns differ. Residual: UNKNOWN-addiu (first differing insn: 'addiu sp, sp, -0x90' vs 'lw a2, %gp_rel(D_1AE380)(gp)').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
 void func_003461D0(void *obj) {
-    GuiBuildScreenDesc((u8 *)obj, D_1AA830, D_1AE380, D_1AE384,
-                       D_1AE388, D_1AE390, D_1AE398, D_1AE3A0, D_1AE3A8, 0);
+    GuiScreenDesc d;
+    u8 *o = (u8 *)obj;
+    s32 enable;
+    enable = 1;
+    d.objCfg4B4 = *(s32 *)(o + 0x4B4);
+    d.typeActive = (*(s32 *)(o + 0x4B8) == 0);
+    d.objCfg4AC = *(s32 *)(o + 0x4AC);
+    d.objCfg4B0 = *(s32 *)(o + 0x4B0);
+    d.layout4 = D_1AE3A8;
+    d.cfg0 = D_1AE380;
+    d.cfg1 = D_1AE384;
+    d.label = D_1AA830;
+    d.child220 = o + 0x220;
+    d.child130 = o + 0x130;
+    d.child17C = o + 0x17C;
+    d.child278 = o + 0x278;
+    d.objCfg4A0 = *(s32 *)(o + 0x4A0);
+    d.layout3 = D_1AE3A0;
+    d.layout2 = D_1AE398;
+    d.layout1 = D_1AE390;
+    d.layout0 = D_1AE388;
+    d.enable = enable;
+    d._z40 = 0;
+    d._z38 = 0;
+    d._z2C = 0;
+    d._z34 = 0;
+    d._z50 = 0;
+    func_003380B8(&d);
 }
 #endif
 
@@ -10764,10 +10845,10 @@ extern u8 D_1AA7F8[], D_1AA8B8[];
 extern s32 D_1AE458, D_1AE45C; extern u8 D_1AE460[8], D_1AE468[8], D_1AE470[8], D_1AE478[8], D_1AE480[8];
 extern s32 D_1AE488, D_1AE48C; extern u8 D_1AE490[8], D_1AE498[8], D_1AE4A0[8], D_1AE4A8[8], D_1AE4B0[8];
 
-/* task #1522: same as GuiBuildScreenDesc above: native-only, so on EE
- * func_00347348/450's #else bodies call an undefined symbol. With it visible as a
- * static inline on EE they measured 41/66 and 37/64 words differ (register
- * allocation). */
+/* task #1522: native-only, so on EE func_00347348/450's #else bodies call an
+ * undefined symbol. With it visible as a static inline on EE they measured 41/66
+ * and 37/64 words differ (register allocation). (The family-1 four above closed
+ * once written out without a helper, in a measured statement order, task #1895.) */
 #ifdef TARGET_NATIVE
 static void GuiBuildScreenDesc2(u8 *obj, void *label, s32 cfg0, s32 cfg1,
                                 void *l0, void *l1, void *l2, void *l3, void *l4,
