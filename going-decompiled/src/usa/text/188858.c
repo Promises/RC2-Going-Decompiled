@@ -2611,10 +2611,9 @@ void func_0028AB70(s32 event) {
  * GUARD (task #1269): on EE this C is the image's body, compiled alone by SN
  * 2.95.3 v1.36 -fopt-stack (tools/ee/s136os_functions.txt) and spliced over the
  * S136OS_SLOT line by tools/ee/s136os_splice.sh. On native it is plain C. */
-#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0028ABC0)
-S136OS_SLOT(func_0028ABC0);
-#else
 #ifndef TARGET_NATIVE
+/* func_0028ABC0's count/head aliases (ADDRESSING-MODEL DEVICE, see above).
+ * At file scope so the spliced unit carries the equates too. */
 __asm__(".extern g_subtitleRingCount, 16\n\tg_subtitleRingCount = g_pActiveTextTable + 0x26");
 extern u8 g_subtitleRingCount;
 __asm__(".extern g_subtitleRingHead, 16\n\tg_subtitleRingHead = g_pActiveTextTable + 0x27");
@@ -2623,6 +2622,9 @@ extern u8 g_subtitleRingHead;
 #define g_subtitleRingCount (((u8 *)&g_pActiveTextTable)[0x26])
 #define g_subtitleRingHead  (((u8 *)&g_pActiveTextTable)[0x27])
 #endif
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0028ABC0)
+S136OS_SLOT(func_0028ABC0);
+#else
 /* The subtitle request ring, viewed over the data block at &g_pActiveTextTable. */
 typedef struct {
     u8  _pad0[0x8];
