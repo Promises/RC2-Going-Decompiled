@@ -475,7 +475,45 @@ void func_00124780(void) {
     }
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00124818);
+extern s32 D_00136394;  /* libcdvd initialised (non-zero once set up) */
+/* libcdvd's pending end-callback state (-1 = none). Stored by func_00124630
+ * (the RPC end-callback, interrupt context, which re-reads it right after its
+ * own store), func_001253A8, func_00125620 and func_00124818 (ROM writer census
+ * over asm/usa). `volatile` here is a measured codegen device (RULING #8404):
+ * without it cc1 sinks the -1 store into the func_0011AC40 call's delay slot,
+ * where the ROM stores it before loading the call's argument. */
+extern volatile s32 D_001363D4;
+extern void func_0011AC40(s32 sema);  /* syscall 0x42 SignalSema */
+extern void func_0011CBC0(s32 index);
+
+/**
+ * libcdvd semaphore teardown. If the library was set up (D_00136394), cancel
+ * any pending end-callback state (D_001363D4 = -1) and signal the completion
+ * semaphore D_001363A0 so a waiter is released; then delete libcdvd's three
+ * semaphores (D_001363A8, D_001363AC, D_001363A0; func_0011AC30 = DeleteSema)
+ * and, with interrupts disabled (func_0011F5E0), clear the key word of entry
+ * 0x80000012 (func_0011CBC0; a negative index selects the D_0013CF64 table),
+ * restoring interrupts (func_0011F628) only if they were on.
+ *
+ * Needs func_0011AC30 declared value-returning, as the SDK declares
+ * DeleteSema: with it `void`, cc1 frees $v0 and takes `lui $2` where the ROM
+ * has `lui $3` for %hi(D_001363AC) (2/37 words, NOTE #9755).
+ */
+void func_00124818(void) {
+    s32 wasEnabled;
+    if (D_00136394 != 0) {
+        D_001363D4 = -1;
+        func_0011AC40(D_001363A0);
+    }
+    func_0011AC30(D_001363A8);
+    func_0011AC30(D_001363AC);
+    func_0011AC30(D_001363A0);
+    wasEnabled = func_0011F5E0();
+    func_0011CBC0((s32)0x80000012);
+    if (wasEnabled != 0) {
+        func_0011F628();
+    }
+}
 
 /* func_001248B0: if the callback D_00141844 is installed and the suppression
  * flag D_001363A4 is clear, invoke the callback with the parameter D_00141848.
