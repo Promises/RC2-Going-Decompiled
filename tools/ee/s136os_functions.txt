@@ -581,3 +581,4 @@ usa text/1D54C0 func_002D5D10
 usa text/1D54C0 AllocMenuWorkBuffer
 usa text/198FA0 DeserializeSaveSections
 usa text/178E88 DrawTexturedQuad2d
+usa text/250080 func_00351910

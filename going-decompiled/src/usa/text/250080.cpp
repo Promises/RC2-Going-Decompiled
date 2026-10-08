@@ -275,18 +275,20 @@ s32 FmvStreamStartDma(u8 *stream);         /* ring init, defined below (fwd for 
 #endif
 
 /* The IPU_TO bitstream sub-object embedded at FmvStream + 0x48: the fields the
- * matched bodies (FmvBitstreamObjInit, func_003518B8) touch. The full layout
- * as far as it is known is described at func_00351910. */
+ * matched bodies (FmvBitstreamObjInit, func_003518B8, func_00351910) touch.
+ * The ring is ringSize blocks of 0x800 bytes at srcBase, one DMA source tag per
+ * block in the tag ring at tagWord's address. */
 typedef struct FmvBitstreamObj {
     /* 0x00 */ u32 srcBase;      /* physical base of the macroblock buffer */
     /* 0x04 */ u32 tagWord;      /* "next" DMA tag to the source-tag ring */
     /* 0x08 */ s32 ringSize;     /* ring blocks (0x800 bytes each) */
-    /* 0x0C */ u8 pad0C[0x8];
+    /* 0x0C */ s32 head;         /* oldest block the channel has not consumed */
+    /* 0x10 */ s32 queued;       /* blocks tagged for the channel and not yet consumed */
     /* 0x14 */ s32 pendingBytes; /* bytes fed and not yet tagged (/0x800 at func_00351910) */
     /* 0x18 */ u32 ringBytes;    /* ringSize << 11 */
     /* 0x1C */ u8 pad1C[0x24];
     /* 0x40 */ s32 sema;         /* decode semaphore id */
-    /* 0x44 */ u8 pad44[0x4];
+    /* 0x44 */ s32 armed;        /* 1 while the ring is live (FmvStreamStartDma) */
     /* 0x48 */ s64 totalBytes;   /* bytes fed since init */
     /* 0x50 */ s32 slotBase;
     /* 0x54 */ s32 slotCount;
@@ -1511,120 +1513,131 @@ s32 func_003518B8(void *stream, s32 n) {
 }
 #endif
 
-/* func_00351910: advance the IPU_TO (DMAC ch4) DMA source-tag RING by the
- * macroblocks the channel already consumed, re-emit the freshly-freed tags, and
- * re-kick the channel. Acquires the stream sema (+0x40) — if the "armed" flag
- * (+0x44) is clear the transfer was torn down, so it reports the FMV error
- * (D_1AE800) and returns 0. Otherwise it suspends ch4 (func_00351550(5)),
- * snapshots the channel CHCR/MADR, and translates MADR into a ring position via
- * func_00351498. The object is the IPU_TO bitstream sub-object (raw offsets, as
- * in the siblings):
- *   +0x0  srcBase       physical base address of the macroblock buffer
- *   +0x4  tagBase       physical base of the source-tag ring (0x10-byte tags)
- *   +0x8  ringSize (N)  number of macroblock tags in the ring
- *   +0xC  head          ring index of the oldest still-outstanding tag
- *   +0x10 outstanding   count of tags the DMAC still owns
- *   +0x14 ptsAccum      pts accumulator (macroblocks-worth, granularity 0x800)
- *   +0x40 sema          decode semaphore id
- *   +0x44 armed         non-zero while the channel is live
- * The consumed count is derived from how far MADR advanced: sectorDelta =
- * func_00351498(obj, madr); the number of whole macroblocks consumed rolls
- * `head` forward and `outstanding` down (mod N ring math). ptsAccum/0x800 gives
- * how many new tags to (re)emit; each is rebuilt via func_003515C0 with qwc 3
- * (0x80-id source tag), the final tag of the batch terminated with qwc 0. If any
- * tag was emitted, ch4's CHCR is restarted (patched to 0x30000000 | 0x100 =
- * chained transfer, dir=to-memory-off, start). Returns 1. Op-for-op faithful to
- * the frozen .s (all divides signed `div`; the beql break-0,7 guards are the
- * compiler's div-by-zero traps for a possibly-zero divisor -> plain % here). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00351910);
+/**
+ * func_00351910: top up the IPU_TO (DMAC ch4) source-tag ring with the bytes fed
+ * since the last call, and restart the channel.
+ * Under the stream semaphore: if the ring is not armed (+0x44, set by
+ * FmvStreamStartDma) it reports D_1AE800 through func_003504C8 and returns 0.
+ * Otherwise it suspends ch4 (func_00351550(5)), snapshots CHCR and MADR, and
+ * converts MADR to a ring block with func_00351498. Every block between the old
+ * head and that one has been consumed: head moves forward and queued drops by
+ * that count. pendingBytes / 0x800 whole blocks (nTags) are then tagged, from
+ * tail = head + queued onward. Before them, the last block already queued
+ * (tail - 1) is re-tagged as REF (id 3), so the old chain end now links on into
+ * the new tags. The new tags are REF except the last, which is REFE (id 0) and
+ * ends the chain; each moves 0x80 qwords (one block). func_003515C0's third
+ * argument is the tag ID and its fourth the QWC (the ID lands at bit 28). queued
+ * grows by nTags. If anything is queued, ch4 is restarted with CHCR | 0x100
+ * (STR). When tags were added, CHCR's top nibble (the TAG field of the last tag
+ * read) is first set to 3, so the restart sees a REF tag, not the old REFE.
+ * Ring arithmetic is signed `%`. The ROM's beql/break 0,7 pairs are cc1's
+ * divide-by-zero traps, not code.
+ * @param dmaq  the IPU_TO bitstream sub-object (FmvStream + 0x48)
+ * @return 1, or 0 when the ring is not armed
+ *
+ * MATCHED on the s136os arm (task #1950; SN 2.95.3 v1.36 -fopt-stack, FACT
+ * #8810), no devices. The old body screened 88/127 (FACT #9920). The cause was
+ * not a register wall: five phrasings set cc1's allocation and schedule. Each
+ * was measured by undoing it alone on a solo s136 compile (relocated fields
+ * masked):
+ *  - the loop walks its own cursor `block`, copied from `start`. With the start
+ *    index computed straight into the loop variable, global-alloc ranks it
+ *    below i and dmaq and colours them $18/$16/$17, against the ROM's
+ *    $16/$17/$18 (89/127, 129 built). The copy gives the loop cursor a short
+ *    live range, so it ranks first, and `start` takes its register by
+ *    preference (the ROM's `mfhi $16`).
+ *  - the loop is a plain `for` with no enclosing `if (nTags > 0)`. With the
+ *    guard, cc1 threads the prime block's test past the loop and adds a second
+ *    entry test (53/127, 129 built).
+ *  - the new head is computed before queued: 16/127 the other way round
+ *    (local-alloc swaps their registers, and tail moves out of $8).
+ *  - the prime index adds `last = ringSize - 1` as a local: inline, cc1
+ *    reassociates it as (tail + ringSize) - 1 (4/127).
+ *  - `emitted = 1` follows the prime call: before it, `li $23,1` issues ahead
+ *    of the argument constants (3/127).
+ *  - the ring and source bases are read as s32: the struct's u32 fields would
+ *    zero-extend each u64 address argument with dsll32/dsrl32 (64/127, 131
+ *    built).
+ * GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+ * (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00351910)
+S136OS_SLOT(func_00351910);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
-extern s32 func_0011AC60(s32 sema);
-extern s32 func_0011AC40(s32 sema);
+extern s32 func_0011AC60(s32 sema);    /* WaitSema (acquire) */
+extern s32 func_0011AC40(s32 sema);    /* SignalSema (release) */
 /* (end of this body's declarations) */
-/* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 78.06% / engine96 70.31%. Residual: PACKED-SAVE (9 callee saves) + 72 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
-/* SCREEN (task #1395, s136 solo, relocated fields masked; not match evidence):
- * 121/127 edit 80 -> 88/127 edit 42 from three changes. The pts quotient is
- * written as the division (the ROM carries cc1's slt/movn expansion); `emitted`
- * is initialised at its declaration (the ROM zeroes $23 in the prologue, before
- * the WaitSema); and the tag address is passed sign-extended (no (u32) cast; the
- * ROM has no dsll32/dsrl32 zero-extension). Residual REGALLOC: the ROM colours
- * emitIdx/i/obj as $16/$17/$18, cc1 here as $18/$16/$17. Neutral spellings
- * tried: `outstanding + (ringSize - 1)`, no outer `if (nTags > 0)`, obj for dmaq. */
 s32 func_00351910(void *dmaq) {
     extern char D_1AE800[];   /* FMV "IPU_TO ring not armed" error string */
-    s32 *obj = (s32 *)dmaq;
-    s32 ringSize;         /* $7  = obj[2] (N) */
-    s32 sectorDelta;      /* $2  = func_00351498(obj, madr) */
-    s32 head;             /* running ring head (obj[3]) */
-    s32 outstanding;      /* running outstanding count (obj[4]) */
-    s32 emitIdx;          /* $16 = ring index to (re)emit at */
-    s32 nTags;            /* $19 = ptsAccum / 0x800, tags to emit */
-    s32 ptsAccum;         /* $1  = obj[5] before wrap */
-    s32 ptsQuot;          /* $9  = rounded-toward-zero ptsAccum / 0x800 */
-    u32 chcr;             /* $21 = ch4 CHCR snapshot */
-    u32 madr;             /* $5  = ch4 MADR snapshot */
-    s32 emitted = 0;      /* $23 = flag: at least one tag emitted */
-    s32 i;                /* $17 = emit-loop counter */
+    FmvBitstreamObj *o = (FmvBitstreamObj *)dmaq;
+    s32 ringSize;
+    s32 consumed;     /* blocks the channel finished since the last call */
+    s32 queued;
+    s32 head;
+    s32 tail;         /* first block not yet tagged: head + queued */
+    s32 start;        /* tail, wrapped into the ring */
+    s32 block;        /* loop cursor: ring block being tagged */
+    s32 nTags;        /* whole blocks of pendingBytes to tag */
+    s32 pending;
+    u32 chcr;         /* ch4 CHCR snapshot */
+    u32 madr;         /* ch4 MADR snapshot */
+    s32 emitted = 0;
+    s32 i;
 
-    func_0011AC60(obj[0x10]);                 /* WaitSema (acquire) */
-    if (obj[0x11] == 0) {                      /* +0x44 armed clear -> torn down */
+    func_0011AC60(o->sema);                    /* WaitSema */
+    if (o->armed == 0) {
         func_003504C8(D_1AE800);
         return 0;
     }
 
-    func_00351550(5);                          /* suspend ch4 (IPU_TO) */
-    chcr = *(volatile u32 *)0x1000B400;        /* ch4 CHCR */
-    madr = *(volatile u32 *)0x1000B410;        /* ch4 MADR */
+    func_00351550(5);                          /* suspend ch4 */
+    chcr = *(volatile u32 *)0x1000B400;        /* D4_CHCR */
+    madr = *(volatile u32 *)0x1000B410;        /* D4_MADR */
 
-    sectorDelta = func_00351498((u32 *)dmaq, madr);
-    ringSize = obj[2];                         /* N */
+    consumed = func_00351498((u32 *)dmaq, madr);
+    ringSize = o->ringSize;
+    consumed = (consumed + ringSize - o->head) % ringSize;
+    head = (o->head + consumed) % ringSize;
+    queued = o->queued - consumed;
+    o->queued = queued;
+    o->head = head;
+    tail = head + queued;
+    start = tail % ringSize;
 
-    /* consumed macroblocks -> roll head forward, outstanding down */
-    sectorDelta = ((sectorDelta + ringSize) - obj[3]) % ringSize;
-    outstanding = obj[4] - sectorDelta;
-    head = (obj[3] + sectorDelta) % ringSize;
-    obj[4] = outstanding;
-    outstanding = head + outstanding;          /* head + outstanding */
-    obj[3] = head;
-    emitIdx = outstanding % ringSize;
-
-    /* ptsAccum / 0x800, rounded toward zero */
-    ptsAccum = obj[5];
-    ptsQuot = ptsAccum / 0x800;
-    nTags = ptsQuot;
-    obj[5] = ptsAccum - ptsQuot * 0x800;       /* keep the remainder */
+    pending = o->pendingBytes;
+    nTags = pending / 0x800;
+    o->pendingBytes = pending - nTags * 0x800; /* keep the partial block */
 
     if (nTags > 0) {
-        /* prime tag: the slot just behind the batch (outstanding + N - 1) */
-        s32 idx = (outstanding + ringSize - 1) % ringSize;
+        /* re-tag the old chain end as REF so it links on into the new tags */
+        s32 last = ringSize - 1;
+        s32 idx = (tail + last) % ringSize;
+        func_003515C0((u64 *)((s32)o->tagWord + idx * 0x10),
+                      (u64)((s32)o->srcBase + idx * 0x800), 3, 0x80);
         emitted = 1;
-        func_003515C0((u64 *)(obj[1] + idx * 0x10),
-                      (u64)(obj[0] + idx * 0x800), 3, 0x80);
     }
 
-    if (nTags > 0) {
-        for (i = 0; i < nTags; i++) {
-            /* last tag of the batch terminates the chain (qwc 0) */
-            u64 qwc = (i != nTags - 1) ? 3 : 0;
-            func_003515C0((u64 *)(obj[1] + emitIdx * 0x10),
-                          (u64)(obj[0] + emitIdx * 0x800), qwc, 0x80);
-            emitIdx = (emitIdx + 1) % obj[2];
-        }
+    block = start;
+    for (i = 0; i < nTags; i++) {
+        u64 id = (i != nTags - 1) ? 3 : 0;     /* REF, the last one REFE */
+        func_003515C0((u64 *)((s32)o->tagWord + block * 0x10),
+                      (u64)((s32)o->srcBase + block * 0x800), id, 0x80);
+        block = (block + 1) % o->ringSize;
     }
 
-    outstanding = obj[4];
-    obj[4] = outstanding + nTags;
-    if (outstanding + nTags != 0) {
+    o->queued = o->queued + nTags;
+    if (o->queued != 0) {
         if (emitted) {
-            chcr = (chcr & 0x0FFFFFFF) | 0x30000000;
+            chcr = (chcr & 0x0FFFFFFF) | 0x30000000;   /* TAG.ID = REF */
         }
-        func_00351550(chcr | 0x100);           /* restart ch4 */
+        func_00351550(chcr | 0x100);           /* STR: restart ch4 */
     }
 
-    func_0011AC40(obj[0x10]);                   /* SignalSema (release) */
+    func_0011AC40(o->sema);                    /* SignalSema */
     return 1;
 }
 #endif
