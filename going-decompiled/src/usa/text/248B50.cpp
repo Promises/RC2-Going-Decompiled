@@ -116,6 +116,14 @@ extern u8 g_bPlayerMode;
 /* GUI instance root (g_guiInstance): the glyph-font owner; widget glyph setters
  * index it at +0x8710 to reach the glyph atlas. */
 extern u8 *g_guiInstance;
+#ifndef TARGET_NATIVE
+/* ADDRESSING-MODEL DEVICE (RULING #8620 class; directive only, emits nothing):
+ * every one of this unit's 22 ROM reads of g_guiInstance is the absolute
+ * `lui $5,%hi / lw $5,%lo` pair, never %gp_rel. cc1 sizes the pointer 4, which
+ * at -G8 would make each read gp-relative, so the symbol is declared 16 ahead
+ * of every use (as 1CA080.cpp does). */
+__asm__(".extern g_guiInstance, 16");
+#endif
 
 #ifdef TARGET_NATIVE
 /* forward decls for the matched-but-defined-later helpers the #else bodies call,
@@ -192,22 +200,25 @@ void *func_00348BD0(void *w) {
 }
 #endif
 
-/* func_00348BF8: build/init a GUI text element — alloc its backing object via
- * GuiPoolAlloc + GuiPlacementNew, run GuiTextElementInit, then seed the colour/
- * style fields (+0xAC..+0xCC). WALL (matching arm): 3 callee saves ($16,$17,$31)
- * — the pinned cc1's 0x20 frame with 16-byte save slots diverges from the
- * original's packed 0x10/8-byte layout; matching arm stays asm. The #else is the
- * functional model. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_00348BF8);
+/* func_00348BF8: GuiMenuList init — reset the list header (include/gui.h's
+ * GuiMenuList layout) and build its text element.
+ *   w:    the list; pool: GUI pool, stored at +0x58 (may be NULL).
+ * Clears the selected row (+0x60) and row count (+0xC0); with a pool, allocates
+ * the 16-byte origin vector (GuiPoolAlloc + GuiPlacementNew), zeroes it and
+ * stores it at +0x5C. Then inits the embedded text element from the D_1AE568
+ * template and seeds the colours (+0xAC selected, +0xB0 normal, +0xB4
+ * disabled), row Y step 0x20 (+0xBC), and clears +0x54, the row Y base
+ * (+0xB8) and the two flags (+0xC4, +0xC8); the underline row (+0xCC) is -1.
+ * Source order is the ROM's store order under SN 1.36's last-store-first issue
+ * (FACT #9254): the vector's +0x0 and the -1 store are written last, which
+ * puts them first.
+ * GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+ * (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in tools/ee/s136os_functions.txt)
+ * and spliced over S136OS_SLOT by tools/ee/s136os_splice.sh (task #1834). On
+ * native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00348BF8)
+S136OS_SLOT(func_00348BF8);
 #else
-/* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
- * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
- * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
- * cc1 2.96-ee-001003-1): sdk29 92.60% / engine96 67.17%.
- * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 31/48 words differ;
- * frozen-.s census: 3 callee GPR saves, 0 fp saves.
- * Residual: PACKED-SAVE (3 callee GPR saves) + REGALLOC: 8 frame/save-slot words incl. save ORDER (s0/s1 swapped), plus s0/s1-vs-a0/a1 colouring. */
 extern void *GuiPoolAlloc(void *pool);
 extern void *GuiPlacementNew(s32 size, void *at);
 extern void GuiTextElementInit(void *element, void *tmpl, void *pool);
@@ -223,13 +234,12 @@ void func_00348BF8(void *w, void *pool) {
         obj = GuiPoolAlloc(pool);
         obj = GuiPlacementNew(0x10, obj);
         *(void **)(el + 0x5C) = obj;
-        *(s32 *)((char *)obj + 0x0) = 0;
         *(s32 *)((char *)obj + 0x4) = 0;
         *(s32 *)((char *)obj + 0x8) = 0;
         *(s32 *)((char *)obj + 0xC) = 0;
+        *(s32 *)((char *)obj + 0x0) = 0;
     }
     GuiTextElementInit(el, D_1AE568, pool);
-    *(s32 *)(el + 0xCC) = -1;
     *(s32 *)(el + 0xAC) = 0x70FFFEED;
     *(s32 *)(el + 0xB0) = 0x80F0F0F0;
     *(s32 *)(el + 0xB4) = 0x80808080;
@@ -238,6 +248,7 @@ void func_00348BF8(void *w, void *pool) {
     *(s32 *)(el + 0xB8) = 0;
     *(s32 *)(el + 0xC4) = 0;
     *(s32 *)(el + 0xC8) = 0;
+    *(s32 *)(el + 0xCC) = -1;
 }
 #endif
 
@@ -635,28 +646,27 @@ void SetPopupLayoutMode(GuiWidget *w, s32 mode) {
  * body, then four border pieces (src+0x8/+0x10/+0x20/+0x18) onto the four corner
  * sub-elements (+0x130/+0x4C/+0x98/+0xE4). Each glyph is looked up in the GUI
  * instance's atlas (g_guiInstance + 0x8710).
- * WALL: 3 callee saves ($16,$17,$18) — 0x20-vs-packed frame divergence. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", SetPopupTitleText);
+ *   w: the popup; src: glyph-id record.
+ * The ROM re-reads g_guiInstance (absolute, see the .extern device at its
+ * declaration) for every call and keeps only 0x8710 in a callee-saved
+ * register, so the atlas is formed per call, not once.
+ * GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+ * (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in tools/ee/s136os_functions.txt)
+ * and spliced over S136OS_SLOT by tools/ee/s136os_splice.sh (task #1834). On
+ * native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_SetPopupTitleText)
+S136OS_SLOT(SetPopupTitleText);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern void GuiElementSetGlyph(void *e, u8 *atlas, s32 code);
 /* (end of this body's declarations) */
-/* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
- * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
- * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
- * cc1 2.96-ee-001003-1): sdk29 38.14% / engine96 48.98%.
- * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 32/34 words differ;
- * frozen-.s census: 4 callee GPR saves, 0 fp saves.
- * Residual: PACKED-SAVE (4 callee GPR saves) — 4 of the 32 differing words are frame/save-slot; remainder REGALLOC/SCHED, not iterated. */
 void SetPopupTitleText(GuiWidget *w, s32 *src) {
-    u8 *atlas = g_guiInstance + 0x8710;
-    GuiElementSetGlyph(w, atlas, src[0]);            /* src+0x0  */
-    GuiElementSetGlyph((char *)w + 0x130, atlas, src[2]); /* src+0x8  */
-    GuiElementSetGlyph((char *)w + 0x4C, atlas, src[4]);  /* src+0x10 */
-    GuiElementSetGlyph((char *)w + 0x98, atlas, src[8]);  /* src+0x20 */
-    GuiElementSetGlyph((char *)w + 0xE4, atlas, src[6]);  /* src+0x18 */
+    GuiElementSetGlyph(w, g_guiInstance + 0x8710, src[0]);
+    GuiElementSetGlyph((char *)w + 0x130, g_guiInstance + 0x8710, src[2]);
+    GuiElementSetGlyph((char *)w + 0x4C, g_guiInstance + 0x8710, src[4]);
+    GuiElementSetGlyph((char *)w + 0x98, g_guiInstance + 0x8710, src[8]);
+    GuiElementSetGlyph((char *)w + 0xE4, g_guiInstance + 0x8710, src[6]);
 }
 #endif
 
