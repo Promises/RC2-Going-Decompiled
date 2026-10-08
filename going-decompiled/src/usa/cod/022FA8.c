@@ -518,11 +518,34 @@ u32 func_00124AF0(void) {
     return value;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00124B88);
-
 extern void *Kprintf(const char *format, ...);
 extern s32 sceSifCheckStatRpc(s32 *rpc);
 extern s32 D_00136390;     /* libcdvd debug level */
+extern char D_0013B208[];  /* "N cmd wait\n" */
+
+/**
+ * sceCdSync: libcdvd N-command sync. With mode 0, print "N cmd wait" when the
+ * debug level D_00136390 is positive, then wait until both the CD busy flag
+ * D_001363B0 is clear and the N-command RPC client D_00137550 is idle
+ * (sceSifCheckStatRpc), calling func_00124568(0x3C) between polls; return 0.
+ * With any other mode, return 1 if either is still busy, else 0, without
+ * waiting. The busy flag is re-read on every poll (D_001363B0 is volatile).
+ */
+s32 func_00124B88(s32 mode) {
+    if (mode == 0) {
+        if (D_00136390 > 0) {
+            Kprintf(D_0013B208);
+        }
+        while (D_001363B0 != 0 || sceSifCheckStatRpc(D_00137550) != 0) {
+            func_00124568(0x3C);
+        }
+        return 0;
+    }
+    if (D_001363B0 != 0 || sceSifCheckStatRpc(D_00137550) != 0) {
+        return 1;
+    }
+    return 0;
+}
 extern char D_0013B218[];  /* "S cmd wait\n" */
 extern s32 D_00137DC8[];   /* RPC client data of the S-command channel */
 

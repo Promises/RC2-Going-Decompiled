@@ -6,8 +6,8 @@
  * StartFileLoadPumpingVoice, StopDialogVoice) to the primitives their real C
  * actually reaches below the 989snd EE layer. Task #1489 derived this set by
  * executing those eight bodies natively and recording which undefined symbol
- * each one trapped on. These three are the trapping primitives. All are
- * raw INCLUDE_ASM with no C anywhere in the tree, and none is game logic:
+ * each one trapped on. Two trapping primitives remain stubbed here. Both are
+ * raw INCLUDE_ASM with no C anywhere in the tree, and neither is game logic:
  *
  *   func_0011B3D0  SyncDCache(start, end): handwritten. Masks interrupts via
  *                  COP0 Status, aligns the range to 64 bytes and runs
@@ -20,13 +20,9 @@
  *                  status word D_001A7100. Host-coherent: no-op. (0321A0.c's
  *                  comment calls it "poll IOP load status into dst"; it moves
  *                  no data itself, the IOP's DMA does.)
- *   func_00124B88  sceCdSync(mode), libcdvd: mode != 0 returns 1 while the CD
- *                  busy flag D_001363B0 is set or the CD RPC client is busy,
- *                  else 0; mode 0 blocks until both clear. Headless has no CD
- *                  command in flight, so it returns 0 (idle). That is also
- *                  what the ROM body returns on a zero arena. Reached by
- *                  snd_CheckLoadInProgress and func_001245D0 on their
- *                  g_sndIopReady == 0 fallback paths.
+ * The third, func_00124B88 (sceCdSync), was retired by task #1839: it is
+ * byte-exact C in cod/022FA8.c, which the native build compiles, so its real
+ * body now runs here.
  *
  * NOT stubbed, deliberately:
  *   - snd_QueueCommandToRing, snd_SendCommandSync, sceSifCheckStatRpc and
@@ -44,6 +40,5 @@
 
 void func_0011B3D0(void) {}                /* SyncDCache - host is coherent */
 void func_0011B500(void) {}                /* InvalidDCache - host is coherent */
-s32  func_00124B88(void) { return 0; }     /* sceCdSync - 0 = no CD command in flight */
 
 #endif /* TARGET_NATIVE */

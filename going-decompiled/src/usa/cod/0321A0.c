@@ -960,7 +960,9 @@ s32 CdStartRead(s32 arg0, s32 arg1, s32 arg2, void *rmode) {
  * callee-saved regs or gp-relativises the small declarations. Also hits the
  * multi-callee-save save-slot wall (see snd_SetupDmaTransfer) (near-miss).
  * Portable #else body. */
-extern s32  func_00124B88(void);              /* direct-RPC load-status fallback */
+/* sceCdSync(mode), defined in cod/022FA8.c. The ROM passes this function's own
+ * noWait straight through ($4 is untouched before the jal at 0x13359C). */
+extern s32  func_00124B88(s32 mode);          /* direct-RPC load-status fallback */
 extern void func_0011B500(void *dst, void *src); /* poll IOP load status into dst */
 extern s32  D_001A7100;  /* IOP-polled load status word (0 = done) */
 extern u8   D_001A713F;  /* poll-request scratch byte */
@@ -972,7 +974,7 @@ s32 snd_CheckLoadInProgress(s32 noWait) {
     s32 done;
 
     if (g_sndIopReady == 0) {
-        return func_00124B88(); /* IOP driver down -> direct RPC status */
+        return func_00124B88(noWait); /* IOP driver down -> direct RPC status */
     }
     func_0011B500(&D_001A7100, &D_001A713F);
     D_001A7498 = done = (D_001A7100 == 0);
