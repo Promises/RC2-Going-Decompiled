@@ -1282,9 +1282,10 @@ s32 func_003513F0(u8 *block) {
  * fixed retry mode {trycount=0x64, spindlctrl=1, datapattern=0}. When flag != 0
  * it returns 0 without advancing (query/prime mode); otherwise it advances the
  * LBN cursor by the sector count, waits (sceCdSync, func_00124B88(0)) and returns
- * byteLen. Matching arm stays asm (8-byte-packed saves s0..s4/ra); the #else is
- * the structure-exact model (the CD I/O itself is the deferred FMV native
- * backend, but the call structure + cursor advance are exact). */
+ * byteLen. The matching arm was left asm behind its 8-byte-packed saves
+ * (s0..s4/ra), a cc1 2.9 property; byte-exact on the s136os arm since task #1387
+ * (GUARD below). On native the CD I/O itself is the deferred FMV backend, but
+ * the call structure + cursor advance are exact. */
 /* GUARD (task #1387): on EE the #else body below is the image's func_003513F8, compiled
  * alone by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
  * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by

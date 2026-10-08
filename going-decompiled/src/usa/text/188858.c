@@ -1535,6 +1535,13 @@ s32 GetSavePromptPending(void) {
     return g_nSavePromptPending;
 }
 
+/* func_002897B0: an empty function - the ROM body is `jr $ra; nop` (2 words,
+ * 0x2897B0). No params read, no return value. Its only caller in the ROM is
+ * func_002DC800 (text/1D54C0, jal at 0x2DC820), which passes a menu widget's
+ * rect as (x0, x1, y0, y1) in $a0..$a3 - so it was most likely a rect-draw or
+ * debug hook compiled out of the retail build. Purpose beyond "does nothing"
+ * not established. Declared there with the four-argument caller view; this
+ * definition takes none, which is ABI-safe because nothing is read. */
 void func_002897B0(void) {
 }
 

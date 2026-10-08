@@ -8405,10 +8405,11 @@ f32 SampleRainHeightmap(Vec4 *pos) {
  * spawns a SpawnRainSplashParticle whose brightness rises with camera distance.
  * Also reused overlay-side (0x32A588 water-sinking moby), so not weather-only.
  *
- * Matching build stays INCLUDE_ASM: the qword point copies + Vu0 subtract and the
- * gp/absolute-mixed globals are an engine-2.96 layout this C won't reproduce byte
- * for byte. The #else below is a faithful op-for-op transcription for the native
- * cmp/coverage harness. */
+ * This comment used to say the matching build stays INCLUDE_ASM, because the
+ * qword point copies + Vu0 subtract and the gp/absolute-mixed globals were a
+ * layout the cc1 2.9 / engine-2.96 arms did not reproduce byte for byte. That
+ * holds for those two arms only: byte-exact on the s136os arm since task #1559
+ * (see MATCHED below), where the C below is the image's body. */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 47.92%
    -> UNKNOWN-@0: ROM `addiu sp,sp,-96` vs `addiu sp,sp,-80` */
 /* MATCHED on the s136os arm (task #1559): byte-exact solo under SN 2.95.3 v1.36

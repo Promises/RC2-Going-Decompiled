@@ -371,8 +371,9 @@ extern s32 g_padButtonsPressed __attribute__((section(".data")));
 extern s32 g_padButtonsPressed;
 #endif
 /* (end of this body's declarations) */
-/* Structure-exact model (cmp-oracle blocked as noted; matching arm stays asm).
-   Drives the HUD sub-element at +0x5D8: any d-pad direction restarts the tween
+/* Structure-exact model; it was written while the cmp-oracle was blocked and the
+   matching arm stayed asm, and it is now byte-exact on the s136os arm since task
+   #1387 (MATCHED above). Drives the HUD sub-element at +0x5D8: any d-pad direction restarts the tween
    counter, then a color-ramp tween handle is written into the element's color
    block, `alpha` into its primary vector, and visibility is set from `visible`. */
 void func_0034DAB0(GuiHudManager *mgr, s32 visible, f32 alpha) {

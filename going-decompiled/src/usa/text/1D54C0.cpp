@@ -314,7 +314,8 @@ extern MapPlanetRow D_25AD90[];
 /* --- Additional externs used by the bodies below ------------------------- */
 /* Per-screen draw helper (preceding asm band) keyed off the pressed buttons. */
 extern void func_0029D1D8(s32 buttons);
-/* Sprite/quad sub-rect submit (x0,x1,y0,y1). */
+/* Caller view of the (x0,x1,y0,y1) rect hook. The ROM body is empty (`jr $ra;
+ * nop`, text/188858.c's definition), so nothing is submitted. */
 extern void func_002897B0(s32 x0, s32 x1, s32 y0, s32 y1);
 /* UI/system sound trigger from the global sound-def pool. */
 extern void PlayGlobalSound(s32 id, s32 a, s32 b);
@@ -3299,8 +3300,9 @@ s32 func_002DC7D8(void) {
     return 0;
 }
 
-/* Submit the menu object's sub-rect (origin +0x18/+0x1C, size +0x20/+0x24) to
- * the 2D batch helper; always returns 2. */
+/* Pass the menu object's sub-rect (origin +0x18/+0x1C, size +0x20/+0x24) to
+ * func_002897B0, whose retail body is empty, so the call has no effect; always
+ * returns 2. */
 s32 func_002DC800(MenuWidget *obj) {
     s32 x = *(s32 *)((u8 *)obj + 0x18);
     s32 y = *(s32 *)((u8 *)obj + 0x1C);

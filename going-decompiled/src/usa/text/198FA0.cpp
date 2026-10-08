@@ -1007,15 +1007,17 @@ s32 func_00299980(void) {
  * func_00115AC0(dest, src=&g_saveDirTemplate, 0xD) string-formatter calls to
  * stamp the dir name into each full path.
  *
- * SEEDABLE but NOT YET MATCHED/oracle'd: the target buffers are .bss (all zero in
- * the ROM image), so the strings are assembled purely at runtime from cfg — a
- * faithful body is writable. The blocker is func_00115AC0's SEMANTICS: it is the
- * SDK string/path formatter (cod/015180 region, called (dst,src,0xD); its body is
- * a SIMD zero-byte scan, sprintf/strncpy/path-join family). Its per-function .s
- * exists (cod/015180/func_00115AC0.s) so it could be linked as a cmp shared callee
- * - but matching the C without first pinning its exact semantics would be a guess.
- * Left as asm pending that identity. The TARGET_NATIVE #else below is faithful
- * coverage — it calls func_00115AC0 by its traced (dst,src,len) signature. */
+ * The target buffers are .bss (all zero in the ROM image), so the strings are
+ * assembled purely at runtime from cfg. func_00115AC0 is the SDK's strncpy
+ * (symbol_addrs: strncpy = 0x00115AC0, CONFIRMED; the ROM's .s calls it as
+ * `jal strncpy`), called (dst, src, 0xD); the body below still spells it by its
+ * splat name.
+ * This comment used to say "SEEDABLE but NOT YET MATCHED ... Left as asm pending
+ * that identity", the blocker being the callee's then-unpinned semantics (the
+ * native-cmp oracle view, before the s136os arm existed). Both halves are
+ * resolved: the callee is strncpy, and the function is byte-exact on the s136os
+ * arm since task #1918 (on EE the C below is the image's body, spliced over
+ * S136OS_SLOT). */
 #if !defined(TARGET_NATIVE) && !defined(S136OS_BuildSaveGamePaths)
 S136OS_SLOT(BuildSaveGamePaths);
 #else
@@ -1028,7 +1030,7 @@ extern u8   D_1A79A8[];              /* save path buffer (+0x14 = a second buffe
 extern u8   g_saveIconSysPath[];
 extern u8   g_saveStaticIcoPath[];
 extern u8   g_saveFileFmt[];
-extern void func_00115AC0(void *dst, const void *src, s32 len); /* path-join/copy (UNCONFIRMED) */
+extern void func_00115AC0(void *dst, const void *src, s32 len); /* strncpy (symbol_addrs 0x00115AC0, CONFIRMED) */
 
 void BuildSaveGamePaths(void *rec) {
     u8 *r = (u8 *)rec;
@@ -1065,7 +1067,9 @@ void BuildSaveGamePaths(void *rec) {
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_00299B00);
 
 /* func_00299B18 / func_00299BF8: save-buffer setup helpers (multi callee-save).
- * 8-byte-packed callee-save frame wall, see func_0029C678. Left as asm. */
+ * They were left as asm behind the 8-byte-packed callee-save frame wall (see
+ * func_0029C678) - a cc1 2.9 property. Both are now byte-exact on the s136os
+ * arm: func_00299B18 since task #1918, func_00299BF8 since task #1636. */
 /* forward decls: CalcSaveSectionsSize/DeserializeSaveSections are defined below;
  * the two section-table globals + the error string aren't declared elsewhere. */
 extern s32  CalcSaveSectionsSize(SaveSection *table);
@@ -3591,8 +3595,9 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029ECE0);
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029FDF8);
 
 /* SpawnMoby: allocates a moby from the spawn free-list (g_mobySpawnStart..
- * g_mobyTableEnd) and initialises it. Multi callee-save; 8-byte-packed
- * callee-save frame wall, see func_0029C678. Left as asm (matching). Scans slots
+ * g_mobyTableEnd) and initialises it. Multi callee-save; it was left as asm
+ * behind the 8-byte-packed callee-save frame wall (see func_0029C678), a cc1 2.9
+ * property, and is byte-exact on the s136os arm since task #1918. Scans slots
  * (stride 0x100) for the first free one — state (+0x20) >= 0xFE with an expired
  * reservation (+0xA0 <= g_gameTime) — inits it (InitMobyFromClass), binds+zeroes
  * its parallel 0x80-byte aux block (g_mobyAuxBlockBase[slot] at moby+0x68), and
