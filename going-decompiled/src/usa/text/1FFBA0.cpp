@@ -55,7 +55,7 @@ extern u8 g_nNanotechBonusHealTimer[]; /* 0x189FFC; +4 (0x18A000) written by S6 
 
 extern void Vec4ScaleVu0(Vec4f dst, f32 s, const Vec4f src);
 extern void AddFxDrawHookLate(void (*hook)(void), s32 arg);
-extern void RequestGameStateChange(s32 a, s32 b, s32 c, s32 d, s32 e);
+extern s32  RequestGameStateChange(s32 a, s32 b, s32 c, s32 d, s32 e);
 extern void StopDialogVoice(void);
 extern void BuildCameraProjection(void);
 extern void func_00283D10(Vec4f dst);  /* identity/clear quad (has #else body) */
@@ -70,7 +70,7 @@ extern void func_00300E70(void);
 extern void func_00300C08(void);
 /* weapon/dialog bookkeeping (trap-stubs in native; no-ops in backend_null.c). */
 extern void func_002888D8(s32 itemId);
-extern void func_00288F30(s32 itemId);
+extern s32  func_00288F30(s32 itemId);
 extern void func_002AE6C8(s32 itemId);
 
 /* gp_rel scratch globals (not yet in symbol_addrs; listed for arena regen). */

@@ -29,7 +29,7 @@ extern void AppendScreenClearPacket(s32 mode);
 extern void RenderFrame(void);
 extern void RenderMenuScreenWidgets(s32 which);
 extern void RecomputeScreenViewportFromGsContext(void);
-extern void TickCountdownTimer(void *arg);
+extern s32  TickCountdownTimer(void *arg);
 
 /* Per-camera-slot flag table base (0x1B7E30). func_00279EE8 passes the slot at
  * +0xF8 (0x1B7F28); modelled as a byte base so the offset stays absolute.

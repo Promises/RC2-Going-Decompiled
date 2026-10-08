@@ -1142,7 +1142,7 @@ void func_002895E0(void *queue);       /* cinematic-queue helper */
 void func_00126288(void *dest, s32 a, s32 b, s32 c, s32 d, s32 e, s32 f, s32 g); /* BuildGsImageUploadPacket */
 s32  func_00126DC0(void *handler);     /* install INTC-2 vblank-start handler; returns the previous one */
 void OnVblankInterrupt(void);
-void PopGameState(s32 a, s32 b);
+s32  PopGameState(s32 a, s32 b);
 void WaitFrameDmaFence(s32 mask);
 void KickGifImageUpload(void *packet, s32 dataAddr);
 void WaitGsPathsIdle(s32 a, s32 b);
@@ -2645,7 +2645,7 @@ extern s32   PlayMobySound(s32 soundIdx, s32 flags, void *owner);
 extern void  BuildVendorItemList(s32 arg);
 extern void  GiveInventoryItem(s32 itemId);
 extern void  func_002AE6C8(s32 itemId);        /* post-grant item hook (skipped for 0x1F/0x3D) */
-extern void  UpgradeWeaponToMax(s32 itemId);   /* apply a bought weapon upgrade */
+extern s32   UpgradeWeaponToMax(s32 itemId);   /* apply a bought weapon upgrade */
 extern void  func_0028AB70(s32 itemId);        /* refresh the granted item's UI state */
 extern void  func_0028C108(s32 handle, s32 arg); /* release a menu sound/anim handle */
 extern void  func_0029C4C0(s32 itemId, s32 flags);

@@ -76,7 +76,7 @@ extern s32  RequestGameStateChange(s32 stateId, s32 push, s32 argA, s32 argB, s3
 extern void RequestLevelExit(s32 destination, s32 commitSave);
 extern s32  StartFileLoad(s32 dest, s32 lbn, s32 sectors);
 extern void StopFileLoad(void);
-extern void UpdateLevelObjectiveStates(void);
+extern s32  UpdateLevelObjectiveStates(void);
 extern void func_00131A98(void *clock);
 extern void func_00132938(s32 flag);
 extern s32  func_0026F7D0(void);
@@ -1515,7 +1515,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D6E98);
  * original's li -1 / slt / movn), the divide path first with fade = 1.0 in the
  * else, and the asm barrier that keeps the jal + $ra frame. */
 extern s32  D_1AA460;                                          /* galactic-map fade step count */
-extern void ColorLerpPacked(s32 color1, s32 color2, f32 fade);   /* 0x2846E8 packed-RGBA colour lerp */
+extern u32  ColorLerpPacked(s32 color1, s32 color2, f32 fade);   /* 0x2846E8 packed-RGBA colour lerp */
 
 void SetGalacticMapFadeAlpha(s32 progress, s32 color1, s32 color2) {
     s32 clampedProgress = (progress > -1) ? progress : 0;
@@ -1603,7 +1603,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D8270);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
-extern void UpdateLevelObjectiveStates(void);
+extern s32  UpdateLevelObjectiveStates(void);
 extern s32 GatherActiveObjectives(s32 outIds, s32 outMask, s32 outVals, s32 wantValues);
 /* (end of this body's declarations) */
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit

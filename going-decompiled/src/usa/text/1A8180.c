@@ -8613,7 +8613,7 @@ s32 func_002B18B0(s32 a) {
 /* func_00273740 (external): emit one debris/effect sub-object for `owner` at
  * scatter `offset` off its position/facing, index `index`, with two extra
  * randomised parameters. */
-extern void func_00273740(Moby *owner, s32 arg1, s32 classId, s32 index,
+extern long func_00273740(Moby *owner, s32 arg1, s32 classId, s32 index,
                           Vec4 *pos, Vec4 *facing, Vec4 *offset, s32 kind,
                           f32 f0, f32 f1);
 
@@ -9010,7 +9010,7 @@ extern Vec4 g_heroPos;
 /* (end of this body's declarations) */
 /* callees with no file-scope decl above this point */
 extern long func_002B2268(void *moby, long hit, Vec4 *dir, u32 tier);
-extern void UpdateMobyThreatFlashAndBurst(void *moby, s32 threatIdx, f32 *stats);
+extern s32  UpdateMobyThreatFlashAndBurst(void *moby, s32 threatIdx, f32 *stats);
 
 u32 func_002B1DF0(void *moby, long hit, long param_3) {
     u8  *m = (u8 *)moby;

@@ -881,7 +881,7 @@ void func_00299758(void) {
  *  it. */
 __asm__(".extern g_nGameState, 12");
 extern s32 g_nGameState;
-extern void RequestGameStateChange(s32 newState, s32 argA, s32 argB, s32 argC, s32 argD);
+extern s32  RequestGameStateChange(s32 newState, s32 argA, s32 argB, s32 argC, s32 argD);
 extern void SetSavePromptPending(void);
 void UpdateSaveTaskState(void) {
     s32 secondary;

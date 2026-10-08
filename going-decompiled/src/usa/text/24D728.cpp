@@ -477,7 +477,7 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0
 /* Sibling-unit GUI helpers used by the #else bodies below (real defs in
    text/235FE8 etc.); their returns are unused here. */
 extern void GuiListRowElementInit(void *row);
-extern void func_0034BDB0(void *hudMgr);
+extern void *func_0034BDB0(void *hudMgr);
 extern void func_003374D8(void *listHead);
 extern void func_00338A80(void *listHead);
 #endif
@@ -503,7 +503,7 @@ S136OS_SLOT(GuiManagerInitListRows);
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern void GuiListRowElementInit(void *row);
-extern void func_0034BDB0(void *hudMgr);
+extern void *func_0034BDB0(void *hudMgr);
 extern void func_003374D8(void *listHead);
 extern void func_00338A80(void *listHead);
 /* (end of this body's declarations) */

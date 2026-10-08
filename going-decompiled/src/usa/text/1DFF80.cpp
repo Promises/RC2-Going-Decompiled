@@ -225,7 +225,7 @@ __asm__(".extern g_mobyTableBase, 16");
 extern u8 *g_mobyTableBase;    /* 0x1B1ADC - moby entity array base (stride 0x100) */
 __asm__(".extern g_mobyTableEnd, 16");
 extern u8 *g_mobyTableEnd;     /* 0x1B1AE4 - end of the moby table */
-extern void PopGameState(s32 a, s32 b);
+extern s32  PopGameState(s32 a, s32 b);
 extern void func_002857C8(s32 a, s32 b, s32 c);
 
 /**

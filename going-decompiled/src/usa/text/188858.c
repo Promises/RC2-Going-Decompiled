@@ -1382,7 +1382,7 @@ s32 StartCinematicFromQueue(CinematicQueue *q) {
 extern s32  g_nLevelExitDestination;   /* 0x1B1600 next level/scene id */
 extern u8   D_1393E0[];                /* 0x1393E0 level-transition latch blob */
 extern u8   g_nSaveLoadStatusCode[];   /* 0x1A7420 save/load popup status block */
-extern void CommitProgressCheckpoint(s32 a, s32 destination);
+extern s32  CommitProgressCheckpoint(s32 a, s32 destination);
 void ClearSavePromptPending(void);     /* defined below in this unit */
 
 /*

@@ -729,7 +729,7 @@ extern void SetDialogVoiceVolumesMax(s32 arg);
 extern void snd_Pump(void);
 extern void BuildPausePromptPopup(void);
 extern void MapSetCurrentLevel(s32 level);
-extern void UpdateLevelObjectiveStates(void);
+extern s32  UpdateLevelObjectiveStates(void);
 extern void func_002DFE60(void);
 extern s32 g_nGameState;
 extern s32 D_1A7A10;
@@ -1240,7 +1240,7 @@ extern s16 g_fileLoadState;
 extern s32 g_mapCurrentLevel;
 extern u8 g_itemEquippedSlot[];
 extern u8 g_weaponTable[];
-extern void PopGameState(s32 a, s32 b);
+extern s32  PopGameState(s32 a, s32 b);
 extern void PumpDialogVoiceSystem(s32 blocking);
 extern void func_00294CD0(s32 arg);
 /* The fields of the menu-screen block that the leave handler reads. */

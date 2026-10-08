@@ -2924,7 +2924,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiConfirmPopup
    177/193 insns differ. Residual: UNKNOWN-addiu + gp/abs-mixed symbol (first differing insn: 'addiu sp, sp, -0x90' vs 'addiu sp, sp, -0x60').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
    not byte-exact, so the arm stays #else. */
-extern void func_002E0010(void *dst, s32 level);
+extern char *func_002E0010(void *dst, s32 level);
 extern f32 D_1ADC38[2], D_1ADC40[2], D_1ADC48[2];
 extern s32 g_health;            /* 0x18C2EC - base of the per-cutscene unlock records at +0x464 */
 extern s32 g_gameTime;          /* 0x1B1608 - global frame counter */
@@ -3563,7 +3563,7 @@ extern void AppendGsRegPacket(s32 reg, u64 val);
 extern void AppendGsRegPacket(s32 reg, s32 val);
 #endif
 extern void MapDraw(s32 a, s32 b);
-extern void func_002DBC98(s32 a);
+extern s32  func_002DBC98(s32 a);
 extern void GuiTextElementDraw(void *e);
 void func_0033B428(void *p) {
     if (*(s32 *)((char *)p + 0x490) != 0) {

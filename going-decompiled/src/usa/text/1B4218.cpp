@@ -2964,7 +2964,7 @@ void UpdateActiveMobys(void) {
 #endif
 
 extern void func_0011D620(s32 a, s32 b, s32 c, s32 d, s32 e, s32 f, s32 g, s32 h, s32 i);
-extern void func_00133250(s32 a, s32 b, s32 c, s32 d);
+extern s32  func_00133250(s32 a, s32 b, s32 c, s32 d);
 extern u8 D_001A7210[];                     /* dialog sound-channel config block */
 
 #ifndef TARGET_NATIVE
