@@ -162,6 +162,19 @@ extern s32 g_gsPixelOffsetXAbs, g_gsPixelOffsetYAbs;
 extern u8  g_gsScreenContext[]; /* 0x1A6480 - dims at +0x150 (w) / +0x152 (h) */
 extern s32 g_screenWidth[];     /* 0x1A7340 */
 extern s32 g_screenHeight[];    /* 0x1A7344 */
+#ifndef TARGET_NATIVE
+/* ADDRESSING-MODEL DEVICE (RULING #8620): absolute views of g_screenWidth and
+ * g_screenHeight (FACT #8036's equate). func_0027CDC8 reads each with the
+ * ROM's same-register `lui $r,%hi; lw $r,%lo($r)` pair and its `lwc1` through
+ * `lui $at`, the assembler's expansion of a one-insn access, i.e. cc1 saw
+ * small data. Sized 16 for the assembler; relocations name the real symbols. */
+__asm__(".extern g_screenWidthAbs, 16\n\tg_screenWidthAbs = g_screenWidth");
+__asm__(".extern g_screenHeightAbs, 16\n\tg_screenHeightAbs = g_screenHeight");
+extern s32 g_screenWidthAbs, g_screenHeightAbs;
+#else
+#define g_screenWidthAbs g_screenWidth[0]
+#define g_screenHeightAbs g_screenHeight[0]
+#endif
 extern f32 IntToFloat(s32 x);
 extern void func_0027A550(void);
 /* Append a 4-vertex flat (untextured-coord) sprite quad packet given a pointer
@@ -697,40 +710,95 @@ void BuildFrameViewMatrices(void) {
 extern s32 g_bCameraUnderwater;   /* 0x1B5580 */
 extern s32 g_particleFarFadeMax;  /* 0x1B1D20 far-fade clamp */
 extern u8  D_1AD564[];            /* 0x1AD564 underwater fog params {b,b,b,_, f,f,f,f} */
+#ifndef TARGET_NATIVE
+/* ADDRESSING-MODEL DEVICES (RULING #8620) for func_0027A550, each the #8036
+ * construct or an asm-label view; none emits an instruction and every
+ * relocation names the real symbol:
+ *   - D_1AD564Abs: an 8-byte (cc1-small) view sized 16 for the assembler, so
+ *     each fog field is one symbolic `lbu`/`lwc1` that gas expands absolutely
+ *     (`lui $r; lbu %lo($r)`, `lui $at; lwc1 %lo($at)`), the ROM's form;
+ *   - g_particleFarFadeMaxAbs: the same for the far-fade store in the else
+ *     arm (`lui $at; sw %lo($at)`), while the underwater arm stores the real
+ *     symbol %gp_rel from the branch delay slot, as the ROM does;
+ *   - g_bCameraUnderwaterHi: an incomplete-array view, so cc1 splits the flag
+ *     read into its own `lui $2; lw $3,%lo($2)` instead of a $gp load. */
+__asm__(".extern D_1AD564Abs, 16\n\tD_1AD564Abs = D_1AD564");
+__asm__(".extern g_particleFarFadeMaxAbs, 16\n\tg_particleFarFadeMaxAbs = g_particleFarFadeMax");
+extern u8 D_1AD564Abs[8];
+extern s32 g_particleFarFadeMaxAbs;
+extern s32 g_bCameraUnderwaterHi[] __asm__("g_bCameraUnderwater");
+#else
+#define D_1AD564Abs D_1AD564
+#define g_particleFarFadeMaxAbs g_particleFarFadeMax
+#define g_bCameraUnderwaterHi (&g_bCameraUnderwater)
+#endif
 
 /* func_0027A550: load the camera fog block (3 colour bytes + 4 floats) into the
  * camera/projection scratch (g_sceneActorMobys+0x674 = D_1B8FC0, +0x218..+0x238)
  * and set the particle far-fade clamp - from the underwater params (D_1AD564) +
  * fade 0x40000 when g_bCameraUnderwater, else the normal block (g_blobShadowCount
  * +0x4) + fade 0x1F4000 - then rebuild the camera projection and clear the
- * screen-grab pending word (g_blobShadowCount+0x18). */
-/* TODO(match) t493: sdk29 28.42% / engine96 24.12% (unit objdiff, objdiff_build.sh +
- * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
- * every other remaining arm). Residual on the better arm (sdk29): MACRO-AT (first differing insn:
- * ROM `lui v0,0x0  [HI16 0x001B5580]` vs built `addiu sp,sp,-16`). Levers: cc1-small/absolute
- * globals model RUN: 24.12% (engine96); engine96 with sched1 MEASURED (flag not landed): 24.51%. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027A550);
+ * screen-grab pending word (g_blobShadowCount+0x18). No params, no return.
+ * Each arm reads all seven fields before storing any, and forms its own copy of
+ * the scratch pointer, as the ROM does (its two arms colour differently).
+ * MATCHED (task #2000): s136os arm (SN 1.36 -fopt-stack, -O2 -G8 -fno-gcse),
+ * spliced. Priced by removing each alone (solo s136os compile of this unit,
+ * word compare against the ROM .s, relocated fields masked):
+ *   - the fog fields through D_1AD564Abs (as D_1AD564 cc1 forms the base once
+ *     and copies field by field: 58/65, built 60);
+ *   - the flag through g_bCameraUnderwaterHi (as the scalar, a $gp load and
+ *     every later word shifts: 65/65);
+ *   - the else-arm fade through g_particleFarFadeMaxAbs (as the real symbol,
+ *     a %gp_rel store: 10/65), and the underwater arm's through the real
+ *     symbol (through the alias it cannot fill the delay slot: 37/65);
+ *   - locals per arm with the pointer formed at the top of the arm (shared
+ *     function-scope locals: 32/65; per-arm locals but the pointer formed after
+ *     the loads: 12/65). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0027A550)
+S136OS_SLOT(func_0027A550);
 #else
 void func_0027A550(void) {
-    u8 *vp = g_sceneActorMobys + 0x674;
-    u8 *f;
-    if (g_bCameraUnderwater != 0) {
-        f = D_1AD564;
+    if (g_bCameraUnderwaterHi[0] != 0) {
+        u8 *vp = g_sceneActorMobys + 0x674;
+        s32 r, g, b;
+        f32 f0, f1, f2, f3;
+        r = D_1AD564Abs[0];
+        g = D_1AD564Abs[1];
+        b = D_1AD564Abs[2];
+        f0 = *(f32 *)(D_1AD564Abs + 0x4);
+        f1 = *(f32 *)(D_1AD564Abs + 0x8);
+        f2 = *(f32 *)(D_1AD564Abs + 0xC);
+        f3 = *(f32 *)(D_1AD564Abs + 0x10);
+        *(s32 *)(vp + 0x230) = r;
+        *(s32 *)(vp + 0x234) = g;
+        *(s32 *)(vp + 0x238) = b;
+        *(f32 *)(vp + 0x218) = f0;
+        *(f32 *)(vp + 0x21C) = f1;
+        *(f32 *)(vp + 0x228) = f2;
+        *(f32 *)(vp + 0x22C) = f3;
         g_particleFarFadeMax = 0x40000;
     } else {
-        f = (u8 *)g_blobShadowCount + 0x4;
-        g_particleFarFadeMax = 0x1F4000;
+        u8 *vp = g_sceneActorMobys + 0x674;
+        s32 r, g, b;
+        f32 f0, f1, f2, f3;
+        r = ((u8 *)g_blobShadowState)[4];
+        g = ((u8 *)g_blobShadowState)[5];
+        b = ((u8 *)g_blobShadowState)[6];
+        f0 = *(f32 *)((u8 *)g_blobShadowState + 0x8);
+        f1 = *(f32 *)((u8 *)g_blobShadowState + 0xC);
+        f2 = *(f32 *)((u8 *)g_blobShadowState + 0x10);
+        f3 = *(f32 *)((u8 *)g_blobShadowState + 0x14);
+        *(s32 *)(vp + 0x230) = r;
+        *(s32 *)(vp + 0x234) = g;
+        *(s32 *)(vp + 0x238) = b;
+        *(f32 *)(vp + 0x218) = f0;
+        *(f32 *)(vp + 0x21C) = f1;
+        *(f32 *)(vp + 0x228) = f2;
+        *(f32 *)(vp + 0x22C) = f3;
+        g_particleFarFadeMaxAbs = 0x1F4000;
     }
-    *(s32 *)(vp + 0x230) = f[0];
-    *(f32 *)(vp + 0x22C) = *(f32 *)(f + 0x10);
-    *(s32 *)(vp + 0x234) = f[1];
-    *(s32 *)(vp + 0x238) = f[2];
-    *(f32 *)(vp + 0x218) = *(f32 *)(f + 0x4);
-    *(f32 *)(vp + 0x21C) = *(f32 *)(f + 0x8);
-    *(f32 *)(vp + 0x228) = *(f32 *)(f + 0xC);
     BuildCameraProjection();
-    *(s32 *)((u8 *)g_blobShadowCount + 0x18) = 0;
+    g_blobShadowState[6] = 0;
 }
 #endif
 
@@ -1646,15 +1714,20 @@ void End2dDrawBatch(void) {
  * divides by the transformed depth scaled by the projection factor
  * (g_cameraProjScale+0x160). Maps the result to pixel space (+ half screen
  * extent) and normalizes by the full screen dimension, writing x to *outX and y
- * to *outY (both in [0,1] across the viewport).
+ * to *outY (both in [0,1] across the viewport). No return value.
+ *
+ * MATCHED (task #2000): s136os arm (SN 1.36 -fopt-stack, -O2 -G8 -fno-gcse),
+ * spliced. Priced by removing each alone (solo s136os compile of this unit,
+ * word compare against the ROM .s, relocated fields masked):
+ *   - the camera base held in a local, so cc1 keeps &g_cameraPos in $s0 across
+ *     the calls and forms the matrix address as `addiu $6,$16,-0x100` (written
+ *     as g_cameraPos twice: 63/66, built 64);
+ *   - the screen dims through g_screenWidthAbs / g_screenHeightAbs (as
+ *     g_screenWidth[0] / g_screenHeight[0], cc1 splits the address itself and
+ *     shares it between the two reads: 29/66, built 64).
  */
-/* TODO(match) t493: sdk29 44.33% / engine96 54.76% (unit objdiff, objdiff_build.sh +
- * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
- * every other remaining arm). Residual on the better arm (engine96): MACRO-AT (first differing
- * insn: ROM `sd s0,16(sp)` vs built `daddu v0,a0,zero`). Levers: cc1-small/absolute globals model
- * RUN: 56.59% (engine96); engine96 with sched1 MEASURED (flag not landed): 66.12%. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027CDC8);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0027CDC8)
+S136OS_SLOT(func_0027CDC8);
 #else
 extern u8 g_cameraPos[];        /* camera position Vec4; camera matrix at -0x100 */
 extern u8 g_cameraProjScale[];  /* projection params; depth scale at +0x160 */
@@ -1664,16 +1737,17 @@ extern f32 func_00283A70(void *out, void *in, void *matrix);
 
 void func_0027CDC8(void *worldPos, f32 *outX, f32 *outY) {
     f32 v[4];   /* scratch Vec4 {x, y, z, w} */
+    u8 *cam = g_cameraPos;
 
-    Vec4SubVu0(v, worldPos, g_cameraPos);
+    Vec4SubVu0(v, worldPos, cam);
     Vec4ScaleVu0(v, 1024.0f, v);
     v[3] = 1.0f;
-    func_00283A70(v, v, g_cameraPos - 0x100);
+    func_00283A70(v, v, cam - 0x100);
     Vec4ScaleVu0(v, *(f32 *)(g_cameraProjScale + 0x160) / v[3], v);
-    *outX = v[0] + (f32)(g_screenWidth[0] >> 1);
-    *outX = *outX / (f32)g_screenWidth[0];
-    *outY = v[1] + (f32)(g_screenHeight[0] >> 1);
-    *outY = *outY / (f32)g_screenHeight[0];
+    *outX = v[0] + (f32)(g_screenWidthAbs >> 1);
+    *outX = *outX / (f32)g_screenWidthAbs;
+    *outY = v[1] + (f32)(g_screenHeightAbs >> 1);
+    *outY = *outY / (f32)g_screenHeightAbs;
 }
 #endif
 
@@ -2160,6 +2234,19 @@ void func_0027E1E8(void) {
 }
 #endif
 
+extern s32 g_vramZBuffer;
+#ifndef TARGET_NATIVE
+/* ADDRESSING-MODEL DEVICE (RULING #8620): absolute view of g_vramZBuffer
+ * (FACT #8036's equate). func_0027E368 reads it with the ROM's same-register
+ * `lui $5,%hi; lw $5,%lo($5)` pair, the assembler's expansion of a one-insn
+ * `lw`; as the real -G8 scalar gas would make it %gp_rel. Sized 16 for the
+ * assembler; relocations name g_vramZBuffer. */
+__asm__(".extern g_vramZBufferAbs, 16\n\tg_vramZBufferAbs = g_vramZBuffer");
+extern s32 g_vramZBufferAbs;
+#else
+#define g_vramZBufferAbs g_vramZBuffer
+#endif
+
 /**
  * func_0027E368 — emit the GS scissor / Z-buffer register packets for a render
  * context.
@@ -2169,41 +2256,39 @@ void func_0027E1E8(void) {
  * a Z-buffer setup: reg 0x4E (ZBUF) from g_vramZBuffer>>13 with the frame + mask
  * bits, a scissored screen rect (func_0027E4D0 over the g_gsScreenContext dims),
  * and a second ZBUF variant. Finally re-appends reg 0x42 (0x44 variant) when
- * +0x8 is set.
+ * +0x8 is set. No return value.
+ *
+ * MATCHED (task #2000): s136os arm (SN 1.36 -fopt-stack, -O2 -G8 -fno-gcse),
+ * spliced. Its two 64-bit constants (0xff000000ff, 0x8000000044) are
+ * RULING #8549 dli sites (rows named func_0027E368, 0x27E388 / 0x27E418, in
+ * tools/ee/ps2eeas_dli_sites.txt). Priced by removing each alone (solo s136os
+ * compile of this unit with those rows in place, word compare against the ROM
+ * .s, relocated fields masked):
+ *   - the parameter typed u8 * (as `void *ctx` cast to a local, cc1 keeps a
+ *     second copy of the pointer in $s2 for the last test: 54/54, built 57);
+ *   - g_vramZBuffer through g_vramZBufferAbs (as the scalar, %gp_rel: 37/54,
+ *     built 52);
+ *   - the screen context's address taken into a local, so cc1 forms it
+ *     whole (`lui; addiu %lo`) and reads +0x152 / +0x150 off it (written
+ *     inline, cc1 folds %lo into the first load and re-bases the second: 5/54).
  */
-/* TODO(match) t493: sdk29 70.35% / engine96 62.24% (unit objdiff, objdiff_build.sh +
- * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
- * every other remaining arm). Residual on the better arm (sdk29): SIBCALL (first differing insn:
- * ROM `addiu sp,sp,-32` vs built `addiu sp,sp,-64`). Levers: cc1-small/absolute globals model RUN:
- * 66.63% (engine96). */
-/* DLI lever MEASURED (task #1220; unit objdiff report, objdiff_build.sh, this #else body promoted
- * SOLO, sdk29 arm, colima-ee-x86; every other row in the unit unchanged). cc1 emits
- * `dli $5,0xff000000ff` and `dli $5,0x8000000044`; the ROM holds SN Ps2EeAs's expansion at
- * 0x27E388 and 0x27E418. A RULING #8549 allowlist row for both sites moves this body 70.35% ->
- * 76.39% (54 differing rows both ways, built 58 words vs ROM 54, NOTE #8789) (objdiff % is a gate figure,
- * not a distance: a reorder scores as insert+delete, FACT #8792, ASSERTED). The dli is NOT the
- * only residual, so no row was landed and this stays INCLUDE_ASM. Residual class: PACKED-SAVE on
- * sdk29 (NOTE #8730 lists it PACKED8; solo first differing insn ROM `addiu sp,sp,-32` vs built
- * `addiu sp,sp,-64`, 3 saves at stride 8 vs 4 at stride 16, NOTE #8777); engine96 best 12 of 54
- * words, residual sched2/reorg (NOTE #8789). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027E368);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0027E368)
+S136OS_SLOT(func_0027E368);
 #else
-extern s32 g_vramZBuffer;
 extern void func_0027E4D0(s32 y0, s32 y1, s32 x0, s32 x1, u64 arg4);
 
-void func_0027E368(void *ctx) {
-    u8 *p = (u8 *)ctx;
-
+void func_0027E368(u8 *p) {
+    u8 *gs;
     if (*(u64 *)(p + 0x8) != 0) {
         AppendGsRegPacket(0x42, *(u64 *)(p + 0x8) & 0x000000FF000000FFULL);
     }
     if ((*(u32 *)(p + 0x4) & 0xFF000000) != 0) {
         AppendGsRegPacket(0x4E,
-            (u64)(g_vramZBuffer >> 13) | 0x01000000ULL | 0x100000000ULL);
-        func_0027E4D0(0, *(s16 *)(g_gsScreenContext + 0x152), 0,
-                      *(s16 *)(g_gsScreenContext + 0x150), *(u32 *)(p + 0x4));
-        AppendGsRegPacket(0x4E, (u64)((g_vramZBuffer >> 13) | 0x01000000));
+            (u64)(g_vramZBufferAbs >> 13) | 0x01000000ULL | 0x100000000ULL);
+        gs = g_gsScreenContext;
+        func_0027E4D0(0, *(s16 *)(gs + 0x152), 0,
+                      *(s16 *)(gs + 0x150), *(u32 *)(p + 0x4));
+        AppendGsRegPacket(0x4E, (u64)((g_vramZBufferAbs >> 13) | 0x01000000));
     }
     if (*(u64 *)(p + 0x8) != 0) {
         AppendGsRegPacket(0x42, 0x0000008000000044ULL);

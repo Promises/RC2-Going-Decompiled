@@ -97,3 +97,14 @@ usa      DrawTexturedQuad2d  0x0027E990  $9,0x400000000008001     34098000 00094
 usa      DrawTexturedQuad2d  0x0027E9A8  $17,0x8531531531531068   34118531 00118c78 3631a62a 00118c78 3631c54c 00118bb8 36311068
 usa      DrawTexturedQuad2d  0x0027E9E4  $8,0xfffff000000000      3408ffff 00084438 3508f000 00084638
 usa      func_0026FC88  0x0026FE1C  $3,0x8000000000000000   2403ffff 00031ffc
+#
+# func_0027E368 (text/178E88) compiles two dli, both in reorder mode and each
+# followed by a noreorder `jal AppendGsRegPacket`: the SCISSOR-style mask
+# 0xff000000ff (GNU as: `li 255; dsll32; ori 0xff`) and the reg-0x42 value
+# 0x8000000044 (GNU as: `li 128; dsll32; ori 0x44`, the same constant as
+# func_0027C020's row). The ROM has Ps2EeAs's `ori; dsll 24; ori` at
+# 0x27E388..0x27E390 and 0x27E418..0x27E420. Compiled from C on the s136os
+# arm (task #2000).
+#
+usa      func_0027E368  0x0027E388  $5,0xff000000ff          3405ff00 00052e38 34a500ff
+usa      func_0027E368  0x0027E418  $5,0x8000000044          34058000 00052e38 34a50044
