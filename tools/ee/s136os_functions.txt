@@ -553,3 +553,7 @@ usa text/191238 func_002980D8
 usa text/191238 ParseLoadedSegment
 usa text/191238 MapBuildBitmapFrom4bpp
 usa text/198FA0 InitMobyFromClass
+usa text/198FA0 func_00299B18
+usa text/198FA0 BuildSaveGamePaths
+usa text/198FA0 func_0029EC70
+usa text/198FA0 SpawnMoby

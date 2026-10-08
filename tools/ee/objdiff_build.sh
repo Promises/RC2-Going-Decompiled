@@ -178,7 +178,7 @@ case "$REGION/$UNIT" in
   usa/text/188858) GFLAG="-G8"; CC1EXTRA="-fno-gcse"; S136EXTRA="";; # Tier-1-A carve (.text mid 2; later-cc1 gameplay/UI TU model). S136EXTRA: the s136os arm compiles at the -O2 default (RULING #9450, FACTs #9441/#9449); the 2.9 compile keeps -fno-gcse
   usa/text/1907F0) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # level-init/screen-fade sub-TU (D_1A9000..D_1A9020)
   usa/text/191238) GFLAG="-G8"; CC1EXTRA="-fno-gcse"; S136EXTRA="";; # Tier-1-B carve (.text mid 3; boot/IRX init + sky render + segment loader + map system). S136EXTRA: the s136os arm compiles at the -O2 default (RULING #9070, FACT #9069); the 2.9 compile keeps -fno-gcse
-  usa/text/198FA0) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # save/GUI-wrapper unit (g_guiInstance modeled cc1-small/assembler-absolute)
+  usa/text/198FA0) GFLAG="-G8"; CC1EXTRA="-fno-gcse" S136EXTRA="";; # PENDING RULING (task #1918): s136os arm unpinned, 2.9 arm keeps -fno-gcse # save/GUI-wrapper unit (g_guiInstance modeled cc1-small/assembler-absolute)
   usa/text/1A00F0) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # Tier-1-C carve (.text tail head; moby render/anim/grid + ammo-drop + bestiary)
   usa/text/1A8180) GFLAG="-G8"; CC1EXTRA="-fno-gcse -fno-strict-aliasing"; S136EXTRA="-fno-strict-aliasing";; # S136EXTRA: the s136os arm drops -fno-gcse only (RULING #9336, FACTs #9333/#9334); the 2.9 compile keeps both. game-state cluster (carve pick #1; later-cc1 TU model: sized externs under -G8, no load-PRE). -fno-strict-aliasing: the u16 slot-list reads are ordered after the pointer-global cursor stores and re-read after the slot/moby stores in func_002A9550 (task #1100)
   usa/text/250080) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # segment-tail FMV/debug-stub unit (carve pick #2; same later-cc1 TU model)

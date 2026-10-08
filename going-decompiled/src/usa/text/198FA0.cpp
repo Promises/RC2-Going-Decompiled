@@ -1013,8 +1013,8 @@ s32 func_00299980(void) {
  * - but matching the C without first pinning its exact semantics would be a guess.
  * Left as asm pending that identity. The TARGET_NATIVE #else below is faithful
  * coverage — it calls func_00115AC0 by its traced (dst,src,len) signature. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", BuildSaveGamePaths);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_BuildSaveGamePaths)
+S136OS_SLOT(BuildSaveGamePaths);
 #else
 /* t511 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
  * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 58.98% -> PACKED-SAVE, first differing row @0: ROM `addiu sp, sp, -0x20` vs `addiu sp, sp, -0x30`;
@@ -1028,35 +1028,31 @@ extern u8   g_saveFileFmt[];
 extern void func_00115AC0(void *dst, const void *src, s32 len); /* path-join/copy (UNCONFIRMED) */
 
 void BuildSaveGamePaths(void *rec) {
-    u8 *r    = (u8 *)rec;
-    u8 *tmpl = g_saveDirTemplate;
+    u8 *r = (u8 *)rec;
     s32 i;
 
-    /* region-code remap into template[2]: 'P' -> 'I', 'E'/'K' unchanged */
-    if (r[0x12] == 0x45) {          /* 'E' */
-        tmpl[2] = 0x45;
-    } else if (r[0x12] == 0x50) {   /* 'P' */
-        tmpl[2] = 0x49;             /* 'I' */
-    } else if (r[0x12] == 0x4B) {   /* 'K' */
-        tmpl[2] = 0x4B;
+    if (r[0x12] == 0x45) {
+        g_saveDirTemplate[2] = 0x45;
+    } else if (r[0x12] == 0x50) {
+        g_saveDirTemplate[2] = 0x49;
+    } else if (r[0x12] == 0x4B) {
+        g_saveDirTemplate[2] = 0x4B;
     }
-
     for (i = 3; i < 7; i++) {
-        tmpl[i] = r[i + 0xD];
+        g_saveDirTemplate[i] = r[i + 0xD];
     }
     for (i = 8; i < 0xB; i++) {
-        tmpl[i] = r[i + 0xD];
+        g_saveDirTemplate[i] = r[i + 0xD];
     }
     for (i = 0xB; i < 0xD; i++) {
-        tmpl[i] = r[i + 0xE];
+        g_saveDirTemplate[i] = r[i + 0xE];
     }
-
-    func_00115AC0(D_1A7950, tmpl, 0xD);
-    func_00115AC0(g_saveIconSysPath, tmpl, 0xD);
-    func_00115AC0(g_saveStaticIcoPath, tmpl, 0xD);
-    func_00115AC0(D_1A79A8, tmpl, 0xD);
-    func_00115AC0(D_1A79A8 + 0x14, tmpl, 0xD);
-    func_00115AC0(g_saveFileFmt, tmpl, 0xD);
+    func_00115AC0(D_1A7950, g_saveDirTemplate, 0xD);
+    func_00115AC0(g_saveIconSysPath, g_saveDirTemplate, 0xD);
+    func_00115AC0(g_saveStaticIcoPath, g_saveDirTemplate, 0xD);
+    func_00115AC0(D_1A79A8, g_saveDirTemplate, 0xD);
+    func_00115AC0(D_1A79A8 + 0x14, g_saveDirTemplate, 0xD);
+    func_00115AC0(g_saveFileFmt, g_saveDirTemplate, 0xD);
 }
 #endif
 
@@ -1075,8 +1071,8 @@ extern void func_0029C418(void);
 extern SaveSection g_saveSectionTableGlobal[];
 extern SaveSection g_saveSectionTableArea[];
 extern char D_1A99A8[];   /* "save size mismatch" log string */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_00299B18);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00299B18)
+S136OS_SLOT(func_00299B18);
 #else
 /* t511 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
  * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 63.07% -> PACKED-SAVE, first differing row @0: ROM `addiu sp, sp, -0x40` vs `addiu sp, sp, -0x70`;
@@ -3258,6 +3254,7 @@ s32 GatherActiveObjectives(s32 *outIds, s32 *outMask, s32 *outVals, s32 wantValu
         {
             s32 *dst = outIds;
             *dst = rec->id;
+            __asm__("" : "+r"(dst));
             if (wantValues != 0) {
                 *dst = (rec->state == 2) ? 0x31B9 : rec->stageTextIds[rec->tickResult];
             }
@@ -3461,19 +3458,25 @@ s32 func_0029EBF8(void) {
  *  has bit 0x4000000 set; 0 otherwise. (The original has a redundant early-out
  *  testing the same two bits first; it cannot change the result, so the #else
  *  collapses to the single conjunction.) */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029EC70);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0029EC70)
+S136OS_SLOT(func_0029EC70);
 #else
 /* t511 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
  * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 42.11% -> IFCONV, first differing row @2: ROM `daddu a1, v0, zero` vs `(nothing)`;
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing, MATCH_ guard) 42.11% -> IFCONV, first differing row @1: ROM `lui a0, 0x1` vs `(nothing)`. */
 s32 func_0029EC70(void) {
     char *flags = (char *)&g_cinematicUnlockedFlags;
-    if ((*(s32 *)(flags + 0x90) & 0x10000) == 0) {
+    if ((*(s32 *)(flags + 0x90) & 0x10000) == 0 &&
+        (*(s32 *)(flags + 0x98) & 0x4000000) != 0) {
         return 0;
     }
-    if ((*(s32 *)(flags + 0x98) & 0x4000000) != 0) {
-        return 1;
+    {
+        char *f2 = (char *)&g_cinematicUnlockedFlags;
+        if ((*(s32 *)(f2 + 0x90) & 0x10000) != 0) {
+            if ((*(s32 *)(f2 + 0x98) & 0x4000000) != 0) {
+                return 1;
+            }
+        }
     }
     return 0;
 }
@@ -3498,7 +3501,10 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0
  * decrements the spawn credit; returns 0 (logging) when full. The TARGET_NATIVE
  * #else is faithful coverage. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", SpawnMoby);
+__asm__(".extern g_mobyTableEnd, 16\n\t.extern g_mobySpawnStart, 16\n\t.extern g_gameTime, 16\n\t.extern g_mobyAuxBlockBase, 16\n\t.extern g_mobySpawnCredit, 16");
+#endif
+#if !defined(TARGET_NATIVE) && !defined(S136OS_SpawnMoby)
+S136OS_SLOT(SpawnMoby);
 #else
 /* t511 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
  * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 59.02% -> PACKED-SAVE, first differing row @0: ROM `addiu sp, sp, -0x10` vs `addiu sp, sp, -0x30`;
@@ -3514,34 +3520,30 @@ extern void InitMobyFromClass(struct Moby *moby, s32 classId);
 
 void *SpawnMoby(s32 classId) {
     u8 *m = g_mobySpawnStart;
+    u32 state;
+    register s32 cls EE_REG("$6") = classId;
+    u8 *aux;
 
     if (m < g_mobyTableEnd) {
-        s32 state = m[0x20];
-        for (;;) {
-            if (state >= 0xFE && !(g_gameTime < *(s32 *)(m + 0xA0))) {
+        do {
+            state = m[0x20];
+            if (state >= 0xFE && !((u32)g_gameTime < *(u32 *)(m + 0xA0))) {
                 if (state == 0xFF) {
-                    m[0x120] = (u8)state;
+                    m[0x120] = state;
                 }
-                InitMobyFromClass((struct Moby *)m, classId);
-                {
-                    s32 slot = (s32)(m - g_mobySpawnStart) / 0x100;
-                    u8 *aux = g_mobyAuxBlockBase + slot * 0x80;
-                    *(u8 **)(m + 0x68) = aux;
-                    FillMemory32(aux, 0, 0x80);
-                }
+                InitMobyFromClass((struct Moby *)m, cls);
+                aux = g_mobyAuxBlockBase + ((m - g_mobySpawnStart) >> 8) * 0x80;
+                *(u8 **)(m + 0x68) = aux;
+                FillMemory32(aux, 0, 0x80);
                 if (g_mobySpawnCredit != 0) {
                     g_mobySpawnCredit--;
                 }
                 return m;
             }
             m += 0x100;
-            if (m >= g_mobyTableEnd) {
-                break;
-            }
-            state = m[0x20];
-        }
+        } while (m < g_mobyTableEnd);
     }
-    DebugPrintStub(D_1A9DC8);   /* compiled-out; original also passes g_gameTime */
+    ((s32 (*)(char *, s32))DebugPrintStub)(D_1A9DC8, g_gameTime);
     return 0;
 }
 #endif
