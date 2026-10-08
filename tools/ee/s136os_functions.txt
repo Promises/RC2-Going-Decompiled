@@ -499,6 +499,7 @@ usa text/248B50 func_00349E90
 usa text/250080 FmvBitstreamObjInit
 usa text/250080 func_003518B8
 usa cod/0321A0 snd_SetupDmaTransfer
+usa cod/0321A0 CdStartRead
 usa cod/033970 func_001339F0
 usa cod/033970 CdReadSync
 usa cod/033970 LoadLevelToc

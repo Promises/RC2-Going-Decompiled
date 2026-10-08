@@ -906,45 +906,77 @@ void func_00133490(s32 arg0) {
     snd_SendCommandSync(0x36, 4, &value);
 }
 
-/* CdStartRead: queue ring command 0x38 (start read) with a 3-word record, or
- * fall back to func_001253A8 when the IOP driver is down. Best attempt 79% —
- * blocked by the multi-callee-save 16-byte save-slot layout wall (see
- * snd_SetupDmaTransfer) plus the D_001A7100/g_sndIopLoadStatus $at-macro
- * stores (cc1-small / assembler-absolute disagreement, see CdGetLoadStatus)
- * (near-miss). Portable #else body. */
 /* sceCdRead(lbn, sectors, buf, mode) — the direct libcdvd read-start fallback.
  * `mode` is DEREFERENCED (3 bytes: trycount/spindlctrl/datapattern), so the 4th
  * argument must be live in $7 at the call. */
 extern s32 func_001253A8(s32 lbn, s32 sectors, s32 buf, void *mode);
 extern s32 snd_CheckLoadInProgress(s32 noWait);
 extern s32 D_001A7494;                     /* pending-read marker */
-extern s32 D_001A7100;                     /* IOP-polled load status word */
-extern u8  D_001A713F;                     /* poll-request scratch byte */
+/* D_001A7100 is the 16-byte load-status block the IOP and the EE share by DMA:
+ * CdStartRead sets it to 1 and writes the 0x1A7100..0x1A713F range back with
+ * func_0011B3D0 (SyncDCache) for the IOP to read; snd_CheckLoadInProgress
+ * invalidates the same range (func_0011B500, InvalidDCache) and re-reads it
+ * after the IOP has cleared it; snd_Init (cod/0314C0) zeroes it. Its other
+ * writer is the IOP, hence volatile. The qualifier is also a CODEGEN DEVICE for
+ * CdStartRead (RULING #8404's terms; writer census above): it orders the store
+ * ahead of the two argument `la`s, as the ROM issues it — non-volatile, cc1
+ * sinks the store below them (6/49 words). */
+extern volatile s32 D_001A7100;
+extern u8  D_001A713F;                     /* last byte of the 64-byte sync range */
 extern s32 D_001A7498;                     /* cached "load complete" flag */
 extern volatile s32 g_sndIopLoadStatus;    /* EE-side load status (0 = done); see CdGetLoadStatus */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", CdStartRead);
+/* ADDRESSING-MODEL DEVICE (RULING #8620 term 4 / #9574, offset 0 each): the ROM
+ * reaches these three with absolute %hi/%lo pairs — `lui $1; sw` for the two
+ * stores and `lui/addiu` for the two `la` arguments at 0x133508..0x133524 —
+ * while cc1 at -G8 treats the complete <=8-byte declarations as small data and
+ * prints bare-symbol macros. `.extern <sym>, 16` ahead of the first use makes
+ * GNU as expand them absolutely (first directive wins), the same model as
+ * D_001A7040 above. Each is load-bearing alone on the s136os arm (solo TU,
+ * fcmp, task #1914): without D_001A7100's 31/49 words, without D_001A713F's
+ * 27/49, without g_sndIopLoadStatus's 25/49. The later g_sndIopLoadStatus line
+ * before CdGetLoadStatus is kept; it no longer decides anything. */
+__asm__(".extern D_001A7100, 16");
+__asm__(".extern D_001A713F, 16");
+__asm__(".extern g_sndIopLoadStatus, 16");
+
+/**
+ * CdStartRead - start an asynchronous CD read through the IOP sound/loader
+ * driver.
+ *
+ * @lbn, @sectors, @buf: forwarded as the three words of ring command 0x38.
+ * @rmode: a sceCdRMode*, used only by the libcdvd fallback.
+ * Returns 1 when the read was queued, 0 when a load is already in flight, or
+ * sceCdRead's result when the IOP driver is down (g_sndIopReady == 0); that
+ * path passes all four arguments straight through in $4-$7.
+ *
+ * Queueing marks D_001A7100 busy and clears g_sndIopLoadStatus, syncs the
+ * status block out to memory for the IOP, then sets D_001A7494 (the pending
+ * marker snd_Pump checks) and clears the cached completion flag D_001A7498.
+ *
+ * Compiled by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, selected in
+ * tools/ee/s136os_functions.txt), which packs the s0-s3/ra saves 8 bytes apart
+ * as the ROM does. The two devices it needs are the `.extern ,16` lines and the
+ * volatile D_001A7100 above.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_CdStartRead)
+S136OS_SLOT(CdStartRead);
 #else
-/* rmode is not used by the ring-command path — it exists only to be forwarded to
- * sceCdRead. Naming it is what makes that forwarding a CONTRACT: the ROM passes
- * $4-$7 straight through, and callers (StartFileLoad, KickRawFileRead, and the
- * CdReadSync in cod/033970) all supply a real sceCdRMode* in $7. */
-s32 CdStartRead(s32 arg0, s32 arg1, s32 arg2, void *rmode) {
+s32 CdStartRead(s32 lbn, s32 sectors, s32 buf, void *rmode) {
     s32 cmd[3]; /* the three command words for the 0x38 read request */
 
     if (g_sndIopReady == 0) {
         /* IOP driver down -> direct libcdvd. Pass all four through, as the ROM does. */
-        return func_001253A8(arg0, arg1, arg2, rmode);
+        return func_001253A8(lbn, sectors, buf, rmode);
     }
     if (snd_CheckLoadInProgress(1) == 1) {
         return 0; /* a load is already in flight */
     }
-    D_001A7100 = 1;             /* mark a load in progress */
+    D_001A7100 = 1; /* mark a load in progress */
     g_sndIopLoadStatus = 0;
-    func_0011B3D0(&D_001A7100, &D_001A713F);
-    cmd[0] = arg0;
-    cmd[1] = arg1;
-    cmd[2] = arg2;
+    func_0011B3D0((void *)&D_001A7100, &D_001A713F);
+    cmd[0] = lbn;
+    cmd[1] = sectors;
+    cmd[2] = buf;
     D_001A7494 = 1;
     D_001A7498 = 0;
     snd_QueueCommandToRing(0x38, 0xC, cmd, 0, 0);
@@ -964,7 +996,7 @@ s32 CdStartRead(s32 arg0, s32 arg1, s32 arg2, void *rmode) {
  * noWait straight through ($4 is untouched before the jal at 0x13359C). */
 extern s32  func_00124B88(s32 mode);          /* direct-RPC load-status fallback */
 extern void func_0011B500(void *dst, void *src); /* poll IOP load status into dst */
-extern s32  D_001A7100;  /* IOP-polled load status word (0 = done) */
+extern volatile s32 D_001A7100; /* IOP-shared load status block (0 = done); see CdStartRead */
 extern u8   D_001A713F;  /* poll-request scratch byte */
 extern s32  D_001A7498;  /* cached "load complete" flag */
 #ifndef TARGET_NATIVE
@@ -976,7 +1008,7 @@ s32 snd_CheckLoadInProgress(s32 noWait) {
     if (g_sndIopReady == 0) {
         return func_00124B88(noWait); /* IOP driver down -> direct RPC status */
     }
-    func_0011B500(&D_001A7100, &D_001A713F);
+    func_0011B500((void *)&D_001A7100, &D_001A713F);
     D_001A7498 = done = (D_001A7100 == 0);
     if (done) {
         return 0; /* load already complete */
@@ -986,7 +1018,7 @@ s32 snd_CheckLoadInProgress(s32 noWait) {
     }
     do { /* block: pump the sound engine until the load finishes */
         snd_Pump();
-        func_0011B500(&D_001A7100, &D_001A713F);
+        func_0011B500((void *)&D_001A7100, &D_001A713F);
         D_001A7498 = done = (D_001A7100 == 0);
     } while (!done);
     return 0;
