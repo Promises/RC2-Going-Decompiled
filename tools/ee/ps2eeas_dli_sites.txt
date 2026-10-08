@@ -78,3 +78,16 @@ usa      func_002E0650  0x002E06EC  $9,0x2400000000008001    34099000 00094bbc 3
 usa      func_0027C020  0x0027C068  $5,0x8000000044          34058000 00052e38 34a50044
 usa      func_0027DF80  0x0027E094  $7,0xfffff300000000       3407ffff 00073c38 34e7f300 00073e38
 usa      InitMobyFromClass  0x0029FF40  $7,0x40404000000000   34078080 00073c38 34e78000 00073df8
+#
+# DrawTexturedQuad2d (text/178E88) compiles three dli, all in reorder mode and
+# none followed by a branch: the GIF register-list qword 0x0400000000008001 in
+# $9 and 0x8531531531531068 in $17 (GNU as: `lui 0x400; dsll32; ori`, and a
+# 6-word lui/ori/dsll chain where the ROM has 7), and the XYZ2 z-field
+# 0xfffff000000000 in $8 (GNU as: `li -1; dsll32 0xc; dsrl 8`, 3 words where the
+# ROM has 4). The $8 site needs a RULING #8598 EE_REG pin on the z-field local
+# (FACT #8791): without it cc1 colours the mask $6 and this row does not apply.
+# Compiled from C on the s136os arm (task #1941).
+#
+usa      DrawTexturedQuad2d  0x0027E990  $9,0x400000000008001     34098000 00094afc 35298001
+usa      DrawTexturedQuad2d  0x0027E9A8  $17,0x8531531531531068   34118531 00118c78 3631a62a 00118c78 3631c54c 00118bb8 36311068
+usa      DrawTexturedQuad2d  0x0027E9E4  $8,0xfffff000000000      3408ffff 00084438 3508f000 00084638

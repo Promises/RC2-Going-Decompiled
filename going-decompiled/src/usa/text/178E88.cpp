@@ -2365,78 +2365,88 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0
 
 /* DrawTexturedQuad2d(x, y, w, h, u, v, uw, vh, colors[4], tex0) — draw a float-coordinate
  * textured quad with per-vertex RGBA (gouraud) into the frame DMA packet. Screen positions are
- * 12.4 fixed-point (FloatToInt(coord*16) + g_gsPixelOffsetX/Y[0] - 8); the quad is clipped against
- * the GS window [0x7000, 0x9000] and dropped entirely if any edge falls outside. Emits a 9-qword
- * GIF packet: DMA/GIF tag, a TEX0 + ST-clamp descriptor, tex0, then 4 {RGBA, ST, XYZ2} vertices for
- * corners (u0,v0)(u1,v0)(u0,v1)(u1,v1). ST packs u<<4 + v<<20; XYZ packs x | (y<<16) | z-field
- * 0xfffff000000000; the descriptor packs u0<<4 | u1<<0xe | 0xa | v0<<0x18 | v1<<0x22.
+ * 12.4 fixed-point (FloatToInt(coord*16) + g_gsPixelOffsetX/Y - 8); the quad is clipped against
+ * the GS window [0x7000, 0x9000] and dropped entirely if any edge falls outside. Emits 0xA0
+ * bytes in three cursor advances: the DMA/GIF tag words (+0x10), a GIFtag + register-list qword
+ * pair (+0x10), then a 16-qword block - the ST descriptor u0<<4 | u1<<0xe | 0xa | v0<<0x18 |
+ * v1<<0x22, tex0, 0x15c, and 4 {RGBA, ST, XYZ2} vertices for corners (u0,v0)(u1,v0)(u0,v1)
+ * (u1,v1), then 5 (+0x80). ST is the 32-bit sum v<<20 + u<<4, sign-extended into the qword
+ * (the ROM forms it with `addu`); XYZ packs x | (y<<16) | z-field 0xfffff000000000. No return.
  *
- * Engine region — faithful #else, whole-.s traced (Ghidra-complete; 0 lq/sq so all copies are 8-byte
- * sd/4-byte sw). GS-pack safeguard: all 64-bit packs (XYZ, ST, descriptor) built in s64 — native long
- * is 32-bit and would overflow the <<16/<<20/<<0x22 fields + the z-field. */
-/* TODO(match) t493: sdk29 46.59% / engine96 41.15% (unit objdiff, objdiff_build.sh +
- * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
- * every other remaining arm). Residual on the better arm (sdk29): MACRO-AT (first differing insn:
- * ROM `addiu sp,sp,-144` vs built `addiu sp,sp,-224`). Levers: cc1-small/absolute globals model
- * RUN: 36.10% (engine96); engine96 with sched1 MEASURED (flag not landed): 32.70%. */
-/* DLI lever MEASURED (task #1220; unit objdiff report, objdiff_build.sh, this #else body promoted
- * SOLO, sdk29 arm, colima-ee-x86; every other row in the unit unchanged). cc1 emits
- * `dli $14,0xfffff000000000`; the ROM holds Ps2EeAs's expansion of that value at 0x27E9E4 ($8),
- * but in a different register. No allowlist row applies to the body AS COMPILED: the checker
- * refuses a row carrying cc1's register (demonstrated, NOTE #8789). A #8598 pin moves the register
- * onto the ROM's (FACT #8791); pin+row is not sufficient: residual body shape - structure /
- * C-shape / addressing (NOTE #8789), built 165 words vs the ROM's 191 on sdk29, 167-168 on
- * engine96, plus PACKED-SAVE (ROM saves at stride 8, cc1 2.9 at 16; NOTE #8777). Solo score
- * 46.59%. Residual class: REGALLOC at the dli site (pin-reachable, above), plus t493's residual
- * above. */
+ * MATCHED (task #1941): s136os arm (SN 1.36 cc1plus -fopt-stack, -O2 -G8 -fno-gcse), spliced.
+ * Every device and phrasing lever priced by removing it ALONE (solo s136os compile of this
+ * unit, word compare against the ROM .s with relocated fields masked; diff words / 191):
+ *   - ADDRESSING-MODEL DEVICE (RULING #8620): the cursor goes through g_frameDmaCursorAbs
+ *     (#8036 offset-0 alias above), so cc1 re-forms lui/lw before every access the ROM
+ *     re-reads and stores each advance through $at: 131/191 without (cursor CSE'd, built 180);
+ *   - the same device for g_gsPixelOffsetXAbs/YAbs (lui/lw per read): 175/191 without;
+ *   - REGISTER-PIN DEVICE (RULING #8598) on the z-field: cc1 otherwise colours it $6 and the
+ *     second advance's cursor reload $8, the reverse of the ROM, so the dli at 0x27E9E4 is
+ *     compiled as `$6,...`, its allowlist row does not apply, and GNU as expands it in 3
+ *     words: 82/191 without. Four pin-free spellings (s64/u64 local at the block top, after
+ *     `q =`, before the first store) all measure 82/191: cse folds them into one pseudo;
+ *   - three RULING #8549 Ps2EeAs dli sites (tools/ee/ps2eeas_dli_sites.txt, rows named
+ *     DrawTexturedQuad2d: 0x27E990 $9, 0x27E9A8 $17, 0x27E9E4 $8): 99/191 without (built 189);
+ *   - phrasing: the ST sums in 32 bits (`(s32)(... + ...)`; as s64 sums cc1 emits daddu):
+ *     48/191 without; `uHi = (u1<<0xe) | 0xa` as its own statement (inline, cc1 pairs the 0xa
+ *     with u<<4 instead): 36/191; `uLo = (s64)u << 4` held in a local declared ahead of uHi
+ *     (cc1 then issues its `move` first, as the ROM does): 18/191.
+ * A second pin, desc in $5, was measured dead weight once uLo was a local and is not used.
+ * Was 172/191 (t493 #else) and 124/191 (NOTE #9918's chunked-cursor body, FACT #9920); the
+ * u/v s-register swap #9920 recorded came from the 64-bit ST sums, not from allocation. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", DrawTexturedQuad2d);
+#define EE_REG(r) __asm__(r)   /* EE register pin; a no-op on the native build */
+#else
+#define EE_REG(r)
+#endif
+#if !defined(TARGET_NATIVE) && !defined(S136OS_DrawTexturedQuad2d)
+S136OS_SLOT(DrawTexturedQuad2d);
 #else
 extern s32 FloatToInt(f32 x);   /* declared file-scope below, used before it here */
 
 void DrawTexturedQuad2d(f32 x, f32 y, f32 w, f32 h, s32 u, s32 v, s32 uw, s32 vh,
                         u32 *colors, u64 tex0) {
-    s32 x0 = FloatToInt(x * 16.0f) + g_gsPixelOffsetX[0] - 8;
-    s32 x1 = FloatToInt((x + w) * 16.0f) + g_gsPixelOffsetX[0] - 8;
-    s32 y0 = FloatToInt(y * 16.0f) + g_gsPixelOffsetY[0] - 8;
-    s32 y1 = FloatToInt((y + h) * 16.0f) + g_gsPixelOffsetY[0] - 8;
+    s32 x0 = FloatToInt(x * 16.0f) + g_gsPixelOffsetXAbs - 8;
+    s32 x1 = FloatToInt((x + w) * 16.0f) + g_gsPixelOffsetXAbs - 8;
+    s32 y0 = FloatToInt(y * 16.0f) + g_gsPixelOffsetYAbs - 8;
+    s32 y1 = FloatToInt((y + h) * 16.0f) + g_gsPixelOffsetYAbs - 8;
 
     if (x0 < 0x9001 && x1 > 0x6fff && y0 < 0x9001 && y1 > 0x6fff) {
-        u32 *base = g_frameDmaCursor[0];
         s32 u1 = u + uw;
         s32 v1 = v + vh;
-        s64 st_u0 = (s64)(u << 4), st_u1 = (s64)(u1 << 4);
-        s64 st_v0 = (s64)(v << 20), st_v1 = (s64)(v1 << 20);
-        s64 zy0 = ((s64)y0 << 16) | 0xfffff000000000LL;
-        s64 zy1 = ((s64)y1 << 16) | 0xfffff000000000LL;
+        u64 *q;
+        register s64 zField EE_REG("$8") = 0xfffff000000000LL;
+        s64 uLo = (s64)u << 4;
+        s64 uHi = ((s64)u1 << 0xe) | 0xa;
+        s64 stDesc;
 
-        base[0] = 0x10000009;
-        base[1] = 0;
-        base[2] = 0;
-        base[3] = 0x50000009;
-        base[4] = 0x8001;
-        base[5] = 0x4000000;
-        base[6] = 0x31531068;
-        base[7] = 0x85315315;
-        *(u64 *)(base + 8)    = ((s64)u << 4) | ((s64)u1 << 0xe) | 0xa | ((s64)v << 0x18) | ((s64)v1 << 0x22);
-        *(u64 *)(base + 0xa)  = tex0;
-        base[0xc] = 0x15c;
-        base[0xd] = 0;
-        *(u64 *)(base + 0xe)  = colors[0];        /* vertex 0 (u0,v0) */
-        *(u64 *)(base + 0x10) = st_v0 + st_u0;
-        *(u64 *)(base + 0x12) = (s64)x0 | zy0;
-        *(u64 *)(base + 0x14) = colors[1];        /* vertex 1 (u1,v0) */
-        *(u64 *)(base + 0x16) = st_v0 + st_u1;
-        *(u64 *)(base + 0x18) = (s64)x1 | zy0;
-        *(u64 *)(base + 0x1a) = colors[2];        /* vertex 2 (u0,v1) */
-        *(u64 *)(base + 0x1c) = st_v1 + st_u0;
-        *(u64 *)(base + 0x1e) = (s64)x0 | zy1;
-        *(u64 *)(base + 0x20) = colors[3];        /* vertex 3 (u1,v1) */
-        *(u64 *)(base + 0x22) = st_v1 + st_u1;
-        *(u64 *)(base + 0x24) = (s64)x1 | zy1;
-        base[0x26] = 5;
-        base[0x27] = 0;
-        g_frameDmaCursor[0] = base + 0x28;
+        ((u32 *)g_frameDmaCursorAbs)[0] = 0x10000009;     /* DMA cnt tag, qwc 9 */
+        ((u32 *)g_frameDmaCursorAbs)[1] = 0;
+        ((u32 *)g_frameDmaCursorAbs)[2] = 0;
+        ((u32 *)g_frameDmaCursorAbs)[3] = 0x50000009;     /* DIRECT, 9 qwords */
+        g_frameDmaCursorAbs += 0x10;
+        ((u64 *)g_frameDmaCursorAbs)[0] = 0x0400000000008001LL;
+        ((u64 *)g_frameDmaCursorAbs)[1] = 0x8531531531531068LL;
+        g_frameDmaCursorAbs += 0x10;
+        q = (u64 *)g_frameDmaCursorAbs;
+        stDesc = uLo | uHi | ((s64)v << 0x18) | ((s64)v1 << 0x22);
+        q[0]  = stDesc;
+        q[1]  = tex0;
+        q[2]  = 0x15c;
+        q[3]  = colors[0];                                /* vertex 0 (u0,v0) */
+        q[4]  = (s32)((v << 20) + (u << 4));
+        q[5]  = ((s64)x0 | ((s64)y0 << 16)) | zField;
+        q[6]  = colors[1];                                /* vertex 1 (u1,v0) */
+        q[7]  = (s32)((v << 20) + (u1 << 4));
+        q[8]  = ((s64)x1 | ((s64)y0 << 16)) | zField;
+        q[9]  = colors[2];                                /* vertex 2 (u0,v1) */
+        q[10] = (s32)((v1 << 20) + (u << 4));
+        q[11] = ((s64)x0 | ((s64)y1 << 16)) | zField;
+        q[12] = colors[3];                                /* vertex 3 (u1,v1) */
+        q[13] = (s32)((v1 << 20) + (u1 << 4));
+        q[14] = ((s64)x1 | ((s64)y1 << 16)) | zField;
+        q[15] = 5;
+        g_frameDmaCursorAbs += 0x80;
     }
 }
 #endif
