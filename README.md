@@ -66,6 +66,12 @@ match reports with [objdiff](https://github.com/encounter/objdiff).
 A function that does not match yet is kept as `INCLUDE_ASM` and, where one
 exists, carries a portable C body under `#else` (`TARGET_NATIVE`).
 
+## Licence
+
+GPL-2.0-or-later; see [LICENSE](LICENSE). The licence covers this project's own
+work only, never the game. Bundled third-party source keeps its own licence;
+see [THIRD-PARTY.md](THIRD-PARTY.md).
+
 ## Credits
 
 See [credits.md](credits.md).
