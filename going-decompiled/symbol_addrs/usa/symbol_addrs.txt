@@ -72,6 +72,8 @@ func_00133930 = 0x00133930; // type:func
 // above - a size attr on a CD-fill symbol demotes the unit to a word dump); the real start
 // alone is pinned and the fill splits off as its own fragment. Valid-instruction blobs
 // are pinned to their size as in the cod/015180 block above.
+// cod/015180h (task 1884) - the head unit has no other mark of these starts, so splat would fold func_00115228 into the debris before it
+func_00115228 = 0x00115228; // type:func
 // cod/015180 - CD-fill heads (start-only pins)
 func_001158F8 = 0x001158F8; // type:func
 func_00124418 = 0x00124418; // type:func

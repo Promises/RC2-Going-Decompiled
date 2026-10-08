@@ -20,3 +20,17 @@ fp-bit-make  cygnus-ee/fp-bit.c  -DFLOAT -DFLOAT_BIT_ORDER_MISMATCH -DUS_SOFTWAR
 # headers) and newlib's configure.host define for mips64r5900.
 s_isnan  ../libm/newlib/libm/math/s_isnan.c  -Igoing-decompiled/libm/shim -Igoing-decompiled/libm/newlib/libm/common -DMALLOC_ALIGNMENT=16
 w_sqrt  ../libm/newlib/libm/math/w_sqrt.c  -Igoing-decompiled/libm/shim -Igoing-decompiled/libm/newlib/libm/common -DMALLOC_ALIGNMENT=16
+# libc.a members from newlib's hand-written R5900 assembly (RULING #9817, under
+# RULING #9783). Not GCC source: they live in going-decompiled/libc/ with their
+# own PROVENANCE, and the source column is relative to this directory. A `.S`
+# source is assembled whole-file by the held Ps2EeAs (build_libgcc.sh says
+# why). memcmp..strcmp are contiguous at 4-aligned ROM addresses, so they are
+# linked as one `ld-r` group (the remaining columns are its parts, in ROM
+# order); strncpy is linked alone. strlen.S is vendored but has no row: it
+# cannot be placed at its 4 mod 8 address (going-decompiled/libc/PROVENANCE).
+memcmp  ../libc/newlib/libc/machine/r5900/memcmp.S
+memcpy  ../libc/newlib/libc/machine/r5900/memcpy.S
+memset  ../libc/newlib/libc/machine/r5900/memset.S
+strcmp  ../libc/newlib/libc/machine/r5900/strcmp.S
+r5900_memcmp_strcmp  ld-r  memcmp memcpy memset strcmp
+strncpy  ../libc/newlib/libc/machine/r5900/strncpy.S

@@ -19,11 +19,24 @@
 # The cc1 OUTPUT goes through the same move_fixup.sed every unit's does, then
 # tools/ee/libgcc_lid_dli.pl (li.d -> dli, which binutils refuses at r5900; a
 # libgcc-only rule, see its header); the GCC source is never edited.
+# Two more MEMBERS row kinds, told apart by column 2 alone (RULING #9817):
+#  - a source ending in `.S` is a vendored hand-written assembly file. It gets
+#    cpp -lang-asm and then the WHOLE file goes through the held SN
+#    Ps2EeAs.exe, the SDK's own assembler (no cc1, no move_fixup.sed, no
+#    mips-linux-gnu-as). EE gas and GNU as both give different bytes for it
+#    (FACT #9816).
+#  - the literal `ld-r` makes a group: the members named in the rest of the row
+#    are built from their own rows and combined, unmodified and in that order,
+#    by `ld -r`. Only the group goes into the archive. It exists because .cod is
+#    SUBALIGN(8): a lone 4-aligned member cannot sit at a 4 mod 8 ROM address,
+#    but ld -r keeps each input's own 4-alignment inside the group, as the SN
+#    link did.
 # Output: going-decompiled/build/<region>/lib/libgcc.a (the yaml's lib_path) and
 # lib/members.txt (one member per line) for build.sh's INPUT/EXTERN lines.
 set -e
 REGION="${1:-usa}"
 cd "$(dirname "$0")/../.."
+ROOT=$(pwd)
 case "$REGION" in
   usa) BASENAME=SCUS_972.68 ;;
   eu)  BASENAME=SCES_516.07 ;;
@@ -44,22 +57,45 @@ if [ -z "$MEMBERS" ]; then
   exit 0
 fi
 mkdir -p "$OUT"
-objs=""
-for m in $MEMBERS; do
+# build_member <member>: $OUT/<member>.o from its MEMBERS row.
+build_member() {
+  m=$1
   row=$(awk -v m="$m" '$1 == m' "$SRC/MEMBERS")
   [ -n "$row" ] || { echo "BUILD FAIL (libgcc): $LD names libgcc.a:$m.o but $SRC/MEMBERS has no row for it" >&2; exit 1; }
   src=$(echo "$row" | awk '{print $2}')
   defs=$(echo "$row" | awk '{ $1 = ""; $2 = ""; sub(/^ +/, ""); print }')
   i="$OUT/$m.i"; s="$OUT/$m.s"; o="$OUT/$m.o"
-  "$WIBO" "$G/cpp.exe" $PRE -I"$SRC/shim" $defs "$SRC/$src" "$i" \
-    || { echo "BUILD FAIL (libgcc cpp): $m" >&2; exit 1; }
-  "$WIBO" "$G/cc1.exe" -quiet -O2 -G0 "$i" -o "$s" \
-    || { echo "BUILD FAIL (libgcc cc1): $m" >&2; exit 1; }
-  sed -E -f tools/ee/move_fixup.sed "$s" | tr -d '\r' | perl tools/ee/libgcc_lid_dli.pl \
-    | mips-linux-gnu-as -march=r5900 -mabi=eabi -no-pad-sections -EL -G0 -o "$o" - \
-    || { echo "BUILD FAIL (libgcc as): $m" >&2; exit 1; }
+  case "$src" in
+    ld-r)
+      # build_member reuses these globals (POSIX sh has no `local`), so the
+      # group's own are restored before ld -r.
+      group=$m; group_parts=$defs; parts=""
+      for p in $group_parts; do build_member "$p"; parts="$parts $OUT/$p.o"; done
+      m=$group; o="$OUT/$m.o"
+      mips-linux-gnu-ld -EL -r -o "$o" $parts \
+        || { echo "BUILD FAIL (libgcc ld -r): $m" >&2; exit 1; } ;;
+    *.S)
+      "$WIBO" "$G/cpp.exe" $PRE -lang-asm $defs "$SRC/$src" "$i" \
+        || { echo "BUILD FAIL (libgcc cpp): $m" >&2; exit 1; }
+      tr -d '\r' < "$i" > "$s"
+      # Ps2EeAs writes beside its output, so it runs in $OUT.
+      (cd "$OUT" && "$WIBO" "$ROOT/tools/ee/cc/ee/bin/Ps2EeAs.exe" -o "$m.o" "$m.s" > /dev/null) \
+        || { echo "BUILD FAIL (libgcc Ps2EeAs): $m" >&2; exit 1; } ;;
+    *)
+      "$WIBO" "$G/cpp.exe" $PRE -I"$SRC/shim" $defs "$SRC/$src" "$i" \
+        || { echo "BUILD FAIL (libgcc cpp): $m" >&2; exit 1; }
+      "$WIBO" "$G/cc1.exe" -quiet -O2 -G0 "$i" -o "$s" \
+        || { echo "BUILD FAIL (libgcc cc1): $m" >&2; exit 1; }
+      sed -E -f tools/ee/move_fixup.sed "$s" | tr -d '\r' | perl tools/ee/libgcc_lid_dli.pl \
+        | mips-linux-gnu-as -march=r5900 -mabi=eabi -no-pad-sections -EL -G0 -o "$o" - \
+        || { echo "BUILD FAIL (libgcc as): $m" >&2; exit 1; } ;;
+  esac
   [ -s "$o" ] || { echo "BUILD FAIL (libgcc: no object): $m" >&2; exit 1; }
-  objs="$objs $o"
+}
+objs=""
+for m in $MEMBERS; do
+  build_member "$m"
+  objs="$objs $OUT/$m.o"
   echo "$m" >> "$OUT/members.txt"
 done
 mips-linux-gnu-ar rcs "$OUT/libgcc.a" $objs

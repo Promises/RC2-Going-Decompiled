@@ -161,3 +161,14 @@ provenance, licence and project-written shims are in
 going-decompiled/libm/PROVENANCE; nothing in this directory changes for them.
 LINK_ALIASES carries w_sqrt.o's three imports that the game defines under
 other names (__ieee754_sqrt, matherr, __errno).
+
+libc.a members in MEMBERS
+-------------------------
+MEMBERS also carries rows that are NOT GCC source: newlib's hand-written R5900
+memcmp, memcpy, memset, strcmp and strncpy (.S files in going-decompiled/libc/),
+assembled by Ps2EeAs and archived into the same build/<region>/lib/libgcc.a
+(task #1884, RULING #9817). The first four are linked as one `ld-r` group,
+r5900_memcmp_strcmp, because .cod's SUBALIGN(8) cannot place a lone member at a
+4 mod 8 address. Provenance, notices and the per-member checks are in
+going-decompiled/libc/PROVENANCE. LINK_ALIASES carries the two old address
+names game code still calls them by (func_00115544, func_00115AC0).

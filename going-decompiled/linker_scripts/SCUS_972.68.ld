@@ -9,6 +9,10 @@ SECTIONS
         FILL(0xCDCDCDCD);
         cod_TEXT_START = .;
         going-decompiled/build/usa/going-decompiled/asm/usa/data/cod/000000.o(.text*);
+        going-decompiled/build/usa/going-decompiled/src/usa/cod/015180h.o(.text*);
+        going-decompiled/build/usa/lib/libgcc.a:r5900_memcmp_strcmp.o(.text*);
+        going-decompiled/build/usa/going-decompiled/src/usa/cod/015610.o(.text*);
+        going-decompiled/build/usa/lib/libgcc.a:strncpy.o(.text*);
         going-decompiled/build/usa/going-decompiled/src/usa/cod/015180.o(.text*);
         going-decompiled/build/usa/lib/libgcc.a:_divdi3.o(.text*);
         going-decompiled/build/usa/going-decompiled/src/usa/cod/0202D8.o(.text*);
@@ -33,6 +37,8 @@ SECTIONS
         cod_TEXT_SIZE = ABSOLUTE(cod_TEXT_END - cod_TEXT_START);
         cod_DATA_START = .;
         going-decompiled/build/usa/going-decompiled/asm/usa/data/cod/000000.o(.data*);
+        going-decompiled/build/usa/going-decompiled/src/usa/cod/015180h.o(.data*);
+        going-decompiled/build/usa/going-decompiled/src/usa/cod/015610.o(.data*);
         going-decompiled/build/usa/going-decompiled/src/usa/cod/015180.o(.data*);
         going-decompiled/build/usa/going-decompiled/src/usa/cod/0202D8.o(.data*);
         going-decompiled/build/usa/going-decompiled/src/usa/cod/0213D0.o(.data*);
@@ -63,6 +69,8 @@ SECTIONS
         FILL(0xCDCDCDCD);
         cod_BSS_START = .;
         going-decompiled/build/usa/going-decompiled/asm/usa/data/cod/000000.o(.bss COMMON .scommon);
+        going-decompiled/build/usa/going-decompiled/src/usa/cod/015180h.o(.bss COMMON .scommon);
+        going-decompiled/build/usa/going-decompiled/src/usa/cod/015610.o(.bss COMMON .scommon);
         going-decompiled/build/usa/going-decompiled/src/usa/cod/015180.o(.bss COMMON .scommon);
         going-decompiled/build/usa/going-decompiled/src/usa/cod/0202D8.o(.bss COMMON .scommon);
         going-decompiled/build/usa/going-decompiled/src/usa/cod/0213D0.o(.bss COMMON .scommon);

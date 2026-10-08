@@ -104,7 +104,19 @@ segments:
       # cmp 0, so no earlier gap depends on the fill). Phase 2 (task #893) adds
       # _fixunsdfdi.o and _floatdidf.o the same way; the ROM's pad at 0x1213B4
       # between them is that same CDCD fill.
-      - [0x015180, c, cod/015180] # core.text head (0x115200..0x11FC67)
+      # LIBC CARVE (task #1884, RULING #9817): newlib's hand-written R5900
+      # memcmp/memcpy/memset/strcmp (one `ld-r` group: three of them start at
+      # 4 mod 8, which SUBALIGN(8) cannot place alone) and strncpy are linked
+      # from their verbatim .S in going-decompiled/libc/, assembled by Ps2EeAs.
+      # strlen (0x1157AC, 4 mod 8, right after game code) cannot be placed and
+      # stays INCLUDE_ASM in cod/015610. The old unit keeps its name for the
+      # part after strncpy, so its .s paths and baselines do not move; the head
+      # before memcmp is cod/015180h.
+      - [0x015180, c, cod/015180h] # core.text head (0x115200..0x11533F)
+      - [0x0152C0, lib, libgcc, r5900_memcmp_strcmp] # libc.a memcmp.o memcpy.o memset.o strcmp.o .text (0x115340..0x11568F)
+      - [0x015610, c, cod/015610] # core.text: func_00115690, strlen, CD fill, func_001158F8 (0x115690..0x115ABF)
+      - [0x015A40, lib, libgcc, strncpy] # libc.a strncpy.o .text (0x115AC0..0x115C8B), its trailing zero word 0x115C8C
+      - [0x015C10, c, cod/015180] # core.text: the rest of the old head unit (0x115C90..0x11FC67)
       - [0x01FBE8, lib, libgcc, _divdi3] # libgcc.a _divdi3.o .text (0x11FC68..0x120353), pad 0x120354
       - [0x0202D8, c, cod/0202D8] # core.text: libgcc _eh.o as asm/C, pad 0x1212C4 as a tail fragment (0x120358..0x1212C7)
       - [0x021248, lib, libgcc, _fixunsdfdi] # libgcc.a _fixunsdfdi.o .text (0x1212C8..0x1213B3), pad 0x1213B4

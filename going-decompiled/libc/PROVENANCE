@@ -1,0 +1,86 @@
+libc — newlib's hand-written R5900 string/memory routines, linked as library members
+====================================================================================
+
+Why this directory exists
+-------------------------
+Six functions in the game's SDK code are newlib libc routines that the SDK
+built from hand-written assembly, not C. Each SDK libc.a object's stabs name
+src/newlib/libc/machine/r5900/<name>.S (FACT #9816). This directory holds those
+.S files verbatim, and tools/ee/build_libgcc.sh assembles them as library
+members (RULING #9817, under RULING #9783), so the game's units no longer carry
+their bodies as INCLUDE_ASM. They were never C, so this is not decompilation.
+It is the original source, built by the original assembler.
+
+Nothing here is edited. If a file's verbatim source does not assemble to the
+ROM's bytes, that member stays INCLUDE_ASM in its game unit.
+
+Files (unmodified)
+------------------
+Upstream: the Cygnus EE toolchain tree (ee/newlib), via
+  https://raw.githubusercontent.com/SSXModding/ps2-ee-toolchain/<revision>/<path>
+Revision: b595ded606227e93b8c4a447446c1d2ac093827d
+That repository is a third-party upload of the Cygnus EE tree and carries no
+licence of its own. Each file below carries its own notice, quoted next.
+
+  file                                      upstream path                                sha1
+  newlib/libc/machine/r5900/memcmp.S        ee/newlib/libc/machine/r5900/memcmp.S        fc50ffae6f6e640c766d17d20b35f0b6fea0836d
+  newlib/libc/machine/r5900/memcpy.S        ee/newlib/libc/machine/r5900/memcpy.S        753a52a237c52017688ba5ce9d8f804bb487b95e
+  newlib/libc/machine/r5900/memset.S        ee/newlib/libc/machine/r5900/memset.S        50fba67610a277c9fd24d532708c417fba0a73fa
+  newlib/libc/machine/r5900/strcmp.S        ee/newlib/libc/machine/r5900/strcmp.S        f72429d18b8bafcb9c21d229c855a5ab5a861cfe
+  newlib/libc/machine/r5900/strlen.S        ee/newlib/libc/machine/r5900/strlen.S        5e97b57bed34b5873ef48e7ff6a702c48deb658d
+  newlib/libc/machine/r5900/strncpy.S       ee/newlib/libc/machine/r5900/strncpy.S       b3533482268c1b379fd8158cf11fb94f25996adb
+
+Notice
+------
+All six files carry the same notice block, byte for byte:
+
+   Copyright (C) 1999 by Cygnus Solutions. All rights reserved.
+
+   Permission to use, copy, modify, and distribute this
+   software is freely granted, provided that this notice
+   is preserved.
+
+It is a permissive notice of its own, so these files do not depend on newlib's
+COPYING.NEWLIB. None of them #includes anything, so no newlib header and no
+project-written shim is involved.
+
+How each member is built and checked
+------------------------------------
+going-decompiled/libgcc/MEMBERS has one row per member (source column ends in
+`.S`). build_libgcc.sh runs the SDK cpp.exe with -lang-asm and the same
+predefines as the C members, then assembles the whole file with the held SN
+Ps2EeAs.exe 1.9.25.758, the SDK's own assembler. Per RULING #9817, each linked
+member was checked two ways:
+  - Ps2EeAs output vs the ROM: byte-identical over the function's size, at its
+    address, in USA and in EU.
+  - The held EE gas (as.exe 2.9-ee-991111b) on the same input vs the SDK
+    libc.a member: identical .text sha1.
+
+The assembler is load-bearing, measured. For strcmp, strlen and strncpy, EE gas
+does NOT reproduce the ROM: it gives the SDK archive's bytes, which are 2, 4
+and 4 words shorter. The source writes its byte-mask constants as
+`dli $7,0x0101010101010101` / `dli $6,0x8080808080808080`. EE gas expands
+0x0101... from lui; Ps2EeAs derives it from the 0x8080... chain ending in
+`dsll $7,$7,9; ori $7,$7,0x101`, one word more per site (10 sites, FACT #9823).
+That one source tree yields two binaries is what was earlier recorded as
+"revision skew". It is an assembler difference, not a source revision.
+
+Placement: the ld-r group
+-------------------------
+memcmp, memcpy, memset and strcmp are contiguous in the ROM (0x115340..0x11568F),
+each .text 4-aligned, and memcpy, memset and strcmp start at 4 mod 8. The game's
+.cod output section is SUBALIGN(8), which would push each lone member to the
+next 8 (measured: memcpy at 0x1153D8 instead of 0x1153D4). So MEMBERS links
+them as one group, r5900_memcmp_strcmp: the four unmodified Ps2EeAs objects
+combined by `ld -r` in ROM order. No relocation is edited and no padding is
+added. The objects have no relocations, and the group's .text is their four
+.text sections back to back. The group starts at 0x115340, 8-aligned, and ends
+at 0x115690, 8-aligned.
+
+strncpy is linked alone (0x115AC0..0x115C8F). Its Ps2EeAs .text is one word
+longer than the function: a trailing zero word, which the ROM also holds at
+0x115C8C.
+
+strlen is vendored but NOT linked. It starts at 0x1157AC (4 mod 8) right after
+game code (func_00115690), so it cannot be grouped with a library neighbour, and
+SUBALIGN(8) forbids it alone. It stays INCLUDE_ASM in cod/015610 (task #1884).

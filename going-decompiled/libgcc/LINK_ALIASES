@@ -11,7 +11,13 @@
 # libm.a w_sqrt.o's imports (task #1856). Each is the ROM target of that
 # relocation in the original link: __ieee754_sqrt is e_sqrt's .s (libm.a
 # e_sqrt.o, still asm), matherr is libm.a s_matherr.o (game C, cod/031380),
-# __errno is libc's accessor (game C, cod/015180).
+# __errno is libc's accessor (game C, cod/015180h).
 __ieee754_sqrt  e_sqrt
 matherr  func_00131400
 __errno  func_00115200
+# Old address names of two libc members (task #1884). Game asm and C still
+# call strcmp and strncpy as func_00115544 / func_00115AC0; cod/015180.c used
+# to define these with INCLUDE_ASM_ALIAS, but the bodies now come from the
+# library. Row form here is <old name> <library symbol>.
+func_00115544  strcmp
+func_00115AC0  strncpy
