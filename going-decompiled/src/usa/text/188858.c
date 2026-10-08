@@ -3070,68 +3070,113 @@ extern void DecompressWad(void *src, void *dest);
 void RelocateHudBankGsSlots(s32 index, s32 size);
 extern u8 g_menuScreenBlock[];                /* 0x menu-screen scratch/VRAM staging block */
 
-/* ReloadAllHudBankTextures(mode): load and upload the HUD moby-table wads into VRAM.
+/**
+ * Load and upload the HUD moby-table texture wads into VRAM.
  *
- * The header (g_pHudAssetHeader[0]) holds, per sub-bank, a decompressed size
+ *   mode  which optional banks to load: banks 0 and 1 always; bank 2 for mode
+ *         0 or 2; bank 3 for mode 1 or 2
+ *
+ * The header (g_pHudAssetHeader[0]) holds, per bank, a decompressed size
  * (+0x54/+0x5C/+0x60/+0x64) and a compressed-source pointer (+0x94/+0x9C/+0xA0/
- * +0xA4); the matching compressed sizes live in g_hudMobySpawnStart (+0x8/+0x10/
- * +0x14/+0x18). Each present sub-bank (size != 0) is staged into the menu-screen
- * scratch buffer (g_menuScreenBlock+0x20) via func_002EFD28, decompressed into
- * the running VRAM address (g_menuScreenBlock+0x114, advanced by each bank's
- * size) via DecompressWad, then registered with RelocateHudBankGsSlots.
+ * +0xA4); the matching compressed sizes are words 2/4/5/6 of the
+ * g_hudMobySpawnStart record (+0x8/+0x10/+0x14/+0x18). Each present bank
+ * (size != 0) is staged into the menu-screen scratch buffer (the pointer at
+ * g_menuScreenBlock+0x20) via func_002EFD28 (compressed size / 16 qwords),
+ * decompressed by DecompressWad to the running VRAM address (starting at
+ * g_menuScreenBlock+0x114 and advanced by each bank's size), then registered
+ * with RelocateHudBankGsSlots. The relocation slot ids are 0, 2, 3, 4 for banks
+ * 0..3 (the ROM passes 2 for bank 1, at 0x28B7C8).
  *
- * Banks 0 and 1 are always loaded; bank 2 only for mode 0 or 2; bank 3 only for
- * mode 1 or 2. [SEEDABLE: mode] */
+ * MATCHED byte-exact on the s136os arm at the unit's -O2 default (RULING
+ * #9450; task #1833). Each of these was measured necessary by reverting it
+ * alone (solo s136os harness, verify_match_unit words differing / built length
+ * in brackets):
+ *   - the header re-read per bank through g_pHudAssetHeaderAbs (absolute
+ *     `lui $5; lw $5`), as the ROM does after every call; read once up front
+ *     [113 vs 117 words];
+ *   - a separate size local per bank: one shared `size` swaps the size/dest
+ *     callee-saved registers ($17/$18) and the save order [22/118];
+ *   - the compressed sizes read through g_hudMobySpawnRec, a 64-byte view of
+ *     g_hudMobySpawnStart, so cc1 splits %hi/%lo itself (`lui $4; lw $2`); the
+ *     byte-offset spelling through the 4-byte declaration [53/118];
+ *   - the scratch pointer and VRAM base read through the `scr` local (one
+ *     `addiu` base, two offsets) [12/118];
+ *   - HUD_BANK3_HEADER: the bank-3 header read is a volatile CODEGEN DEVICE
+ *     (RULING #8404), not a claim that the header changes asynchronously. cc1
+ *     thinks the read is one small-data insn and puts it in the `mode - 1 < 2`
+ *     test's delay slot; the ROM branches likely to the epilogue
+ *     (`beql $2,$0; ld $16`) and reads the header after it [4/118]. Writers of
+ *     g_pHudAssetHeader: ParseLoadedSegment only (sw +0 at 0x2931EC, sw +4 at
+ *     0x293204), by a direct-`sw` census of going-decompiled/asm/usa, one row
+ *     per glabel (the census form documented above func_00290320's devices,
+ *     which reads 85 for g_frameDmaCursor as its control).
+ * g_hudMobySpawnRec is a bare asm-label alias (NOTE #9476): it names the real
+ * symbol, so the relocations are g_hudMobySpawnStart's; natively it is that
+ * record's words.
+ *
+ * GUARD (task #1269): on EE this C is the image's body, compiled alone by SN
+ * 2.95.3 v1.36 -fopt-stack (tools/ee/s136os_functions.txt) and spliced over the
+ * S136OS_SLOT line by tools/ee/s136os_splice.sh. On native it is plain C.
+ */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", ReloadAllHudBankTextures);
+extern s32 g_hudMobySpawnRec[16] __asm__("g_hudMobySpawnStart");
+#define HUD_BANK3_HEADER (*(u8 *volatile *)&g_pHudAssetHeaderAbs[0])
+#else
+#define g_hudMobySpawnRec ((s32 *)&g_hudMobySpawnStart)
+#define HUD_BANK3_HEADER ((u8 *)g_pHudAssetHeader[0])
+#endif
+#if !defined(TARGET_NATIVE) && !defined(S136OS_ReloadAllHudBankTextures)
+S136OS_SLOT(ReloadAllHudBankTextures);
 #else
 void ReloadAllHudBankTextures(s32 mode) {
-    u8   *hdr  = (u8 *)g_pHudAssetHeader[0];
-    void *dest = *(void **)(g_menuScreenBlock + 0x20);
-    s32   vram = *(s32 *)(g_menuScreenBlock + 0x114);
-    s32   size, clen;
+    u8 *scr = g_menuScreenBlock;
+    void *dest = *(void **)(scr + 0x20);
+    s32 vram = *(s32 *)(scr + 0x114);
+    s32 size0, size1, size2, size3;
 
-    /* bank 0 — always */
-    size = *(s32 *)(hdr + 0x54);
-    if (size != 0) {
-        clen = *(s32 *)((u8 *)&g_hudMobySpawnStart + 0x8);
-        func_002EFD28(dest, *(void **)(hdr + 0x94), 0, clen / 16, 0);
+    /* bank 0 - always */
+    size0 = *(s32 *)((u8 *)g_pHudAssetHeaderAbs[0] + 0x54);
+    if (size0 != 0) {
+        func_002EFD28(dest, *(void **)((u8 *)g_pHudAssetHeaderAbs[0] + 0x94), 0,
+                      g_hudMobySpawnRec[2] / 16, 0);
         DecompressWad(dest, (void *)vram);
         RelocateHudBankGsSlots(0, vram);
-        vram += size;
+        vram += size0;
     }
-    /* bank 1 — always */
-    size = *(s32 *)(hdr + 0x5C);
-    if (size != 0) {
-        clen = *(s32 *)((u8 *)&g_hudMobySpawnStart + 0x10);
-        func_002EFD28(dest, *(void **)(hdr + 0x9C), 0, clen / 16, 0);
+    /* bank 1 - always */
+    size1 = *(s32 *)((u8 *)g_pHudAssetHeaderAbs[0] + 0x5C);
+    if (size1 != 0) {
+        func_002EFD28(dest, *(void **)((u8 *)g_pHudAssetHeaderAbs[0] + 0x9C), 0,
+                      g_hudMobySpawnRec[4] / 16, 0);
         DecompressWad(dest, (void *)vram);
-        RelocateHudBankGsSlots(1, vram);
-        vram += size;
+        RelocateHudBankGsSlots(2, vram);
+        vram += size1;
     }
-    /* bank 2 — mode 0 or 2 */
+    /* bank 2 - mode 0 or 2 */
     if (mode == 0 || mode == 2) {
-        size = *(s32 *)(hdr + 0x60);
-        if (size != 0) {
-            clen = *(s32 *)((u8 *)&g_hudMobySpawnStart + 0x14);
-            func_002EFD28(dest, *(void **)(hdr + 0xA0), 0, clen / 16, 0);
+        size2 = *(s32 *)((u8 *)g_pHudAssetHeaderAbs[0] + 0x60);
+        if (size2 != 0) {
+            func_002EFD28(dest, *(void **)((u8 *)g_pHudAssetHeaderAbs[0] + 0xA0), 0,
+                          g_hudMobySpawnRec[5] / 16, 0);
             DecompressWad(dest, (void *)vram);
             RelocateHudBankGsSlots(3, vram);
-            vram += size;
+            vram += size2;
         }
     }
-    /* bank 3 — mode 1 or 2 */
+    /* bank 3 - mode 1 or 2 */
     if (mode == 1 || mode == 2) {
-        size = *(s32 *)(hdr + 0x64);
-        if (size != 0) {
-            clen = *(s32 *)((u8 *)&g_hudMobySpawnStart + 0x18);
-            func_002EFD28(dest, *(void **)(hdr + 0xA4), 0, clen / 16, 0);
+        u8 *hdr = HUD_BANK3_HEADER;
+        size3 = *(s32 *)(hdr + 0x64);
+        if (size3 != 0) {
+            func_002EFD28(dest, *(void **)(hdr + 0xA4), 0,
+                          g_hudMobySpawnRec[6] / 16, 0);
             DecompressWad(dest, (void *)vram);
             RelocateHudBankGsSlots(4, vram);
         }
     }
 }
 #endif
+#undef HUD_BANK3_HEADER
 
 /*
  * g_hudClutSlotsAbs / g_hudTextureSlotsAbs: ASSEMBLER aliases of the two slot-
