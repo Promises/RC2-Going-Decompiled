@@ -1856,43 +1856,62 @@ s32 func_00352058(u8 *obj, u8 *req) {
  * into the queue's ring buffer. Under the queue sema (dmaq+0x40): if there is
  * room (count@0x58 < capacity@0x54), validates the command via func_00352058 and
  * - unless BOTH 64-bit words (cmd+0x0, cmd+0x8) are negative (the skip sentinel) -
- * copies {u64,u64,s32,s32} into ring[writeIdx@0x5C] (base@0x50, stride 0x18),
- * bumps the count and wraps the write index modulo capacity, returning 1. Returns
- * 0 if the queue is full or the command was the skip sentinel. (The prior
- * signature inconsistency was the void-vs-s32 extern, now fixed - the caller
- * func_00352638 checks the result == 0.) Matching arm stays asm; #else is the
- * structure-exact model. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003521B0);
+ * copies {s64,s64,s32,s32} into ring[writeIdx@0x5C] (base@0x50, stride 0x18),
+ * bumps the count and wraps the write index modulo capacity.
+ *   dmaq: the FMV DMA-add queue; cmd: the command to copy.
+ *   returns 1 if the queue had room (the sentinel is accepted and dropped, as
+ *   the ROM sets the result in the sentinel branch's delay slot too), 0 if full.
+ * The ring slot is re-addressed for every field store (the stores may alias the
+ * queue), as the ROM does. The sema calls use their ROM symbols: WaitSema and
+ * SignalSema have no EE definition (as in func_00352000).
+ * GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+ * (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in tools/ee/s136os_functions.txt)
+ * and spliced over S136OS_SLOT by tools/ee/s136os_splice.sh (task #1834). There
+ * is no asm fallback: a build that skips the splice drops the function. On
+ * native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_003521B0)
+S136OS_SLOT(func_003521B0);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
-extern void WaitSema(s32 sema);
+extern s32 func_0011AC60(s32 sema);
 extern s32 func_00352058(u8 *obj, u8 *req);
-extern s32 SignalSema(s32 sema);
+extern s32 func_0011AC40(s32 sema);
 /* (end of this body's declarations) */
-/* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 71.46% / engine96 67.53%. Residual: PACKED-SAVE (4 callee saves) + 40 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
+typedef struct FmvDmaAddCmd {
+    /* 0x00 */ s64 tag0;
+    /* 0x08 */ s64 tag1;
+    /* 0x10 */ s32 arg0;
+    /* 0x14 */ s32 arg1;
+} FmvDmaAddCmd;
+typedef struct FmvDmaAddQueue {
+    /* 0x00 */ u8 pad00[0x40];
+    /* 0x40 */ s32 sema;
+    /* 0x44 */ u8 pad44[0xC];
+    /* 0x50 */ FmvDmaAddCmd *ring;
+    /* 0x54 */ s32 capacity;
+    /* 0x58 */ s32 count;
+    /* 0x5C */ s32 writeIdx;
+} FmvDmaAddQueue;
 s32 func_003521B0(void *dmaq, void *cmd) {
-    u8 *q = (u8 *)dmaq;
-    u8 *c = (u8 *)cmd;
+    FmvDmaAddQueue *q = (FmvDmaAddQueue *)dmaq;
+    FmvDmaAddCmd *c = (FmvDmaAddCmd *)cmd;
     s32 result = 0;
 
-    WaitSema(*(s32 *)(q + 0x40));
-    if (*(s32 *)(q + 0x58) < *(s32 *)(q + 0x54)) {   /* count < capacity */
-        func_00352058(q, c);
-        if (*(s64 *)(c + 0x0) >= 0 || *(s64 *)(c + 0x8) >= 0) {
-            u8 *slot = *(u8 **)(q + 0x50) + *(s32 *)(q + 0x5C) * 0x18;
-            *(s64 *)(slot + 0x0)  = *(s64 *)(c + 0x0);
-            *(s64 *)(slot + 0x8)  = *(s64 *)(c + 0x8);
-            *(s32 *)(slot + 0x10) = *(s32 *)(c + 0x10);
-            *(s32 *)(slot + 0x14) = *(s32 *)(c + 0x14);
-            *(s32 *)(q + 0x58) += 1;
-            *(s32 *)(q + 0x5C) =
-                (*(s32 *)(q + 0x5C) + 1) % *(s32 *)(q + 0x54);
-            result = 1;
+    func_0011AC60(q->sema);
+    if (q->count < q->capacity) {
+        func_00352058((u8 *)q, (u8 *)c);
+        if (c->tag0 >= 0 || c->tag1 >= 0) {
+            q->ring[q->writeIdx].tag0 = c->tag0;
+            q->ring[q->writeIdx].tag1 = c->tag1;
+            q->ring[q->writeIdx].arg0 = c->arg0;
+            q->ring[q->writeIdx].arg1 = c->arg1;
+            q->count += 1;
+            q->writeIdx = (q->writeIdx + 1) % q->capacity;
         }
+        result = 1;
     }
-    SignalSema(*(s32 *)(q + 0x40));
+    func_0011AC40(q->sema);
     return result;
 }
 #endif
