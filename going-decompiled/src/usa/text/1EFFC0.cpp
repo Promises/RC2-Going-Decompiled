@@ -1836,38 +1836,59 @@ extern s32 IsVendorUpgradesUnlocked(void);
  *  stores (i + 0xEA92) at +0x0, the slot's source word D_1AD2E8[i] at +0x4, and the
  *  slot index i at +0x8; the running count lives at +0x740. Resets the count and
  *  the g_vendorHasPendingArmor flag first. Note the flagged path SKIPS the unlock call. */
-/* RESIDUAL CLASS (task #576): UNDIAGNOSED
- *   Both arms measured at unit objdiff (objdiff_build.sh + unit_report.sh,
- *   whole-unit blanket screen, clean tree): sdk29 42.54%, engine96 48.78%
- *   (better arm: engine96). Neither reaches 100.00%, so this stays INCLUDE_ASM
- *   and the #else below remains the portable impl.
- *   SCREENED ONLY. Both arms were measured; the residual was not diagnosed to a
- *   mechanism. This is an open arm, not a wall -- do not read it as one. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F8038);
+/* GUARD (task #2021): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback. On native it is plain C.
+ * No device. What it took, each item priced by reverting it ALONE (solo s136
+ * screen, words differing of 90 incl. the trailing pad; final = EXACT 0/90):
+ *   - `ui` taken BEFORE the start slot is computed: 16/90;
+ *   - the loop reads the list through a second pointer `owner = ui` set inside
+ *     the guard (the ROM's `daddu $17,$5,$0` in the beqz slot; the first store
+ *     keeps `ui` in $5): 69/90, built 88;
+ *   - the three column pointers (owner+0x148/+0x144/+0x140) hoisted as locals,
+ *     the ROM's $23/$22/$21: 81/90, built 80;
+ *   - the five source words copied as ONE 20-byte struct (the ROM's
+ *     ldl/ldr/sdl/sdr + lw/sw block), not a word loop: 83/90, built 88.
+ *   Not load-bearing: the flag test spelled `(... ? 1 : 0) || ...` is EXACT too.
+ *   The explicit `if (i < 5) do..while` guard places the column pointers after
+ *   the bound test, as the ROM's preheader has them (not priced alone). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002F8038)
+S136OS_SLOT(func_002F8038);
 #else
+/* The five per-slot source words, copied as one block. */
+typedef struct { s32 v[5]; } VendorSlotSrcWords;
+
 void func_002F8038(void) {
-    s32 srcVals[5];
-    s32 i, k, count, emit;
+    VendorSlotSrcWords src;
+    char *ui;
+    char *owner;
+    char *slotCol, *valCol, *idCol; /* entry +0x8 / +0x4 / +0x0 columns */
+    s32 i;
 
-    i = (g_vendorEntryArmor != 0) ? g_vendorEntryArmor + 1 : 1;
-    *(s32 *)((char *)&g_vendorUi + 0x740) = 0;
-    g_vendorHasPendingArmor = 0;
-
-    for (k = 0; k < 5; k++) {
-        srcVals[k] = D_1AD2E8[k];
+    ui = (char *)&g_vendorUi;
+    i = 1;
+    if (g_vendorEntryArmor != 0) {
+        i = g_vendorEntryArmor + 1;
     }
+    *(s32 *)(ui + 0x740) = 0;
+    g_vendorHasPendingArmor = 0;
+    src = *(VendorSlotSrcWords *)D_1AD2E8;
 
-    for (; i < 5; i++) {
-        emit = ((u32)i < 8 && ((D_1395B8[0x8D] >> i) & 1)) ? 1 : 0;
-        if (!emit && IsVendorUpgradesUnlocked() == 0) {
-            continue;
-        }
-        count = *(s32 *)((char *)&g_vendorUi + 0x740);
-        *(s32 *)((char *)&g_vendorUi + 0x148 + count * 0xC) = i;
-        *(s32 *)((char *)&g_vendorUi + 0x144 + count * 0xC) = srcVals[i];
-        *(s32 *)((char *)&g_vendorUi + 0x140 + count * 0xC) = i + 0xEA92;
-        *(s32 *)((char *)&g_vendorUi + 0x740) = count + 1;
+    if (i < 5) {
+        owner = ui;
+        slotCol = owner + 0x148;
+        valCol  = owner + 0x144;
+        idCol   = owner + 0x140;
+        do {
+            if (((u32)i < 8 && ((D_1395B8[0x8D] >> i) & 1)) || IsVendorUpgradesUnlocked() != 0) {
+                *(s32 *)(slotCol + *(s32 *)(owner + 0x740) * 0xC) = i;
+                *(s32 *)(valCol + *(s32 *)(owner + 0x740) * 0xC) = src.v[i];
+                *(s32 *)(idCol + *(s32 *)(owner + 0x740) * 0xC) = i + 0xEA92;
+                *(s32 *)(owner + 0x740) = *(s32 *)(owner + 0x740) + 1;
+            }
+            i++;
+        } while (i < 5);
     }
 }
 #endif
