@@ -5775,44 +5775,63 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00297B48);
  * into one 32-bit word — bit `b` is set when the pixel nibble is nonzero (even b
  * = low nibble, odd b = high nibble of scratchpad byte[b>>1]). The output word
  * for (row, col) lands at dest + 4*((row%16) + 512*(row/16)) + col*0x40 (bands of
- * 16 rows, columns 0x40 bytes apart). The matching build keeps the asm (t496
- * probe below: best arm sdk29 56.23%, PACKED-SAVE; the strength-reduction
- * 64.83% is func_00297E80's); this #else is the portable equivalent. */
+ * 16 rows, columns 0x40 bytes apart). Returns nothing.
+ *
+ * Byte-exact on the s136os arm (task #1915). Its nine callee saves at 8-byte
+ * stride are SN 1.36 -fopt-stack's; the t496 "PACKED-SAVE" label described the
+ * 2.9 arm. Each lever priced by removing it alone (solo s136 compile, relocated
+ * fields masked; N/84 words differ):
+ *  - the row is decoded FIRST and the band offset formed after the call, so the
+ *    output pointer lives in caller-saved $5 through the column loops: 53/84;
+ *  - the band split is signed `row % 16` / `row / 16` (the ROM's -1 compare,
+ *    +15 bias and movn); `row & 15` / `row >> 4`: 70/84, 75 words;
+ *  - `row % 16` is written BEFORE `row / 16`: the modulus's own quotient comes
+ *    first and `band` is a copy of it that cse cannot fold, which is the ROM's
+ *    `daddu $2,$3,$0` at 0x297DA8; quotient first: 58/84, 82 words (no copy,
+ *    so no alignment nop at 0x297DC4 either);
+ *  - the scratchpad is read through a pointer local, which puts the base first
+ *    in the address add (ROM `addu $2,$19,$2`): 1/84. */
 #ifdef TARGET_NATIVE
 extern void func_00297E80(void *scratchpad, s32 row, void *srcA, void *srcB);
 #endif
 
-#ifndef TARGET_NATIVE
-/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
- * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 56.23% PACKED-SAVE /
- * engine96 40.65% IDIOM-LIKELY; best arm sdk29, first differing insn there: 'addiu sp, sp,
- * -0x50' vs 'addiu sp, sp, -0x80' */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapBuildBitmapFrom4bpp);
+/* t496 probe (unit objdiff on the all-promoted probe files): sdk29 56.23% PACKED-SAVE /
+ * engine96 40.65% IDIOM-LIKELY ('addiu sp, sp, -0x50' vs -0x80).
+ * GUARD (task #1915): on EE this C is the image's body, compiled alone by SN
+ * 2.95.3 v1.36 -fopt-stack (tools/ee/s136os_functions.txt) and spliced over the
+ * S136OS_SLOT line by tools/ee/s136os_splice.sh; the 2.9 compile sees only the
+ * slot, so a build that skips the splice loses the function. On native it is
+ * plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_MapBuildBitmapFrom4bpp)
+S136OS_SLOT(MapBuildBitmapFrom4bpp);
 #else
 /* Prototypes this body needs whose declarations sit in other guarded arms:
  * the s136os arm compiles this arm alone, so it must see them here. */
 extern void func_00297E80(void *scratchpad, s32 row, void *srcA, void *srcB);
 void MapBuildBitmapFrom4bpp(void *destArg, void *srcA, void *srcB) {
-    u8 *dest = (u8 *)destArg;
+    u8 *dest    = (u8 *)destArg;
+    u8 *scratch = (u8 *)0x70000000;   /* row pixels decoded here, one nibble each */
     s32 row;
 
     for (row = 0; row < 0x100; row++) {
-        s32  band = row >> 4;             /* 16-row band index */
-        s32  sub  = row - (band << 4);    /* row within band (row % 16) */
-        s32 *out  = (s32 *)(dest + ((sub + (band << 9)) << 2));
+        s32 *out;
         s32  col;
 
         func_00297E80((void *)0x70000000, row, srcA, srcB);
+        {
+            s32 sub  = row % 16;          /* row within its 16-row band */
+            s32 band = row / 16;          /* 16-row band index */
+            out = (s32 *)(dest + ((sub + band * 512) << 2));
+        }
 
         for (col = 0; col < 0x20; col++) {
-            const u8 *sp = (const u8 *)0x70000000 + col * 16;
             s32 acc = 0;
             s32 bit;
             for (bit = 0; bit < 0x20; bit++) {
-                u8  byte   = sp[bit >> 1];
+                u8  byte   = scratch[col * 16 + (bit >> 1)];
                 s32 nibble = (bit & 1) ? (byte >> 4) : (byte & 0xF);
                 if (nibble != 0) {
-                    acc |= (s32)(1U << bit);
+                    acc |= 1 << bit;
                 }
                 if ((bit & 0x1F) == 0x1F) {
                     *out++ = acc;
