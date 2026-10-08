@@ -6437,23 +6437,63 @@ void func_0028FFF0(s32 iconIndex, s32 x0, s32 y0, s32 x1, s32 y1,
 }
 #endif
 
-/* UploadTextureToGs(src, a2, a3, logW, logH, kickNow) = UploadTextureToGs: build a GS
- * image-upload GIF packet for one texture (TRXPOS/TRXREG/TRXDIR) via
- * func_00126288 (BuildGsImageUploadPacket). The transfer dimensions come from the
- * log2 dims: width = 1<<logW, height = 1<<logH, GS-buffer-width v12 =
- * max((1<<logW)>>6, 1), and the qword count tag = 1<<(logW+logH-4). When kickNow==0
- * it splices a DMA tag chain into g_frameDmaCursor for deferred upload (DMAtag
- * 0x10000006 + GIFtag 0x50000006 header, then a 0x30000000|tag transfer + trailing
- * 0x50000000|tag), advancing the cursor by 0x70 then 0x10; otherwise it builds into
- * a local packet and issues it immediately (func_0011AEA0/FlushCache +
- * KickGifImageUpload). MATCH-WALL only (callee-save/register-colouring); un-walled
- * as faithful #else (engine 2.96 = no byte-match). */
+/*
+ * g_frameDmaCursorGp: an ASSEMBLER alias of g_frameDmaCursor sized 4 (FACT
+ * #8036's construct, RULING #8620), so gas addresses it %gp_rel while the
+ * `.extern g_frameDmaCursor, 16` above makes every access to the real name
+ * absolute. The ROM uses the %gp_rel form for the cursor accesses cc1 places in
+ * delay slots (UploadTextureToGs, and the GS-rectangle builders below). The
+ * relocation names g_frameDmaCursor and the object has no g_frameDmaCursorGp
+ * symbol.
+ */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", UploadTextureToGs);
+__asm__(".extern g_frameDmaCursorGp, 4\n\tg_frameDmaCursorGp = g_frameDmaCursor");
+extern u32 *g_frameDmaCursorGp; // alias
 #else
+#define g_frameDmaCursorGp g_frameDmaCursor
+#endif
+
+/**
+ * Upload one texture to GS local memory with an IMAGE-mode GIF transfer.
+ *
+ *   handle    main-RAM address of the texel data (the REF DMAtag's address)
+ *   vramBlk   destination base block pointer (DBP)
+ *   fmt       pixel format, passed through as BuildGsImageUploadPacket's 4th
+ *             argument (the sole caller passes 0x1B; FACT #5665)
+ *   wLog/hLog log2 of the texture width / height
+ *   kickMode  0 = append the upload to the frame DMA chain, else build it in a
+ *             stack packet and send it now
+ *
+ * The transfer size is width = 1<<wLog, height = 1<<hLog, buffer width
+ * max((1<<wLog)>>6, 1), and 1<<(wLog+hLog-4) qwords of texels. With kickMode 0
+ * it writes a CNT DMAtag + GIFtag header (0x10000006 / 0x50000006) at
+ * g_frameDmaCursor, builds the BITBLTBUF/TRXPOS/TRXREG/TRXDIR packet after it
+ * (func_00126288, BuildGsImageUploadPacket), advances the cursor by 0x70, then
+ * appends a REF DMAtag (0x30000000|qwords, address `handle`) + IMAGE GIFtag
+ * (0x50000000|qwords) and advances by 0x10. Otherwise the packet is built in a
+ * local buffer, the data cache is flushed (func_0011AEA0) and
+ * KickGifImageUpload sends it.
+ *
+ * MATCHED byte-exact on the s136os arm at the unit's -O2 default (RULING
+ * #9450; task #1833). The ROM re-reads the cursor (absolute `lui; lw`) before
+ * every header word: the u32 stores through it may alias the pointer, so cc1
+ * does the same with plain g_frameDmaCursor reads (a volatile is not needed;
+ * measured byte-identical without it). The three accesses the ROM makes
+ * %gp_rel go through g_frameDmaCursorGp, each measured necessary by reverting
+ * it alone (solo s136os harness, verify_match_unit words differing): the
+ * first write-back [55/94], the post-call read of the cursor in the bnez slot
+ * [35/94], the second write-back [17/94].
+ *
+ * GUARD (task #1269): on EE this C is the image's body, compiled alone by SN
+ * 2.95.3 v1.36 -fopt-stack (tools/ee/s136os_functions.txt) and spliced over the
+ * S136OS_SLOT line by tools/ee/s136os_splice.sh. On native it is plain C.
+ */
 extern void func_00126288(void *buf, s32 a, s32 b, s32 c, s32 d, s32 e, s32 f, s32 g);
 extern void func_0011AEA0(s32 mode);   /* FlushCache */
 extern void KickGifImageUpload(void *packet, s32 handle);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_UploadTextureToGs)
+S136OS_SLOT(UploadTextureToGs);
+#else
 void UploadTextureToGs(s32 handle, s32 vramBlk, s32 fmt, s32 wLog, s32 hLog,
                    s32 kickMode) {
     s32 v12 = (1 << wLog) >> 6;
@@ -6466,13 +6506,14 @@ void UploadTextureToGs(s32 handle, s32 vramBlk, s32 fmt, s32 wLog, s32 hLog,
     }
 
     if (kickMode == 0) {
-        u32 *c = g_frameDmaCursor;
-        c[0] = 0x10000006;
-        c[1] = 0;
-        c[2] = 0;
-        c[3] = 0x50000006;
+        u32 *c;
+        g_frameDmaCursor[0] = 0x10000006;
+        g_frameDmaCursor[1] = 0;
+        g_frameDmaCursor[2] = 0;
+        g_frameDmaCursor[3] = 0x50000006;
+        c = g_frameDmaCursor;
         buf = (u8 *)c + 0x10;
-        g_frameDmaCursor = (u32 *)((u8 *)c + 0x70);
+        g_frameDmaCursorGp = (u32 *)((u8 *)c + 0x70);
     } else {
         buf = packet;
     }
@@ -6481,12 +6522,11 @@ void UploadTextureToGs(s32 handle, s32 vramBlk, s32 fmt, s32 wLog, s32 hLog,
                 (s16)(1 << hLog));
 
     if (kickMode == 0) {
-        u32 *c = g_frameDmaCursor;
-        c[0] = tag | 0x30000000;
-        c[1] = (u32)handle;
-        c[2] = 0;
-        c[3] = tag | 0x50000000;
-        g_frameDmaCursor = (u32 *)((u8 *)c + 0x10);
+        g_frameDmaCursorGp[0] = tag | 0x30000000;
+        g_frameDmaCursor[1] = (u32)handle;
+        g_frameDmaCursor[2] = 0;
+        g_frameDmaCursor[3] = tag | 0x50000000;
+        g_frameDmaCursorGp = (u32 *)((u8 *)g_frameDmaCursor + 0x10);
     } else {
         func_0011AEA0(0);
         KickGifImageUpload(buf, handle);
@@ -6555,8 +6595,9 @@ void UploadTextureToGs(s32 handle, s32 vramBlk, s32 fmt, s32 wLog, s32 hLog,
  *     RecomputeScreenViewportFromGsContext and func_0027B858. None of those is
  *     named as an interrupt or DMA handler. That census is by name, not a
  *     call-graph trace.
- *   - g_frameDmaCursorGp is an ASSEMBLER ALIAS of g_frameDmaCursor (FACT #8036's
- *     construct, sized 4 so gas makes it %gp_rel). It gives the ROM's final
+ *   - g_frameDmaCursorGp (defined above UploadTextureToGs) is an ASSEMBLER
+ *     ALIAS of g_frameDmaCursor (FACT #8036's construct, sized 4 so gas makes
+ *     it %gp_rel). It gives the ROM's final
  *     `jr $31; sw $2,%gp_rel(g_frameDmaCursor)($28)`, while every other cursor
  *     access is absolute. Without it the final store is `lui $1; sw %lo` and the
  *     function is 2 words longer. The relocation names g_frameDmaCursor and the
@@ -6568,14 +6609,11 @@ void UploadTextureToGs(s32 handle, s32 vramBlk, s32 fmt, s32 wLog, s32 hLog,
  *   - func_00290640 carries one EE_REG pin (RULING #8598), see its comment.
  */
 #ifndef TARGET_NATIVE
-__asm__(".extern g_frameDmaCursorGp, 4\n\tg_frameDmaCursorGp = g_frameDmaCursor");
-extern u32 *g_frameDmaCursorGp; // alias
 #define GS_RECT_VOL volatile
 #define GS_RECT_CURSOR (*(u32 *volatile *)&g_frameDmaCursor)
 #define GS_RECT_PIX_X (*(volatile s32 *)&g_gsPixelOffsetX)
 #define GS_RECT_PIX_Y (*(volatile s32 *)&g_gsPixelOffsetY)
 #else
-#define g_frameDmaCursorGp g_frameDmaCursor
 #define GS_RECT_VOL
 #define GS_RECT_CURSOR g_frameDmaCursor
 #define GS_RECT_PIX_X g_gsPixelOffsetX
