@@ -12,7 +12,7 @@
 extern void *Kprintf(const char *format, ...);
 
 
-extern s32 func_0011E0D8(const char *path, s32 mode);
+extern s32 func_0011E0D8(const char *path, s32 flags, ...);
 extern s32 func_0011E4E0(s32 fd, void *buf, s32 size);
 extern s32 func_0011E360(s32 fd);
 extern s8 D_00138158[];    /* ROM version string block */
