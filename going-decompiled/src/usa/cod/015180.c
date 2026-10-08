@@ -2569,7 +2569,7 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00
 extern s32 D_00134DA8[4]; /* two {syscall number, handler} pairs (ROM:
                            * {0x83, func_0011F6C0} {0x5A, func_0011F688}),
                            * the same shape as SyscallPatchEntry */
-extern s32 D_00134DA0;    /* cached end-of-walk pointer (func_0011F6C0 side) */
+extern s32 D_00134DA0;    /* cached kernel syscall-table base (set by func_0011F718) */
 extern s32 *func_0011F6C0(s32 *first, s32 *last, s32 value);
 extern void func_0011F818(s32 syscall, s32 handler); /* defined later in-unit */
 
@@ -2629,8 +2629,9 @@ void func_0011F718(void) {
  *  - SDK: ps2sdk's prototype is `void SetSyscall(int, void *)` (external
  *    knowledge). The vendored eekernel.h has no prototype for 0x74.
  *  - Callers: the ROM has exactly 2 `jal` sites, both in func_0011F718, and
- *    neither reads $v0. The address is taken nowhere: there is no data word
- *    0x0011F818, no %lo, and it is not in any syscall-patch table.
+ *    neither reads $v0. In the boot ELF image the address is taken nowhere:
+ *    there is no data word 0x0011F818, no %lo, and it is not in any
+ *    syscall-patch table. Overlays loaded at runtime were not scanned.
  *  - The other three copies are already void.
  * The EE call in func_0011F718 was implicit int before this change, and the
  * unit object is byte-identical either way.
