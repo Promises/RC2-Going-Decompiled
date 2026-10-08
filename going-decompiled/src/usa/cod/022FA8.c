@@ -2469,7 +2469,37 @@ typedef struct {
     s32 *callbacks;            /* 0x858: handed to func_0012FAE8 while waiting */
 } IpuDecoder;
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012B3E0);
+/**
+ * Derive the dual-prime motion vectors (mpeg2decode's Dual_Prime_Arithmetic)
+ * from the vector (mvx, mvy) and the decoded dmvector. In a frame picture
+ * dmvOut[0] predicts one field from the other and dmvOut[1] the reverse,
+ * with the 1/2 and 3/2 scalings swapped when the bottom field comes first;
+ * in a field picture only dmvOut[0] is formed, its vertical part shifted by
+ * one line toward the opposite parity.
+ */
+void func_0012B3E0(IpuDecoder *dec, s32 dmvOut[2][2], s32 *dmvector, s32 mvx, s32 mvy) {
+    if (dec->pictureStructure == 3) {
+        if (dec->topFieldFirst) {
+            dmvOut[0][0] = ((mvx + (mvx > 0)) >> 1) + dmvector[0];
+            dmvOut[0][1] = ((mvy + (mvy > 0)) >> 1) + dmvector[1] - 1;
+            dmvOut[1][0] = ((3 * mvx + (mvx > 0)) >> 1) + dmvector[0];
+            dmvOut[1][1] = ((3 * mvy + (mvy > 0)) >> 1) + dmvector[1] + 1;
+        } else {
+            dmvOut[0][0] = ((3 * mvx + (mvx > 0)) >> 1) + dmvector[0];
+            dmvOut[0][1] = ((3 * mvy + (mvy > 0)) >> 1) + dmvector[1] - 1;
+            dmvOut[1][0] = ((mvx + (mvx > 0)) >> 1) + dmvector[0];
+            dmvOut[1][1] = ((mvy + (mvy > 0)) >> 1) + dmvector[1] + 1;
+        }
+    } else {
+        dmvOut[0][0] = ((mvx + (mvx > 0)) >> 1) + dmvector[0];
+        dmvOut[0][1] = ((mvy + (mvy > 0)) >> 1) + dmvector[1];
+        if (dec->pictureStructure == 1) {
+            dmvOut[0][1]--;
+        } else {
+            dmvOut[0][1]++;
+        }
+    }
+}
 
 /* func_00130250 formats a report; its definition below takes only the object,
  * so this caller sees no prototype and passes the format and its value. */
@@ -2604,7 +2634,37 @@ void func_0012C008(s32 *pred, s32 rSize, s32 code, s32 residual, s32 fullPel) {
     *pred = fullPel ? vec << 1 : vec;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012C090);
+extern void func_0012C230(s32 *ipu, s32 *pmv, s32 *dmvector, s32 hRSize, s32 vRSize,
+                          s32 dmv, s32 mvScale, s32 fullPel);
+
+/**
+ * Decode a macroblock's motion vectors (mpeg2decode's motion_vectors) for
+ * direction `s` (0 forward, 1 backward). With one vector, a field vector
+ * that is not dual-prime first reads one motion_vertical_field_select for
+ * both fields; the vector is decoded into pmv[0][s] (func_0012C230) and
+ * copied to pmv[1][s]. With two, each field reads its select bit and its
+ * own vector into pmv[0][s] and pmv[1][s].
+ *
+ * func_0012C230 is defined below, so it is declared here: with an implicit
+ * declaration the pmv copy's two loads swap registers.
+ */
+void func_0012C090(s32 *ipu, s32 pmv[2][2][2], s32 *dmvector, s32 mvFieldSel[2][2],
+                   s32 s, s32 motionVectorCount, s32 mvFormat, s32 hRSize,
+                   s32 vRSize, s32 dmv, s32 mvScale) {
+    if (motionVectorCount == 1) {
+        if (mvFormat == 0 && !dmv) {
+            mvFieldSel[1][s] = mvFieldSel[0][s] = IpuGetBits(ipu, 1);
+        }
+        func_0012C230(ipu, pmv[0][s], dmvector, hRSize, vRSize, dmv, mvScale, 0);
+        pmv[1][s][0] = pmv[0][s][0];
+        pmv[1][s][1] = pmv[0][s][1];
+    } else {
+        mvFieldSel[0][s] = IpuGetBits(ipu, 1);
+        func_0012C230(ipu, pmv[0][s], dmvector, hRSize, vRSize, dmv, mvScale, 0);
+        mvFieldSel[1][s] = IpuGetBits(ipu, 1);
+        func_0012C230(ipu, pmv[1][s], dmvector, hRSize, vRSize, dmv, mvScale, 0);
+    }
+}
 
 extern s32 IpuGetBits(s32 *arg0, s32 arg1);
 
