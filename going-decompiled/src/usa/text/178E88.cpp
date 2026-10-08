@@ -3174,7 +3174,7 @@ void func_0027FFF0(f32 f1, f32 f2, f32 f3, s32 a, s32 b, s32 c) {
 }
 #endif
 
-/* func_00280080: 0x10 bytes of dead epilogue pad (addiu $sp,0x40; nop x2) carved
+/* func_00280080: 0x10 bytes of dead epilogue pad ((addiu $sp,0x40; nop) x2) carved
  * off the real body func_00280090 in task #472 (was PARKED #70 pending exactly
  * this re-split). func_00280090 body logic (right-justified fixed-font string
  * draw): w = func_0027F7F8(d, e); tex0 = GetUiTextureTex0(1);
@@ -3222,8 +3222,11 @@ void func_00280120(s32 x, s32 arg1, s32 arg2, const char *str, s32 maxChars) {
 
 /* func_002801B0: 8 bytes of dead epilogue pad (addiu $sp,0x30; nop) carved off
  * the real body func_002801B8 in task #472 (twin of func_00280080, was PARKED
- * #70). func_002801B8: a right-justified fixed-font string draw of the same
- * func_0027F7F8 / GetUiTextureTex0 / DrawFixedFontString shape as func_00280090. */
+ * #70). func_002801B8 is the CENTERED fixed-font string draw: the same
+ * func_0027F7F8 / GetUiTextureTex0 / DrawFixedFontString calls as the
+ * right-justified func_00280090, but the anchor is x - width/2 (ROM
+ * `sra $2,$2,1` at 0x2801F4, then `subu`), not x - width, and it returns the
+ * centered x. */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/178E88", func_002801B0);
 
 /** func_002801B8 (DrawFont1CenteredLabel) — draw a horizontally-centered
