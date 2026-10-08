@@ -5679,11 +5679,31 @@ s32 func_0028EAC8(void) {
  *     just tears the live widget down.
  * D_1A8FB8 == -1 means "no live widget", so the teardown is skipped in that case.
  *
- * WALL (matching build): callee-saves + the gp-rel/absolute global mix + the
- * peeled likely-branch teardown and multiple jal gates cc1 won't reproduce.
- * Matching arm stays INCLUDE_ASM; #else is the portable body. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028EB10);
+ * MATCHED on the s136os arm (task #1889) at the unit's -O2 default
+ * (S136EXTRA="", RULING #9450), from NOTE #9759's 4/88 body. Each device or
+ * spelling below was priced by reverting it alone in the solo s136os harness
+ * (words differing / ROM 88 = 87 + the trailing pad word):
+ *   - the bank-gate byte is pinned to $3 (EE_REG, a REGISTER-PIN DEVICE,
+ *     RULING #8598): without it cc1 puts the byte in $2 and the constant in
+ *     $3 (3/88).
+ *   - the compare constant is a local `two` assigned BEFORE `none = -1`: it
+ *     moves the ROM's `li $4,2` above the block base's `addiu` (literal 2:
+ *     2/88; `two = 2` after `none = -1`: 2/88). A $4 pin on it is inert.
+ *   - `none` holds -1 for the shared `li $16,-1` in the bne slot (literal -1
+ *     everywhere: 86 vs 88 words, 21/88).
+ *   - the ammo-widget handle store goes through a volatile view (RULING #8404
+ *     CODEGEN DEVICE, not an asynchronous-object claim: the ROM's only writers
+ *     of D_1A8FB8 are this function and func_0028EC70); it keeps `lui $1; sw`
+ *     ahead of the `b` with `ld $16` in its slot (plain store: 86 vs 88, 49/88).
+ *   - iconId is read before exists (exists first: 16/88), and ammoCapacity is
+ *     re-read through g_itemEquippedSlot (ROM redoes the slot byte and the
+ *     `mult` after the D_1A8FB4 store; via w: 84 vs 88, 76/88).
+ *
+ * GUARD (task #1269): on EE this C is the image's body, compiled alone by SN
+ * 2.95.3 v1.36 -fopt-stack (tools/ee/s136os_functions.txt) and spliced over the
+ * S136OS_SLOT line by tools/ee/s136os_splice.sh. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0028EB10)
+S136OS_SLOT(func_0028EB10);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
@@ -5693,10 +5713,21 @@ extern s32 D_1A8FBC;                  /* gp hard-disable gate (0x1A8FBC) */
 extern u8  g_soundBankHandlesBlk[];   /* g_soundBankHandles+0x20 (0x189E20) */
 extern u8  D_002907C0[];              /* ammo-vendor widget layout blob (0x2907C0) */
 extern void func_0028E640(void);      /* generic-bank widget draw callback (INCLUDE_ASM) */
+/* EE codegen device (RULING #8404), see above; plain store on native. */
+#ifndef TARGET_NATIVE
+#define AMMO_HUD_HANDLE (*(volatile s32 *)&D_1A8FB8)
+#else
+#define AMMO_HUD_HANDLE D_1A8FB8
+#endif
 void func_0028EB10(void) {
     s32 itemId;
     u8  slot;
     WeaponDef *w;
+    s32 exists;
+    s32 iconId;
+    s32 none;                         /* the "no live widget" handle, -1 */
+    s32 two;                          /* the bank state that spawns the bank widget */
+    register s32 gate EE_REG("$3");   /* REGISTER-PIN DEVICE (RULING #8598), see above */
 
     if (D_1A8FBC != 0) {
         return;                       /* hard-disabled */
@@ -5708,19 +5739,25 @@ void func_0028EB10(void) {
     itemId = func_0028EAC8();
     slot = g_itemEquippedSlot[itemId];
     w = &g_weaponTable[slot];
-    if (itemId != 0 && w->exists != 0) {
+    iconId = w->iconId;
+    exists = w->exists;
+    if (itemId != 0 && exists != 0) {
         D_1A8FB4 = itemId;
-        D_1A8FB8 = func_0028BE10(0x10, w->iconId,
+        AMMO_HUD_HANDLE = func_0028BE10(0x10, iconId,
                                  (s32)&func_0028E7A0, (s32)D_002907C0,
                                  (s32)&func_0028E7D0, (s32)&g_weaponAmmo[itemId],
-                                 w->ammoCapacity);
+                                 g_weaponTable[g_itemEquippedSlot[itemId]].ammoCapacity);
         return;
     }
 
-    if (g_soundBankHandlesBlk[0x22B4] == 2) {
-        if (D_1A8FB8 != -1) {
-            func_0028C108(D_1A8FB8, 0);
-            D_1A8FB8 = -1;
+    two = 2;
+    none = -1;
+    gate = g_soundBankHandlesBlk[0x22B4];
+    if (gate == two) {
+        s32 handle = D_1A8FB8;
+        if (handle != none) {
+            func_0028C108(handle, 0);
+            D_1A8FB8 = none;
         }
         *(s16 *)(g_soundBankHandlesBlk + 0x1878) =
             (s16)func_0028BE10(0x10, 0xFFFF,
@@ -5728,12 +5765,14 @@ void func_0028EB10(void) {
                                (s32)&func_0028E640 + 0x40,
                                (s32)(g_soundBankHandlesBlk + 0x1874), 0xC8);
     } else {
-        if (D_1A8FB8 != -1) {
-            func_0028C108(D_1A8FB8, 0);
-            D_1A8FB8 = -1;
+        s32 handle = D_1A8FB8;
+        if (handle != none) {
+            func_0028C108(handle, 0);
+            D_1A8FB8 = none;
         }
     }
 }
+#undef AMMO_HUD_HANDLE
 #endif
 
 /* Re-seed the HUD widget table (func_0028BF80), then arm the countdown gate
