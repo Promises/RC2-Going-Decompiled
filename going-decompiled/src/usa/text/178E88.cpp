@@ -338,66 +338,77 @@ void func_00279D88(void) {
 }
 #endif
 
-/* func_00279E00 - advance a horizontally-scrolling text cursor across the
- * camera-slot record table, wrapping when a glyph run runs past the visible
- * extent. The streaming directory at g_cameraSlotActive+0xD0 holds the start
- * record index (s16 at +0x20) and a base advance (s16 at +0x22); the records
- * live in the 0x28-byte table at g_cameraSlotActive+0x458 with its entry count
- * at +0x500. *pIndex (a1) is seeded with the start index and *pCursor (a2) with
- * base+`scroll` (a0). Walking records forward: if the current record still fits
- * (rec.f[2] >= rec.f[1] + cursor) the routine returns 1 (still on this record);
- * otherwise, if the next record shares the same group id (f[0]) the cursor is
- * rewound by the run width and the index advanced, looping; any boundary
- * (negative/missing index, end of table, group change) returns 0 with the index
- * and cursor left at their last values.
- * Near-miss: cc1 threads the record cursor and reloaded count through
- * branch-likely (bnel) tails; expressed as a straight loop here. */
-/* TODO(match) t493: sdk29 73.30% / engine96 52.79% (unit objdiff, objdiff_build.sh +
- * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
- * every other remaining arm). Residual on the better arm (sdk29): UNKNOWN-lui (first differing
- * insn: ROM `lui a3,0x0  [HI16 0x001B7E30]` vs built `lui v0,0x0  [HI16 0x001B7E30]`). */
+/* The text-run table at g_cameraSlotActive+0x458: 32 0x28-byte run records
+ * (f[0] group id, f[1] run start, f[2] run end) followed by the live count. */
+typedef struct {
+    CamSlotRecord runs[32];
+    s32 count;              /* +0x500 */
+} TextRunTable;
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00279E00);
+/* ADDRESSING-MODEL DEVICE (RULING #8620 / #9574): a non-zero-offset equate,
+ * g_textRunTable = g_cameraSlotActive + 0x458, sized as the struct (0x504).
+ * It emits nothing; the relocations name g_cameraSlotActive+0x458, as the
+ * ROM's `lui $3,%hi(g_cameraSlotActive+0x458)` at 0x279E28 does. As a distinct
+ * symbol cc1 forms the table base in its own `lui/addiu` after the first
+ * index test instead of deriving it from the directory base at +0xD0
+ * (spelled as a cast of g_cameraSlotActive+0x458: 13/57). */
+__asm__(".extern g_textRunTable, 1284\n\tg_textRunTable = g_cameraSlotActive + 0x458");
+extern TextRunTable g_textRunTable;
+#else
+#define g_textRunTable (*(TextRunTable *)(g_cameraSlotActive + 0x458))
+#endif
+
+/** func_00279E00 — advance a horizontally-scrolling text cursor across the
+ *  text-run table, wrapping when a glyph run runs past the visible extent.
+ *  @param scroll   added to the directory's base advance to seed *pCursor
+ *  @param pIndex   out: run index, seeded with the directory's start index
+ *  @param pCursor  out: cursor within the run
+ *  @return 1 while the cursor still fits inside run *pIndex; 0 at any
+ *          boundary (negative or past-the-end index, last run, group change)
+ *  The streaming directory at g_cameraSlotActive+0xD0 holds the start index
+ *  (s16 at +0x20) and the base advance (s16 at +0x22). While the cursor
+ *  overruns the current run (start + cursor > end) and the next run shares
+ *  its group id, the cursor is rewound by the run's inclusive width and the
+ *  index advanced; *pIndex and *pCursor keep their last values on return 0.
+ *  MATCHED (task #2026): s136os arm (SN 1.36 -fopt-stack, -O2 -G8 -fno-gcse),
+ *  spliced. Device-free apart from the g_textRunTable equate above. Spelling,
+ *  priced by changing each alone (solo s136os compile of this unit, word
+ *  compare against the ROM .s, relocated fields masked):
+ *    - one `while (idx >= 0 && idx < count)` loop, which cc1 rotates into the
+ *      ROM's entry test plus the bottom `bltz`/`bnez` pair (master's
+ *      for(;;) with separate returns: 55/57, built 48);
+ *    - the increment as `(*pIndex)++; if (*pIndex < 0) break; idx = *pIndex;`
+ *      so the stored value is tested and copied to idx after the branch
+ *      (`idx = *pIndex + 1; *pIndex = idx;`: 36/57, built 56);
+ *    - the rewind as cursor - (end - start + 1) (cursor - 1 - (end - start)
+ *      reassociates to the same subtraction in another order: 5/57). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00279E00)
+S136OS_SLOT(func_00279E00);
 #else
 s32 func_00279E00(s32 scroll, s32 *pIndex, s32 *pCursor) {
     u8 *dir = g_cameraSlotActive + 0xD0;
-    CamSlotRecord *recs = (CamSlotRecord *)(g_cameraSlotActive + 0x458);
-    s32 *count = (s32 *)(g_cameraSlotActive + 0x458 + 0x500);
-    s32 idx;
+    s32 idx, cursor, start, end;
 
     *pIndex = *(s16 *)(dir + 0x20);
     *pCursor = *(s16 *)(dir + 0x22) + scroll;
-
     idx = *pIndex;
-    if (idx < 0 || idx >= *count) {
-        return 0;
-    }
-
-    for (;;) {
-        s32 cursor = *pCursor;
-        s32 runStart = recs[idx].f[1];
-        s32 runEnd = recs[idx].f[2];
-
-        if (runEnd >= runStart + cursor) {
-            return 1;                       /* cursor still inside this record */
-        }
-        if (idx + 1 >= *count) {
-            return 0;                       /* no following record */
-        }
-        if (recs[idx].f[0] != recs[idx + 1].f[0]) {
+    while (idx >= 0 && idx < g_textRunTable.count) {
+        cursor = *pCursor;
+        start = g_textRunTable.runs[idx].f[1];
+        end = g_textRunTable.runs[idx].f[2];
+        if (end >= start + cursor)
+            return 1;                       /* cursor still inside this run */
+        if (idx + 1 >= g_textRunTable.count)
+            return 0;                       /* no following run */
+        if (g_textRunTable.runs[idx].f[0] != g_textRunTable.runs[idx + 1].f[0])
             return 0;                       /* group id changes: stop here */
-        }
-
-        *pCursor = (cursor - 1) - (runEnd - runStart);
-        if (*pIndex + 1 < 0) {
-            return 0;
-        }
-        *pIndex = *pIndex + 1;
+        *pCursor = cursor - (end - start + 1);
+        (*pIndex)++;
+        if (*pIndex < 0)
+            break;
         idx = *pIndex;
-        if (idx >= *count) {
-            return 0;
-        }
     }
+    return 0;
 }
 #endif
 
@@ -502,10 +513,11 @@ extern u8  g_platinumBoltFlags[]; /* 0x19B278; +0x230 (0x19B4A8) = per-progress 
  *   - g_playerProgressAbs: FACT #8036's zero-offset equate, sized 16 for the
  *     assembler, so the read is one symbolic `lw` that gas expands into the
  *     ROM's same-register `lui $3; lw $3,%lo($3)` pair (cc1 saw small data;
- *     as the plain symbol it is a %gp_rel load and every word moves: 24/24);
+ *     as the plain symbol it is a %gp_rel load and every word moves: 23/23,
+ *     built 22);
  *   - g_progressNibbleCounters: an asm-label view of the nibble-counter table
  *     at g_platinumBoltFlags+0x230, the ROM's D_19B4A8. Spelled as
- *     `g_platinumBoltFlags + 0x230` cc1 folds the offset differently: 9/23. */
+ *     `g_platinumBoltFlags + 0x230` cc1 folds the offset differently: 8/23. */
 __asm__(".extern g_playerProgressAbs, 16\n\tg_playerProgressAbs = g_playerProgress");
 extern s32 g_playerProgressAbs;
 extern u8 g_progressNibbleCounters[] __asm__("D_19B4A8");
