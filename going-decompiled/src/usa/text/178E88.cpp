@@ -493,37 +493,58 @@ s32 func_00279F08(void) {
  * entry func_0027A0D0 in task #472. */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027A0C8);
 
-/* func_0027A0D0 globals (declared for the TARGET_NATIVE #else only). */
+/* func_0027A0D0 globals. */
 extern s32 g_playerProgress;      /* 0x1A79F8 story progress counter */
 extern u8  g_platinumBoltFlags[]; /* 0x19B278; +0x230 (0x19B4A8) = per-progress 3-bit nibble-counter table, stride 0x400 */
-
-/** func_0027A0D0 — read a progress-gated nibble counter and scale it. Index the
- *  per-progress nibble table (g_platinumBoltFlags+0x230, stride 0x400 keyed by
- *  g_playerProgress) at index>>1; take the selected byte's low nibble (even index)
- *  or high nibble (odd index), mask it to 0..7, and use THAT to index `table` — both
- *  parities index table[nibble & 7]. Return (table[nibble & 7] * mult) / 100. */
-/* TODO(match) t493: sdk29 23.60% / engine96 45.20% (unit objdiff, objdiff_build.sh +
- * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
- * every other remaining arm). Residual on the better arm (engine96): GPREL-FORM (first differing
- * insn: ROM `addiu sp,sp,32` vs built `lw v0,0(gp)  [GPREL16 0x001A79F8]`). Levers:
- * cc1-small/absolute globals model RUN: 33.20% (sdk29); engine96 with sched1 MEASURED (flag not
- * landed): 44.60%.
- * (t527 merge note: measured before task #472's carve, against the fused blob func_0027A0C8 =
- * the 8-byte pad + this body; the `addiu sp,sp,32` row named above is the pad's first word,
- * the %s are for the 0x64-byte blob. The GPREL-FORM residual — ROM lui/lw %hi/%lo of
- * g_playerProgress vs gp-relative — is in the body itself and remains at func_0027A0D0, 0x5C.) */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027A0D0);
+/* ADDRESSING-MODEL DEVICES (RULING #8620) for func_0027A0D0; neither emits an
+ * instruction and both relocations name the ROM's symbols:
+ *   - g_playerProgressAbs: FACT #8036's zero-offset equate, sized 16 for the
+ *     assembler, so the read is one symbolic `lw` that gas expands into the
+ *     ROM's same-register `lui $3; lw $3,%lo($3)` pair (cc1 saw small data;
+ *     as the plain symbol it is a %gp_rel load and every word moves: 24/24);
+ *   - g_progressNibbleCounters: an asm-label view of the nibble-counter table
+ *     at g_platinumBoltFlags+0x230, the ROM's D_19B4A8. Spelled as
+ *     `g_platinumBoltFlags + 0x230` cc1 folds the offset differently: 9/23. */
+__asm__(".extern g_playerProgressAbs, 16\n\tg_playerProgressAbs = g_playerProgress");
+extern s32 g_playerProgressAbs;
+extern u8 g_progressNibbleCounters[] __asm__("D_19B4A8");
+#else
+#define g_playerProgressAbs g_playerProgress
+#define g_progressNibbleCounters (g_platinumBoltFlags + 0x230)
+#endif
+
+/** func_0027A0D0 — read a progress-gated nibble counter and scale it.
+ *  @param table  8-entry byte table indexed by the counter (0..7)
+ *  @param mult   scale applied to the looked-up entry
+ *  @param index  counter index; byte index>>1 of the current progress row,
+ *                low nibble when even, high nibble when odd
+ *  @return       table[counter & 7] * mult / 100 (signed division)
+ *  The per-progress table is g_progressNibbleCounters (g_platinumBoltFlags
+ *  +0x230), one 0x400-byte row per g_playerProgress value; both nibbles are
+ *  masked to 3 bits before indexing `table`.
+ *  MATCHED (task #2026): s136os arm (SN 1.36 -fopt-stack, -O2 -G8 -fno-gcse),
+ *  spliced. Two empty volatile fences (RULING #8483), each priced by removing
+ *  it alone (solo s136os compile of this unit, word compare against the ROM
+ *  .s, relocated fields masked):
+ *    - the one in the odd arm stops cc1 if-converting the shift into a `movn`,
+ *      keeping the ROM's `beqz` with the byte load in its delay slot (5/23);
+ *    - the one after forming the table address keeps the `lbu` ahead of the
+ *      divisor `li 100` and the zero-divide trap, the ROM's order (5/23). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0027A0D0)
+S136OS_SLOT(func_0027A0D0);
 #else
 s32 func_0027A0D0(u8 *table, s32 mult, s32 index) {
-    u8 *entry = g_platinumBoltFlags + 0x230 + g_playerProgress * 0x400 + (index >> 1);
-    s32 value;
+    s32 counter = g_progressNibbleCounters[(index >> 1) + g_playerProgressAbs * 0x400];
+    u8 *entry;
     if (index & 1) {
-        value = table[(*entry >> 4) & 7];
-    } else {
-        value = table[*entry & 7];
+        counter >>= 4;
+        __asm__ __volatile__("");
     }
-    return (value * mult) / 100;
+    entry = &table[counter & 7];
+    __asm__ __volatile__("");
+    counter = *entry;
+    return (counter * mult) / 100;
 }
 #endif
 
