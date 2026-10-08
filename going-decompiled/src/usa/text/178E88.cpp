@@ -2893,15 +2893,18 @@ s32 func_0027F838(const char *str, s32 maxChars) {
  * at +3) as a float, multiply each by `scale`, accumulate, and round the total
  * back to an integer. Stops at NUL or after `maxChars` chars (the maxChars test
  * fires after folding the current glyph). Worker behind func_0027F900.
- * Near-miss: the four packed GPR saves ($16-$19) + two FPR saves ($f20/$f21)
- * and the IntToFloat-per-glyph call shape are a save-layout wall. Correct C
- * preserved as the portable body. */
-/* TODO(match) t493: sdk29 91.88% / engine96 77.38% (unit objdiff, objdiff_build.sh +
- * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
- * every other remaining arm). Residual on the better arm (sdk29): UNKNOWN-addiu (first differing
- * insn: ROM `addiu sp,sp,-64` vs built `addiu sp,sp,-96`). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027F858);
+ * Returns the rounded width.
+ * MATCHED (task #1877): s136os arm (SN 1.36 -fopt-stack, -O2 -G8 -fno-gcse),
+ * spliced. The four packed saves and the IntToFloat-per-glyph call were never
+ * the wall: the ROM walks a COPY of `str` (made only after both entry tests,
+ * which read str itself), counts up from 0 at the top of each pass, and tests
+ * the count and the next char together at the bottom. Master's form (count
+ * from 1, early `break`, walking `str` itself) measured 31/42 words; counting
+ * from 0 but keeping the early `break` and walking `str` 41/42 (built 38).
+ * Record of the cc1 2.9 / 2.96 attempts (t493, unit objdiff, objdiff_build.sh +
+ * unit_report.sh): sdk29 91.88% / engine96 77.38%. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0027F858)
+S136OS_SLOT(func_0027F858);
 #else
 extern s32 FloatToInt(f32 x);
 s32 func_0027F858(const char *str, s32 maxChars, const void *glyphTable,
@@ -2909,16 +2912,15 @@ s32 func_0027F858(const char *str, s32 maxChars, const void *glyphTable,
     const u8 *s = (const u8 *)str;
     const s8 *gt = (const s8 *)glyphTable;
     f32 acc = 0.0f;
-    s32 i;
-    if (maxChars != 0 && s[0] != 0) {
-        i = 1;
+    s32 n = 0;
+    if (maxChars != 0 && *s != 0) {
+        const u8 *p = s;
         do {
-            s8 advance = gt[s[0] * 4 + 3];
-            s++;
-            acc += IntToFloat(advance) * scale;
-            if (i == maxChars) break;
-            i++;
-        } while (s[0] != 0);
+            s32 c = *p;
+            n++;
+            p++;
+            acc += IntToFloat(gt[c * 4 + 3]) * scale;
+        } while (n != maxChars && *p != 0);
     }
     return FloatToInt(acc);
 }
