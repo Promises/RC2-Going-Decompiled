@@ -1117,7 +1117,7 @@ extern u8 g_collHitTriVert2[];
 
 extern void BuildScreenDrawPackets(s32 dw, s32 dh, s32 sw, s32 sh, s32 a, s32 b);
 extern void ApplyGsDisplayEnv(void);
-extern void KickGifImageUpload(void *packet, void *src);
+extern s32 KickGifImageUpload(void *packet, void *src);
 extern void WaitGsPathsIdle(s32 a, s32 b);
 extern void FlushCache(s32 mode);                       /* func_0011AEA0 */
 extern void BuildGsImageUploadPacket(void *packet, s32 dbp, s32 psm, s32 c,

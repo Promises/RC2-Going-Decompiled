@@ -6716,7 +6716,7 @@ extern u32 *g_frameDmaCursorGp; // alias
  */
 extern void func_00126288(void *buf, s32 a, s32 b, s32 c, s32 d, s32 e, s32 f, s32 g);
 extern void func_0011AEA0(s32 mode);   /* FlushCache */
-extern void KickGifImageUpload(void *packet, s32 handle);
+extern s32 KickGifImageUpload(void *packet, s32 handle);
 #if !defined(TARGET_NATIVE) && !defined(S136OS_UploadTextureToGs)
 S136OS_SLOT(UploadTextureToGs);
 #else

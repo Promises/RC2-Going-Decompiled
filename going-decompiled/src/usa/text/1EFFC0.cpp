@@ -1190,7 +1190,7 @@ s32  func_00126DC0(void *handler);     /* install INTC-2 vblank-start handler; r
 void OnVblankInterrupt(void);
 s32  PopGameState(s32 a, s32 b);
 void WaitFrameDmaFence(s32 mask);
-void KickGifImageUpload(void *packet, s32 dataAddr);
+s32 KickGifImageUpload(void *packet, s32 dataAddr);
 void WaitGsPathsIdle(s32 a, s32 b);
 s32  snd_CheckLoadInProgress(s32 a);
 void SaveLoadStateMachine(void);

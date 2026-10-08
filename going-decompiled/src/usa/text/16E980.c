@@ -708,7 +708,7 @@ extern void FillMemory32(void *dst, s32 val, s32 nbytes);
 extern s32 Log2Floor(s32 x);
 extern void func_00126288(void *ctx, s32 bp, s32 bw, s32 psm, s32 x, s32 y,
                         s32 w, s32 h);
-extern void KickGifImageUpload(void *ctx, void *data);
+extern s32 KickGifImageUpload(void *ctx, void *data);
 typedef struct GsTexUploadBlk {
     /* 0x00 */ void *clutData;
     /* 0x04 */ void *imageData;

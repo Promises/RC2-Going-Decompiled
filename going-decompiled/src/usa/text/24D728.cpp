@@ -1190,7 +1190,7 @@ void *GuiSystemInit(void *guiArg) {
 extern void WaitFrameDmaFence(s32 mask);
 extern s32  WaitGsPathsIdle(s32 a, s32 b);
 extern void func_0011AEA0(s32 arg);                       /* pre-RPC flush/sync */
-extern void KickGifImageUpload(void *packet, void *vramDest);
+extern s32 KickGifImageUpload(void *packet, void *vramDest);
 extern void func_00126288(void *dst, s32 texId, s32 a, s32 b, s32 c,
                         s32 d, s32 width, s32 height);    /* build a GS image-upload GIF packet */
 

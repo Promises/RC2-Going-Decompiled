@@ -234,7 +234,7 @@ extern s32 func_00352638(u8 *obj, u64 a, u64 b, s32 pos, s32 n);
 extern s32 func_003522C0(void *dmaq, ...);  /* FMV DMA-add-queue enqueue (deferred native; ret ignored) */
 extern void ZeroQwords(void *p, s32 n);
 extern s32 func_00133850(s32 a, s32 b, s32 c, s32 d, s32 e, s32 f);
-extern void *IpuInitDecoder(void);
+extern void *IpuInitDecoder(void); /* DECL-LEVER(#2025): defined (obj, buf, size) in cod/022FA8; FmvStreamInit forwards its own incoming $a0..$a2 through a bare `jal` (the ROM sets none of them before the call), which this argument-less declaration reproduces, as #2011 did for func_0012EE28 */
 extern s32 func_0012FA70(u8 *obj, s32 slot, void *cb, s32 arg);
 extern void func_003525D0(FmvStream *s);
 extern s32 FmvBitstreamObjInit(u8 *obj, s32 a, s32 b, s32 c, s32 d, s32 e);
@@ -1991,7 +1991,7 @@ S136OS_SLOT(FmvStreamInit);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
-extern void *IpuInitDecoder(void);
+extern void *IpuInitDecoder(void); /* DECL-LEVER(#2025): defined (obj, buf, size) in cod/022FA8; FmvStreamInit forwards its own incoming $a0..$a2 through a bare `jal` (the ROM sets none of them before the call), which this argument-less declaration reproduces, as #2011 did for func_0012EE28 */
 extern s32 func_0012FA70(u8 *obj, s32 slot, void *cb, s32 arg);
 extern void func_003525D0(FmvStream *s);
 extern s32 FmvBitstreamObjInit(u8 *obj, s32 a, s32 b, s32 c, s32 d, s32 e);

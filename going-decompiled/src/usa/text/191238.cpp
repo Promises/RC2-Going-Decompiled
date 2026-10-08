@@ -302,7 +302,7 @@ extern void func_00294970(void);
 extern s32  func_00131628(void);               /* read OSD screen type */
 extern void FillMemory32(void *dst, u32 word, s32 nbytes);
 extern void func_00126288(void *dst, s32 tbp, s32 a, s32 b, s32 c, s32 d, s32 w, s32 h);
-extern void KickGifImageUpload(void *packet, void *src);
+extern s32 KickGifImageUpload(void *packet, void *src);
 extern void WaitGsPathsIdle(s32 arg);
 extern void func_0026FE58(void);
 extern void ResetCinematicQueue(void *queue);
@@ -1072,7 +1072,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002920C0);
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern void FillMemory32(void *dst, u32 word, s32 nbytes);
-extern void KickGifImageUpload(void *packet, void *src);
+extern s32 KickGifImageUpload(void *packet, void *src);
 extern s32 Log2Floor(s32 v);
 extern void WaitGsPathsIdle(s32 arg);
 extern void func_0011AEA0(s32 a);
@@ -1085,7 +1085,7 @@ extern s32  Log2Floor(s32 v);
 extern void func_00126288(void *dst, s32 tbp, s32 a, s32 b, s32 c, s32 d,
                         s32 w, s32 h);
 extern void func_0011AEA0(s32 a);             /* FlushCache */
-extern void KickGifImageUpload(void *packet, void *src);
+extern s32 KickGifImageUpload(void *packet, void *src);
 extern void WaitGsPathsIdle(s32 arg);
 extern s32  g_vramAllocCursor;
 #endif
@@ -1697,7 +1697,7 @@ extern u8   g_vramTextureBase[];
 extern u8  *g_heldItemModelBufferBase;    /* loaded model/texture buffer ptr */
 extern u64  g_heldItemTexDescriptor;      /* cached packed GS texture register */
 extern void func_00126288(void *dst, s32 tbp, s32 a, s32 b, s32 c, s32 d, s32 w, s32 h);
-extern void KickGifImageUpload(void *packet, void *src);
+extern s32 KickGifImageUpload(void *packet, void *src);
 extern void WaitGsPathsIdle(s32 arg);
 
 void LoadHeldItemDisplayModel(s32 itemId) {
@@ -1935,7 +1935,7 @@ extern u8   g_vramTextureBase[];          /* VRAM texture-slot descriptor (+0xC/
 extern void PumpDialogVoiceSystem(s32 blocking);   /* declared later in-unit */
 extern void func_0011AEA0(s32 a);                  /* declared later in-unit */
 extern void func_00126288(void *dst, s32 tbp, s32 a, s32 b, s32 c, s32 d, s32 w, s32 h);
-extern void KickGifImageUpload(void *packet, void *src);
+extern s32 KickGifImageUpload(void *packet, void *src);
 extern void WaitGsPathsIdle(s32 arg);
 
 void LoadShipDisplayTexture(s32 shipId) {
@@ -2323,7 +2323,7 @@ S136OS_SLOT(func_002938B0);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
-extern void KickGifImageUpload(void *packet, void *src);
+extern s32 KickGifImageUpload(void *packet, void *src);
 extern void WaitGsPathsIdle(s32 arg);
 extern void func_0011AEA0(s32 a);
 extern void func_00126288(void *dst, s32 tbp, s32 a, s32 b, s32 c, s32 d, s32 w, s32 h);
@@ -4164,7 +4164,7 @@ extern void DecompressWad(void *src, void *dest);
 extern void func_0011AEA0(s32 mode);      /* FlushCache / DMA-arm sync                   */
 extern void func_00126288(void *dst, s32 tbp, s32 a, s32 b,
                         s32 c, s32 d, s32 w, s32 h);   /* build GS image-upload packet   */
-extern void KickGifImageUpload(void *packet, void *vramDest);
+extern s32 KickGifImageUpload(void *packet, void *vramDest);
 extern void WaitGsPathsIdle(s32 mode);    /* $5=0 extra sync arg is unused (see .s)      */
 extern void RegisterMobyClass(u8 *hdr, s32 idMap, s32 nameScratch, s32 classId);
 extern s32  func_001337F0(void);          /* snd free-sram query A                       */
