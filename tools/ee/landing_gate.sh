@@ -2550,6 +2550,16 @@ selftest_asmunit() {
     if [ "$FAILED" = 0 ] && [ "$WARNED" = 1 ]; then ok "fired: 'asm_unit.sh: la-slot: $s' is not the known spelling and WARNs"
     else say "SELFTEST-FAIL (23) 'asm_unit.sh: la-slot: $s' was read as the known la-slot line (FAILED=$FAILED WARNED=$WARNED):"; show < "$T/asmunit_laword.txt"; b=1; fi
   done
+  # task #2004: the same for the `noapp-slot: N pins in <unit>` line (RULING #10043)
+  local nr; nr=$(/usr/bin/grep -cE "$ASMUNIT_R1_RE" "$log" || true)
+  if [ "$nr" -ge 1 ]; then ok "control: $nr asm_unit.sh noapp-slot: line(s) in the exact spelling, none counted as an unknown kind ($(/usr/bin/grep -E "$ASMUNIT_R1_RE" "$log" | cut -d: -f1-3 | sort | uniq -c | sed -E 's/^ +//' | tr '\n' ';' | sed 's/;$//; s/;/ ; /g'))"
+  else say "SELFTEST-FAIL (23) this build's log carries no 'asm_unit.sh: noapp-slot: N pins in <unit>' line: asm_unit.sh did not emit the RULING #10043 per-unit line"; b=1; fi
+  for s in '1 pins' '1 pin in cod/015180: func_0011AA20' '1 pins in cod/015180 func_0011AA20'; do
+    { cat "$log"; printf 'asm_unit.sh: noapp-slot: %s\n' "$s"; } > "$T/asmunit_r1word.log"
+    FAILED=0; WARNED=0; STRICT=0; check_asmunit "$T/asmunit_r1word.log" > "$T/asmunit_r1word.txt"
+    if [ "$FAILED" = 0 ] && [ "$WARNED" = 1 ]; then ok "fired: 'asm_unit.sh: noapp-slot: $s' is not the known spelling and WARNs"
+    else say "SELFTEST-FAIL (23) 'asm_unit.sh: noapp-slot: $s' was read as the known noapp-slot line (FAILED=$FAILED WARNED=$WARNED):"; show < "$T/asmunit_r1word.txt"; b=1; fi
+  done
   for s in 'transform (9 allowlist rows for usa)' 'transforms (9 allowlist rows for usa) INERT'; do
     { cat "$log"; printf 'asm_unit.sh: dli: 9 %s\n' "$s"; } > "$T/asmunit_dliword.log"
     FAILED=0; WARNED=0; STRICT=0; check_asmunit "$T/asmunit_dliword.log" > "$T/asmunit_dliword.txt"
