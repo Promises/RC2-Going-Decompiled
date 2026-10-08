@@ -1755,9 +1755,11 @@ void RunFxDrawHooksPostParticles(void) {
 #endif
 
 #ifndef TARGET_NATIVE
-/* cc1-small views (size 8 <= -G8) of the 16-byte late-queue tables, sized 16
- * for the assembler so `la` expands absolutely (the #8036 construct, RULING
- * #8620; relocations name the real symbols). Natively they are the tables. */
+/* ADDRESSING-MODEL DEVICE (RULING #8620): cc1-small views (size 8 <= -G8) of
+ * the 16-byte late-queue tables, sized 16 for the assembler so `la` expands
+ * absolutely (the #8036 construct, same pattern as g_inventoryOwnedAbs[8];
+ * relocations name the real symbols). The [2] is the view cc1 sees, not the
+ * tables' extent: indices 0..3 are valid. Natively they are the tables. */
 __asm__(".extern g_fxHooksLateFuncsAbs, 16\n\tg_fxHooksLateFuncsAbs = g_fxHooksLateFuncs");
 __asm__(".extern g_fxHooksLateArgsAbs, 16\n\tg_fxHooksLateArgsAbs = g_fxHooksLateArgs");
 extern DrawHookFn g_fxHooksLateFuncsAbs[2];
