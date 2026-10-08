@@ -114,17 +114,6 @@ void snd_SetupDmaTransfer(u8 *buffer, s32 count) {
 }
 #endif
 
-/* snd_BankLoadByLoc: request a sound-bank load from the IOP over the SIF RPC
- * load channel and block until the IOP posts the result. Returns the IOP's load
- * handle/result, or 0 on any early-out (system down, a load already running, or
- * the RPC call failing). Not matched — the multi-callee-save frame hits the same
- * 16-byte save-slot layout wall as snd_SetupDmaTransfer (near-miss). Portable
- * #else body.
- *
- * NOTE the branch-likely at 0x132360: `bnel` writing D_001A71C0 = arg0 in its
- * delay slot fires ONLY when snd_CheckLoadInProgress(1) != 1 (the proceed path);
- * when a load is already in progress (== 1) the write is nullified — so the
- * request word is only stored on the path that actually issues the load. */
 extern s32  D_001A74C8;   /* nonzero while the command ring still has pending work */
 extern s32  D_001A7488;   /* last bank-load status/error code */
 extern s32  D_001A71C0;   /* load-request word 0 (base of the 8-byte send buffer) */
@@ -132,8 +121,8 @@ extern s32  D_001A71C4;   /* load-request word 1 */
 /* IOP load-result slot (4-byte receive buffer), preset to the 0xFFFFFFFF
  * sentinel. Unsigned because the ROM builds that preset as a 32-bit unsigned
  * constant (`lui $2,0xffff; ori $2,$2,0xffff` at 0x132520), which cc1 emits
- * only for an unsigned store; s32 gives `li $2,-1` (4/82 words in
- * snd_BankLoadAsync). */
+ * only for an unsigned value; s32 gives `li $2,-1` (4/82 words in
+ * snd_BankLoadAsync, 67/96 in snd_BankLoadByLoc). */
 extern u32  D_001A7180;
 /* g_sndRpcClientBank, the load-channel sceSif RPC client — the twin of
  * D_001A7040. Declared as a complete 8-byte object so cc1 treats it as small
@@ -143,17 +132,20 @@ extern u32  D_001A7180;
 extern u8   D_001A7140[8];
 /* ADDRESSING-MODEL DEVICES (RULING #8620 term 4 / #9574, offset 0 each) for the
  * snd_BankLoad* family, ahead of every compiled use in the unit. The ROM stores
- * D_001A71C4, D_001A7180 and D_001A74D8 through absolute `lui $1` macros and
- * loads D_001A7140's address with an absolute lui/addiu, while cc1 at -G8 sees
- * them as small data: `.extern ,16` makes GNU as expand them absolutely. The
- * request word D_001A71C0 is gp-relative only in the `bnel` delay slot
- * (0x1324F8) and absolute as the RPC send-buffer `la`: size 12 is
- * asm_unit.sh's marker for exactly that split (gp-addressable but
- * assembler-absolute). Cost of removing each alone in snd_BankLoadAsync
- * (s136os solo TU, task #1914), words of 82: D_001A71C4 47, D_001A7180 45,
- * D_001A74D8 42, D_001A71C0 19, D_001A7140 32 (and the [8] size 35). */
+ * D_001A71C4 and D_001A74D8 through absolute `lui $1` macros and loads
+ * D_001A7140's address with an absolute lui/addiu, while cc1 at -G8 sees them
+ * as small data: `.extern ,16` makes GNU as expand them absolutely. The request
+ * word D_001A71C0 and the result word D_001A7180 are gp-relative only inside
+ * delay slots (D_001A71C0's `bnel` slots at 0x132364 and 0x1324FC;
+ * D_001A7180's loads in the slots at 0x132420 and 0x132458) and absolute
+ * everywhere else: size 12 is asm_unit.sh's marker for exactly that split
+ * (gp-addressable but assembler-absolute). Cost of removing each alone (s136os solo TU, task
+ * #1914), words of snd_BankLoadAsync /82 and snd_BankLoadByLoc /96:
+ * D_001A71C4 47 / 64, D_001A7180 45 / 62 (and 16 in place of 12: 0 / 35),
+ * D_001A74D8 42 / -, D_001A71C0 19 / 41, D_001A7140 32 / 53 (and its [8]
+ * size 35 / 54). */
 __asm__(".extern D_001A71C4, 16");
-__asm__(".extern D_001A7180, 16");
+__asm__(".extern D_001A7180, 12");
 __asm__(".extern D_001A74D8, 16");
 __asm__(".extern D_001A71C0, 12");
 __asm__(".extern D_001A7140, 16");
@@ -162,8 +154,45 @@ extern char D_001A7600[]; /* "sound system not ready" diagnostic */
 extern char D_001A7630[]; /* "load already in progress" diagnostic */
 extern char D_001A7650[]; /* "load RPC failed" diagnostic */
 extern s32  snd_CheckLoadInProgress(s32 noWait);
+
+/* SCHEDULING DEVICE (RULING #8435): one `noreorder` nop, ordered after the load
+ * of `next` (input) and before the next use of `v` (output). It reproduces the
+ * load-delay nop the ROM's assembler emitted after a polled load that cc1
+ * marks `#nop` and GNU as (r5900, interlocked) drops. Same form as
+ * cod/0314C0.c's macro of this name. No-op on the native arm. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", snd_BankLoadByLoc);
+#define R5900_SHORT_LOOP_PAD1(v, next) \
+    __asm__(".set noreorder\n\tnop\n\t.set reorder" : "+r"(v) : "r"(next))
+#else
+#define R5900_SHORT_LOOP_PAD1(v, next) ((void)0)
+#endif
+
+/**
+ * snd_BankLoadByLoc - load a sound bank over the IOP's SIF RPC load channel and
+ * wait for the result.
+ *
+ * @arg0, @arg1: the two words of the load request (D_001A71C0/D_001A71C4, the
+ *               RPC send block).
+ * Returns the IOP's load result (the word it writes over the 0xFFFFFFFF
+ * sentinel in D_001A7180), or 0 when the command ring still has pending work,
+ * a load is already in flight, or the RPC call fails (status 0x106 in
+ * D_001A7488). Each early-out prints a diagnostic unless D_001A74F8
+ * suppresses it.
+ *
+ * Like snd_BankLoadAsync the ROM stores D_001A71C0 = arg0 in the delay slot of
+ * a branch-likely (`bnel` at 0x132360), so only the path that issues the load
+ * writes the request word.
+ *
+ * Compiled by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, selected in
+ * tools/ee/s136os_functions.txt). Devices: the addressing declarations above
+ * and R5900_SHORT_LOOP_PAD1 in the poll loop. The ROM pads `lw $2,
+ * D_001A7180; nop; beq $2,$16` at 0x132474..0x13247C; without the pad the body
+ * is one word short (13/96, s136os solo TU, task #1914). The pad's output is
+ * the sentinel register, not the polled value, so cc1 still knows $2 holds
+ * D_001A7180 at the loop exit and returns it without a reload, as the ROM does.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_snd_BankLoadByLoc)
+S136OS_SLOT(snd_BankLoadByLoc);
 #else
 s32 snd_BankLoadByLoc(s32 arg0, s32 arg1) {
     D_001A7488 = 0;
@@ -187,7 +216,7 @@ s32 snd_BankLoadByLoc(s32 arg0, s32 arg1) {
     /* stage the request and mark the result slot pending */
     D_001A71C0 = arg0;
     D_001A71C4 = arg1;
-    D_001A7180 = -1;
+    D_001A7180 = 0xFFFFFFFF;
 
     /* wait for the load RPC channel to go idle */
     while (sceSifCheckStatRpc(D_001A7140) != 0) {
@@ -207,11 +236,15 @@ s32 snd_BankLoadByLoc(s32 arg0, s32 arg1) {
         return 0;
     }
 
-    /* block until the IOP overwrites the -1 sentinel with the load result */
-    if (D_001A7180 == -1) {
+    /* block until the IOP overwrites the sentinel with the load result */
+    if (D_001A7180 == 0xFFFFFFFF) {
+        u32 pending = 0xFFFFFFFF;
+        u32 result;
         do {
             func_0011AEA0(0);
-        } while (D_001A7180 == -1);
+            result = D_001A7180;
+            R5900_SHORT_LOOP_PAD1(pending, result);
+        } while (result == pending);
     }
     return D_001A7180;
 }
