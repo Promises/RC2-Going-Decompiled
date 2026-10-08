@@ -62,7 +62,10 @@ _Static_assert(__builtin_offsetof(UiSpritePacket, alpha) == 0x88, "alpha");
  * (FACT #9771; census control: the handwritten 1812A8.s blob scores 379).
  * Only the NATIVE port needs the platform render backend, through
  * ProjectAndClipBillboardQuad; that work is parked (RULING #9559) and says
- * nothing about the EE byte match. */
+ * nothing about the EE byte match.
+ * Before writing C: its outer loops are NOT strength-reduced in the ROM
+ * (`mult k,0x90` recomputed per iteration) while every natural C loop is, the
+ * same wall DrawGlowSprites hit (NOTE #9807, task #1863). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1823B8", func_002823B8);
 
 /* MIS-SPLIT fragment: a bare `addiu $29,$29,0x100; nop` stack-restore tail that
@@ -381,5 +384,8 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1823B8", func_0
  * - EE byte match: does NOT need it. The packet words are written with plain
  *   integer stores; the body has 0 COP2/VU0-macro and 0 MMI ops and saves
  *   8 bytes apart (s136os arm) — ordinary compiled C (FACT #9771). It stays
- *   INCLUDE_ASM only because no byte-exact C has been written. */
+ *   INCLUDE_ASM only because no byte-exact C has been written. The best body
+ *   so far (task #1863) is 2/227 words off in the unit build: NOTE #9806 holds
+ *   it as a patch with every device priced, and NOTE #9807 the loop
+ *   strength-reduction wall behind its remaining residual. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1823B8", DrawGlowSprites);
