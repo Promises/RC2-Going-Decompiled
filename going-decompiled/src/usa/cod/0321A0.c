@@ -1208,7 +1208,7 @@ s32 func_00133960(void) {
  * which is the ROM's word (FACT #6462, re-measured in task #866 as
  * FACT #8203). The rule's own comment in move_fixup.sed records that every
  * compiler-emitted break in both regions is 0x000001CD. Do not "fix" a
- * 0x0007000D seen outside the asm_unit.sh pipeline. cod/022FA8.c's
+ * 0x0007000D seen outside the asm_unit.sh pipeline. cod/0314C0.c's
  * func_00131730 relies on the same rewrite.
  *
  * This C body was already correct before promotion: cc1 2.9's output for it

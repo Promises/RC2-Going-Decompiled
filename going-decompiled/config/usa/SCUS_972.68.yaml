@@ -120,13 +120,23 @@ segments:
       - [0x021A98, c, cod/021A98] # core.text: libgcc _pure.o, _udivdi3.o, _umoddi3.o, dp-bit.o head (0x121B18..0x122F0F)
       - [0x022E90, lib, libgcc, _fpcmp_parts_df] # libgcc.a _fpcmp_parts_df.o .text (0x122F10..0x123023)
       - [0x022FA4, zeropad] # dp-bit.o's own alignment pad before dpcmp (0x123024..0x123027), zero in the ROM
-      - [0x022FA8, c, cod/022FA8] # core.text: dp-bit.o tail, fp-bit.o, frame.o, then libsn/SDK (0x123028..0x13221F)
+      - [0x022FA8, c, cod/022FA8] # core.text: dp-bit.o tail, fp-bit.o, frame.o, then libsn/SDK up to libm.a's e_sqrt.o and its CDCD pad (0x123028..0x1313C7)
+      # libm.a's s_isnan.o and w_sqrt.o are linked from newlib's own source
+      # (going-decompiled/libm/, RULING #9783), archived by build_libgcc.sh with
+      # the libgcc members. Each lib line cuts cod/022FA8's old range, so the
+      # code between and after them is its own unit (task #1856).
+      - [0x031348, lib, libgcc, s_isnan] # libm.a s_isnan.o .text (isnan, 0x1313C8..0x1313FF)
+      - [0x031380, c, cod/031380] # core.text: libm.a s_matherr.o's matherr as game C, then 0xC of CD-fill debris (0x131400..0x13142F)
+      - [0x0313B0, lib, libgcc, w_sqrt] # libm.a w_sqrt.o .text (sqrt, 0x131430..0x13153B), pad 0x13153C
+      - [0x0314C0, c, cod/0314C0] # core.text: libsn/SDK code incl. _start and main (0x131540..0x13221F)
       - [0x0321A0, c, cod/0321A0] # snd sub-TU, built at -G8 (0x132220..0x1339EF)
       - [0x033970, cpp, cod/033970] # core.text tail (0x1339F0..0x133B7F)
       - [0x033B00, data, cod/033B00] # core.data
       - [0x03A180, rodata, cod/03A180] # core.rdata
       - [0x03ABD8, lib, libgcc, _divdi3, .rodata] # libgcc.a _divdi3.o .rodata (__clz_tab, 0x13AC58..0x13AD57)
-      - [0x03ACD8, rodata, cod/03ACD8] # core.rdata (0x13AD58..)
+      - [0x03ACD8, rodata, cod/03ACD8] # core.rdata (0x13AD58..0x13BF27)
+      - [0x03BEA8, lib, libgcc, w_sqrt, .rodata] # libm.a w_sqrt.o .rodata ("sqrt" and the NaN retval, 0x13BF28..0x13BF37)
+      - [0x03BEB8, rodata, cod/03BEB8] # core.rdata (0x13BF38..)
       # ROM-anchor the bss at 0x3C000 (= vram 0x13C080) so splat BOUNDS the rodata
       # there instead of over-extending it across the bss region to the next
       # ROM-backed subsegment (core.lit @ 0xA7400). Without this anchor the rodata

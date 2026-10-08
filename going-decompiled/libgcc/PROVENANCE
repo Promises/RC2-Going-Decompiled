@@ -108,3 +108,13 @@ _fixunsdfdi's call to dptoul, the link-only alias in LINK_ALIASES. Each was chec
 SDK's own libgcc.a member (tools/ee/cc/lib/gcc-lib/ee/2.95.2/libgcc.a, used
 only as an identity oracle, never linked): .text, .rodata and .data bytes and
 the relocation lists are identical. The whole-image check is landing_gate.sh.
+
+libm.a members in MEMBERS
+-------------------------
+MEMBERS also carries two rows that are NOT GCC source: libm.a's s_isnan.o and
+w_sqrt.o, built from newlib's own fdlibm files in going-decompiled/libm/ and
+archived into the same build/<region>/lib/libgcc.a (task #1856). Their
+provenance, licence and project-written shims are in
+going-decompiled/libm/PROVENANCE; nothing in this directory changes for them.
+LINK_ALIASES carries w_sqrt.o's three imports that the game defines under
+other names (__ieee754_sqrt, matherr, __errno).

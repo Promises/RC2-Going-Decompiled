@@ -266,6 +266,28 @@
       }
     },
     {
+      "name": "usa/cod/031380",
+      "target_path": "going-decompiled/build/usa/expected/cod/031380.o",
+      "base_path": "going-decompiled/build/usa/obj/cod/031380.o",
+      "metadata": {
+        "source_path": "going-decompiled/src/usa/cod/031380.c",
+        "progress_categories": [
+          "cod"
+        ]
+      }
+    },
+    {
+      "name": "usa/cod/0314C0",
+      "target_path": "going-decompiled/build/usa/expected/cod/0314C0.o",
+      "base_path": "going-decompiled/build/usa/obj/cod/0314C0.o",
+      "metadata": {
+        "source_path": "going-decompiled/src/usa/cod/0314C0.c",
+        "progress_categories": [
+          "cod"
+        ]
+      }
+    },
+    {
       "name": "usa/cod/0321A0",
       "target_path": "going-decompiled/build/usa/expected/cod/0321A0.o",
       "base_path": "going-decompiled/build/usa/obj/cod/0321A0.o",

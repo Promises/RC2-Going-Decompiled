@@ -9,3 +9,12 @@ _muldi3  libgcc2.c  -DIN_LIBGCC2 -DFINE_GRAINED_LIBRARIES -DL_muldi3
 _fixunsdfdi  libgcc2.c  -DIN_LIBGCC2 -DFINE_GRAINED_LIBRARIES -DL_fixunsdfdi
 _floatdidf  libgcc2.c  -DIN_LIBGCC2 -DFINE_GRAINED_LIBRARIES -DL_floatdidf
 _fpcmp_parts_df  fp-bit.c  -DFLOAT_BIT_ORDER_MISMATCH -DUS_SOFTWARE_GOFAST -DFINE_GRAINED_LIBRARIES -DL_fpcmp_parts_df
+# libm.a members (RULING #9783): not GCC source, so they live in
+# going-decompiled/libm/ with their own PROVENANCE, and the source column is
+# relative to this directory. build_libgcc.sh archives them into the same
+# build/<region>/lib/libgcc.a; the member names are libm.a's own. The defines
+# column carries their include path (newlib's fdlibm.h plus the project-written
+# shims in libm/shim/, searched after libgcc/shim/, which has none of their
+# headers) and newlib's configure.host define for mips64r5900.
+s_isnan  ../libm/newlib/libm/math/s_isnan.c  -Igoing-decompiled/libm/shim -Igoing-decompiled/libm/newlib/libm/common -DMALLOC_ALIGNMENT=16
+w_sqrt  ../libm/newlib/libm/math/w_sqrt.c  -Igoing-decompiled/libm/shim -Igoing-decompiled/libm/newlib/libm/common -DMALLOC_ALIGNMENT=16

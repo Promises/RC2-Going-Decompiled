@@ -1,0 +1,96 @@
+libm — newlib's own math source, linked into the game as library members
+=========================================================================
+
+Why this directory exists
+-------------------------
+Part of the game binary is the SDK's libm.a, linked in by the original
+toolchain. Two of its members are built here from the source they were
+compiled from, instead of being kept as disassembly: s_isnan.o (isnan,
+0x1313C8) and w_sqrt.o (sqrt, 0x131430, plus its 0x10-byte .rodata at
+0x13BF28). The SDK's libm.a members were built from the newlib bundled in the
+Cygnus EE toolchain tree (every member's .mdebug stabs name
+../../../../../src/newlib/libm/math/<m>.c; FACT #9781). The source files are
+SunPro fdlibm code under a permissive notice, vendored verbatim under RULING
+#9783 because they reproduce the SDK members byte-exact (task #1856).
+
+Nothing in newlib/ is edited. If a file's verbatim source did not compile to
+the ROM's bytes, its member would stay INCLUDE_ASM in its game unit; the
+source is never changed to make it match.
+
+Files taken from newlib (unmodified)
+------------------------------------
+Upstream: a third-party upload of the Cygnus 2.9-ee-991111 EE toolchain tree,
+  https://raw.githubusercontent.com/SSXModding/ps2-ee-toolchain/<revision>/ee/newlib/<path>
+Revision: b595ded606227e93b8c4a447446c1d2ac093827d. The upload carries no
+  licence of its own (the same caveat as the GCC files of FACT #9751/#9752);
+  RULING #9783 makes the byte-exact reproduction below the provenance
+  evidence.
+
+  file                          upstream path              sha1
+  newlib/libm/math/s_isnan.c    libm/math/s_isnan.c        06a4746c39528fb40635f78601fc20ff3342e02d
+  newlib/libm/math/w_sqrt.c     libm/math/w_sqrt.c         eb05bfd2a464c6616b8af805b7be6ca3cb41830a
+  newlib/libm/common/fdlibm.h   libm/common/fdlibm.h       a2db72cf31c9b5cb718ff2cc17c039692465cca1
+
+Re-derive: curl -sSf <upstream URL> | sha1sum   — each must print the sha1
+above, and `cmp` against the file here must be silent.
+
+Licence, as found in each file
+------------------------------
+All three carry the same notice in their own header, verbatim:
+
+  Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+
+  Developed at SunPro, a Sun Microsystems, Inc. business.
+  Permission to use, copy, modify, and distribute this
+  software is freely granted, provided that this notice
+  is preserved.
+
+That is RULING #9783's condition 1.
+
+Headers NOT taken from newlib, and why
+--------------------------------------
+fdlibm.h includes <math.h> and <machine/ieeefp.h>, and w_sqrt.c includes
+<errno.h>. In the same tree those are newlib/libc/include/math.h (sha1
+c66e9246706d882273902bf69de96353a9a2c421), machine/ieeefp.h (cd4145ff9e65cb9a
+84793f5bc46ca8ff3efa918a) and errno.h -> sys/errno.h (a772e37c596d446736ab2611
+a470ba1281ad7f32 / f0ed505dc5d05841babb0bf98cf8a60abcc11d25), and math.h pulls
+in sys/reent.h, _ansi.h and sys/config.h. None of these files carries any
+copyright or permission notice of its own (the tree's ee/COPYING.NEWLIB, sha1
+29e2fc78466b79e68bf5077d497c130ae93f791e, lists eleven sources' notices and
+names no file). They do not meet
+RULING #9783's condition 1, so they are NOT vendored; their licensing is the
+operator's review (#8304). GCC's ginclude/stddef.h is not needed at all.
+
+Project-written files (NOT newlib source)
+-----------------------------------------
+- shim/math.h, shim/machine/ieeefp.h, shim/errno.h: written for this project
+  as stand-ins for those headers. Each says so in its first line. They declare
+  only what s_isnan.c and w_sqrt.c use: the 32-bit integer types and the
+  little-endian flag fdlibm.h's word macros need, isnan, matherr, the SVID
+  struct exception, DOMAIN, the fdlibm error-mode values behind _LIB_VERSION
+  (the const global __fdlib_version), __errno and EDOM. The values are fixed by
+  the SDK objects the build reproduces: e.g. EDOM 33 is the constant the SDK's
+  w_sqrt.o stores, and a shim with EDOM 34 measured 1 differing image byte.
+- PROVENANCE: this file.
+
+How it is built and linked
+--------------------------
+The two members are rows in going-decompiled/libgcc/MEMBERS (its source
+column is relative to that directory; the defines column carries this
+directory's include path and newlib's configure.host define for mips64r5900,
+-DMALLOC_ALIGNMENT=16). tools/ee/build_libgcc.sh builds every member the
+linker script names with the SDK's own compiler, 2.9-ee-991111 cpp.exe +
+cc1.exe at -O2 -G0, and archives them into build/<region>/lib/libgcc.a with
+the libgcc members; the yaml places them as splat `lib` subsegments:
+s_isnan.o .text at 0x1313C8, w_sqrt.o .text at 0x131430 and .rodata at
+0x13BF28 (USA). w_sqrt.o's imports resolve to the ROM's own definitions:
+isnan from s_isnan.o, dpcmp through symbol_addrs, __fdlib_version to the
+rodata word at 0x13BF10 (symbol_addrs), and __ieee754_sqrt (e_sqrt, still
+asm: it does not reproduce, FACT #9782), matherr (game C, cod/031380) and
+__errno (game C, cod/015180) through going-decompiled/libgcc/LINK_ALIASES.
+
+Checked against the SDK's own libm.a (tools/ee/sdk-lib/libm.a, an identity
+oracle only, never linked): with these shims, the .text and .rodata of both
+members are sha1-identical to the SDK objects (s_isnan .text d80aa972...,
+w_sqrt .text 9f7f2c93..., .rodata d6dd2c88...) and w_sqrt.o's 13 relocations
+are the same set. The whole-image check is landing_gate.sh.

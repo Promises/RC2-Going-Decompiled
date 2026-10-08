@@ -129,7 +129,7 @@ void LoadLevelToc(s32 level, u8 *scratch) {
 
 /* Retail inter-function padding: the ROM has 13 zero words after LoadLevelToc,
  * 0x133B4C..0x133B7F, up to the cod/033B00 data at 0x133B80. They are layout
- * data, not code (RULING #8467; precedent cod/022FA8.c before _start). Without
+ * data, not code (RULING #8467; precedent cod/0314C0.c before _start). Without
  * them the data after this unit links 0x30 low, and every reference to it
  * moves: landing_gate usa --strict measured cmp 13918 differing bytes at
  * 5a32d8ff6 (task #1790). */
