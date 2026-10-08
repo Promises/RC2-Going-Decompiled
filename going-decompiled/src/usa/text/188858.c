@@ -4569,7 +4569,7 @@ extern s32 g_playerProgress;
 /* g_guiInstance (void*), PlayGlobalSound, IntToFloat(s32), FloatToInt: file-scope. */
 extern s32 g_padButtonsHeld, g_padButtonsPressed, g_fileLoadState;
 extern u8  g_soundBankHandlesBlk[];  /* +0x1248 = last-selected item id */
-extern s32 D_1A8C64;                 /* input-lock gate */
+extern s32 g_noticeOwner;                 /* on-screen notice slot owner; nonzero = a notice is up (locks input here) */
 extern u8  D_1A7BBB;                 /* inventory-overlay-mode flag */
 extern f32 D_1382C8, D_1382CC;       /* analog stick x / y */
 extern s32 D_13834C, D_138358;       /* input/mode flags */
@@ -4606,7 +4606,7 @@ void func_0028C840(void *wheel) {
     f32  ang, mag, snap;
     s32  bActive;
 
-    if (D_1A8C64 != 0) {
+    if (g_noticeOwner != 0) {
         return;
     }
 
@@ -4814,7 +4814,7 @@ void func_0028C840(void *wheel) {
  * computes a per-item angle (WrapAnglePiSum, result unused here), drives the
  * highlight tween for the selected item (func_0034DAB0), and pokes the GUI alpha
  * slot (FloatToInt(alpha*0.5) while func_00290FC0(), else 0). For the highlighted
- * item — unless the popup gate D_1A8C64 is set — it draws the equipped weapon's
+ * item — unless the popup gate g_noticeOwner is set — it draws the equipped weapon's
  * ammo counter "%d/%d" (red 0x804040FF when out of ammo, white gradient
  * otherwise) and the localized weapon name, split onto two lines at the first '-'
  * or ' '. Returns w+0x58 (the widget status word).
@@ -4833,7 +4833,7 @@ extern void  func_0034DAB0(void *elem, s32 flag, f32 t);       /* HUD highlight 
 extern s32   func_00290FC0(void);                              /* GUI state gate */
 extern s32  func_002801B8(s32 x, s32 y, u32 color, const char *text, s32 flag);
 extern char  g_szAmmoFraction[];             /* "%d/%d" ammo-count format string */
-extern s32   D_1A8C64;                        /* GUI popup-busy gate */
+extern s32   g_noticeOwner;                        /* on-screen notice slot owner; nonzero = a notice is up */
 
 s32 DrawWeaponSelectWheel(HudElement *w) {
     char buf[0x50];
@@ -4908,7 +4908,7 @@ s32 DrawWeaponSelectWheel(HudElement *w) {
     if (*(s32 *)((u8 *)table[D_1A8D48] + selectedIndex * 0x1C) == 0) {
         return *(s32 *)((u8 *)w + 0x58);
     }
-    if (D_1A8C64 != 0) {
+    if (g_noticeOwner != 0) {
         return *(s32 *)((u8 *)w + 0x58);
     }
 

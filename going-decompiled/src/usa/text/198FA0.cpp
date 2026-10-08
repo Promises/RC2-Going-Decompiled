@@ -80,7 +80,7 @@ __asm__(".extern g_loadedHeldItemModelId, 16");
 __asm__(".extern g_levelDialogToc, 16");
 __asm__(".extern g_nSaveLoadStatusCode, 12");
 __asm__(".extern g_gameStateFlags, 12");
-__asm__(".extern D_1A8C64, 16");
+__asm__(".extern g_noticeOwner, 16");
 __asm__(".extern D_1A8C88, 12");
 __asm__(".extern D_1A8C8C, 12");
 
@@ -105,10 +105,10 @@ extern s32 g_nSaveLoadStatusCode[2];
  * scalar, fills the slot with the store, and the .extern 12 above keeps its
  * straight-line reads absolute (task #888, func_002992E8). */
 extern s32 g_gameStateFlags;
-extern s32 D_1A8C64;  /* GUI popup-busy gate (also read by the walled func_0029CCB8) */
+extern s32 g_noticeOwner;  /* on-screen notice slot owner (claimed by func_002B1A90/func_002B1B48, 1A8180); nonzero = a notice is up */
 
 /* Two card-error gate words in the save-prompt small-data block adjacent to
- * D_1A8C64; read by the save/load status handlers below to choose between the
+ * g_noticeOwner; read by the save/load status handlers below to choose between the
  * "card removed / fatal" and "retry" message paths.
  *   D_1A8C88 : set when the active card slot reported a hard/unrecoverable error
  *   D_1A8C8C : set when a card-removal abort is in progress
@@ -2254,7 +2254,7 @@ void func_0029CC48(void) {
 /*
  * func_0029CCB8 — GUI popup-poll gate. When the GUI is up and every gating
  * flag permits (D_1A9A88 set, D_18A000 = the s16 sub-state half at
- * g_nNanotechBonusHealTimer+4 clear, the popup-busy gate D_1A8C64 clear,
+ * g_nNanotechBonusHealTimer+4 clear, the popup-busy gate g_noticeOwner clear,
  * g_menuScreenReady set, g_guiInstance non-null), forwards the widget at
  * g_guiInstance+0x3F7B0 to func_0033B720. No params, no return value.
  *
@@ -2272,14 +2272,14 @@ void func_0029CC48(void) {
 void func_0029CCB8(void) {
     /* All five gates must permit before the popup-poll runs:
      *  D_1A9A88 set, the nanotech sub-state half at +0x4 clear, the popup-busy
-     *  gate D_1A8C64 clear, g_menuScreenReady set, and the GUI instance up. */
+     *  gate g_noticeOwner clear, g_menuScreenReady set, and the GUI instance up. */
     if (D_1A9A88 == 0) {
         return;
     }
     if (D_18A000 != 0) {
         return;
     }
-    if (D_1A8C64 != 0) {
+    if (g_noticeOwner != 0) {
         return;
     }
     if (g_menuScreenReady == 0) {
@@ -2950,13 +2950,13 @@ void GuiManagerCreate(void) {
 }
 #endif
 
-/** If the GUI is up and the popup-busy gate (D_1A8C64) is clear, pause the
+/** If the GUI is up and the popup-busy gate (g_noticeOwner) is clear, pause the
  *  game world (func_0028E9A0(1)) and run the GUI pump (func_0029CA98),
  *  propagating its result.
  *
  *  The two early-exit paths (GUI down, or popup-busy) fall off the end with no
  *  explicit `return`: the pinned cc1 incidentally leaves the in-register value
- *  in $v0 (0 when g_guiInstance==0, the loaded D_1A8C64 when it is non-zero), so
+ *  in $v0 (0 when g_guiInstance==0, the loaded g_noticeOwner when it is non-zero), so
  *  the matching PS2 build is byte-exact AS WRITTEN. A different host compiler
  *  resolves the fall-off-end UB differently and DIVERGES on the return value
  *  (memory effects are identical). The #else makes those two returns explicit so
@@ -2968,7 +2968,7 @@ void GuiManagerCreate(void) {
 #if !defined(TARGET_NATIVE) && !defined(S136OS_func_0029CA98)
 s32 func_0029DC70(void) {
     if (g_guiInstance != 0) {
-        if (D_1A8C64 == 0) {
+        if (g_noticeOwner == 0) {
             func_0028E9A0(1);
             return func_0029CA98();
         }
@@ -2979,8 +2979,8 @@ s32 func_0029DC70(void) {
     if (g_guiInstance == 0) {
         return 0;
     }
-    if (D_1A8C64 != 0) {
-        return D_1A8C64;
+    if (g_noticeOwner != 0) {
+        return g_noticeOwner;
     }
     func_0028E9A0(1);
     return func_0029CA98();

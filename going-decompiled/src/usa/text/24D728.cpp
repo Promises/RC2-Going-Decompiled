@@ -438,7 +438,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034DBE0);
 /* func_0034E8D8(hudMgr): the weapon-select / bolt-counter HUD RENDER pass. Draws
  * the frame + label sprites/text at the sub-element offsets (+0x4C/+0x98/+0x158/
  * +0x100 base group; +0x2E0/+0x32C mirrored pair with negated scale when no notice
- * is pending, D_1A8C64==0), runs the two element-list draw loops (7 rows each,
+ * is pending, g_noticeOwner==0), runs the two element-list draw loops (7 rows each,
  * dispatching each element's own draw fn via its vtable at +0x8/+0xC), then renders
  * the live bolt count: counts its decimal digits (g_boltCount / 10 loop), formats
  * it with a language-selected template (g_currentLanguage 3/5/!=4 -> D_1AE6B0 vs
@@ -791,7 +791,7 @@ void func_0034F220(GuiInstance *mgr) {
  * func_0034F240(gui) — refresh the HUD under a temporary camera-projection
  * override. Saves the scene camera's projection param (g_sceneActorMobys+0x674,
  * field +0xB0), forces it to 0.62, and rebuilds the projection
- * (BuildCameraProjection). Then, unless the suppress flag D_1A8C64 is set, it
+ * (BuildCameraProjection). Then, unless the suppress flag g_noticeOwner is set, it
  * re-reads the HUD manager's packed color (func_0034D7A8 on the embedded
  * GuiHudManager at gui+0x7A0) and re-applies it via func_0034F028 (with the two
  * gp-globals D_1AE6F4/D_1AE6F8 and the color's top byte). It runs the manager
@@ -807,25 +807,25 @@ extern void func_0029D9B8(void);
 extern void func_0034F028(u8 *obj, s32 a, s32 b, s32 c);
 extern void func_0034E8D8(void *p);
 extern u8   g_sceneActorMobys[];      /* 0x1B894C  scene cast moby ptrs (byte base) */
-extern s32  D_1A8C64;                 /* HUD-refresh suppress flag */
+extern s32  g_noticeOwner;                 /* on-screen notice slot owner; nonzero suppresses the HUD refresh */
 extern s32  D_1AE6F4;                 /* gp-global passed to func_0034F028 */
 extern s32  D_1AE6F8;                 /* gp-global passed to func_0034F028 */
 #endif
 
 /* ADDRESSING-MODEL DEVICE (RULING #8620, the 191238.cpp equate form):
- * func_0034F240 reads D_1A8C64 and g_guiInstance absolutely (lui/lw at
+ * func_0034F240 reads g_noticeOwner and g_guiInstance absolutely (lui/lw at
  * 0x34F278 and 0x34F2B4). Declared as plain ints cc1 writes `.extern <sym>, 4`
  * and gas makes both reads one-word %gp_rel (the body comes out 46 words, the
  * ROM's is 48). Size 16 pins them absolute; the equated names keep the size
  * off the real symbols, and the relocations still name them. Top level, so
  * the s136os TU and the spliced 2.9 TU see the same lines. */
 #ifndef TARGET_NATIVE
-__asm__(".extern D_1A8C64Abs, 16\n\tD_1A8C64Abs = D_1A8C64");
-extern s32 D_1A8C64Abs;
+__asm__(".extern g_noticeOwnerAbs, 16\n\tg_noticeOwnerAbs = g_noticeOwner");
+extern s32 g_noticeOwnerAbs;
 __asm__(".extern g_guiInstanceAbs, 16\n\tg_guiInstanceAbs = g_guiInstance");
 extern void *g_guiInstanceAbs;
 #else
-#define D_1A8C64Abs D_1A8C64
+#define g_noticeOwnerAbs g_noticeOwner
 #define g_guiInstanceAbs g_guiInstance
 #endif
 
@@ -839,7 +839,7 @@ extern void func_0034F028(u8 *obj, s32 a, s32 b, s32 c);
 extern void func_0034E8D8(void *p);
 extern void func_0029D9B8(void);
 extern u8 g_sceneActorMobys[];
-extern s32 D_1A8C64;
+extern s32 g_noticeOwner;
 extern s32 D_1AE6F4;
 extern s32 D_1AE6F8;
 extern void *g_guiInstance;
@@ -862,7 +862,7 @@ void func_0034F240(void *gui) {
     *(f32 *)(cam + 0xB0) = 0.62f;
     BuildCameraProjection();
 
-    if (D_1A8C64Abs == 0) {
+    if (g_noticeOwnerAbs == 0) {
         s32 packed = func_0034D7A8((GuiHudManager *)((u8 *)gui + 0x7A0));
         func_0034F028((u8 *)gui, D_1AE6F4, D_1AE6F8, (s32)((u32)packed >> 24));
     }

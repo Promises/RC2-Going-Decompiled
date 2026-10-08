@@ -94,7 +94,7 @@ __asm__(".extern D_1A8BD0, 12");
 __asm__(".extern g_skillPointFlags, 12");
 __asm__(".extern g_abLevelAvailableFlags, 12");
 __asm__(".extern D_1A8C60, 12");   /* func_002B1B48: gp_rel in a beql slot, lui/$at elsewhere */
-__asm__(".extern D_1A8C64, 12");
+__asm__(".extern g_noticeOwner, 12");
 __asm__(".extern g_altGravityEnabled, 12");   /* func_002B0E40: lui/$at; func_002B03E8: gp_rel in a bc1t slot */
 /* Assembler-absolute globals (size class 16, see header): every C access the
  * ROM makes to these is the lui/$at macro, never %gp_rel, so -G8 must not
@@ -8685,22 +8685,22 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_0
 /* shared by func_002B1A90 + func_002B1B48 (the notice-slot pair) — declared
  * above both so the TARGET_NATIVE #else bodies compile. */
 extern s32   D_1A8C60;  /* pending-notice arg2 latch */
-extern void *D_1A8C64;  /* pending-notice subject latch */
+extern void *g_noticeOwner;  /* subject holding the single on-screen notice slot (0 = free) */
 extern void  func_0029DB10(char *text, s32 arg);
 
 /* func_002B1A90(subject, stringId, arg2): claim the single global notice slot for
- * `subject`. If this subject already holds it (D_1A8C64 == subject): refresh the
- * text and return 2. If a DIFFERENT subject holds it (D_1A8C64 != 0): reject,
- * return 0. Otherwise claim it (latch D_1A8C64 = subject) and return 1. In the
+ * `subject`. If this subject already holds it (g_noticeOwner == subject): refresh the
+ * text and return 2. If a DIFFERENT subject holds it (g_noticeOwner != 0): reject,
+ * return 0. Otherwise claim it (latch g_noticeOwner = subject) and return 1. In the
  * claim/refresh cases it localizes stringId (when set) through func_0029DB10,
  * writes D_1A8C60 = 2, and records the stringId at &g_pMobyGroupIterMoby+0x8. */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 81.26%
-   -> UNKNOWN-@1: ROM `lui v0,0x0  [HI16 D_1A8C64]` vs `lw v1,0(gp)  [GPREL16 D_1A8C64]` */
+   -> UNKNOWN-@1: ROM `lui v0,0x0  [HI16 g_noticeOwner]` vs `lw v1,0(gp)  [GPREL16 g_noticeOwner]` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B1A90);
 #else
 s32 func_002B1A90(void *subject, s32 stringId, s32 arg2) {
-    if (D_1A8C64 == subject) {
+    if (g_noticeOwner == subject) {
         if (stringId != 0) {
             func_0029DB10(GetLocalizedString(stringId), arg2);
         }
@@ -8708,13 +8708,13 @@ s32 func_002B1A90(void *subject, s32 stringId, s32 arg2) {
         D_1A8C60 = 2;
         return 2;
     }
-    if (D_1A8C64 != 0) {
+    if (g_noticeOwner != 0) {
         return 0;
     }
     if (stringId != 0) {
         func_0029DB10(GetLocalizedString(stringId), arg2);
     }
-    D_1A8C64 = subject;
+    g_noticeOwner = subject;
     D_1A8C60 = 2;
     *(s32 *)((u8 *)&g_pMobyGroupIterMoby + 0x8) = stringId;
     return 1;
@@ -8725,15 +8725,15 @@ s32 func_002B1A90(void *subject, s32 stringId, s32 arg2) {
  * First runs func_002B1A90(subject) as a gate — if it returns non-zero, abort
  * with that code. Otherwise, when stringId is set, localize it and hand the
  * text + arg2 to func_0029DB10 (the display/queue helper). Latches the pending
- * notice state (g_pendingNoticeArg2 = arg2, g_pendingNoticeSubject = subject,
+ * notice state (D_1A8C60 = arg2, g_noticeOwner = subject,
  * and the subject-slot's stringId at &g_pMobyGroupIterMoby+0x8) and returns 3.
- * (D_1A8C60/D_1A8C64/func_0029DB10 declared above the pair; func_002B1A90 is
+ * (D_1A8C60/g_noticeOwner/func_0029DB10 declared above the pair; func_002B1A90 is
  * defined just above so needs no forward decl in the TARGET_NATIVE build.) */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 84.84%
    -> UNKNOWN-@2: ROM `(none)` vs `daddu s0,a1,zero` */
 /* MATCHED on the s136os arm (task #1324): byte-exact solo under SN 2.95.3
  * v1.36 -fopt-stack (verify_match_unit, FACT #8810's method). Closing lever:
- * D_1A8C60/D_1A8C64 in the unit's size-12 `.extern` class (header):
+ * D_1A8C60/g_noticeOwner in the unit's size-12 `.extern` class (header):
  * the ROM writes D_1A8C60 %gp_rel from a beql slot and lui/$at elsewhere;
  * plus func_002B1A90's prototype in this arm. */
 /* GUARD (task #1324): on EE this C is the image's body, compiled alone by the
@@ -8756,7 +8756,7 @@ s32 func_002B1B48(void *subject, s32 stringId, s32 arg2) {
         func_0029DB10(GetLocalizedString(stringId), arg2);
     }
     D_1A8C60 = arg2;
-    D_1A8C64 = subject;
+    g_noticeOwner = subject;
     *(s32 *)((u8 *)&g_pMobyGroupIterMoby + 0x8) = stringId;
     return 3;
 }
