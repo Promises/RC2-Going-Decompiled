@@ -6280,22 +6280,36 @@ void func_002980D8(void *dstArg, u8 *src, s32 ctrlArg) {
 }
 #endif
 
-#ifndef TARGET_NATIVE
-/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
- * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 88.03% PACKED-SAVE /
- * engine96 78.06% UNKNOWN-addiu; best arm sdk29, first differing insn there: 'addiu sp, sp,
- * -0x480' vs 'addiu sp, sp, -0x490' */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00298308);
-#else
-extern void CopyQwords(void *dst, const void *src, s32 nbytes);
 /*
  * func_00298308(dst, src) — the "plain" 1bpp->4bpp map-bitmap expander (the
- * bit0-clear arm of MapBuildBitmap). Builds a 256-entry lookup that fans each
- * bit k of an input byte out to nibble k of a 32-bit word (bit set -> 0xF), then
- * for each of 128 rows expands the next 16 source bytes to sixteen 32-bit words
- * (64 bytes) and replicates that run four times (256 bytes) into dst — a 4x
- * horizontal scale. Consumes 128*16 = 2048 source bytes, writes 128*256 = 32 KB.
+ * bit0-clear arm of MapBuildBitmap; the sibling of the packed func_002980D8).
+ * Builds a 256-entry lookup that fans each bit k of an input byte out to nibble
+ * k of a 32-bit word (bit set -> 0xF), then for each of 128 rows expands the
+ * next 16 source bytes to sixteen 32-bit words (64 bytes) and copies that run
+ * four times (256 bytes) into dst — a 4x horizontal scale. Consumes
+ * 128*16 = 2048 source bytes, writes 128*256 = 32 KB. Returns nothing.
+ *
+ * Byte-exact on the s136os arm (task #1962). The ROM's six callee saves at
+ * 8-byte stride are what SN 1.36 -fopt-stack emits; the old t496 "PACKED-SAVE"
+ * label described the 2.9 arm. One lever, priced by removing it (solo s136
+ * compile, relocated fields masked; N/116 words differ): the row is filled
+ * through a pointer `p` reset to `row` at the top of each outer iteration, not
+ * by `row[k]`. The ROM keeps that reset value in its own callee-saved $21
+ * (`addiu $21,$29,1024` in the prologue, `move $5,$21` at 0x298420) apart from
+ * the CopyQwords argument in $17; indexing merges the two into one register:
+ * 27/116, 115 words. Where `src++` sits does not matter.
  */
+/* GUARD (task #1962): on EE this C is the image's body, compiled alone by SN
+ * 2.95.3 v1.36 -fopt-stack (tools/ee/s136os_functions.txt) and spliced over the
+ * S136OS_SLOT line by tools/ee/s136os_splice.sh; the 2.9 compile sees only the
+ * slot, so a build that skips the splice loses the function. On native it is
+ * plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00298308)
+S136OS_SLOT(func_00298308);
+#else
+/* Prototypes this body needs whose declarations sit in other guarded arms:
+ * the s136os arm compiles this arm alone, so it must see them here. */
+extern void CopyQwords(void *dst, const void *src, s32 nbytes);
 void func_00298308(void *dst, u8 *src) {
     s32 lut[256];   /* bit-expand table: input byte -> nibble mask */
     s32 row[16];    /* one expanded 16-byte source run */
@@ -6317,9 +6331,9 @@ void func_00298308(void *dst, u8 *src) {
     }
 
     for (j = 0; j < 0x80; j++) {
+        s32 *p = row;   /* own register ($21 in the ROM): see above */
         for (k = 0; k < 16; k++) {
-            row[k] = lut[*src];
-            src++;
+            *p++ = lut[*src++];
         }
         CopyQwords(out, row, 0x40); out += 0x40;
         CopyQwords(out, row, 0x40); out += 0x40;

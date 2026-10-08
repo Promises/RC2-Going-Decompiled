@@ -602,3 +602,4 @@ usa text/235FE8 func_0033FAB0
 usa text/191238 func_00297E80
 usa text/191238 DrawSkyShellsScaledSpin
 usa text/191238 MapBeginUpload
+usa text/191238 func_00298308
