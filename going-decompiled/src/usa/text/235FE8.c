@@ -102,6 +102,13 @@ __asm__(".extern D_1ADDEC, 16");
 __asm__(".extern D_1ADDF4, 16");
 __asm__(".extern D_1ADE34, 16");
 __asm__(".extern D_1ADE3C, 16");
+__asm__(".extern D_1ADF04, 16");
+__asm__(".extern D_1ADF0C, 16");
+__asm__(".extern D_1ADF14, 16");
+__asm__(".extern D_1ADF1C, 16");
+__asm__(".extern D_1ADF24, 16");
+__asm__(".extern D_1ADF2C, 16");
+__asm__(".extern D_1ADF34, 16");
 __asm__(".extern D_1ADF3C, 16");
 __asm__(".extern D_1ADF44, 16");
 __asm__(".extern D_1ADF4C, 16");
@@ -6581,7 +6588,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiStatsPanelSc
    166/264 insns differ. Residual: UNKNOWN-sd + gp/abs-mixed symbol (first differing insn: 'sd s7, 0x58(sp)' vs 'sd s2, 0x30(sp)').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
    not byte-exact, so the arm stays #else. */
-void func_0033FAB0(void *w, s32 flag);
+s32 func_0033FAB0(void *w, s32 flags); /* returns bit 6 of flags (198FA0.cpp reads it) */
 extern void GuiDialogBoxInitBorder(void *w, void *pool, void *borderCfg);
 extern char *g_guiInstance;
 extern u8 D_1ADED8[8], D_1ADC60[], D_1ADEE8[], D_1ADEF0[], D_1ADEF8[];
@@ -6661,7 +6668,69 @@ void GuiStatsPanelScreenInit(void *w, GuiPool *pool) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033FAB0);
+/* func_0033FAB0: per-frame layout tick of the stats panel built above. Lays
+ * out the embedded dialog box (func_0033BE70 on w+0x8) and re-anchors it at the
+ * panel anchor *(w+0x2D8) (func_0033C060), then positions seven elements at
+ * fixed (x, y) offsets from that anchor (+0x318 D_1ADF00/04, +0x370 D_1ADF08/0C,
+ * +0x3C8 D_1ADF10/14, +0x2DC D_1ADF28/2C, +0x420 D_1ADF30/34, the caption +0x628
+ * D_1ADF20/24, +0x5D0 D_1ADF18/1C), re-reading the anchor for every element.
+ * Refreshes the map thumbnail (func_002E0010 at +0x680 for the selected
+ * planet, g_mapVertexData+0x230) and sets the caption from
+ * g_levelSelectEntries[planet].valueStrId (localized, or the D_1ADC60
+ * placeholder when the id is negative), runs the value-row layout
+ * func_0033FCE8(w) and GalacticMapScreenTick(0).
+ * Params: w = the panel; flags = the pad mask. Returns bit 6 of flags.
+ * MATCHED byte-exact on the s136os arm (task #1987), on the first spelling,
+ * written after its sibling GuiLevelInfoPanelTick (same caption read at
+ * (level << 3) | 4). ADDRESSING-MODE PINS (the unit's top-of-file list): the
+ * ROM reads every x offset $gp-relative and every y offset absolute through
+ * the assembler's `$at` macro, so the seven y symbols carry `.extern sym, 16`
+ * there. Measured in a solo s136os compile: all seven removed, 134 words
+ * (115 of 142 differ); D_1ADF04's alone removed, 140 words.
+ * GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+ * (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in tools/ee/s136os_functions.txt)
+ * and spliced over S136OS_SLOT by tools/ee/s136os_splice.sh. There is no asm
+ * fallback. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0033FAB0)
+S136OS_SLOT(func_0033FAB0);
+#else
+extern f32 D_1ADF00, D_1ADF04, D_1ADF08, D_1ADF0C, D_1ADF10, D_1ADF14, D_1ADF18, D_1ADF1C;
+extern f32 D_1ADF20, D_1ADF24, D_1ADF28, D_1ADF2C, D_1ADF30, D_1ADF34;
+extern u8 g_mapVertexData[], g_levelSelectEntries[], D_1ADC60[];
+extern char *func_002E0010(void *dst, s32 level);
+extern void func_0033FCE8(void *w);
+extern s32 GalacticMapScreenTick(s32 arg);
+s32 func_0033FAB0(void *w, s32 flags) {
+    void *box = (char *)w + 0x8;
+    GuiElement *caption = (GuiElement *)((char *)w + 0x628);
+    u8 *map;
+    s32 valueStrId;
+
+    func_0033BE70(box);
+#define ANCHOR (*(f32 **)((char *)w + 0x2D8))
+    func_0033C060(box, ANCHOR[0], ANCHOR[1]);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x318), D_1ADF00 + ANCHOR[0], D_1ADF04 + ANCHOR[1], 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x370), D_1ADF08 + ANCHOR[0], D_1ADF0C + ANCHOR[1], 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x3C8), D_1ADF10 + ANCHOR[0], D_1ADF14 + ANCHOR[1], 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x2DC), D_1ADF28 + ANCHOR[0], D_1ADF2C + ANCHOR[1], 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x420), D_1ADF30 + ANCHOR[0], D_1ADF34 + ANCHOR[1], 0.0f, 0.0f);
+    GuiElementSetPos(caption, D_1ADF20 + ANCHOR[0], D_1ADF24 + ANCHOR[1], 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x5D0), D_1ADF18 + ANCHOR[0], D_1ADF1C + ANCHOR[1], 0.0f, 0.0f);
+#undef ANCHOR
+
+    map = g_mapVertexData;
+    func_002E0010((char *)w + 0x680, *(s32 *)(map + 0x230));
+    valueStrId = *(s32 *)(g_levelSelectEntries + ((*(s32 *)(map + 0x230) << 3) | 4));
+    if (valueStrId >= 0) {
+        GuiElementSetText(caption, GetLocalizedString(valueStrId));
+    } else {
+        GuiElementSetText(caption, (s32)D_1ADC60);
+    }
+    func_0033FCE8(w);
+    GalacticMapScreenTick(0);
+    return (flags >> 6) & 1;
+}
+#endif
 
 /* func_0033FCE8: stats-panel value-row layout. Positions four value elements at
  * fixed data-driven offsets from the shared anchor record *(w+0x2D8): +0x578 at
