@@ -1768,12 +1768,45 @@ void LoadShipDisplayTexture(s32 shipId) {
 }
 #endif
 
+/* t496 probe (unit objdiff on the all-promoted probe files): sdk29 73.42% PACKED-SAVE /
+ * engine96 71.28% CONST-LI ('addiu sp, sp, -0x40' vs -0x70).
+ * ADDRESSING-MODEL DEVICES for ParseLoadedSegment (RULING #8620; the size-16
+ * FACT #8036 equate form of g_sceneArenaCursorAbs above). The ROM reaches five
+ * pointer globals with the assembler's absolute macro (`lui $19; lw $19,%lo($19)`
+ * for g_pLoadedSegment at 0x293144, `lui $1; sw ...,%lo($1)` for the four
+ * stores at 0x29320C..0x293248, `lui $N; lw $N,%lo($N)` for the header
+ * reloads), where -G8 would make them gp-relative. Each equate carries the size
+ * on a local name, so the relocations still name the real symbols and other
+ * readers keep their own access. The unit's `.extern g_pLoadedSegment, 16` and
+ * `.extern g_pHudAssetHeader, 16` lines below this function come after its
+ * uses, so they do not reach it. Outside the guard: the s136os splice carries
+ * only the function's .ent..end block and .extern lines, so the equates must
+ * already be in the 2.9 TU. They emit no bytes. */
 #ifndef TARGET_NATIVE
-/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
- * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 73.42% PACKED-SAVE /
- * engine96 71.28% CONST-LI; best arm sdk29, first differing insn there: 'addiu sp, sp, -0x40'
- * vs 'addiu sp, sp, -0x70' */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", ParseLoadedSegment);
+__asm__(".extern g_pLoadedSegmentAbs, 16\n\tg_pLoadedSegmentAbs = g_pLoadedSegment");
+__asm__(".extern g_pHudAssetHeaderAbs, 16\n\tg_pHudAssetHeaderAbs = g_pHudAssetHeader");
+__asm__(".extern g_hudIconMapAbs, 16\n\tg_hudIconMapAbs = g_hudIconMap");
+__asm__(".extern g_hudClutSlotsAbs, 16\n\tg_hudClutSlotsAbs = g_hudClutSlots");
+__asm__(".extern g_hudTextureSlotsAbs, 16\n\tg_hudTextureSlotsAbs = g_hudTextureSlots");
+extern u8   *g_pLoadedSegmentAbs;
+extern u8   *g_pHudAssetHeaderAbs;
+extern void *g_hudIconMapAbs;
+extern void *g_hudClutSlotsAbs;
+extern void *g_hudTextureSlotsAbs;
+#else
+#define g_pLoadedSegmentAbs  g_pLoadedSegment
+#define g_pHudAssetHeaderAbs g_pHudAssetHeader
+#define g_hudIconMapAbs      g_hudIconMap
+#define g_hudClutSlotsAbs    g_hudClutSlots
+#define g_hudTextureSlotsAbs g_hudTextureSlots
+#endif
+/* GUARD (task #1915): on EE this C is the image's body, compiled alone by SN
+ * 2.95.3 v1.36 -fopt-stack (tools/ee/s136os_functions.txt) and spliced over the
+ * S136OS_SLOT line by tools/ee/s136os_splice.sh; the 2.9 compile sees only the
+ * slot, so a build that skips the splice loses the function. On native it is
+ * plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_ParseLoadedSegment)
+S136OS_SLOT(ParseLoadedSegment);
 #else
 extern u8 *g_pLoadedSegment;
 extern u8 *g_pHudAssetHeader;
@@ -1819,9 +1852,31 @@ extern u8 D_1A9230[];
  *  - Banks 2-4 (gates header[0x5C]/[0x60]/[0x64]): DMA seg sections
  *    0x30/0x34, 0x38/0x3C, 0x40/0x44 to the ring (tags D_1A9210/20/30),
  *    recording GS handles at header +0x9C/+0xA0/+0xA4.
+ * Takes and returns nothing.
+ *
+ * Byte-exact on the s136os arm (task #1915). The ROM's seven callee saves at
+ * 8-byte stride are what SN 1.36 -fopt-stack emits; the t496 "PACKED-SAVE"
+ * label described the 2.9 arm. Besides the five equates above, each lever was
+ * priced by removing it alone (solo s136 compile, relocated fields masked;
+ * N/165 words differ):
+ *  - the equates, one at a time: g_pLoadedSegmentAbs 12/165, g_pHudAssetHeaderAbs
+ *    120/165 (155 words), g_hudIconMapAbs 110, g_hudClutSlotsAbs 106,
+ *    g_hudTextureSlotsAbs 102;
+ *  - the size table is filled by an indexed `for (i = 0; i < 5; i++)`, which
+ *    loop.c turns into the ROM's count-down with the mask in $5 and the counter
+ *    in $4 (a pointer walk swaps those two): 6/165;
+ *  - the arena table is taken into a pointer before the first DebugMalloc, so
+ *    its address sits in $18 across the calls as in the ROM: 145/165;
+ *  - section addresses are `value + (s32)seg` integer sums (ROM `addu $5,$5,$19`;
+ *    pointer arithmetic puts seg first): 5/165;
+ *  - each bank tests g_pHudAssetHeader afresh instead of reassigning the
+ *    long-lived `header` (which pins a callee-saved register): 36/165;
+ *  - banks 2-4 each have their own qword count; one shared with bank 0 lives
+ *    across bank 0's call and drags the others into a callee-saved
+ *    register: 60/165, 168 words.
  */
 void ParseLoadedSegment(void) {
-    u8 *seg = g_pLoadedSegment;
+    u8 *seg = g_pLoadedSegmentAbs;
     u8 *header;
     u8 *iopBase;
     s32 *src;
@@ -1829,73 +1884,69 @@ void ParseLoadedSegment(void) {
     s32 i;
     s32 size;
     s32 sizeQw;
+    s32 *arenaTable;
 
     /* Round the 5 sub-segment sizes up to 64 and publish the size table. */
     src = (s32 *)(seg + 0x24);
     dst = (s32 *)(g_hudMobySpawnStart + 8);
-    for (i = 4; i >= 0; i--) {
-        *dst = (*src + 0x3F) & 0xFFFFFFC0;
-        src += 2;
-        dst += 1;
+    for (i = 0; i < 5; i++) {
+        dst[i] = (src[i * 2] + 0x3F) & 0xFFFFFFC0;
     }
 
     /* DebugMalloc + CopyQwords the working header copy. */
+    arenaTable = (s32 *)g_memoryArenaTable;
     size = (*(s32 *)(seg + 0x1C) + 0x3F) & 0xFFFFFFC0;
     header = (u8 *)DebugMalloc(size, 0, D_1A91F0, 0x305);
-    CopyQwords(header, (void *)(*(s32 *)(seg + 0x18) + seg), size);
-    g_pHudAssetHeader = header;
+    CopyQwords(header, (void *)(*(s32 *)(seg + 0x18) + (s32)seg), size);
+    g_pHudAssetHeaderAbs = header;
 
     /* Resolve the header's section pointers + the fixed IOP staging base. */
-    *((u8 **)&g_pHudAssetHeader + 1) = header + *(s32 *)(header + 0x4);
-    iopBase = (u8 *)(*(s32 *)(g_memoryArenaTable + 0x10) + 0x60000);
-    g_hudIconMap      = header + *(s32 *)(header + 0x8);
-    g_hudClutSlots    = header + *(s32 *)(header + 0xC);
-    g_hudTextureSlots = header + *(s32 *)(header + 0x10);
+    *((u8 **)&g_pHudAssetHeaderAbs + 1) = header + *(s32 *)(header + 0x4);
+    iopBase = (u8 *)(arenaTable[4] + 0x60000);
+    g_hudIconMapAbs      = header + *(s32 *)(header + 0x8);
+    g_hudClutSlotsAbs    = header + *(s32 *)(header + 0xC);
+    g_hudTextureSlotsAbs = header + *(s32 *)(header + 0x10);
 
     /* Bank 0. */
     if (*(s32 *)(header + 0x54) != 0) {
         sizeQw = ((*(s32 *)(seg + 0x24) + 0x3F) & 0xFFFFFFC0) >> 4;
         DecompressHudBankWad(0, iopBase);
-        *(s32 *)(g_pHudAssetHeader + 0x94) =
-            UploadDataToIopRing((void *)(*(s32 *)(seg + 0x20) + seg),
+        *(s32 *)(g_pHudAssetHeaderAbs + 0x94) =
+            UploadDataToIopRing((void *)(*(s32 *)(seg + 0x20) + (s32)seg),
                                 sizeQw, sizeQw, D_1A9200);
         UploadHudBankTextures(0, iopBase, 1);
     }
 
     /* Bank 1 (scratch decompress, no upload). */
-    header = g_pHudAssetHeader;
-    if (*(s32 *)(header + 0x58) != 0) {
-        u8 *buf = (u8 *)DebugMalloc(*(s32 *)(header + 0x58), 0, D_1A91F0, 0x32D);
+    if (*(s32 *)(g_pHudAssetHeaderAbs + 0x58) != 0) {
+        u8 *buf = (u8 *)DebugMalloc(*(s32 *)(g_pHudAssetHeaderAbs + 0x58), 0, D_1A91F0, 0x32D);
         DecompressHudBankWad(1, buf);
         func_0011AEA0(0);
         RelocateHudBankGsSlots(1, buf);
     }
 
     /* Bank 2. */
-    header = g_pHudAssetHeader;
-    if (*(s32 *)(header + 0x5C) != 0) {
-        sizeQw = ((*(s32 *)(seg + 0x34) + 0x3F) & 0xFFFFFFC0) >> 4;
-        *(s32 *)(g_pHudAssetHeader + 0x9C) =
-            UploadDataToIopRing((void *)(*(s32 *)(seg + 0x30) + seg),
-                                sizeQw, sizeQw, D_1A9210);
+    if (*(s32 *)(g_pHudAssetHeaderAbs + 0x5C) != 0) {
+        s32 q2 = ((*(s32 *)(seg + 0x34) + 0x3F) & 0xFFFFFFC0) >> 4;
+        *(s32 *)(g_pHudAssetHeaderAbs + 0x9C) =
+            UploadDataToIopRing((void *)(*(s32 *)(seg + 0x30) + (s32)seg),
+                                q2, q2, D_1A9210);
     }
 
     /* Bank 3. */
-    header = g_pHudAssetHeader;
-    if (*(s32 *)(header + 0x60) != 0) {
-        sizeQw = ((*(s32 *)(seg + 0x3C) + 0x3F) & 0xFFFFFFC0) >> 4;
-        *(s32 *)(g_pHudAssetHeader + 0xA0) =
-            UploadDataToIopRing((void *)(*(s32 *)(seg + 0x38) + seg),
-                                sizeQw, sizeQw, D_1A9220);
+    if (*(s32 *)(g_pHudAssetHeaderAbs + 0x60) != 0) {
+        s32 q3 = ((*(s32 *)(seg + 0x3C) + 0x3F) & 0xFFFFFFC0) >> 4;
+        *(s32 *)(g_pHudAssetHeaderAbs + 0xA0) =
+            UploadDataToIopRing((void *)(*(s32 *)(seg + 0x38) + (s32)seg),
+                                q3, q3, D_1A9220);
     }
 
     /* Bank 4. */
-    header = g_pHudAssetHeader;
-    if (*(s32 *)(header + 0x64) != 0) {
-        sizeQw = ((*(s32 *)(seg + 0x44) + 0x3F) & 0xFFFFFFC0) >> 4;
-        *(s32 *)(g_pHudAssetHeader + 0xA4) =
-            UploadDataToIopRing((void *)(*(s32 *)(seg + 0x40) + seg),
-                                sizeQw, sizeQw, D_1A9230);
+    if (*(s32 *)(g_pHudAssetHeaderAbs + 0x64) != 0) {
+        s32 q4 = ((*(s32 *)(seg + 0x44) + 0x3F) & 0xFFFFFFC0) >> 4;
+        *(s32 *)(g_pHudAssetHeaderAbs + 0xA4) =
+            UploadDataToIopRing((void *)(*(s32 *)(seg + 0x40) + (s32)seg),
+                                q4, q4, D_1A9230);
     }
 }
 #endif
