@@ -1809,19 +1809,22 @@ char *GetLocalizedString(s32 textId) {
  * $ra. Not a real function; left INCLUDE_ASM. */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/188858", func_00289A58);
 
+/* g_bPalMode, g_screenHeight and D_1A7B9C are sized 16 for gas: every access
+ * to them in this unit's ROM is absolute (`lui; lw/lhu %lo`), and cc1 -G8 would
+ * otherwise address the scalars %gp_rel. */
+__asm__(".extern g_bPalMode, 16");
 extern s32 g_bPalMode;          /* 0x1A7B98 - PAL flag (0 = NTSC) */
+__asm__(".extern g_screenHeight, 16");
 extern s32 g_screenHeight;      /* 0x1A7344 - active display height */
+__asm__(".extern D_1A7B9C, 16");
 extern u16 D_1A7B9C;            /* 0x1A7B9C - subtitle-sound-enabled flag */
-extern s32 D_1A8D20[];          /* gp small-data table indexed by g_bPalMode */
+extern s32 D_1A8D20[2];         /* gp small-data table indexed by g_bPalMode */
 extern s32 PlayGlobalSound(s32 id, s32 a, s32 b);
 extern void func_00280C98(s16 *layout, s16 clipX0, s16 clipX1, s16 left, s16 right,
                           s16 anchorX, s16 y, s16 lineHeight, s32 flags);
-extern void func_00280BB8(void *layout, s32 color, const char *text, s32 arg4);
+extern void func_00280BB8(void *layout, u64 color, const char *text, s32 arg4);
 extern s32 func_001157AC(const char *s); /* SDK strlen */
 
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", BeginSubtitleDisplay);
-#else
 /**
  * Start showing the current subtitle line: arm the subtitle state machine and
  * lay out its on-screen box.
@@ -1835,14 +1838,41 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", BeginSubtitleDi
  * box fields; textPixelWidth is strlen*7 (0 for an empty line). Finally the box Y
  * is positioned near the screen bottom (screenHeight-0x3C) and nudged up if it
  * would clip the bottom margin.
+ *
+ * MATCHED byte-exact on the s136os arm at the unit's -O2 default (RULING
+ * #9450; task #1833), with no pin, fence or pad. Each of these was measured necessary by
+ * reverting it alone (solo s136os harness, verify_match_unit words differing /
+ * built length in brackets):
+ *   - layout is 0x20 bytes: the ROM frame is 0x50 [frame 0x70, 8/86];
+ *   - func_00280BB8's colour is u64 (DrawFont2TextBox, as 191238.cpp declares
+ *     it), so 0x80FFA888 is built zero-extended (`ori; dsll 16; ori`) [85 vs
+ *     86 words];
+ *   - D_1A8D20 declared with its size, so it is %gp_rel [42/88];
+ *   - g_bPalMode / g_screenHeight / D_1A7B9C sized 16 for gas, absolute
+ *     [46/86, 17/86, 79/86 respectively, each 85 vs 86 words];
+ *   - the line text read through g_pActiveTextTableAbs, absolute [68/86];
+ *   - field18 stored before field1C (cc1 issues them in the other order)
+ *     [2/86];
+ *   - the clamp spelled with halfH, y and t locals; the as-was inline form
+ *     [11/86] has cc1 swap screenH/halfH ($6/$5) and reassociate
+ *     `screenH - (halfH + 0xC)` as `(screenH - 0xC) - halfH`.
+ *
+ * GUARD (task #1269): on EE this C is the image's body, compiled alone by SN
+ * 2.95.3 v1.36 -fopt-stack (tools/ee/s136os_functions.txt) and spliced over the
+ * S136OS_SLOT line by tools/ee/s136os_splice.sh. On native it is plain C.
  */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_BeginSubtitleDisplay)
+S136OS_SLOT(BeginSubtitleDisplay);
+#else
 void BeginSubtitleDisplay(void) {
     SubtitleState *ss = &g_subtitleState;
-    u8 layout[0x40];
+    u8 layout[0x20];
     const char *text;
     s16 measuredW;
     s16 measuredH;
     s32 screenH;
+    s32 halfH;
+    s32 y;
 
     ss->state = 1;
     ss->animStep = 0;
@@ -1851,7 +1881,7 @@ void BeginSubtitleDisplay(void) {
         PlayGlobalSound(0, 1, 0);
     }
 
-    text = g_pActiveTextTable[ss->entryIndex].str;
+    text = g_pActiveTextTableAbs[ss->entryIndex].str;
 
     func_00280C98((s16 *)layout, 0xF0, 0x1E0, 0x2C, 0x1D4, 0x100, 0x168, 0x10, 7);
     func_00280BB8(layout, 0x80FFA888, text, -1);
@@ -1864,8 +1894,8 @@ void BeginSubtitleDisplay(void) {
     ss->boxHalfHeight = (measuredH >> 1) + 0x5;
     ss->field10 = 0x100;
     ss->boxPosY = D_1A8D20[g_bPalMode];
-    ss->field1C = 8;
     ss->field18 = 8;
+    ss->field1C = 8;
     ss->textPixelWidth = 0;
 
     if (text != 0) {
@@ -1874,9 +1904,12 @@ void BeginSubtitleDisplay(void) {
     }
 
     screenH = g_screenHeight;
-    ss->boxPosY = screenH - 0x3C;
-    if (screenH - 0xC < (screenH - 0x3C) + ss->boxHalfHeight) {
-        ss->boxPosY = screenH - (ss->boxHalfHeight + 0xC);
+    halfH = ss->boxHalfHeight;
+    y = screenH - 0x3C;
+    ss->boxPosY = y;
+    if (screenH - 0xC < y + halfH) {
+        s32 t = halfH + 0xC;
+        ss->boxPosY = screenH - t;
     }
 }
 #endif

@@ -495,3 +495,4 @@ usa cod/033970 CdReadSync
 usa cod/033970 LoadLevelToc
 usa text/1823B8 func_00282798
 usa text/188858 InitHudMobyTable
+usa text/188858 BeginSubtitleDisplay
