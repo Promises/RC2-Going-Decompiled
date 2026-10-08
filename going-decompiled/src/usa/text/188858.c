@@ -5669,7 +5669,8 @@ s32 func_0028EAC8(void) {
  *   - if a real ammo weapon is equipped (itemId != 0 && its g_weaponTable entry
  *     exists), it registers the ammo-vendor widget via func_0028BE10 (feeding the
  *     weapon's name-string id + ammo-capacity and the vendor tick/draw callbacks
- *     func_0028E7A0 / func_0028E7D0 + the D_002907C0 layout blob), remembering the
+ *     func_0028E7A0 / func_0028E7D0 + D_002907C0, which is code reached by
+ *     pointer, NOTE #9576), remembering the
  *     returned handle in D_1A8FB8 and the item in D_1A8FB4;
  *   - otherwise (no ammo weapon): if the sound-bank state byte
  *     g_soundBankHandlesBlk[0x22B4] == 2 it first tears down any live widget
@@ -5711,7 +5712,7 @@ extern void func_0028C4C8(HudElement *w);
 /* (end of this body's declarations) */
 extern s32 D_1A8FBC;                  /* gp hard-disable gate (0x1A8FBC) */
 extern u8  g_soundBankHandlesBlk[];   /* g_soundBankHandles+0x20 (0x189E20) */
-extern u8  D_002907C0[];              /* ammo-vendor widget layout blob (0x2907C0) */
+extern u8  D_002907C0[];              /* code at 0x2907C0 passed by pointer (NOTE #9576) */
 extern void func_0028E640(void);      /* generic-bank widget draw callback (INCLUDE_ASM) */
 /* EE codegen device (RULING #8404), see above; plain store on native. */
 #ifndef TARGET_NATIVE
