@@ -4358,15 +4358,20 @@ s32 MapIsLevelRevealed(s32 level) {
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapInit);
 
 /* MapBeginUpload (0x295D70) — begin streaming the current level's galactic-map
- * texture into a fresh map-cache slot. Portable #else body lives in the
- * map-cache slice below (after the MapCache type + g_discToc/g_mapDataSet it
- * depends on); the INCLUDE_ASM stays here in address order. */
+ * texture into a fresh map-cache slot. Its body lives in the map-cache slice
+ * below (after the MapCache type it reads); the S136OS_SLOT stays here in
+ * address order. g_mapDataSetAbs (ADDRESSING-MODEL DEVICE, RULING #8620 /
+ * FACT #8036 size-16 equate) is declared here, ahead of the slot, because GNU
+ * as sizes the symbol at its first `.extern` line and MapBeginUpload is its
+ * first user; MapFindNearestAvailableLevel uses it too. Emits nothing. */
 #ifndef TARGET_NATIVE
-/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
- * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 50.33% PACKED-SAVE /
- * engine96 33.43% SIBCALL; best arm sdk29, first differing insn there: 'addiu sp, sp, -0x20'
- * vs 'addiu sp, sp, -0x50' */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapBeginUpload);
+__asm__(".extern g_mapDataSetAbs, 16\n\tg_mapDataSetAbs = g_mapDataSet");
+extern u8 g_mapDataSetAbs;
+#else
+#define g_mapDataSetAbs g_mapDataSet
+#endif
+#if !defined(TARGET_NATIVE) && !defined(S136OS_MapBeginUpload)
+S136OS_SLOT(MapBeginUpload);
 #endif
 
 /*
@@ -4430,7 +4435,12 @@ typedef struct MapCache {
     u8  _pad28[0x230 - 0x28];
     s32 currentLevel;      /* +0x230 */
     s32 activeSlot;        /* +0x234 */
-    u8  _pad238[0x288 - 0x238];
+    s32 tocHandle;         /* +0x238  map-data IOP ring handle, -1 == none */
+    s32 uploadArmed;       /* +0x23C  first upload already issued */
+    s32 uploadBytes;       /* +0x240  bytes of the streamed map texture */
+    u8  _pad244[0x248 - 0x244];
+    s32 savedDmaCursor;    /* +0x248  menu-screen DMA cursor before the carve */
+    u8  _pad24C[0x288 - 0x24C];
     s32 slotState[5];      /* +0x288  per-slot pixel-data buffer pointer (0 == empty) */
     s32 slotLevelId[5];    /* +0x29C */
     s32 lockedSlot;        /* +0x2B0  slot index to leave untouched when evicting */
@@ -4605,104 +4615,126 @@ s32 MapDataExistsForLevel(s32 levelAndFlag) {
  * (g_menuScreenBlock +0x10C/+0x110) to carve a scratch pixel buffer, primes the
  * map-cache bookkeeping (slots 0/3/4 cleared, slot 1 = the new pixel buffer,
  * slot 2 = the old +0x110 cursor; all 5 level ids = -1, lockedSlot cleared),
- * then — when a map-data TOC handle is live (cache +0x238
- * != -1) — issues the disc load for this level's secondary-set map texture:
- * first upload goes through StartFileLoadPumpingVoice + a voice pump and
- * func_002EFCA8; an already-armed upload is re-issued via func_002EFD28. Records
- * the level id (with the g_mapDataSet 0x100 flag) into slotLevelId[1], marks the
- * cache available, and plays UI sound 0x11. When no TOC handle is live it just
- * clears `available` and plays the sound.
+ * then — when a map-data IOP ring handle is live (tocHandle != -1) — issues the
+ * load of this level's secondary-set map texture: the first upload streams it
+ * from disc with StartFileLoadPumpingVoice + a voice pump and pushes it with
+ * PushIopRingData; an already-armed upload (or the primary set) is re-issued
+ * with TransferIopRingData. Records the level id (+0x100 when g_mapDataSet is
+ * set; the first upload only runs then) into slotLevelId[1], marks the cache
+ * available and the active slot -2. With no live handle it just clears
+ * `available`. Either way it plays UI sound 0x11. No params, no return value.
  *
- * MATCH WALL: the 0x20 multi-callee-save frame is packed 8-byte by the later
- * cc1 (the unit-wide save-layout wall) and the many cache-field stores colour
- * differently; kept as the portable #else body, placed here in the map-cache
- * slice after the MapCache type + g_discToc/g_mapDataSet it depends on. The
- * four still-unnamed cache fields (+0x238 TOC handle, +0x23C load-issued flag,
- * +0x240 pixel qword count, +0x248 saved DMA cursor) are accessed by raw offset.
+ * Byte-exact on the s136os arm (task #1988). The old "MATCH WALL" here (packed
+ * save frame) was the 2.9 arm's. The body sits here, after the MapCache type it
+ * reads, and the S136OS_SLOT stays at 0x295D70 in address order; the s136os
+ * compile takes the function from wherever its body is. Each lever priced by
+ * removing it alone (solo s136 compile, relocated fields masked; N/112 words
+ * differ):
+ *  - ADDRESSING-MODEL DEVICES (RULING #8620, FACT #8036 size-16 equates): the
+ *    ROM reads g_mapDataSet (0x295E1C, 0x295EE0) and g_playerProgress
+ *    (0x295E8C, 0x295ED4) with the assembler's absolute macro, `lui; lbu|lw`.
+ *    g_mapDataSetAbs is the equate MapFindNearestAvailableLevel already used,
+ *    moved up above this function's slot: GNU as sizes the symbol at its first
+ *    `.extern`, so a use spliced before that line is gp-relative. Plain
+ *    g_mapDataSet: 72/112, 110 words; plain g_playerProgress: 45/112, 110 words;
+ *  - the disc TOC is read through DiscTocMapView, so the entry address is
+ *    `g_discToc + level*8` (base first) with 0x15D0/0x15D4 folded into the
+ *    loads; a byte-offset pointer: 64/112, 111 words;
+ *  - the two menu-screen cursors through one `s32 *`: byte casts 25/112;
+ *  - STORE ORDER (sched1 ranks a store that ends a register's life first): the
+ *    +0x10C cursor is written before the slot stores and the +0x110 cursor
+ *    after them, so slotState[2] = cur110 is not the old value's last use.
+ *    +0x110 written beside +0x10C: 8/112; both after the slot stores: 20/112;
+ *  - the re-issue tail stores available, slotLevelId[1], then activeSlot (cc1
+ *    1.36 issues the last int store of a group first); the ROM's order in the
+ *    source: 5/112.
+ * The four MapCache fields this function alone writes are named in the type
+ * (tocHandle, uploadArmed, uploadBytes, savedDmaCursor).
  */
-#ifdef TARGET_NATIVE
+/* GUARD (task #1988): on EE this C is the image's body, compiled alone by SN
+ * 2.95.3 v1.36 -fopt-stack (tools/ee/s136os_functions.txt) and spliced over the
+ * S136OS_SLOT line above by tools/ee/s136os_splice.sh; the 2.9 compile sees only
+ * the slot, so a build that skips the splice loses the function. On native it
+ * is plain C. */
+#if defined(TARGET_NATIVE) || defined(S136OS_MapBeginUpload)
 extern u8   g_menuScreenBlock[];   /* 0x1F27C0 menu-screen manager block */
+extern s32  g_discToc[];
 extern void func_00298AA0(void);
 extern void func_0029ECE0(s32 level, s32 flag);
 extern void StartFileLoadPumpingVoice(void *dest, s32 startSector, s32 sectorCount);
 extern void PumpDialogVoiceSystem(s32 blocking);
-extern s32  func_002EFCA8(s32 dest, s32 handle, s32 zero, s32 byteSize);
-extern s32  func_002EFD28(s32 dest, s32 handle, s32 zero, s32 byteSize, s32 zero2);
+extern s32  PushIopRingData(void *dest, s32 ringIndex, s32 qwordOffset, s32 qwordCount);
+extern s32  TransferIopRingData(void *dest, s32 ringIndex, s32 qwordOffset, s32 qwordCount, s32 arg4);
 extern void PlayGlobalSound(s32 id, s32 a, s32 b);
-
+/* The disc TOC's per-level secondary-set map texture records: start sector and
+ * sector count, 8 bytes per level from g_discToc + 0x15D0 (the +0x15D4 word is
+ * the count MapDataExistsForLevel tests). A view for indexing only. */
+typedef struct DiscTocMapTexture {
+    s32 lba;
+    s32 sectors;
+} DiscTocMapTexture;
+typedef struct DiscTocMapView {
+    u8                _pad0[0x15D0];
+    DiscTocMapTexture secondary[0x100];
+} DiscTocMapView;
 void MapBeginUpload(void) {
     s32 *msb;
-    s32  cur10C, cur110, pixelBuf, handle;
+    s32  cur10C, cur110, pixelBuf;
 
     func_00298AA0();
-    func_0029ECE0(g_mapCache.currentLevel, 1);
+    func_0029ECE0(g_mapVertexData.currentLevel, 1);
 
-    msb    = (s32 *)g_menuScreenBlock;
-    cur10C = msb[0x10C / 4];
-    cur110 = msb[0x110 / 4];
+    msb      = (s32 *)g_menuScreenBlock;
+    cur10C   = msb[0x10C / 4];
+    cur110   = msb[0x110 / 4];
     pixelBuf = cur10C + 0x9A800;
-    msb[0x110 / 4] = cur110 + 0x48000;
     msb[0x10C / 4] = pixelBuf + 0x48000;
+    g_mapVertexData.savedDmaCursor = cur10C;
+    g_mapVertexData.slotState[0]   = 0;
+    g_mapVertexData.slotState[1]   = pixelBuf;
+    g_mapVertexData.slotState[2]   = cur110;
+    g_mapVertexData.slotState[3]   = 0;
+    g_mapVertexData.slotState[4]   = 0;
+    g_mapVertexData.slotLevelId[0] = -1;
+    g_mapVertexData.slotLevelId[1] = -1;
+    g_mapVertexData.slotLevelId[2] = -1;
+    g_mapVertexData.slotLevelId[3] = -1;
+    g_mapVertexData.slotLevelId[4] = -1;
+    g_mapVertexData.lockedSlot     = -1;
+    msb[0x110 / 4] = cur110 + 0x48000;
 
-    *(s32 *)((u8 *)&g_mapCache + 0x248) = cur10C;   /* saved DMA cursor */
-    g_mapCache.slotState[0] = 0;
-    g_mapCache.slotState[1] = pixelBuf;
-    g_mapCache.slotState[2] = cur110;
-    g_mapCache.slotState[3] = 0;
-    g_mapCache.slotState[4] = 0;
-    g_mapCache.slotLevelId[0] = -1;
-    g_mapCache.slotLevelId[1] = -1;
-    g_mapCache.slotLevelId[2] = -1;
-    g_mapCache.slotLevelId[3] = -1;
-    g_mapCache.slotLevelId[4] = -1;
-    g_mapCache.lockedSlot = -1;
+    if (g_mapVertexData.tocHandle != -1 && g_mapVertexData.uploadArmed == 0 && g_mapDataSetAbs != 0) {
+        DiscTocMapView *toc     = (DiscTocMapView *)g_discToc;
+        s32             level   = g_mapVertexData.currentLevel;
+        s32             sectors = toc->secondary[level].sectors;
+        s32             bytes   = sectors << 7;
 
-    handle = *(s32 *)((u8 *)&g_mapCache + 0x238);   /* map-data TOC handle */
-    if (handle == -1) {
-        g_mapCache.available = 0;
-        PlayGlobalSound(0x11, 0, 0);
-        return;
-    }
-
-    if (*(s32 *)((u8 *)&g_mapCache + 0x23C) == 0 && g_mapDataSet != 0) {
-        /* first upload: stream this level's secondary-set map texture */
-        s32 *toc      = g_discToc + g_mapCache.currentLevel * 2;  /* stride 8 */
-        s32  secSize  = toc[0x15D4 / 4];
-        s32  byteSize = secSize << 7;
-
-        StartFileLoadPumpingVoice((void *)pixelBuf,
-                                  toc[0x15D0 / 4] + g_discToc[0x36C / 4], /* + global WAD base LBA */
-                                  secSize);
+        StartFileLoadPumpingVoice((void *)pixelBuf, toc->secondary[level].lba + g_discToc[0x36C / 4], sectors);
         PumpDialogVoiceSystem(1);
+        g_mapVertexData.uploadArmed       = 1;
+        g_mapVertexData.uploadBytes       = bytes;
+        g_mapVertexData.slotPixelCount[1] = bytes;
+        PushIopRingData((void *)g_mapVertexData.slotState[1], g_mapVertexData.tocHandle, 0, bytes);
+        g_mapVertexData.activeSlot     = -2;
+        g_mapVertexData.available      = 1;
+        g_mapVertexData.slotLevelId[1] = g_playerProgressAbs + 0x100;
+    } else if (g_mapVertexData.tocHandle != -1) {
+        s32 bytes = g_mapVertexData.uploadBytes;
+        s32 level;
 
-        *(s32 *)((u8 *)&g_mapCache + 0x23C) = 1;
-        *(s32 *)((u8 *)&g_mapCache + 0x240) = byteSize;
-        g_mapCache.slotPixelCount[1] = byteSize;
-        func_002EFCA8(g_mapCache.slotState[1], handle, 0, byteSize);
-
-        g_mapCache.activeSlot = -2;
-        g_mapCache.available  = 1;
-        g_mapCache.slotLevelId[1] = g_playerProgress + 0x100;
-        PlayGlobalSound(0x11, 0, 0);
-        return;
-    }
-
-    /* upload already armed (or secondary set inactive): re-issue it */
-    {
-        s32 byteSize = *(s32 *)((u8 *)&g_mapCache + 0x240);
-        s32 levelId  = g_playerProgress;
-
-        func_002EFD28(g_mapCache.slotState[1], handle, 0, byteSize, 0);
-        g_mapCache.slotPixelCount[1] = byteSize;
-
-        g_mapCache.activeSlot = -2;
-        g_mapCache.available  = 1;
-        if (g_mapDataSet != 0) {
-            levelId = g_playerProgress + 0x100;
+        g_mapVertexData.slotPixelCount[1] = bytes;
+        TransferIopRingData((void *)g_mapVertexData.slotState[1], g_mapVertexData.tocHandle, 0, bytes, 0);
+        level = g_playerProgressAbs;
+        g_mapVertexData.available = 1;
+        if (g_mapDataSetAbs != 0) {
+            level += 0x100;
         }
-        g_mapCache.slotLevelId[1] = levelId;
-        PlayGlobalSound(0x11, 0, 0);
+        g_mapVertexData.slotLevelId[1] = level;
+        g_mapVertexData.activeSlot     = -2;
+    } else {
+        g_mapVertexData.available = 0;
     }
+    PlayGlobalSound(0x11, 0, 0);
 }
 #endif
 
@@ -4745,17 +4777,16 @@ void MapBeginUpload(void) {
  * ADDRESSING-MODEL DEVICE (RULING #8620, FACT #8036 equates, top level so the
  * s136os TU and the spliced 2.9 TU see the same lines): the ROM reads
  * g_mapDataSet (0x29619C) and the first g_pLevelOrder (0x2961EC) absolutely
- * (lui/lbu, lui/lw), and the in-loop g_pLevelOrder read gp-relatively. */
+ * (lui/lbu, lui/lw), and the in-loop g_pLevelOrder read gp-relatively. The
+ * g_mapDataSetAbs equate is declared above MapBeginUpload's slot, its first
+ * user (task #1988). */
 #ifndef TARGET_NATIVE
 #define MFNAL_SHORT_LOOP_PAD3(v, n) \
     __asm__(".set noreorder\n\tnop\n\tnop\n\tnop\n\t.set reorder" : "+r"(v), "+r"(n))
-__asm__(".extern g_mapDataSetAbs, 16\n\tg_mapDataSetAbs = g_mapDataSet");
 __asm__(".extern g_pLevelOrderAbs, 16\n\tg_pLevelOrderAbs = g_pLevelOrder");
-extern u8 g_mapDataSetAbs;
 extern s32 *g_pLevelOrderAbs;
 #else
 #define MFNAL_SHORT_LOOP_PAD3(v, n) ((void)0)
-#define g_mapDataSetAbs g_mapDataSet
 #define g_pLevelOrderAbs g_pLevelOrder
 #endif
 #ifndef TARGET_NATIVE
