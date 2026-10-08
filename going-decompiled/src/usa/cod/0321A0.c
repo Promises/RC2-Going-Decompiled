@@ -859,9 +859,9 @@ s32 snd_CommitRingEntry(void) {
  * 0xFFC). Waits for the command channel D_001A7040 to go idle (reporting
  * D_001A7578 unless D_001A74F8 silences it), then fires RPC function 0x4D in
  * mode 1 (NOWAIT): send the used part of the buffer, receive into the DMA
- * area, (count * 4) + 8 bytes, no end callback. sceSifCallRpc is the
- * sceSifCallRpc-shaped primitive (client, fno, mode, send buf/size, recv
- * buf/size, end callback/param). No parameters, no return value.
+ * area, (count * 4) + 8 bytes, no end callback. sceSifCallRpc is the SDK
+ * SIF RPC call (client, fno, mode, send buf/size, recv buf/size, end
+ * callback/param). No parameters, no return value.
  *
  * Compiled by the s136os arm (tools/ee/s136os_functions.txt), which packs the
  * callee saves 8 bytes apart as the ROM does. The flip is spelled through a
