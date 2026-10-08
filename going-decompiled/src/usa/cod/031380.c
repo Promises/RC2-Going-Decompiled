@@ -7,9 +7,17 @@
  */
 #include "common.h"
 
-/* 0x123028 is libgcc dp-bit.o's dpcmp, which the build links as the libgcc.a
- * member dp-bit.o (task #1837); symbol_addrs names the address so. */
+/* 0x123028 is libgcc dp-bit.o's dpcmp. On the EE the address is the linked
+ * libgcc.a member dp-bit.o (task #1837), so the call names the member's own
+ * symbol, dpcmp (symbol_addrs names 0x123028 so too); the portable build calls
+ * its TARGET_NATIVE stand-in, func_00123028 (cod/022FA8). */
+#ifdef TARGET_NATIVE
+extern s32 func_00123028(s64 a, s64 b);
+#define DPCMP func_00123028
+#else
 extern s32 dpcmp(s64 a, s64 b);
+#define DPCMP dpcmp
+#endif
 
 /**
  * libm.a s_matherr.o's matherr(struct exception *x): the default error hook
@@ -20,13 +28,12 @@ extern s32 dpcmp(s64 a, s64 b);
  * arg0 is the struct exception; arg0[1] is its arg1 field (offset 0x8).
  * newlib's libm/common/s_matherr.c tests `x->arg1 != x->arg1` (a NaN check)
  * and returns 0 on both paths, so the soft-float compare dpcmp (libgcc
- * dp-bit.o, 0x123028) is called and its result discarded. It is called by its
- * libgcc name because the address is the linked libgcc.a member, which
- * defines dpcmp.
+ * dp-bit.o, 0x123028) is called and its result discarded (DPCMP above picks
+ * the per-arm name).
  */
 s32 func_00131400(s64 *arg0) {
     s64 v = arg0[1];
-    dpcmp(v, v);
+    DPCMP(v, v);
     return 0;
 }
 
