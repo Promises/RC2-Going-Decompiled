@@ -7592,7 +7592,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiScrollListSc
    114/197 insns differ. Residual: UNKNOWN-sd + gp/abs-mixed symbol (first differing insn: 'sd s4, 0x20(sp)' vs 'sd s1, 0x8(sp)').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
    not byte-exact, so the arm stays #else. */
-void func_00341F40(void *w, s32 a, s32 b);
+s32 func_00341F40(void *w, s32 flags, void *table);
 extern char *g_guiInstance;
 extern u8 D_1ADF78[], D_1ADF98[], D_1ADFA0[], D_1AE008[], D_1ADFB0[], D_1AE018[];
 void GuiScrollListScreenInit(void *w, GuiPool *pool) {
@@ -7662,77 +7662,88 @@ void GuiScrollListScreenInit(void *w, GuiPool *pool) {
 }
 #endif
 
-/* func_00341F40: 2D grid-cursor move + selection readout. `flags` selects a
- * direction (0x1000 up / 0x4000 down on the row axis +0x218 wrapping mod
- * rowCount +0x220; 0x8000 left / 0x2000 right on the col axis +0x214 wrapping mod
- * colCount +0x21C), each accompanied by the cursor sound (PlayGlobalSound(3,0,0)).
- * Then re-positions the cursor element (*(w+0x1C0)) and, when `table` is non-null,
- * records the s16 at table[col + row*colCount].field_0x6 into +0x224. Called with
- * table==0 at init (a no-op early-out). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00341F40);
+/**
+ * func_00341F40: 2D grid-cursor move + selection readout for a grid screen `w`.
+ *
+ * w:     the screen; row +0x218 / rowCount +0x220, col +0x214 / colCount +0x21C,
+ *        cursor element pointer +0x1C0, selected value +0x224.
+ * flags: held buttons; one direction is taken, in priority order up (0x1000,
+ *        row-- wrapping to rowCount-1), down (0x4000, row++ wrapping to 0),
+ *        left (0x8000, col-- wrapping to colCount-1), right (0x2000, col++
+ *        wrapping to 0), each with the cursor cue PlayGlobalSound(3, 0, 0).
+ * table: grid-entry array (stride 0xA, +6 = s16 value). When it is 0 (the
+ *        call GuiScrollListScreenInit makes at init) nothing else happens.
+ * Returns 0.
+ *
+ * Otherwise it clears +0x224, re-positions `w` at the cursor element's x/y plus a
+ * zeroed stack pair (so a -0.0 component is stored as +0.0), applies the
+ * direction, and stores table[col + row * colCount] +6 into +0x224.
+ *
+ * Matched byte-exact on the s136os arm (task #1969), device-free:
+ * - the offset pair is a `= {0}` initialiser, which cc1 lowers to the ROM's
+ *   `jal memset` (an explicit memset() of the 8-byte local is inlined as stores);
+ * - the null-table test wraps the body so the early exit is the shared epilogue
+ *   (`beqz $18` to the `move $2,$0` return) instead of a separate return block;
+ * - the up/left wraps pre-decrement the field into a 64-bit local: widening the
+ *   s32 result is cc1's extendsidi2, emitted as the ROM's `move $2,$3` ahead of
+ *   `bgez $2`, with the store in the delay slot. An s32 local, a (long) cast on
+ *   the test, a 0L constant or a store-then-test spelling all drop that move
+ *   (93 words against the ROM's 95).
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00341F40)
+S136OS_SLOT(func_00341F40);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00341F40, unit objdiff): 75.61%,
-   53/102 insns differ. Residual: UNKNOWN-sd + movn/movz (first differing insn: 'sd s0, 0x10(sp)' vs 'sd s2, 0x20(sp)').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
-void func_00341F40(void *w, s32 flags, s32 table) {
-    f32 offset[2];
+s32 func_00341F40(void *w, s32 flags, void *table) {
+    f32 offset[2] = {0};
     GuiElement *cursor;
     s32 col, row, idx;
 
-    /* zeroed 8-byte (Vec2) position offset, added to the cursor element's pos */
-    memset(offset, 0, 8);
-    if (table == 0) {
-        return;
+    if (table != 0) {
+        *(s32 *)((char *)w + 0x224) = 0;
+        cursor = *(GuiElement **)((char *)w + 0x1C0);
+        GuiElementSetPos((GuiElement *)w,
+                         offset[0] + *(f32 *)((char *)cursor + 0x0),
+                         offset[1] + *(f32 *)((char *)cursor + 0x4),
+                         0.0f, 0.0f);
+
+        if (flags & 0x1000) {                   /* up: row-- wrap to rowCount-1 */
+            long cur;
+            PlayGlobalSound(3, 0, 0);
+            cur = --*(s32 *)((char *)w + 0x218);
+            if (cur < 0) {
+                *(s32 *)((char *)w + 0x218) = *(s32 *)((char *)w + 0x220) - 1;
+            }
+        } else if (flags & 0x4000) {            /* down: row++ wrap to 0 */
+            s32 cur;
+            PlayGlobalSound(3, 0, 0);
+            cur = *(s32 *)((char *)w + 0x218) + 1;
+            if (cur >= *(s32 *)((char *)w + 0x220)) {
+                cur = 0;
+            }
+            *(s32 *)((char *)w + 0x218) = cur;
+        } else if (flags & 0x8000) {            /* left: col-- wrap to colCount-1 */
+            long cur;
+            PlayGlobalSound(3, 0, 0);
+            cur = --*(s32 *)((char *)w + 0x214);
+            if (cur < 0) {
+                *(s32 *)((char *)w + 0x214) = *(s32 *)((char *)w + 0x21C) - 1;
+            }
+        } else if (flags & 0x2000) {            /* right: col++ wrap to 0 */
+            s32 cur;
+            PlayGlobalSound(3, 0, 0);
+            cur = *(s32 *)((char *)w + 0x214) + 1;
+            if (cur >= *(s32 *)((char *)w + 0x21C)) {
+                cur = 0;
+            }
+            *(s32 *)((char *)w + 0x214) = cur;
+        }
+
+        row = *(s32 *)((char *)w + 0x218);
+        col = *(s32 *)((char *)w + 0x214);
+        idx = col + row * *(s32 *)((char *)w + 0x21C);
+        *(s32 *)((char *)w + 0x224) = *(s16 *)((char *)table + idx * 0xA + 0x6);
     }
-
-    *(s32 *)((char *)w + 0x224) = 0;
-    cursor = *(GuiElement **)((char *)w + 0x1C0);
-    GuiElementSetPos((GuiElement *)w,
-                     offset[0] + *(f32 *)((char *)cursor + 0x0),
-                     offset[1] + *(f32 *)((char *)cursor + 0x4),
-                     0.0f, 0.0f);
-
-    if (flags & 0x1000) {                       /* up: row-- wrap to rowCount-1 */
-        s32 cur;
-        PlayGlobalSound(3, 0, 0);
-        cur = *(s32 *)((char *)w + 0x218) - 1;
-        if (cur < 0) {
-            cur = *(s32 *)((char *)w + 0x220) - 1;
-        }
-        *(s32 *)((char *)w + 0x218) = cur;
-    } else if (flags & 0x4000) {                /* down: row++ wrap to 0 */
-        s32 cur;
-        PlayGlobalSound(3, 0, 0);
-        cur = *(s32 *)((char *)w + 0x218) + 1;
-        if (cur >= *(s32 *)((char *)w + 0x220)) {
-            cur = 0;
-        }
-        *(s32 *)((char *)w + 0x218) = cur;
-    } else if (flags & 0x8000) {                /* left: col-- wrap to colCount-1 */
-        s32 cur;
-        PlayGlobalSound(3, 0, 0);
-        cur = *(s32 *)((char *)w + 0x214) - 1;
-        if (cur < 0) {
-            cur = *(s32 *)((char *)w + 0x21C) - 1;
-        }
-        *(s32 *)((char *)w + 0x214) = cur;
-    } else if (flags & 0x2000) {                /* right: col++ wrap to 0 */
-        s32 cur;
-        PlayGlobalSound(3, 0, 0);
-        cur = *(s32 *)((char *)w + 0x214) + 1;
-        if (cur >= *(s32 *)((char *)w + 0x21C)) {
-            cur = 0;
-        }
-        *(s32 *)((char *)w + 0x214) = cur;
-    }
-
-    row = *(s32 *)((char *)w + 0x218);
-    col = *(s32 *)((char *)w + 0x214);
-    idx = col + row * *(s32 *)((char *)w + 0x21C);
-    *(s32 *)((char *)w + 0x224) =
-        *(s16 *)((char *)table + idx * 0xA + 0x6);
+    return 0;
 }
 #endif
 
