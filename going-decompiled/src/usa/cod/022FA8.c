@@ -1,14 +1,14 @@
 /*
- * cod/022FA8 (0x123028..0x1313C7): the part of cod/021A98 after the libgcc.a
- * member _fpcmp_parts_df.o (__fpcmp_parts_d, 0x122F10..0x123023), which the
- * build links from GCC's own fp-bit.c (going-decompiled/libgcc/, RULING #8206)
- * followed by the ROM's zero pad word at 0x123024 (a `zeropad` subsegment;
- * carve: task #918). It starts with the rest of libgcc's dp-bit.o (dpcmp ..
- * dptofp), then fp-bit.o and frame.o as the ROM's asm plus this project's own
- * C, then the libsn/SDK code that follows, up to libm.a's e_sqrt.o and its CD
- * pad. libm.a's s_isnan.o (0x1313C8) and w_sqrt.o (0x131430) are linked from
- * newlib's own source (going-decompiled/libm/, task #1856); the code around
- * them is cod/031380 and cod/0314C0.
+ * cod/022FA8 (0x1232F0..0x1313C7): the part of the old cod/021A98 after the
+ * libgcc.a member dp-bit.o (0x122630..0x1232EB, task #1837; before it this
+ * unit started at 0x123028, after _fpcmp_parts_df.o and its zeropad, task
+ * #918), which the build links from the Cygnus EE fp-bit.c
+ * (going-decompiled/libgcc/, RULING #8206 / #9753). It holds fp-bit.o and
+ * frame.o as the ROM's asm plus this project's own C, then the libsn/SDK code
+ * that follows, up to libm.a's e_sqrt.o and its CD pad. libm.a's s_isnan.o
+ * (0x1313C8) and w_sqrt.o (0x131430) are linked from newlib's own source
+ * (going-decompiled/libm/, task #1856); the code around them is cod/031380
+ * and cod/0314C0. The unit keeps its name, so no .s path below 0x1313C8 moves.
  */
 #include "common.h"
 
@@ -25,6 +25,10 @@ typedef struct {
 extern void func_00122760(s64 *value, FpParts *out);
 extern s64 func_00122630(FpParts *parts);
 
+/* dpcmp .. dptofp (0x123028..0x1232EB) and the CDCD pad after them: on the EE
+ * this range is the linked libgcc.a member dp-bit.o (task #1837 branch
+ * prototype), so the C below is only the TARGET_NATIVE build's stand-ins. */
+#ifdef TARGET_NATIVE
 extern s32 func_00122F10(FpParts *a, FpParts *b);
 
 /**
@@ -62,10 +66,6 @@ s32 func_00123028(s64 a, s64 b) {
  * calls sibling soft-float func_00122630 (#else), so verification is routed to
  * tester-EE rather than a vacuous standalone oracle.
  */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", litodp);
-INCLUDE_ASM_ALIAS(func_00123078, litodp);
-#else
 s64 func_00123078(s32 x) {
     FpParts parts;
     s64 mant;
@@ -96,7 +96,6 @@ s64 func_00123078(s32 x) {
     }
     return func_00122630(&parts);
 }
-#endif
 
 /**
  * func_00123130 = convert a double to a SIGNED 32-bit integer (truncate toward
@@ -222,8 +221,10 @@ void func_00123298(s64 a) {
     }
     func_001234C0(parts.fpClass, parts.sign, parts.exponent, rounded);
 }
+#endif
 
-INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_001232EC);
+/* __make_dp (dp-bit.o, 0x123268): func_001234F0 below calls it by this name. */
+extern s64 func_00123268(s32 fpClass, s32 sign, s32 exponent, s64 mantissa);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", __pack_f);
 INCLUDE_ASM_ALIAS(func_001232F0, __pack_f);

@@ -117,10 +117,18 @@ segments:
       # alignment before dpcmp. A lone member has no such tail and SUBALIGN(8)
       # places nothing at 4 mod 8, so the word is a `zeropad` subsegment
       # (tools/splat_ext/zeropad.py): FILL 0 for that gap only, then CDCD again.
-      - [0x021A98, c, cod/021A98] # core.text: libgcc _pure.o, _udivdi3.o, _umoddi3.o, dp-bit.o head (0x121B18..0x122F0F)
-      - [0x022E90, lib, libgcc, _fpcmp_parts_df] # libgcc.a _fpcmp_parts_df.o .text (0x122F10..0x123023)
-      - [0x022FA4, zeropad] # dp-bit.o's own alignment pad before dpcmp (0x123024..0x123027), zero in the ROM
-      - [0x022FA8, c, cod/022FA8] # core.text: dp-bit.o tail, fp-bit.o, frame.o, then libsn/SDK up to libm.a's e_sqrt.o and its CDCD pad (0x123028..0x1313C7)
+      # Task #1837 (branch prototype, not landed) replaces that member and its
+      # zeropad with the WHOLE dp-bit.o as the ROM has it: 14 of the SDK
+      # object's 15 functions, __negdf2 dead-stripped by the SN linker and the
+      # rest packed together (FACT #9756), built from the Cygnus EE fp-bit.c
+      # with fp-bit.c's own L_* selection minus L_negate_df (libgcc/MEMBERS).
+      # One object, so the zero word at 0x123024 is its own assembler alignment
+      # again and needs no zeropad. It ends 0x1232EC (4 mod 8): the ROM's word
+      # there is the SN linker's CDCD, which is this segment's fill. cod/022FA8
+      # keeps its name and now starts at 0x1232F0 (fp-bit.o).
+      - [0x021A98, c, cod/021A98] # core.text: libgcc _pure.o, _udivdi3.o, _umoddi3.o (0x121B18..0x12262F)
+      - [0x0225B0, lib, libgcc, dp-bit] # libgcc.a dp-bit.o .text (0x122630..0x1232EB), pad 0x1232EC
+      - [0x023270, c, cod/022FA8] # core.text: fp-bit.o, frame.o, then libsn/SDK up to libm.a's e_sqrt.o and its CDCD pad (0x1232F0..0x1313C7)
       # libm.a's s_isnan.o and w_sqrt.o are linked from newlib's own source
       # (going-decompiled/libm/, RULING #9783), archived by build_libgcc.sh with
       # the libgcc members. Each lib line cuts cod/022FA8's old range, so the
@@ -146,7 +154,13 @@ segments:
       # (fixed VMA 0x1A7480). Anchored, the rodata ends at 0x3C000 (~0x1E80) and
       # the bss is the lone NOBITS 0x13C080..0x1A7480 (size 0x6B400 inferred from
       # the constant +0x100080 linear delta, exactly as before).
-      - [0x03C000, bss, cod/0013C080] # core.bss
+      # dp-bit.o's .bss is fp-bit.c's function-local `thenan` (0x18), which
+      # _fpadd_parts, dpmul and dpdiv address with %hi/%lo. The ROM has it at
+      # 0x141810 (FACT #9756), so the core bss is cut there for the member's
+      # .bss (task #1837 prototype). Offsets are the same linear +0x100080.
+      - [0x03C000, bss, cod/0013C080] # core.bss (0x13C080..0x14180F)
+      - [0x041790, lib, libgcc, dp-bit, .bss] # libgcc.a dp-bit.o .bss (thenan, 0x141810..0x141827)
+      - [0x0417A8, bss, cod/00141828] # core.bss (0x141828..0x1A747F)
 
   - name: core.lit
     type: code

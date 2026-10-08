@@ -45,6 +45,40 @@ Revision: releases/gcc-2.95.3 (the fp-bit.c revision NOTE #7038 §7 / FACT
   it (0x123024, the whole dp-bit.o's own alignment) is placed by the link
   (a `zeropad` subsegment in the yaml), not by the member. The whole dp-bit.o
   is blocked on __unpack_d, whose source revision is not 2.95.3.
+  [Task #1837 prototype: no member is built from this 2.95.3 copy any more.
+  dp-bit.o, which includes __fpcmp_parts_d and its pad, comes from the
+  cygnus-ee/ revision below.]
+
+Files taken from the Cygnus 2.9-ee-991111 GCC tree (unmodified)
+---------------------------------------------------------------
+The game SDK's libgcc.a fp-bit.o and dp-bit.o were not built from FSF 2.95.3.
+They come from the 2.9-ee-991111 tree's own config/fp-bit.c, which is 2.95.3
+plus one CYGNUS LOCAL hunk in unpack_d (NO_DENORMALS: zero-exponent values
+flush to zero), and from that tree's config/mips/t-r5900, whose dp-bit.c rule
+defines NO_DENORMALS (FACT #9752, validated by FACT #9756). Vendored under
+RULING #9753: the file's own licence header is the same GPL + link permission
++ libgcc special exception as the 2.95.3 file, and it reproduces the SDK
+member byte-exact. That reproduction is the provenance evidence. No licensed
+upstream copy of this tree is known. The fetch source is a third-party upload
+that carries no licence of its own:
+  https://raw.githubusercontent.com/SSXModding/ps2-ee-toolchain/b595ded606227e93b8c4a447446c1d2ac093827d/ee/gcc/<path>
+
+  file                           upstream path             sha1
+  cygnus-ee/fp-bit.c             config/fp-bit.c           c7584f8a1814040c0d5b6f0671f3d49b057f0bc6
+  cygnus-ee/config/mips/t-r5900  config/mips/t-r5900       d8f2fc8211ba4a1da0956c098e2954d0134f57d0
+
+  `diff fp-bit.c cygnus-ee/fp-bit.c` shows exactly two hunks: a comment and
+  the unpack_d `|| 1` under #ifdef NO_DENORMALS. t-r5900 is here as the
+  provenance of the dp-bit.c recipe: a 5-line prelude (FLOAT_BIT_ORDER_MISMATCH
+  under __MIPSEL__, US_SOFTWARE_GOFAST, NO_DENORMALS), then fp-bit.c. The
+  MEMBERS row passes that prelude as cpp defines.
+  One member is built from it: dp-bit.o. The ROM keeps 14 of the SDK
+  dp-bit.o's 15 functions. The SN linker dropped __negdf2 and packed the rest
+  together (FACT #9756), so the row uses fp-bit.c's own FINE_GRAINED_LIBRARIES
+  module selection, every L_*_df module the SDK object holds except
+  L_negate_df. That gives one object with the 14 ROM functions, in source
+  order, with the intra-object alignment word at 0x123024 and one shared
+  `thenan` (.bss, 0x18 at 0x141810).
 
 Re-derive: curl -sSf <upstream URL> | shasum   — each must print the sha1 above,
 and `cmp` against the file here must be silent.

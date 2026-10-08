@@ -17,10 +17,7 @@ SECTIONS
         going-decompiled/build/usa/going-decompiled/src/usa/cod/0213D0.o(.text*);
         going-decompiled/build/usa/lib/libgcc.a:_muldi3.o(.text*);
         going-decompiled/build/usa/going-decompiled/src/usa/cod/021A98.o(.text*);
-        going-decompiled/build/usa/lib/libgcc.a:_fpcmp_parts_df.o(.text*);
-        FILL(0x00000000);
-        . += 0x4;
-        FILL(0xCDCDCDCD);
+        going-decompiled/build/usa/lib/libgcc.a:dp-bit.o(.text*);
         going-decompiled/build/usa/going-decompiled/src/usa/cod/022FA8.o(.text*);
         going-decompiled/build/usa/lib/libgcc.a:s_isnan.o(.text*);
         going-decompiled/build/usa/going-decompiled/src/usa/cod/031380.o(.text*);
@@ -72,6 +69,8 @@ SECTIONS
         going-decompiled/build/usa/going-decompiled/src/usa/cod/0321A0.o(.bss COMMON .scommon);
         going-decompiled/build/usa/going-decompiled/src/usa/cod/033970.o(.bss COMMON .scommon);
         going-decompiled/build/usa/going-decompiled/asm/usa/data/cod/0013C080.bss.o(.bss COMMON .scommon);
+        going-decompiled/build/usa/lib/libgcc.a:dp-bit.o(.bss*);
+        going-decompiled/build/usa/going-decompiled/asm/usa/data/cod/00141828.bss.o(.bss COMMON .scommon);
         . = ALIGN(., 16);
         cod_BSS_END = .;
         cod_BSS_SIZE = ABSOLUTE(cod_BSS_END - cod_BSS_START);

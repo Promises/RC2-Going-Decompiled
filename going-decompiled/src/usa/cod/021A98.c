@@ -1,11 +1,15 @@
 /*
- * cod/021A98 (0x121B18..0x122F0F): the part of the old cod/015180 unit after the
+ * cod/021A98 (0x121B18..0x12262F): the part of the old cod/015180 unit after the
  * libgcc.a member _muldi3.o, which the build links from GCC's own source
  * (going-decompiled/libgcc/, RULING #8206; carve: task #879). It holds libgcc's
- * _pure.o, _udivdi3.o, _umoddi3.o and the head of dp-bit.o (__pack_d .. dpdiv)
- * as the ROM's asm plus this project's own C. It ends where the linked member
- * _fpcmp_parts_df.o (__fpcmp_parts_d, 0x122F10) begins; the rest of dp-bit.o
- * and everything after it is cod/022FA8 (carve: task #918).
+ * _pure.o, _udivdi3.o and _umoddi3.o as the ROM's asm plus this project's own C.
+ * It ends where the linked member dp-bit.o (0x122630..0x1232EB, task #1837
+ * branch prototype) begins; everything after that member is cod/022FA8.
+ *
+ * The dp-bit.o functions below (__pack_d .. dpdiv, __fpcmp_parts_d) have no EE
+ * code here: on the EE the address range is the linked member, built from the
+ * Cygnus EE fp-bit.c (libgcc/MEMBERS). Their C stays only as the TARGET_NATIVE
+ * build's stand-ins, because the portable build links no libgcc member.
  */
 #include "common.h"
 
@@ -94,10 +98,7 @@ typedef struct {
  * fillers. Seedable (FpParts->bits): shipped as a cmp-oracle'd portable #else
  * (asm-vs-C proven bit-identical on real R5900 by run_cmp_015180_iso.sh).
  */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/021A98", __pack_d);
-INCLUDE_ASM_ALIAS(func_00122630, __pack_d);
-#else
+#ifdef TARGET_NATIVE
 s64 func_00122630(FpParts *p) {
     s32 cls = p->fpClass;
     s32 sign = p->sign;
@@ -163,10 +164,7 @@ s64 func_00122630(FpParts *p) {
  * from C. Seedable (bits->FpParts): shipped as a cmp-oracle'd portable #else
  * (asm-vs-C proven bit-identical on real R5900 by run_cmp_015180_iso.sh).
  */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/021A98", __unpack_d);
-INCLUDE_ASM_ALIAS(func_00122760, __unpack_d);
-#else
+#ifdef TARGET_NATIVE
 void func_00122760(s64 *value, FpParts *out) {
     u64 v = *(u64 *)value;
     s32 sign = (s32)(v >> 63);
@@ -220,10 +218,7 @@ extern FpParts D_00141810;
  * faithful portable TARGET_NATIVE #else, cmp-oracle'd asm-vs-C bit-identical on
  * the real R5900 (run_cmp_015180_iso.sh, incl. the inf-inf NaN path that reads
  * D_00141810). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/021A98", _fpadd_parts);
-INCLUDE_ASM_ALIAS(func_00122800, _fpadd_parts);
-#else
+#ifdef TARGET_NATIVE
 FpParts *func_00122800(FpParts *a, FpParts *b, FpParts *out) {
     s32 clsA, clsB;
     s32 expA, expB, expR;
@@ -346,6 +341,7 @@ extern s64 func_00122630(FpParts *parts);
  * IEEE-754 parts (func_00122760), combine them with func_00122800 into a result
  * descriptor, then recompose that into a packed double via func_00122630.
  */
+#ifdef TARGET_NATIVE
 s64 func_00122A40(s64 a, s64 b) {
     s64 va = a;
     s64 vb = b;
@@ -356,12 +352,14 @@ s64 func_00122A40(s64 a, s64 b) {
     func_00122760(&vb, &pb);
     return func_00122630(func_00122800(&pa, &pb, &result));
 }
+#endif
 
 /**
  * Software double-precision subtraction: decompose both operands, flip the sign
  * of the second, then add (func_00122800) and recompose (func_00122630), i.e.
  * compute a + (-b).
  */
+#ifdef TARGET_NATIVE
 s64 func_00122A98(s64 a, s64 b) {
     s64 va = a;
     s64 vb = b;
@@ -373,6 +371,7 @@ s64 func_00122A98(s64 a, s64 b) {
     pb.sign ^= 1;
     return func_00122630(func_00122800(&pa, &pb, &result));
 }
+#endif
 
 /* func_00122B00 = software double-precision MULTIPLY of two packed doubles
  * (a * b -> packed double), the multiply sibling of the add-core func_00122800
@@ -393,10 +392,7 @@ s64 func_00122A98(s64 a, s64 b) {
  * bit-identical on the real R5900 (incl. the 0*inf NaN path reading
  * D_00141810). The product mantissa is built from four 32x32 partial products
  * via __muldi3 exactly as the original does. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/021A98", dpmul);
-INCLUDE_ASM_ALIAS(func_00122B00, dpmul);
-#else
+#ifdef TARGET_NATIVE
 extern s64 __muldi3(s64 a, s64 b);
 
 s64 func_00122B00(s64 a, s64 b) {
@@ -510,10 +506,7 @@ s64 func_00122B00(s64 a, s64 b) {
  * (packed double pair -> packed double): ships a faithful portable
  * TARGET_NATIVE #else, cmp-oracle'd asm-vs-C bit-identical on the real R5900
  * (incl. the inf/inf and 0/0 NaN paths reading D_00141810). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/021A98", dpdiv);
-INCLUDE_ASM_ALIAS(func_00122DA8, dpdiv);
-#else
+#ifdef TARGET_NATIVE
 s64 func_00122DA8(s64 a, s64 b) {
     FpParts pa, pb;
     s64 va = a, vb = b;

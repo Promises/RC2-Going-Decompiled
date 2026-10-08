@@ -6,7 +6,7 @@
 # symbol, and a matched function must keep its name (objdiff matches by name).
 # A plain assignment, not PROVIDE, so landing_gate.sh's PROVIDE-stripped relink
 # still resolves it. Written for task #893 (PROCEDURE #8224 §3d).
-dptoul  func_001231C8
+__make_fp  func_001234C0
 # libm.a w_sqrt.o's imports (task #1856). Each is the ROM target of that
 # relocation in the original link: __ieee754_sqrt is e_sqrt's .s (libm.a
 # e_sqrt.o, still asm), matherr is libm.a s_matherr.o (game C, cod/031380),

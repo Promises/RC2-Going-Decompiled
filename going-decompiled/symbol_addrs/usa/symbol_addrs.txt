@@ -2617,6 +2617,7 @@ func_00122F10 = 0x00122F10; // type:func - splat name kept for __fpcmp_parts_d (
 // dptoli = 0x00123130 - CONFIRMED libgcc.a dp-bit.o (whole 148B body verbatim, 1 reloc-masked words, 24 distinctive)
 // dptoul = 0x001231C8 - CONFIRMED libgcc.a dp-bit.o (whole 160B body verbatim, 1 reloc-masked words, 26 distinctive)
 // fptodp = 0x001234F0 - CONFIRMED libgcc.a fp-bit.o (whole 64B body verbatim, 2 reloc-masked words, 5 distinctive)
+func_001234C0 = 0x001234C0; // type:func - splat name kept for fp-bit.o's __make_fp. Pinned for task #1837 (branch prototype). Once dp-bit.o is a linked libgcc.a member, the only jal to 0x1234C0 (dptofp's, at 0x123298) is no longer disassembled, and without this line splat fuses 0x1234C0 into func_00123490 (0x2C -> 0x5C)
 // sceGsResetPath = 0x00124418 - CONFIRMED libsn.a vu.o (whole 160B body verbatim, 4 reloc-masked words, 28 distinctive)
 
 // === Track-B DATA lane (2026-07-25) - 989snd EE-side RPC channel globals + frame counter + global state bitfield. Each traced from its WRITE site. ===
