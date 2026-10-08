@@ -2846,7 +2846,7 @@ extern s32   GuiFontAtlasLookupGlyph(void *atlas, s32 codepoint); /* 0x337BF8 */
  * func_003018A0. $a2/$a3 are never read (FACT #8918), so there are no pointer
  * params. */
 extern void  func_003017F8(s32 handle, s32 color0, f32 px, f32 py, f32 sx, f32 syg, f32 v38);
-extern void  func_00280090(s32 x, s32 y, u64 color, char *str, s64 wrap); /* 0x280090 text/number draw */
+extern void  func_00280090(s32 x, s32 y, u32 color, char *str, s32 wrap); /* 0x280090 text/number draw */
 
 void func_0028B0B0(void) {
     HudRollSlot *slot = (HudRollSlot *)((u8 *)&g_hudMobyAuxBlockBase + 0x44);
@@ -4771,7 +4771,7 @@ extern void *g_guiInstance;
 extern f32   WrapAnglePiSum(f32 a, f32 b);   /* 0x284548 wrap a+b into [-pi,pi] */
 extern void  func_0034DAB0(void *elem, s32 flag, f32 t);       /* HUD highlight tween */
 extern s32   func_00290FC0(void);                              /* GUI state gate */
-extern void  func_002801B8(s32 x, s32 y, u32 color, const char *text, s32 flag);
+extern s32  func_002801B8(s32 x, s32 y, u32 color, const char *text, s32 flag);
 extern char  g_szAmmoFraction[];             /* "%d/%d" ammo-count format string */
 extern s32   D_1A8C64;                        /* GUI popup-busy gate */
 
@@ -5196,7 +5196,7 @@ extern s32 func_002AA3F0(s32 a, s32 b, s32 c, s32 d, s32 e);
 extern f32 WrapAnglePiSum(f32 a, f32 b);
 extern char *GetLocalizedString(s32 textId);
 extern s32 ColorLerpPacked(s32 colorA, s32 colorB, f32 t);
-extern void func_002801B8(s32 x, s32 y, u32 color, const char *text, s32 flag);
+extern s32 func_002801B8(s32 x, s32 y, u32 color, const char *text, s32 flag);
 /* (end of this body's declarations) */
 /* later-defined / asm-only helpers, forward-declared for this arm */
 extern s32  func_0028EDF0(s32 name, s32 level);

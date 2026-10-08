@@ -83,7 +83,7 @@ extern s32  func_0026F7D0(void);
 extern s32  func_0026F7D8(void);
 extern void func_0027F7A0(void);
 extern void func_00280090(s32 a, s32 b, s32 c, s32 d, s32 e);
-extern void func_002801B8(s32 x, s32 y, u32 color, s32 str, s32 wrap);
+extern s32 func_002801B8(s32 x, s32 y, u32 color, s32 str, s32 wrap);
 extern void func_00283460(void *dst, const void *src, s32 nbytes);
 extern void func_00286138(s32 a, s32 b);
 extern void func_002861D8(s32 a, s32 b);
@@ -543,7 +543,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D5A48);
 extern s32 GuiFontAtlasLookupGlyph(void *atlas, s32 codepoint);
 extern void func_003017F8(s32 glyph, s32 color, f32 x, f32 y, f32 scale, f32 a5, f32 a6);
 extern s32 GetLocalizedString(s32 id);
-extern void func_002801B8(s32 x, s32 y, u32 color, s32 str, s32 wrap);
+extern s32 func_002801B8(s32 x, s32 y, u32 color, s32 str, s32 wrap);
 extern void func_00280090(s32 a, s32 b, s32 c, s32 d, s32 e);
 /* (end of this body's declarations) */
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
@@ -673,7 +673,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D5D10);
 extern s32 GuiFontAtlasLookupGlyph(void *atlas, s32 codepoint);
 extern void func_003017F8(s32 glyph, s32 color, f32 x, f32 y, f32 scale, f32 a5, f32 a6);
 extern s32 GetLocalizedString(s32 id);
-extern void func_002801B8(s32 x, s32 y, u32 color, s32 str, s32 wrap);
+extern s32 func_002801B8(s32 x, s32 y, u32 color, s32 str, s32 wrap);
 /* (end of this body's declarations) */
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 55.10% / engine96 43.66%; better arm sdk29; 75 differing
@@ -3507,7 +3507,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DD630);
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern s32 GetLocalizedString(s32 id);
-extern void func_002801B8(s32 x, s32 y, u32 color, s32 str, s32 wrap);
+extern s32 func_002801B8(s32 x, s32 y, u32 color, s32 str, s32 wrap);
 extern s32 func_002E0010(char *dst, s32 level);
 /* (end of this body's declarations) */
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit

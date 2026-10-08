@@ -231,7 +231,7 @@ extern s32 g_padButtonsPressed;
 
 /* Localized-string + 2D label draw helpers in adjacent text bands. */
 extern char *GetLocalizedString(s32 id);
-extern void func_00280090(s32 x, s32 y, u64 color, char *str, s64 wrap);
+extern void func_00280090(s32 x, s32 y, u32 color, char *str, s32 wrap);
 extern void func_0029D368(void);
 extern void func_0029D478(s32 buttons);
 extern s32 func_002D67A0(s32 a, void *b);
@@ -1407,7 +1407,7 @@ s32 LevelSelectListHandleInput(s32 flags) {
 #if !defined(TARGET_NATIVE) && !defined(S136OS_LevelSelectListRender)
 S136OS_SLOT(LevelSelectListRender);
 #else
-extern void func_002801B8(s32 x, s32 y, u64 color, char *str, s64 sel);
+extern s32 func_002801B8(s32 x, s32 y, u32 color, char *str, s32 sel);
 extern void func_0027F208(s32 y0, s32 y1, s32 x0, s32 x1, s32 h, s32 color);
 extern s32 sprintf(char *dst, const char *fmt, ...);
 extern s32 D_1AB914;             /* row pitch */
@@ -2156,7 +2156,7 @@ s32 func_002CE230(void) {
  * zero` handle-copy idiom (1-GPR packed save) — not reproduced by cc1 2.9; the
  * s136os arm reproduces it (GUARD below). */
 extern void func_0029CFE0(void);
-extern void func_002801B8(s32 x, s32 y, u64 color, char *str, s64 sel);
+extern s32 func_002801B8(s32 x, s32 y, u32 color, char *str, s32 sel);
 extern s32 D_1AB9D8, D_1AB9DC;
 extern void BeginMobyDrawSegment(void);
 extern void func_002A1000(void);
