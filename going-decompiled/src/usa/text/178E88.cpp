@@ -3167,25 +3167,41 @@ void func_0027FFF0(f32 f1, f32 f2, f32 f3, s32 a, s32 b, s32 c) {
  * DrawFixedFontString(a - w, b, c, d, e, (s32)tex0, D_263B10). */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280080);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280090);
+/** func_00280090 (DrawFont1RightJustifiedLabel) — draw a right-aligned string
+ *  in the D_263B10 font: measure its width (func_0027F7F8), shift the anchor x
+ *  left by it, resolve the UI texture (GetUiTextureTex0 slot 1) and forward to
+ *  DrawFixedFontString. `str` travels as an integer, as gui.h and
+ *  DrawFixedFontString declare it. No return value. Twin of func_00280120.
+ *  MATCHED (task #1877): s136os arm (SN 1.36 -fopt-stack, -O2 -G8 -fno-gcse),
+ *  spliced; the 2.9 compile sees only the slot. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00280090)
+S136OS_SLOT(func_00280090);
+#else
+void func_00280090(s32 x, s32 y, s32 color, s32 str, s32 maxChars) {
+    s32 left = x - func_0027F7F8((const char *)str, maxChars);
+    u64 tex0 = GetUiTextureTex0(1);
+    DrawFixedFontString(left, y, color, str, maxChars, tex0, D_263B10);
+}
+#endif
 
 /** func_00280120 — draw a right-aligned debug-font string. Measures the string's
  *  rendered width (func_0027F818(str, maxChars)), shifts the anchor x left by that
  *  width, resolves the UI font texture (GetUiTextureTex0 slot 2), and forwards to
  *  DrawFixedFontString with the debug glyph table. (DrawFixedFontString's d/e
  *  params carry the string/maxChars — its committed decl types them s32.) */
-/* TODO(match) t493: sdk29 50.60% / engine96 23.00% (unit objdiff, objdiff_build.sh +
- * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
- * every other remaining arm). Residual on the better arm (sdk29): SIBCALL (first differing insn:
- * ROM `addiu sp,sp,-48` vs built `addiu sp,sp,-112`). Levers: engine96 with sched1 MEASURED (flag
- * not landed): 22.20%. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280120);
+/* MATCHED (task #1877): s136os arm (SN 1.36 -fopt-stack, -O2 -G8 -fno-gcse),
+ * spliced. The anchor is formed as `x - width` straight after the measure, so
+ * x and the width share one saved register as in the ROM; holding the width
+ * and subtracting at the call keeps both live in six saves (frame 64, not 48).
+ * Record of the cc1 2.9 / 2.96 attempts (t493, unit objdiff, objdiff_build.sh +
+ * unit_report.sh): sdk29 50.60% / engine96 23.00%, residual SIBCALL. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00280120)
+S136OS_SLOT(func_00280120);
 #else
 void func_00280120(s32 x, s32 arg1, s32 arg2, const char *str, s32 maxChars) {
-    s32 width = func_0027F818(str, maxChars);
+    s32 left = x - func_0027F818(str, maxChars);
     u64 tex0 = GetUiTextureTex0(2);
-    DrawFixedFontString(x - width, arg1, arg2, (s32)(unsigned long)str, maxChars, tex0,
+    DrawFixedFontString(left, arg1, arg2, (s32)(unsigned long)str, maxChars, tex0,
                         g_debugFontGlyphTable);
 }
 #endif
@@ -3196,7 +3212,24 @@ void func_00280120(s32 x, s32 arg1, s32 arg2, const char *str, s32 maxChars) {
  * func_0027F7F8 / GetUiTextureTex0 / DrawFixedFontString shape as func_00280090. */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/178E88", func_002801B0);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_002801B8);
+/** func_002801B8 (DrawFont1CenteredLabel) — draw a horizontally-centered
+ *  string in the D_263B10 font: measure its width (func_0027F7F8), center the
+ *  anchor (x - width/2), resolve the UI texture (GetUiTextureTex0 slot 1),
+ *  draw via DrawFixedFontString, and return the centered x (the ROM writes $v0
+ *  from the saved anchor). The D_263B10 / slot-1 twin of func_00280250.
+ *  MATCHED (task #1877): s136os arm (SN 1.36 -fopt-stack, -O2 -G8 -fno-gcse),
+ *  spliced; the 2.9 compile sees only the slot. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002801B8)
+S136OS_SLOT(func_002801B8);
+#else
+s32 func_002801B8(s32 x, s32 arg1, s32 arg2, const char *str, s32 maxChars) {
+    s32 width = func_0027F7F8(str, maxChars);
+    s32 cx = x - (width >> 1);
+    u64 tex0 = GetUiTextureTex0(1);
+    DrawFixedFontString(cx, arg1, arg2, (s32)(unsigned long)str, maxChars, tex0, D_263B10);
+    return cx;
+}
+#endif
 
 /** func_00280250 — draw a horizontally-centered debug-font string. Measures the
  *  rendered width (func_0027F818), centers the anchor (x - width/2), draws via

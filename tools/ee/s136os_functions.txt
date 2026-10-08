@@ -513,3 +513,6 @@ usa text/178E88 RunDrawHooksAfterShrubs
 usa text/178E88 RunFxDrawHooksPostParticles
 usa text/178E88 AddFxDrawHookLate
 usa text/178E88 RunFxDrawHooksLate
+usa text/178E88 func_00280090
+usa text/178E88 func_00280120
+usa text/178E88 func_002801B8
