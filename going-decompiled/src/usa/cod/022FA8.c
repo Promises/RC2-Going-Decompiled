@@ -483,7 +483,7 @@ extern s32 D_00136394;  /* libcdvd initialised (non-zero once set up) */
  * without it cc1 sinks the -1 store into the func_0011AC40 call's delay slot,
  * where the ROM stores it before loading the call's argument. */
 extern volatile s32 D_001363D4;
-extern void func_0011AC40(s32 sema);  /* syscall 0x42 SignalSema */
+extern s32 func_0011AC40(s32 sema);  /* syscall 0x42 SignalSema */
 extern void func_0011CBC0(s32 index);
 
 /**
