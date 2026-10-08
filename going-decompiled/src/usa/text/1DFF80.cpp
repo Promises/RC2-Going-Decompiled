@@ -936,38 +936,65 @@ extern u8 g_skyShellMatrix[];     /* 0x1B2070 - shared sky-shell transform matri
 extern float WrapAnglePiSum(float a, float b);
 extern void func_00283DE0(void *matrix, f32 *eulerXYZ);
 
+/* g_skyShellMatrixSmall: a second C name for g_skyShellMatrix (same assembler
+ * symbol via the asm label). section(".sdata") makes cc1 -G8 treat it as small
+ * data, so it prints the address as the one-insn `la` macro, which it schedules
+ * and places differently; gas expands it to the ROM's `lui; addiu` with HI16/LO16
+ * relocations against g_skyShellMatrix. An ADDRESSING-MODEL DEVICE (RULING
+ * #8620): it moves no data and emits nothing of its own. File scope so every
+ * member below sees it (UpdateSkyShellRotation, func_002E43F8); the copy inside
+ * DrawSkyShellsFixedSpin's arm (task #1347) is the same declaration. */
+#ifndef TARGET_NATIVE
+extern u8 g_skyShellMatrixSmall[] __asm__("g_skyShellMatrix") __attribute__((section(".sdata")));
+#else
+#define g_skyShellMatrixSmall g_skyShellMatrix
+#endif
+
 /* Advance sky shell `shellIdx`'s three Euler angles by its per-shell spin rate
  * (wrapping each into [-pi,pi] via WrapAnglePiSum) and rebuild the shared sky-
  * shell rotation matrix from the updated {x,y,z} angles.  The angle table and
  * spin-rate table are both strided 0xC (three floats per shell).
- * NEAR-MISS (~70%, structurally faithful): cc1 -O2 -G8 -fno-gcse derives the
- * three angle-slot pointers eagerly and needs a 5th callee-save, growing the
- * frame 0x40 -> 0x60/0x70, where the original interleaves each pointer's
- * derivation with the call stream and keeps only 4 saves (the lazy-derive /
- * regalloc-schedule wall).  The angle math, call order, and the {x,y,z} stack
- * vec handed to the matrix builder all match.  Not cmp-oracle'd: the tail calls
- * the VU0 matrix builder func_00283DE0, which has no native leaf yet. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", UpdateSkyShellRotation);
+ *
+ * GUARD (task #1902): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback. On native it is plain C.
+ * The old note here (a ~70% near-miss, the "lazy-derive / regalloc-schedule
+ * wall") was a 2.9-arm result. Byte-exact on this arm; each choice priced by
+ * undoing it alone (solo s136os compile, positional words differing of 52):
+ *   - each angle pointer derived just before its call, not all up front: the
+ *     eager form needs a fifth callee save (34/52);
+ *   - the y/z pointers spelled from the symbol (`stride + g_skyShellAngles +
+ *     4`), not from a pointer local: cse then forms them from the base register
+ *     the x pointer used (`addiu $18,$16,4`) and the z pointer reuses it;
+ *   - the spin rates indexed `g_pSkyShellSpinRates[shellIdx * 3 + k]`: the byte
+ *     offset spelling puts the operands of the address add the other way round
+ *     (7/52);
+ *   - g_skyShellMatrixSmall as the matrix argument, an ADDRESSING-MODEL DEVICE
+ *     (RULING #8620, declared above): with the plain symbol cc1 forms the
+ *     address after the first euler store (4/52); the ROM forms it first.
+ * Not cmp-oracle'd natively: the tail calls the VU0 matrix builder
+ * func_00283DE0, which has no native leaf yet. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_UpdateSkyShellRotation)
+S136OS_SLOT(UpdateSkyShellRotation);
 #else
 void UpdateSkyShellRotation(s32 shellIdx) {
     s32 stride = shellIdx * 0xC;
-    f32 *angleX = (f32 *)((u8 *)g_skyShellAngles + stride);
-    f32 *angleY = (f32 *)((u8 *)g_skyShellAngles + 0x4 + stride);
-    f32 *angleZ = (f32 *)((u8 *)g_skyShellAngles + 0x8 + stride);
+    f32 *angleX = (f32 *)(stride + (u8 *)g_skyShellAngles);
+    f32 *angleY;
+    f32 *angleZ;
     f32 euler[3];
 
-    *angleX = WrapAnglePiSum(*angleX,
-                             *(f32 *)((u8 *)g_pSkyShellSpinRates + stride));
-    *angleY = WrapAnglePiSum(*angleY,
-                             *(f32 *)((u8 *)g_pSkyShellSpinRates + 0x4 + stride));
-    *angleZ = WrapAnglePiSum(*angleZ,
-                             *(f32 *)((u8 *)g_pSkyShellSpinRates + 0x8 + stride));
+    *angleX = WrapAnglePiSum(*angleX, g_pSkyShellSpinRates[shellIdx * 3]);
+    angleY = (f32 *)(stride + (u8 *)g_skyShellAngles + 0x4);
+    *angleY = WrapAnglePiSum(*angleY, g_pSkyShellSpinRates[shellIdx * 3 + 1]);
+    angleZ = (f32 *)(stride + (u8 *)g_skyShellAngles + 0x8);
+    *angleZ = WrapAnglePiSum(*angleZ, g_pSkyShellSpinRates[shellIdx * 3 + 2]);
 
     euler[0] = *angleX;
     euler[1] = *angleY;
     euler[2] = *angleZ;
-    func_00283DE0(g_skyShellMatrix, euler);
+    func_00283DE0(g_skyShellMatrixSmall, euler);
 }
 #endif
 
@@ -1028,15 +1055,6 @@ extern f32 D_1ABE54;                  /* 0x1ABE54 - sky spin angle (gp_rel) */
 __asm__(".extern g_vramZBuffer, 16");
 #endif
 extern s32 g_vramZBuffer;             /* 0x1A72E0 - VRAM Z buffer base */
-/* The .sdata alias of g_skyShellMatrix, as DrawSkyShellsFixedSpin's arm
- * declares it (that declaration is inside its own guarded arm, so the 2.9 TU
- * and this member's s136os TU do not see it). ADDRESSING-MODEL DEVICE (RULING
- * #8620): same assembler symbol, moves no data, emits nothing of its own; the
- * native arm already has the #define above. */
-#ifndef TARGET_NATIVE
-extern u8 g_skyShellMatrixSmall[] __asm__("g_skyShellMatrix") __attribute__((section(".sdata")));
-#endif
-
 /**
  * func_002E43F8 — draw the sky shells with hard-wired per-shell spins (a sky
  * mode beside DrawSkyShellsFixedSpin / the scaled-spin driver; caller not traced).
