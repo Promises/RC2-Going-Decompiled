@@ -10730,34 +10730,41 @@ S136OS_SLOT(func_00346368);
  * 0x2BEE/0x2BF0) + the empty +0x4B8 buffer; two rows right-flagged. Closed by
  * GuiMapScreenTick(w, 0, &prevSel) — the 3rd arg is a throwaway out-pointer the
  * tick writes the previous list-selection index into (traced: it only writes
- * *(out+0), never reads it; the caller discards it). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiMapScreenInit);
+ * *(out+0), never reads it; the caller discards it).
+ * Params: w = the screen; pool = the GUI pool (may be 0). No return value.
+ * MATCHED byte-exact on the s136os arm (task #2012), device-free, with the
+ * GuiIconScreenInit/GuiTitledSpriteScreenInit re-spellings of master's #else
+ * (solo s136os harness, words differing / built words, ROM 288): as written
+ * 166 / 288; element pointers assigned after the pool block 100 / 288; plus the
+ * record zeroed [1],[2],[3],[0] and both seed floats stored through a fresh
+ * read of +0x470: 0 / 288. */
+/* GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+ * (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in tools/ee/s136os_functions.txt)
+ * and spliced over S136OS_SLOT by tools/ee/s136os_splice.sh. There is no asm
+ * fallback. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_GuiMapScreenInit)
+S136OS_SLOT(GuiMapScreenInit);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiMapScreenInit, unit objdiff): 49.94%,
-   225/349 insns differ. Residual: UNKNOWN-sd + gp/abs-mixed symbol (first differing insn: 'sd s7, 0x68(sp)' vs 'sd s2, 0x40(sp)').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
 s32 GuiMapScreenTick(void *w, s32 mode, s32 *out);
 extern char *g_guiInstance;
 extern u8 D_1ADBE8[], D_1ADBF0[], D_1ADBF8[], D_1ADC00[], D_1ADF98[], D_1ADFA0[];
 extern u8 D_1ADD40[], D_1ADD38[], D_1AE3B0[], D_1AE3C0[], D_1AE3D0[], D_1ADD30[];
 extern u8 D_1AE008[], D_1ADFB0[];
 void GuiMapScreenInit(void *w, GuiPool *pool) {
-    GuiElement *e0 = (GuiElement *)((char *)w + 0x0);
-    GuiElement *e1 = (GuiElement *)((char *)w + 0x4C);
-    GuiElement *e2 = (GuiElement *)((char *)w + 0x98);
-    GuiElement *e3 = (GuiElement *)((char *)w + 0xE4);
-    GuiElement *e4 = (GuiElement *)((char *)w + 0x130);
-    GuiElement *e5 = (GuiElement *)((char *)w + 0x17C);
-    GuiElement *t2B8 = (GuiElement *)((char *)w + 0x2B8);
-    GuiElement *t310 = (GuiElement *)((char *)w + 0x310);
-    GuiElement *t368 = (GuiElement *)((char *)w + 0x368);
-    GuiElement *t3C0 = (GuiElement *)((char *)w + 0x3C0);
-    GuiElement *t418 = (GuiElement *)((char *)w + 0x418);
-    GuiElement *t1C8 = (GuiElement *)((char *)w + 0x1C8);
-    GuiElement *t220 = (GuiElement *)((char *)w + 0x220);
-    GuiElement *sprite = (GuiElement *)((char *)w + 0x278);
+    GuiElement *e0;
+    GuiElement *e1;
+    GuiElement *e2;
+    GuiElement *e3;
+    GuiElement *e4;
+    GuiElement *e5;
+    GuiElement *t2B8;
+    GuiElement *t310;
+    GuiElement *t368;
+    GuiElement *t3C0;
+    GuiElement *t418;
+    GuiElement *t1C8;
+    GuiElement *t220;
+    GuiElement *sprite;
     void *rec;
     s32 prevSel; /* GuiMapScreenTick out-param (discarded) */
 
@@ -10766,16 +10773,29 @@ void GuiMapScreenInit(void *w, GuiPool *pool) {
     if (pool != 0) {
         rec = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
         *(void **)((char *)w + 0x470) = rec;
-        *(s32 *)((char *)rec + 0x0) = 0;
         *(s32 *)((char *)rec + 0x4) = 0;
         *(s32 *)((char *)rec + 0x8) = 0;
         *(s32 *)((char *)rec + 0xC) = 0;
+        *(s32 *)((char *)rec + 0x0) = 0;
     }
+    e0 = (GuiElement *)((char *)w + 0x0);
+    e1 = (GuiElement *)((char *)w + 0x4C);
+    e2 = (GuiElement *)((char *)w + 0x98);
+    e3 = (GuiElement *)((char *)w + 0xE4);
+    e4 = (GuiElement *)((char *)w + 0x130);
+    e5 = (GuiElement *)((char *)w + 0x17C);
+    t2B8 = (GuiElement *)((char *)w + 0x2B8);
+    t310 = (GuiElement *)((char *)w + 0x310);
+    t368 = (GuiElement *)((char *)w + 0x368);
+    t3C0 = (GuiElement *)((char *)w + 0x3C0);
+    t418 = (GuiElement *)((char *)w + 0x418);
+    t1C8 = (GuiElement *)((char *)w + 0x1C8);
+    t220 = (GuiElement *)((char *)w + 0x220);
+    sprite = (GuiElement *)((char *)w + 0x278);
 
     *(s32 *)((char *)w + 0x4F8) = 1;
-    rec = *(void **)((char *)w + 0x470);
-    *(f32 *)((char *)rec + 0x0) = 250.0f;
-    *(f32 *)((char *)rec + 0x4) = 207.0f;
+    (*(f32 **)((char *)w + 0x470))[0] = 250.0f;
+    (*(f32 **)((char *)w + 0x470))[1] = 207.0f;
 
     GuiElementInit(e0, (s32)D_1ADBE8, pool);
     GuiElementInit(e1, (s32)D_1ADBF0, pool);
