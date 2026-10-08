@@ -507,3 +507,9 @@ usa text/250080 func_003511A8
 usa text/1907F0 func_00291148
 usa text/1823B8 func_00282868
 usa text/1823B8 func_00282A80
+usa text/178E88 RunFxDrawHooksPreParticles
+usa text/178E88 RunDrawHooksAfterTies
+usa text/178E88 RunDrawHooksAfterShrubs
+usa text/178E88 RunFxDrawHooksPostParticles
+usa text/178E88 AddFxDrawHookLate
+usa text/178E88 RunFxDrawHooksLate

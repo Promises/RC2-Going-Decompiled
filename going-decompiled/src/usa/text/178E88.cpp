@@ -1657,19 +1657,21 @@ void AddFxDrawHookPreParticles(DrawHookFn func, void *arg) {
 /* Run every registered pre-particle fx draw hook in order, each as
  * func(arg). The count is re-read each iteration so a hook may extend the
  * queue. Driver for AddFxDrawHookPreParticles.
- * Near-miss: the three-deep packed callee-save block (sd $16/$17/$18) + the
- * branch-likely re-test loop is a register/save-layout wall. Correct C
- * preserved as the portable body. */
-/* TODO(match) t493: sdk29 78.17% / engine96 57.90% (unit objdiff, objdiff_build.sh +
- * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
- * every other remaining arm). Residual on the better arm (sdk29): UNKNOWN-addiu (first differing
- * insn: ROM `addiu sp,sp,-32` vs built `addiu sp,sp,-80`). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", RunFxDrawHooksPreParticles);
+ * The packed saves (sd $16/$17/$18 8 apart) are the s136os arm's -fopt-stack
+ * layout, and the branch-likely (bnel) re-test is what that cc1 emits for the
+ * loop; neither was the residual. The residual was addressing: read as
+ * g_fxHooksPreCount[0], cc1 hoists &count into a fourth saved register ($19,
+ * frame 48), while the ROM re-forms `lui; lw` on every test. Read through the
+ * cc1-small absolute alias g_fxHooksPreCountAbs, cc1 emits `lw $2,sym` each
+ * time and the assembler expands it to that pair: frame 32, three saves.
+ * MATCHED (task #1864): s136os arm (SN 1.36 -fopt-stack, -O2 -G8 -fno-gcse),
+ * spliced. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_RunFxDrawHooksPreParticles)
+S136OS_SLOT(RunFxDrawHooksPreParticles);
 #else
 void RunFxDrawHooksPreParticles(void) {
     s32 i;
-    for (i = 0; i < g_fxHooksPreCount[0]; i++)
+    for (i = 0; i < g_fxHooksPreCountAbs; i++)
         g_fxHooksPreFuncs[i](g_fxHooksPreArgs[i]);
 }
 #endif
@@ -1693,36 +1695,30 @@ void func_0027D500(DrawHookFn func, void *arg) {
 
 /* Run every registered after-ties draw hook in order as func(arg); the count is
  * re-read each iteration. Driver for func_0027D500 (AddDrawHookAfterTies).
- * Near-miss: same packed-save / branch-likely loop wall as
- * RunFxDrawHooksPreParticles. Correct C preserved as the portable body. */
-/* TODO(match) t493: sdk29 78.17% / engine96 57.90% (unit objdiff, objdiff_build.sh +
- * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
- * every other remaining arm). Residual on the better arm (sdk29): UNKNOWN-addiu (first differing
- * insn: ROM `addiu sp,sp,-32` vs built `addiu sp,sp,-80`). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", RunDrawHooksAfterTies);
+ * MATCHED (task #1864): s136os arm (SN 1.36 -fopt-stack, -O2 -G8 -fno-gcse),
+ * spliced; see RunFxDrawHooksPreParticles for why the count goes through its
+ * absolute alias. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_RunDrawHooksAfterTies)
+S136OS_SLOT(RunDrawHooksAfterTies);
 #else
 void RunDrawHooksAfterTies(void) {
     s32 i;
-    for (i = 0; i < g_drawHooksAfterTiesCount[0]; i++)
+    for (i = 0; i < g_drawHooksAfterTiesCountAbs; i++)
         g_drawHooksAfterTiesFuncs[i](g_drawHooksAfterTiesArgs[i]);
 }
 #endif
 
 /* Run every registered after-shrubs draw hook in order as func(arg); the count
  * is re-read each iteration.
- * Near-miss: same packed-save / branch-likely loop wall as
- * RunFxDrawHooksPreParticles. Correct C preserved as the portable body. */
-/* TODO(match) t493: sdk29 78.17% / engine96 57.90% (unit objdiff, objdiff_build.sh +
- * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
- * every other remaining arm). Residual on the better arm (sdk29): UNKNOWN-addiu (first differing
- * insn: ROM `addiu sp,sp,-32` vs built `addiu sp,sp,-80`). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", RunDrawHooksAfterShrubs);
+ * MATCHED (task #1864): s136os arm (SN 1.36 -fopt-stack, -O2 -G8 -fno-gcse),
+ * spliced; see RunFxDrawHooksPreParticles for why the count goes through its
+ * absolute alias. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_RunDrawHooksAfterShrubs)
+S136OS_SLOT(RunDrawHooksAfterShrubs);
 #else
 void RunDrawHooksAfterShrubs(void) {
     s32 i;
-    for (i = 0; i < g_drawHooksAfterShrubsCount[0]; i++)
+    for (i = 0; i < g_drawHooksAfterShrubsCountAbs; i++)
         g_drawHooksAfterShrubsFuncs[i](g_drawHooksAfterShrubsArgs[i]);
 }
 #endif
@@ -1745,61 +1741,70 @@ void AddFxDrawHookPostParticles(DrawHookFn func, void *arg) {
 
 /* Run every registered post-particle fx draw hook in order as func(arg); the
  * count is re-read each iteration. Driver for AddFxDrawHookPostParticles.
- * Near-miss: same packed-save / branch-likely loop wall as
- * RunFxDrawHooksPreParticles. Correct C preserved as the portable body. */
-/* TODO(match) t493: sdk29 78.17% / engine96 57.90% (unit objdiff, objdiff_build.sh +
- * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
- * every other remaining arm). Residual on the better arm (sdk29): UNKNOWN-addiu (first differing
- * insn: ROM `addiu sp,sp,-32` vs built `addiu sp,sp,-80`). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", RunFxDrawHooksPostParticles);
+ * MATCHED (task #1864): s136os arm (SN 1.36 -fopt-stack, -O2 -G8 -fno-gcse),
+ * spliced; see RunFxDrawHooksPreParticles for why the count goes through its
+ * absolute alias. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_RunFxDrawHooksPostParticles)
+S136OS_SLOT(RunFxDrawHooksPostParticles);
 #else
 void RunFxDrawHooksPostParticles(void) {
     s32 i;
-    for (i = 0; i < g_fxHooksPostCount[0]; i++)
+    for (i = 0; i < g_fxHooksPostCountAbs; i++)
         g_fxHooksPostFuncs[i](g_fxHooksPostArgs[i]);
 }
+#endif
+
+#ifndef TARGET_NATIVE
+/* cc1-small views (size 8 <= -G8) of the 16-byte late-queue tables, sized 16
+ * for the assembler so `la` expands absolutely (the #8036 construct, RULING
+ * #8620; relocations name the real symbols). Natively they are the tables. */
+__asm__(".extern g_fxHooksLateFuncsAbs, 16\n\tg_fxHooksLateFuncsAbs = g_fxHooksLateFuncs");
+__asm__(".extern g_fxHooksLateArgsAbs, 16\n\tg_fxHooksLateArgsAbs = g_fxHooksLateArgs");
+extern DrawHookFn g_fxHooksLateFuncsAbs[2];
+extern void *g_fxHooksLateArgsAbs[2];
+#else
+#define g_fxHooksLateFuncsAbs g_fxHooksLateFuncs
+#define g_fxHooksLateArgsAbs  g_fxHooksLateArgs
 #endif
 
 /* Register a (func,arg) callback in the small late fx draw queue (cap 4), run
  * by RunFxDrawHooksLate at the end of the RenderFrame fx layer. No-op when
  * full.
- * Near-miss: same count-%hi register-allocation wall as
- * AddFxDrawHookPreParticles. */
-/* TODO(match) t493: sdk29 51.75% / engine96 44.25% (unit objdiff, objdiff_build.sh +
- * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
- * every other remaining arm). Residual on the better arm (sdk29): SCHED — with the cc1-small count
- * model 68.25%/77.00% sdk29; the original computes the Funcs slot address, stores, then the Args
- * address (cap 4 variant), cc1 hoists both address computations. Levers: engine96 with sched1
- * MEASURED (flag not landed): 43.25%. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", AddFxDrawHookLate);
+ * Unlike the cap-0x40 queues, the ROM forms each 16-byte table's address as an
+ * adjacent `lui $r; addiu $r,$r` pair, the assembler's expansion of a one-insn
+ * `la`, i.e. cc1 treated the tables as small data. Reached through the
+ * cc1-small aliases g_fxHooksLateFuncsAbs/g_fxHooksLateArgsAbs (and the count
+ * through g_fxHooksLateCountAbs), the s136os arm emits the ROM's sequence; the
+ * old "count-%hi register-allocation wall" was that addressing.
+ * MATCHED (task #1864): s136os arm (SN 1.36 -fopt-stack, -O2 -G8 -fno-gcse),
+ * spliced. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_AddFxDrawHookLate)
+S136OS_SLOT(AddFxDrawHookLate);
 #else
 void AddFxDrawHookLate(DrawHookFn func, void *arg) {
-    s32 n = g_fxHooksLateCount[0];
+    s32 n = g_fxHooksLateCountAbs;
     if (n < 4) {
-        g_fxHooksLateFuncs[n] = func;
-        g_fxHooksLateArgs[n] = arg;
-        g_fxHooksLateCount[0] = n + 1;
+        g_fxHooksLateFuncsAbs[n] = func;
+        g_fxHooksLateArgsAbs[n] = arg;
+        g_fxHooksLateCountAbs = n + 1;
     }
 }
 #endif
 
 /* Run every registered late fx draw hook in order as func(arg); the count is
  * re-read each iteration. Driver for AddFxDrawHookLate (small cap-4 queue).
- * Near-miss: same packed-save / branch-likely loop wall as
- * RunFxDrawHooksPreParticles. Correct C preserved as the portable body. */
-/* TODO(match) t493: sdk29 71.00% / engine96 50.87% (unit objdiff, objdiff_build.sh +
- * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
- * every other remaining arm). Residual on the better arm (sdk29): UNKNOWN-addiu (first differing
- * insn: ROM `addiu sp,sp,-32` vs built `addiu sp,sp,-80`). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", RunFxDrawHooksLate);
+ * The count goes through its absolute alias as in RunFxDrawHooksPreParticles,
+ * and the two tables through their cc1-small aliases as in AddFxDrawHookLate
+ * (the ROM's `lui $18; addiu $18,$18` la-expansion pairs, Args first).
+ * MATCHED (task #1864): s136os arm (SN 1.36 -fopt-stack, -O2 -G8 -fno-gcse),
+ * spliced. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_RunFxDrawHooksLate)
+S136OS_SLOT(RunFxDrawHooksLate);
 #else
 void RunFxDrawHooksLate(void) {
     s32 i;
-    for (i = 0; i < g_fxHooksLateCount[0]; i++)
-        g_fxHooksLateFuncs[i](g_fxHooksLateArgs[i]);
+    for (i = 0; i < g_fxHooksLateCountAbs; i++)
+        g_fxHooksLateFuncsAbs[i](g_fxHooksLateArgsAbs[i]);
 }
 #endif
 
