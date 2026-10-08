@@ -275,7 +275,7 @@ extern void func_00285CE8(void);
 extern void KickFrameDmaChain(void);
 extern void WaitFrameDmaFence(s32 a);
 extern void WaitGsPathsIdle(s32 a, s32 b);
-extern void WaitVblankGetField(s32 a);
+extern s32 WaitVblankGetField(s32 a);
 extern void DrawFullScreenTint(s32 a, s32 b, s32 c, s32 d);
 extern s32 g_vramFrameBufB;
 

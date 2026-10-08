@@ -119,7 +119,7 @@ extern void func_003432B8(void *p, s32 v);
 extern s32  func_003432C0(void *p);
 extern void func_0034EF68(void *base, s32 index, s32 x, s32 y, s32 shade);
 extern s32  func_0034F300(void *mgr);
-extern void sceCdReadClock(void *clock);
+extern s32 sceCdReadClock(void *clock);
 #endif
 
 /* Also called from the EE-compiled func_002DECE0 (cheat-code unlocks), so these
@@ -4263,7 +4263,7 @@ S136OS_SLOT(func_002DF668);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
-extern void sceCdReadClock(void *clock);
+extern s32 sceCdReadClock(void *clock);
 extern void func_00131A98(void *clock);
 extern void func_00298A00(void);
 extern void func_00297FA0(s32 saveRegion);
@@ -4337,7 +4337,7 @@ S136OS_SLOT(func_002DF710);
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern void func_00299BF8(void);
-extern void sceCdReadClock(void *clock);
+extern s32 sceCdReadClock(void *clock);
 extern void func_00131A98(void *clock);
 extern void BuildSaveImage(void *dst);
 /* (end of this body's declarations) */
