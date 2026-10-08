@@ -5346,7 +5346,14 @@ S136OS_SLOT(func_0033DDC8);
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033DE08);
 
-/* func_0033DE10: dialog-box screen with TWO scrolling lists (record at +0x36C).
+/* InitAudioOptionsMenuInGame (was func_0033DE10; named in task #2027): construct
+ * the in-game audio-options widget. Evidence for the name: GuiSystemInit builds
+ * it at gui+0x3DA78, the object UpdateAudioOptionsMenuInGameDispatch forwards to
+ * UpdateAudioOptionsMenuInGame (func_0033E070, called last here); that tick
+ * drives this function's two lists as the music (+0x2DC) and sfx (+0x324)
+ * volume sliders, clamped to the 0x400 item count set here, and cycles the
+ * +0x2D8 row index cleared here (NOTE #5485).
+ * A dialog-box screen with TWO scrolling lists (record at +0x36C).
  * Panel 255x195, border D_1ADE20, text rows localized 0x2C2D/0x2BE4/0x2BE5, bounds
  * (0,-143,0,114,0,140), scale 0.67. Builds two identical lists (+0x2DC and +0x324),
  * each: GuiListElementInit(0x96 px wide, v34=1, tag D_1ADC60), 0x10 px tall
@@ -5368,14 +5375,14 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
  * (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in tools/ee/s136os_functions.txt)
  * and spliced over S136OS_SLOT by tools/ee/s136os_splice.sh. There is no asm
  * fallback. On native it is plain C. */
-#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0033DE10)
-S136OS_SLOT(func_0033DE10);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_InitAudioOptionsMenuInGame)
+S136OS_SLOT(InitAudioOptionsMenuInGame);
 #else
 s32 func_0033E070(void *w, s32 flags);
 extern void GuiDialogBoxInitBorder(void *w, void *pool, void *borderCfg);
 extern void GuiDialogBoxSetText3(void *p, s32 t0, s32 t1, s32 t2);
 extern u8 D_1ADE20[8], D_1ADC60[];
-void func_0033DE10(void *w, GuiPool *pool) {
+void InitAudioOptionsMenuInGame(void *w, GuiPool *pool) {
     GuiElement *list1;
     GuiElement *list2;
     void *obj;
@@ -5426,7 +5433,7 @@ void func_0033DE10(void *w, GuiPool *pool) {
 }
 #endif
 
-/* func_0033E070: the in-game audio-options menu handler (closer of func_0033DE10 —
+/* func_0033E070: the in-game audio-options menu handler (closer of InitAudioOptionsMenuInGame —
  * this is UpdateAudioOptionsMenuInGame). Re-anchors the box + positions the two
  * volume-slider lists (music +0x2DC, sfx +0x324) at the anchor (*(w+0x36C)) plus
  * D_1ADE30..3C. Left/right (0x1000/0x4000) cycle the selected row +0x2D8 through

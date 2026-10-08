@@ -239,7 +239,7 @@ func_0033D1F8 = 0x0033D1F8; // type:func
 func_0033D4A8 = 0x0033D4A8; // type:func size:0x8
 func_0033D4B0 = 0x0033D4B0; // type:func
 func_0033DE08 = 0x0033DE08; // type:func size:0x8
-func_0033DE10 = 0x0033DE10; // type:func
+InitAudioOptionsMenuInGame = 0x0033DE10; // type:func - CONFIRMED mechanism - ctor of the in-game audio-options widget. GuiSystemInit builds it at gui+0x3DA78 (jal at 0x34F778), the object UpdateAudioOptionsMenuInGameDispatch hands to UpdateAudioOptionsMenuInGame (0x33E070), which this ctor calls last. Its lists +0x2DC/+0x324 are the music/sfx sliders that tick drives (count 0x400 = the volume clamp) (task #2027)
 func_0033E4B8 = 0x0033E4B8; // type:func size:0x8
 func_0033E4C0 = 0x0033E4C0; // type:func
 func_0033EB50 = 0x0033EB50; // type:func size:0x8
