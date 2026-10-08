@@ -173,8 +173,8 @@ void ResolveMobyAnimFramePtrs(Moby *moby) {
  * live at g_listenerPosHistory + slot*0x70.
  *
  * TODO(match): not closed on the s136os arm after four rounds (tasks #1791,
- * #1894, #1958, #2001; NOTEs #9699, #9852, #9970 and task #2001's NOTE hold
- * the bodies and figures). The best body reaches 54 = 54 words with 2
+ * #1894, #1958, #2001; NOTEs #9699, #9852, #9970 and #10054 hold the
+ * bodies and figures). The best body reaches 54 = 54 words with 2
  * differing: two empty tied fences give the ROM's slot -> $4 -> $5 copy chain,
  * and the idx fence then takes one of the R5900's two issue slots, so `mult`
  * and `addiu %lo(g_listenerPosHistory)` come out swapped (0x2A02B4/B8).
