@@ -2454,7 +2454,11 @@ typedef struct {
     s32 frames[3][4];          /* 0x1B8 */
     u8  _pad1E8[0x810 - 0x1E8];
     s32 mbSlot;                /* 0x810: selects a 0x140-byte record (see func_0012BAA0) */
-    u8  _pad814[0x840 - 0x814];
+    s32 _pad814;
+    s32 lastCmdFlag;           /* 0x818: D_00137F10[opcode] of the last IPU command */
+    u8  _pad81C[0x838 - 0x81C];
+    s32 bitBuffer;             /* 0x838: the 32 stream bits FDEC last returned */
+    s32 bitsValid;             /* 0x83C: 32 after each FDEC */
     s32 loadIntraQuant;        /* 0x840 */
     s32 loadNonIntraQuant;     /* 0x844 */
     s32 _pad848;
@@ -2554,13 +2558,14 @@ void func_0012C380(s32 *arg0, u32 cmd) {
 
 extern s32 func_0012FAE8(s32 *obj);
 
-/**
- * Wait for the IPU to go idle: spin while IPU_CTRL (0x10002010) reads busy
- * (bit 31) without an error (bit 14). Every 5001 polls the decoder's
- * callbacks get entry #1 run (func_0012FAE8), and the count restarts.
- */
-void IpuWaitReady(s32 *ipu) {
-    IpuDecoder *dec = (IpuDecoder *)ipu;
+/* The library's inline helpers: the ROM's IpuSkipBits and func_0012C680 carry
+ * their own copies of IpuWaitReady's loop and of func_0012C380's two stores
+ * rather than calling them (cc1 2.9 inlines only `inline` functions at -O2). */
+
+/* Spin while IPU_CTRL (0x10002010) reads busy (bit 31) without an error
+ * (bit 14). Every 5001 polls the decoder's callbacks get entry #1 run
+ * (func_0012FAE8), and the count restarts. */
+static inline void IpuWaitIdle(IpuDecoder *dec) {
     s32 count = 0;
     while ((*(volatile u32 *)0x10002010 & 0x80004000) == 0x80000000) {
         if (count++ > 5000) {
@@ -2568,6 +2573,19 @@ void IpuWaitReady(s32 *ipu) {
             count = 0;
         }
     }
+}
+
+/* func_0012C380, inline: write IPU_CMD and note the opcode's table entry. */
+static inline void IpuIssueCommand(IpuDecoder *dec, u32 cmd) {
+    *(volatile u32 *)0x10002000 = cmd;
+    dec->lastCmdFlag = D_00137F10[cmd >> 28];
+}
+
+/**
+ * Wait for the IPU to go idle (IpuWaitIdle, out of line).
+ */
+void IpuWaitReady(s32 *ipu) {
+    IpuWaitIdle((IpuDecoder *)ipu);
 }
 
 /**
@@ -2594,7 +2612,24 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012C508);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012C680);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", IpuSkipBits);
+/**
+ * Skip `n` bits of the IPU bitstream: wait for the IPU, issue FDEC with the
+ * skip count (0x40000000 | n), and refill the 32-bit look-ahead from its
+ * result (bitBuffer, bitsValid = 32).
+ *
+ * No return statement, though the declarations say s32: the ROM leaves FDEC's
+ * result in $v0 only as a side effect, none of the nine ROM call sites reads
+ * it, and an explicit `return` of it moves the sign-extension into $v1 and
+ * lengthens the body by one or two words (func_0012CFA0 above has the same
+ * shape).
+ */
+s32 IpuSkipBits(s32 *ipu, s32 n) {
+    IpuDecoder *dec = (IpuDecoder *)ipu;
+    IpuWaitIdle(dec);
+    IpuIssueCommand(dec, 0x40000000 | n);
+    dec->bitBuffer = IpuWaitCmdResult(ipu);
+    dec->bitsValid = 32;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", IpuGetBits);
 
