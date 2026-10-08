@@ -425,7 +425,8 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
  * sub+0x90 = *b; sub+0x120 = arg4; cam[0x88] = mode. mode 3 additionally seeds a
  * 1.0 blend at sub+0x124 (sub+0x128=0), overrides cam+0x30/+0x40 with the saved
  * g_cameraPos qwords, copies g_heroPos to sub+0x110 and runs func_00272560(sub+0xFC,
- * &camPos). mode 2 and 3 both stamp arg3 at sub+0xE0/+0xE4. Faithful TARGET_NATIVE
+ * &camPos0, g_heroPos) (the ROM's $a2 is the g_heroPos address left by the copy).
+ * mode 2 and 3 both stamp arg3 at sub+0xE0/+0xE4. Faithful TARGET_NATIVE
  * #else (engine 2.96 qword-copy regalloc = no byte-match). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336230);
@@ -437,7 +438,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336230);
 extern u8   g_cameraPos[];
 extern u8   g_heroPos[];
 extern void SwitchActiveCamera(void *cam);
-extern void func_00272560(void *dst, void *src);
+extern s32  func_00272560(f32 *out, const void *from, const void *to);
 
 /* One 16-byte quadword, 16-byte aligned so cc1 moves it with a single lq/sq
  * pair as the ROM does. */
@@ -471,7 +472,7 @@ void func_00336230(void *a, void *b, s32 mode, s32 arg3, s32 arg4) {
         *(Qw128_235FE8 *)(cam + 0x30) = camPos0;
         *(Qw128_235FE8 *)(cam + 0x40) = camPos1;
         *(Qw128_235FE8 *)(sub + 0x110) = *(Qw128_235FE8 *)g_heroPos;
-        func_00272560(sub + 0xFC, &camPos0);
+        func_00272560((f32 *)(sub + 0xFC), &camPos0, g_heroPos);
     }
     if (mode == 2 || mode == 3) {
         *(s32 *)(sub + 0xE4) = arg3;

@@ -2532,7 +2532,40 @@ void UpdateCamera(void) {
  * task #472. */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00272550);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00272560);
+/* func_00272560: spherical angles and distance of the offset from - to.
+ *   out:  receives { out[0] = Atan2fPoly(d.x, d.y), out[1] =
+ *         Atan2fPoly(|d.xy|, d.z), out[2] = |d| } for d = *from - *to.
+ *   from, to: the two points (235FE8's func_00336230 passes the saved camera
+ *         position and g_heroPos, writing into its transition block +0xFC).
+ * Returns 0. The old out[0] is passed to WrapAnglePiDiff with the new angle
+ * and the result is dropped (the ROM never reads that call's $f0), so out[0]
+ * is overwritten with the raw angle.
+ * MATCHED on the s136os arm (task #1986): first spelling, no devices; the
+ * ROM's 8-byte save slots (s0 0x10, ra 0x18, $f20 0x20) are -fopt-stack's.
+ * GUARD: on EE this C is compiled alone by SN 2.95.3 v1.36 -fopt-stack
+ * (tools/ee/s136os_functions.txt) and spliced over the S136OS_SLOT line by
+ * tools/ee/s136os_splice.sh; native compiles it as written. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00272560)
+S136OS_SLOT(func_00272560);
+#else
+extern void Vec4SubVu0(Vec4 *dst, const Vec4 *a, const Vec4 *b);
+extern f32 Vec2LengthXyVu0(const Vec4 *v);
+extern f32 Vec3LengthVu0(const Vec4 *v);
+extern f32 Atan2fPoly(f32 y, f32 x);
+extern f32 WrapAnglePiDiff(f32 a, f32 b);
+s32 func_00272560(f32 *out, const Vec4 *from, const Vec4 *to) {
+    Vec4 d;
+    f32 yaw;
+
+    Vec4SubVu0(&d, from, to);
+    out[1] = Atan2fPoly(Vec2LengthXyVu0(&d), d.z);
+    yaw = Atan2fPoly(d.x, d.y);
+    WrapAnglePiDiff(yaw, out[0]);
+    out[0] = yaw;
+    out[2] = Vec3LengthVu0(&d);
+    return 0;
+}
+#endif
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/16E980", func_002725D8);
 
