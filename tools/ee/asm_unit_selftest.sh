@@ -81,6 +81,14 @@
 #        as's words. Against a copy from before task #1965, the three pinning
 #        arms must FAIL (GNU as swaps the addiu into the slot) and the line is
 #        absent from every arm.
+#   NOAPP (RULING #10043, task #2004) a reorder-mode `j $31` directly after
+#        `#NO_APP` (also across a blank line, and in CRLF input) is pinned at
+#        -G8 and -G0: the asm block's sqc2 stays before the return and the
+#        slot holds a nop (`noapp-slot: 1 pins in <unit>: f`). A C insn
+#        between, cc1's noreorder bracket, and a non-return branch after the
+#        block pin nothing (`0 pins`) and keep GNU as's words. Against a copy
+#        from before task #2004 the four pinning arms must FAIL (GNU as moves
+#        the sqc2 into the slot) and the line is absent from every arm.
 #
 # The seeds are written in cc1 layout (TAB, mnemonic, TAB, operands) into the
 # container's own /tmp, so no VM mount sits between writing and assembling
@@ -519,6 +527,40 @@ for k in "la_b:-G8:1:00641021 27900000 10000001 00000000" \
   ok=$(accepted); [ "$ok" = 1 ] && ok=$(has "$w")
   [ "$LALINE" = "asm_unit.sh: la-slot: $np pins" ] || ok=0
   verdict "LASLOT $sd $G" "$ok" "'asm_unit.sh: la-slot: $np pins', run [$w]"
+done
+
+# --- NOAPP: no fill of a return slot after an inline-asm block (RULING #10043) ---
+# A reorder-mode `j $31` directly after cc1's `#NO_APP` is pinned with a nop in
+# its slot (Ps2EeAs never fills one, FACT #10035): the block's sqc2 stays
+# BEFORE the return. GNU as alone moves it into the slot (`03e00008 f8830020`),
+# which is what an asm_unit.sh without R1 gives and what these arms refuse.
+# Negative arms keep GNU's words and pin nothing: a C insn between `#NO_APP` and
+# the return, the return inside cc1's own noreorder bracket, and a non-return
+# branch after `#NO_APP` (R1 is the return only; FACT #10042 measured no other;
+# GNU as still moves the sqc2 into that `b` slot, `10000001 f8830020`).
+NH='\t.text\n\t.ent\tf\nf:\n#APP\n\tsqc2\t$vf3,32($4)\n#NO_APP\n'
+NE='\t.end\tf\n'
+seed r1_pos  "$NH\tj\t\$31\n$NE"
+seed r1_blank "${NH}\n\tj\t\$31\n$NE"
+printf '\t.text\r\n\t.ent\tf\r\nf:\r\n#APP\r\n\tsqc2\t$vf3,32($4)\r\n#NO_APP\r\n\tj\t$31\r\n\t.end\tf\r\n' > "$T/r1_crlf.s"
+seed r1_cins "$NH\taddu\t\$2,\$4,\$5\n\tj\t\$31\n$NE"
+seed r1_nore "\t.text\n\t.ent\tf\nf:\n\t.set\tnoreorder\n#APP\n\tsqc2\t\$vf3,32(\$4)\n#NO_APP\n\tj\t\$31\n\tnop\n\t.set\treorder\n$NE"
+seed r1_br   "$NH\tb\t\$L1\n\$L1:\n\tj\t\$31\n\tnop\n$NE"
+# <seed>:<-G>:<line suffix after "pins in <unit>">:<pins>:<the whole .text>
+for k in "r1_pos:-G8:: f:1:f8830020 03e00008 00000000" \
+         "r1_pos:-G0:: f:1:f8830020 03e00008 00000000" \
+         "r1_blank:-G8:: f:1:f8830020 03e00008 00000000" \
+         "r1_crlf:-G0:: f:1:f8830020 03e00008 00000000" \
+         "r1_cins:-G8:::0:f8830020 03e00008 00851021" \
+         "r1_nore:-G8:::0:f8830020 03e00008 00000000" \
+         "r1_br:-G8:::0:10000001 f8830020 03e00008 00000000 00000000"; do
+  sd=${k%%:*}; r=${k#*:}; G=${r%%:*}; r=${r#*:}; r=${r#*:}; sfx=${r%%:*}; r=${r#*:}; np=${r%%:*}; w=${r#*:}
+  [ -n "$sfx" ] && sfx=":$sfx"
+  run "$sd" "$G"
+  ok=$(accepted); [ "$ok" = 1 ] && [ "$WORDS" = "$w" ] || ok=0
+  R1LINE=$(grep '^asm_unit\.sh: noapp-slot:' "$T/err" | tr -d '\r' || true)
+  [ "$R1LINE" = "asm_unit.sh: noapp-slot: $np pins in $T/$sd$sfx" ] || ok=0
+  verdict "NOAPP $sd $G" "$ok" "'asm_unit.sh: noapp-slot: $np pins in $T/$sd$sfx', .text [$w] (got [$WORDS], '$R1LINE')"
 done
 
 echo "asm_unit_selftest: $N arms, $F failed ($AU)"

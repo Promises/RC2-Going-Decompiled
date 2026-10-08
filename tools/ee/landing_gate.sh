@@ -618,6 +618,9 @@ check_asmunit() {
   # and so is its `la-slot: N pins` line (RULING #9966, task #1965), likewise
   # in its exact spelling only
   nd=$(( nd + $(/usr/bin/grep -cE "$ASMUNIT_LA_RE" "$log" || true) ))
+  # and so is its `noapp-slot: N pins in <unit>` line (RULING #10043, task
+  # #2004), likewise in its exact spelling only
+  nd=$(( nd + $(/usr/bin/grep -cE "$ASMUNIT_R1_RE" "$log" || true) ))
   na=$(( $(/usr/bin/grep -c 'asm_unit\.sh:' "$log" || true) - nd ))
   if [ "$n" = 0 ]; then
     ok "ASMUNIT [$REGION]: 0 asm_unit.sh WARNING/REFUSED/FAIL lines in $(wc -l < "$log" | tr -d ' ') log lines"
@@ -626,13 +629,16 @@ check_asmunit() {
     show < <(/usr/bin/grep -nE 'asm_unit\.sh: (WARNING|REFUSED|FAIL):' "$log" | cut -c1-400 | sed 's/^/       /')
   fi
   if [ "$na" != "$n" ]; then
-    warn "ASMUNIT [$REGION]: $((na - n)) asm_unit.sh: line(s) with none of WARNING/REFUSED/FAIL in $log — a diagnostic kind this row does not know; read it and extend the row: $(/usr/bin/grep -n 'asm_unit\.sh:' "$log" | /usr/bin/grep -vE 'asm_unit\.sh: (WARNING|REFUSED|FAIL):' | /usr/bin/grep -vE "$ASMUNIT_DLI_RE" | /usr/bin/grep -vE "$ASMUNIT_LA_RE" | cut -c1-200 | tr '\n' ';')"
+    warn "ASMUNIT [$REGION]: $((na - n)) asm_unit.sh: line(s) with none of WARNING/REFUSED/FAIL in $log — a diagnostic kind this row does not know; read it and extend the row: $(/usr/bin/grep -n 'asm_unit\.sh:' "$log" | /usr/bin/grep -vE 'asm_unit\.sh: (WARNING|REFUSED|FAIL):' | /usr/bin/grep -vE "$ASMUNIT_DLI_RE" | /usr/bin/grep -vE "$ASMUNIT_LA_RE" | /usr/bin/grep -vE "$ASMUNIT_R1_RE" | cut -c1-200 | tr '\n' ';')"
   fi
 }
 # asm_unit.sh's per-unit transform line, whole-line anchored (task #1205)
 ASMUNIT_DLI_RE='^asm_unit\.sh: dli: [0-9]+ transforms \([0-9]+ allowlist rows for (usa|eu)\)$'
 # and its per-unit small-`la` slot pin line (RULING #9966, task #1965)
 ASMUNIT_LA_RE='^asm_unit\.sh: la-slot: [0-9]+ pins$'
+# and its per-unit no-fill-after-inline-asm line, naming the unit and one
+# function per pin (RULING #10043, task #2004)
+ASMUNIT_R1_RE='^asm_unit\.sh: noapp-slot: [0-9]+ pins in [A-Za-z0-9_./-]+(: [A-Za-z0-9_.$]+( [A-Za-z0-9_.$]+)*)?$'
 
 # ---------------------------------------------------------- NATIVE-ARENA ----
 # check_arena [REGEN_SCRIPT] — the NATIVE-ARENA row (task #1431, on #1419's

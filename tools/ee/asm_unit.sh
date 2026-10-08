@@ -388,6 +388,14 @@ cd "$FIXROOT"
 # comment markers in what reaches `as`. It is 0 at -G0 by construction (the
 # rule lives in the -G8 pass), which is not the same as a -G8 unit with no
 # site. landing_gate.sh's ASMUNIT row knows this spelling too.
+# And a third, R1's (RULING #10043, task #2004; the pass is described where it
+# runs, below the dli pass):
+#   asm_unit.sh: noapp-slot: N pins in <unit>[: <fn> <fn> ...]
+# <unit> is $UNIT_S relative to src/<region>/ without `._u.s` (cod/015180), or
+# the whole path, likewise trimmed, when it is not under src/<region>/. One
+# function name per pin, so a function pinned twice is named twice. N is 0 at
+# a unit with no inline-asm return, at every -G. landing_gate.sh's ASMUNIT row
+# knows this spelling too.
 # The selftest is tools/ee/asm_unit_selftest.sh.
 DLIAWK="$ROOT/tools/ee/ps2eeas_dli.awk"
 DLISRC="$ROOT/tools/ee/ps2eeas_dli_sites.txt"
@@ -760,7 +768,47 @@ NIN=$(($(wc -l < "$DLIIN"))); NOUT=$(($(wc -l < "$DLIOUT")))
 DLIN=$(awk '/^\t# ps2eeas_dli_sites\.txt [^ ]+: dli / { n++ } END { print n + 0 }' "$DLIOUT")
 DLIM=$(echo "$DLICOUNT" | awk -v r="$REGION" '{ print (r == "usa") ? $2 : (r == "eu") ? $3 : 0 }')
 LAPINS=$(awk '/^\t# asm_unit\.sh la-slot pin / { n++ } END { print n + 0 }' "$DLIOUT")
-mips-linux-gnu-as -march=r5900 -mabi=eabi -no-pad-sections -EL "$GFLAG" -I. -o "$OUT_O" - < "$DLIOUT"
+# R1, the no-fill after an inline-asm block (RULING #10043, task #2004). The
+# held SN assembler, Ps2EeAs.exe 1.9.25.758, never fills a reorder-mode delay
+# slot (FACT #10035, confirmed by FACT #10040). cc1 fills its own C return
+# slots, so the only slot it hands the assembler at a return is one directly
+# after an inline-asm block, where GNU as 2.40 moves the block's last
+# instruction into it and Ps2EeAs leaves a nop. So a reorder-mode `j $31` /
+# `jr $31` whose previous non-blank line is cc1's `#NO_APP` is printed
+# `.set noreorder` / the return / `nop` / `.set reorder`. Nothing else is
+# touched: a BROAD no-fill (every reorder-mode branch) breaks 10 matched -G0
+# cod/ functions (FACT #10042) and is not granted. It runs at every -G, after
+# every pass above (the -G8 lq/sq return pin already brackets func_002A9A68's
+# return, so the line before it is `.set noreorder` and R1 does not see it).
+# Measured price on master 4a8c55b15: 27 sites in 25 matched functions, 0
+# bytes changed - GNU as moves neither a `syscall` nor an `mtc1` into the slot
+# (FACT #10042). Each pin leaves a `# asm_unit.sh noapp-slot pin` comment
+# naming its function, counted into the per-unit line below. CRLF (the -G0
+# input is not \r-stripped) is ignored when matching and kept when printing.
+R1OUT="$(mktemp)"
+R1RC=0
+awk '
+  { s = $0; sub(/\r$/, "", s) }
+  s ~ /^[ \t]*\.ent[ \t]/ { fn = s; sub(/^[ \t]*\.ent[ \t]+/, "", fn); sub(/[ \t,].*/, "", fn) }
+  s ~ /^[ \t]*\.set[ \t]+noreorder([ \t#]|$)/ { nore = 1 }
+  s ~ /^[ \t]*\.set[ \t]+reorder([ \t#]|$)/ { nore = 0 }
+  !nore && prev == "#NO_APP" && s ~ /^\tj(r)?\t\$31[ \t]*$/ {
+    print "\t# asm_unit.sh noapp-slot pin (RULING #10043) " fn
+    print "\t.set\tnoreorder"; print; print "\tnop"; print "\t.set\treorder"
+    prev = s; next
+  }
+  { print; if (s !~ /^[ \t]*$/) { t = s; sub(/^[ \t]+/, "", t); sub(/[ \t]+$/, "", t); prev = t } }
+' "$DLIOUT" > "$R1OUT" || R1RC=$?
+[ "$R1RC" = 0 ] || { rm -f "$R1OUT"; dli_fail "(b): the RULING #10043 noapp-slot pass exited $R1RC"; }
+NR1=$(($(wc -l < "$R1OUT")))
+[ "$NR1" -ge "$NOUT" ] || { rm -f "$R1OUT"; dli_fail "(c): the RULING #10043 noapp-slot pass printed $NR1 line(s) for $NOUT in"; }
+# the per-unit line names the unit (the gap #1982 found in #9966's la-slot
+# line) and lists one function per pin, so the count and the members agree
+R1UNIT=$(printf '%s\n' "$UNIT_S" | sed -E "s#^.*/src/$REGION/##; s#(\._u)?\.s\$##")
+R1PINS=$(awk '/^\t# asm_unit\.sh noapp-slot pin / { n++ } END { print n + 0 }' "$R1OUT")
+R1FNS=$(awk '/^\t# asm_unit\.sh noapp-slot pin / { printf " %s", $NF }' "$R1OUT")
+mips-linux-gnu-as -march=r5900 -mabi=eabi -no-pad-sections -EL "$GFLAG" -I. -o "$OUT_O" - < "$R1OUT"
 echo "asm_unit.sh: dli: $DLIN transforms ($DLIM allowlist rows for $REGION)" >&2
 echo "asm_unit.sh: la-slot: $LAPINS pins" >&2
-rm -f "$DLIIN" "$DLIOUT"; rm -rf "$DLITMP"
+echo "asm_unit.sh: noapp-slot: $R1PINS pins in $R1UNIT${R1FNS:+:$R1FNS}" >&2
+rm -f "$DLIIN" "$DLIOUT" "$R1OUT"; rm -rf "$DLITMP"
