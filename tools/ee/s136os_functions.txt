@@ -605,3 +605,4 @@ usa text/191238 MapBeginUpload
 usa text/191238 func_00298308
 usa text/191238 func_00294A30
 usa text/191238 func_00294B50
+usa text/191238 func_00291EB0

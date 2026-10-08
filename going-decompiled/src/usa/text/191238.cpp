@@ -792,6 +792,27 @@ void func_00291D28(void) {
 }
 #endif
 
+/* ADDRESSING-MODEL DEVICE (RULING #8620 / #9574, the non-zero-offset equate):
+ * func_00291EB0 forms the request table g_pointLights+0x100 with its own
+ * `lui $4` / `addiu $4,$4,%lo(g_pointLights+0x100)` (0x291ECC/0x291ED4), apart
+ * from the `lui $2` / `addiu $2,$2,%lo(g_pointLights)` of the light table. Read
+ * as `g_pointLights + 0x100`, cse folds both into one base. A separate equated
+ * name keeps them apart; the relocations still name g_pointLights + 0x100.
+ * Emits nothing; top level, EE only. Native indexes g_pointLights directly. */
+#ifndef TARGET_NATIVE
+__asm__(".extern g_pointLightReqs, 16\n\tg_pointLightReqs = g_pointLights + 0x100");
+extern u8 g_pointLightReqs[];
+#else
+extern u8 g_pointLights[];
+#define g_pointLightReqs (g_pointLights + 0x100)
+#endif
+/* EE_REG(r): an EE-arm register pin (RULING #8598), empty on native. */
+#ifndef TARGET_NATIVE
+#define EE_REG(r) __asm__(r)
+#else
+#define EE_REG(r)
+#endif
+
 /**
  * func_00291EB0 — build a light-relight request record for point light `index`.
  *
@@ -802,31 +823,74 @@ void func_00291D28(void) {
  * half-counts ((cursor - base) >> 1, i.e. 16-bit element counts) into the entry
  * halfwords: +0x2/+0x4 = stage-1 count, +0x6 = stage-2 delta, +0x8 = stage-2
  * total, +0xA = stage-3 delta. Stops early if any builder hits the limit.
+ *
+ * The ROM also copies the light's 16-byte quad at +0x10 into a stack local it
+ * never reads (`lq` / `sq` at 0x291EFC/0x291F00): SN cc1 has no dead-store
+ * elimination for memory, so the copy in the C below is real ROM behaviour.
+ *
+ * Byte-exact on the s136os arm (task #1962). The ROM's five callee saves at
+ * 8-byte stride are what SN 1.36 -fopt-stack emits; the old t496 "PACKED-SAVE"
+ * label described the 2.9 arm. Each lever priced by removing it alone (solo s136
+ * compile, relocated fields masked; N/70 words differ):
+ *  - the request table through g_pointLightReqs (the equate above): 66/70,
+ *    68 words;
+ *  - the quad copied into `copy[1]` (an array, so it lives in memory): no
+ *    copy 51/70, 68 words; a scalar copy 57/70;
+ *  - `light` and `src = light + 0x10` as two locals: one expression 54/70;
+ *  - the cursor read once into `cursor` before `limit` is formed: 50/70;
+ *  - the last count formed in one expression: 3/70.
+ * Three devices, each removed alone:
+ *  - an EMPTY tied fence on `src` (RULING #8483), `volatile`: without it cse
+ *    folds the `lq` back to 16(light), 20/70; non-volatile, 14/70;
+ *  - an EMPTY untied barrier after the copy (RULING #8483): it keeps the `sq`
+ *    above the compare, as at 0x291F00: 3/70;
+ *  - a REGISTER-PIN DEVICE (RULING #8598): the first compare's result is pinned
+ *    to $3 (`sltu $3,$5,$17` at 0x291F04). With the barrier the `sq` frees $2
+ *    first and cc1 picks it: 2/70. Pin-free, the best body read 2/70 (the
+ *    `sq`/`sltu` pair in the other order).
+ * All three emit nothing and are empty on native.
  */
-#ifndef TARGET_NATIVE
-/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
- * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 80.07% PACKED-SAVE /
- * engine96 62.24% CONST-MULT; best arm sdk29, first differing insn there: 'addiu sp, sp,
- * -0x40' vs 'addiu sp, sp, -0x50' */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00291EB0);
+/* GUARD (task #1962): on EE this C is the image's body, compiled alone by SN
+ * 2.95.3 v1.36 -fopt-stack (tools/ee/s136os_functions.txt) and spliced over the
+ * S136OS_SLOT line by tools/ee/s136os_splice.sh; the 2.9 compile sees only the
+ * slot, so a build that skips the splice loses the function. On native it is
+ * plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00291EB0)
+S136OS_SLOT(func_00291EB0);
 #else
+/* Prototypes this body needs whose declarations sit in other guarded arms:
+ * the s136os arm compiles this arm alone, so it must see them here. */
+#ifndef TARGET_NATIVE
+typedef unsigned long LightQuadT __attribute__((mode(TI)));
+#else
+typedef struct { unsigned long long _q[2]; } __attribute__((aligned(16))) LightQuadT;
+#endif
 extern u8 g_pointLights[];
 extern s32 func_002F5DF8(s32 cursor, s32 limit, s32 index, void *src);
 extern s32 func_002E4000(s32 cursor, s32 limit, s32 index, void *src);
 extern s32 func_002F19D0(s32 cursor, s32 limit, s32 index, void *src);
 
 void func_00291EB0(s32 index) {
-    u8 *req = g_pointLights + 0x100 + index * 0x30;
-    void *src = g_pointLights + index * 0x20 + 0x10;
-    s32 limit = *(s32 *)(req + 0xC) + 0x400;
-    s32 cursor, count;
+    u8 *req   = g_pointLightReqs + index * 0x30;   /* request entry, stride 0x30 */
+    u8 *light = g_pointLights + index * 0x20;      /* light entry, stride 0x20 */
+    u8 *src   = light + 0x10;                      /* its 16-byte quad */
+    s32 cursor = *(s32 *)(req + 0xC);
+    s32 limit  = cursor + 0x400;
+    LightQuadT copy[1];                            /* written, never read: see above */
+    s32 count;
 
-    if ((u32)*(s32 *)(req + 0xC) >= (u32)limit) {
-        return;
+    __asm__ __volatile__("" : "+r"(src));          /* tied fence: see above */
+    copy[0] = *(LightQuadT *)src;
+    __asm__ __volatile__("");                      /* barrier: see above */
+    {
+        register s32 ok EE_REG("$3") = (u32)cursor < (u32)limit;
+        if (!ok) {
+            return;
+        }
     }
     *(s16 *)(req + 0x0) = 0;
 
-    cursor = func_002F5DF8(*(s32 *)(req + 0xC), limit, index, src);
+    cursor = func_002F5DF8(cursor, limit, index, src);
     count = (cursor - *(s32 *)(req + 0xC)) >> 1;
     *(s16 *)(req + 0x2) = (s16)count;
     if ((u32)cursor >= (u32)limit) {
@@ -843,8 +907,7 @@ void func_00291EB0(s32 index) {
     *(s16 *)(req + 0x8) = (s16)count;
 
     cursor = func_002F19D0(cursor, limit, index, src);
-    count = (cursor - *(s32 *)(req + 0xC)) >> 1;
-    *(s16 *)(req + 0xA) = (s16)(count - *(u16 *)(req + 0x8));
+    *(s16 *)(req + 0xA) = (s16)(((cursor - *(s32 *)(req + 0xC)) >> 1) - *(u16 *)(req + 0x8));
 }
 #endif
 
@@ -3578,14 +3641,14 @@ extern void *D_1A9338;
  * compile, relocated fields masked; N/72 words differ):
  *  - the TOC entry is re-derived from rec[0] at every use, never held in a
  *    pointer: the ROM re-reads rec[0] and re-multiplies after the calls
- *    (0x294B44): 59/72;
+ *    (0x294AFC / 0x294B0C): 59/72;
  *  - the TOC is read through a struct (LevelDiscTocT), so the entry address
  *    is formed first and the field offset sits in the load (`lw $4,19280($2)`
- *    at 0x294A68): byte-offset reads fold 0x4B50 into the %lo, 12/72;
+ *    at 0x294A78): byte-offset reads fold 0x4B50 into the %lo, 12/72;
  *  - the IOP staging base is read through g_iopStagingBaseAbs (the equate
  *    above): 20/72;
  *  - dest+0x40/+0x44 are stored through `hdr = dest + 0x18`, which the ROM
- *    keeps in $7 (`addiu $7,$2,24` at 0x294AB4): 15/72; and +0x40 is
+ *    keeps in $7 (`addiu $7,$2,24` at 0x294AAC): 15/72; and +0x40 is
  *    written before +0x44, which the ROM stores in the opposite order: 2/72.
  * One SCHEDULING DEVICE (RULING #8435; this unit's R5900_SHORT_LOOP_PAD3_TIED,
  * as in LoadIrxModuleFromBuffer): the sceSifDmaStat poll loop is jal + slot +
