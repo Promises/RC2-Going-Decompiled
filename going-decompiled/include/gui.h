@@ -113,10 +113,12 @@ typedef struct GuiElement {                 /* === base 0x4C, text variant 0x58 
                            screens write 0x80F0F0F0 etc through it).                 CONFIRMED */
     f32 *visVec;        /* +0x10 ptr to pooled vec4 = visibility/alpha gate; [0]=1.0 visible /
                            0.0 hidden (GuiElementSetVisible / GuiElementIsVisible).  CONFIRMED */
-    u32  shareFlag14;   /* +0x14 ownership/share latch for vec2 (dtor frees only if 0)  PROBABLE */
-    u32  shareFlag18;   /* +0x18 ownership/share latch for scaleVec, set by ShareScaleVec CONFIRMED */
-    u32  shareFlag1C;   /* +0x1C ownership/share latch (vec slot)                     PROBABLE */
-    u32  shareFlag20;   /* +0x20 ownership/share latch (vec slot)                     PROBABLE */
+    u32  shareFlag14;   /* +0x14 share latch for posVec: the base dtor func_00336F00 frees
+                           posVec only if 0 (ROM 0x336F2C)                           CONFIRMED */
+    u32  shareFlag18;   /* +0x18 ownership/share latch for scaleVec, set by ShareScaleVec;
+                           the base dtor frees scaleVec only if 0             CONFIRMED */
+    u32  shareFlag1C;   /* +0x1C share latch for vec2 (base dtor frees vec2 only if 0) CONFIRMED */
+    u32  shareFlag20;   /* +0x20 share latch for colorVec (base dtor frees it only if 0) CONFIRMED */
     u8   pad24[4];      /* +0x24 un-analyzed                                        UNCONFIRMED */
     const char *name;   /* +0x28 element name string (param to GuiElementBaseInit).   CONFIRMED */
     void *pool;         /* +0x2C GUI pool/arena this element allocs its vecs from.    CONFIRMED */

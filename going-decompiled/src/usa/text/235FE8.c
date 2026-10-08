@@ -1208,17 +1208,34 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
 S136OS_SLOT(func_00336F00);
 #else
 extern void func_00337D78(void *pool, void **node);
+/* The base-element fields its destructor touches: the four pooled vectors,
+ * their "not owned" latches, the pool and the vtable. */
+typedef struct {
+    void **pos;          /* 0x00 */
+    void **scale;        /* 0x04 */
+    void **unk08;        /* 0x08 */
+    void **color;        /* 0x0C */
+    void  *visible;      /* 0x10 */
+    s32    posShared;    /* 0x14 */
+    s32    scaleShared;  /* 0x18 */
+    s32    unk08Shared;  /* 0x1C */
+    s32    colorShared;  /* 0x20 */
+    u8     _pad24[8];
+    void  *pool;         /* 0x2C */
+    void  *vtable;       /* 0x30 */
+} GuiElementVecs;
 void func_00336F00(void *p, s32 flag) {
-    *(void **)((char *)p + 0x30) = &g_GuiElementVtable;
-    if (*(void **)((char *)p + 0x2C) != 0) {
-        if (*(s32 *)((char *)p + 0x14) == 0)
-            func_00337D78(*(void **)((char *)p + 0x2C), *(void ***)((char *)p + 0x0));
-        if (*(s32 *)((char *)p + 0x1C) == 0)
-            func_00337D78(*(void **)((char *)p + 0x2C), *(void ***)((char *)p + 0x8));
-        if (*(s32 *)((char *)p + 0x18) == 0)
-            func_00337D78(*(void **)((char *)p + 0x2C), *(void ***)((char *)p + 0x4));
-        if (*(s32 *)((char *)p + 0x20) == 0)
-            func_00337D78(*(void **)((char *)p + 0x2C), *(void ***)((char *)p + 0xC));
+    GuiElementVecs *e = p;
+    e->vtable = &g_GuiElementVtable;
+    if (e->pool != 0) {
+        if (e->posShared == 0)
+            func_00337D78(e->pool, e->pos);
+        if (e->unk08Shared == 0)
+            func_00337D78(e->pool, e->unk08);
+        if (e->scaleShared == 0)
+            func_00337D78(e->pool, e->scale);
+        if (e->colorShared == 0)
+            func_00337D78(e->pool, e->color);
     }
     if (flag & 1)
         ((void (*)(void *))func_00337C48)(p);
@@ -1960,7 +1977,90 @@ s32 GuiTextElementMeasure(GuiElement *e) {
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337898);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiTextElementDraw);
+/* GuiTextElementDraw: draw a text element (the text vtable's draw slot).
+ * Turns inline colour codes on (func_0027F790) or off (func_0027F7A0) per the
+ * element's flag. With auto-fit on, it re-fits the scale (func_002804C0 over
+ * the string, its fit parameter and base scale) into scale.x and lowers the
+ * text by 3 - (scale.x - base) * 10. Hidden elements (visible[0] == 0) and
+ * elements without text draw nothing. Otherwise it measures the string,
+ * aligns x by the align word (1 centred, 2 right-aligned, else left) and draws
+ * it with func_0027FCB0 at (x, pos.y + the fit offset) in the element colour,
+ * scale.x, the UI texture's TEX0 (GetUiTextureTex0) and the glyph table.
+ * Params: p = the text element. No return value.
+ * MATCHED byte-exact on the s136os arm (task #1987), device-free. Levers, each
+ * measured in a solo s136os compile against the frozen .s (PROCEDURE #9863):
+ * the fit offset zeroed at the join after the colour-code call, not at its
+ * declaration (64 -> 48 of 102 words); an explicit `case 0: break;`, which
+ * gives the ROM's `slti`/`bnezl` decision tree instead of two `beq` tests
+ * (48 -> 26); the colour word read into a local before the call, which loads
+ * it ahead of GetUiTextureTex0 into $s1 as the ROM does (26 -> 0).
+ * func_0027F790 is defined s32 (178E88.cpp) but declared void here to agree
+ * with this unit's two other declarations; nothing reads its result, and the
+ * body measured 0 of 102 with either declaration.
+ * GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+ * (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in tools/ee/s136os_functions.txt)
+ * and spliced over S136OS_SLOT by tools/ee/s136os_splice.sh. There is no asm
+ * fallback. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_GuiTextElementDraw)
+S136OS_SLOT(GuiTextElementDraw);
+#else
+extern void func_0027F790(void);
+extern void func_0027F7A0(void);
+extern f32 func_002804C0(const char *str, s32 maxChars, s32 count, f32 inputScale);
+extern u64 GetUiTextureTex0(s32 slot);
+extern void func_0027FCB0(f32 x, f32 y, s32 color, s32 text, s32 width, f32 scale,
+                          u64 tex0, u8 *glyphTable);
+/* The text-element fields its draw reads, after the base element. */
+typedef struct {
+    GuiElement base;     /* 0x00 */
+    u8  _pad14[0x20];
+    u8 *glyphTable;      /* 0x34 font glyph table */
+    s32 texSlot;         /* 0x38 UI texture slot */
+    u8  _pad3C[4];
+    s32 text;            /* 0x40 string */
+    s32 align;           /* 0x44 0 left, 1 centred, 2 right */
+    s32 autoFit;         /* 0x48 re-fit the scale to the string */
+    s32 fitParam;        /* 0x4C */
+    f32 fitScale;        /* 0x50 base scale for the fit */
+    s32 colorCodes;      /* 0x54 inline colour codes enabled */
+} GuiTextElement;
+void GuiTextElementDraw(void *p) {
+    GuiTextElement *e = p;
+    f32 yAdjust;
+    f32 x, y;
+    s32 width;
+    s32 color;
+    if (e->colorCodes != 0) {
+        func_0027F790();
+    } else {
+        func_0027F7A0();
+    }
+    yAdjust = 0.0f;
+    if (e->autoFit != 0) {
+        e->base.scale[0] = func_002804C0((const char *)e->text, -1, e->fitParam, e->fitScale);
+        yAdjust = 3.0f - (e->base.scale[0] - e->fitScale) * 10.0f;
+    }
+    if (e->base.visible[0] == 0.0f || e->text == 0) {
+        return;
+    }
+    width = GuiTextElementMeasure(&e->base);
+    x = e->base.pos[0];
+    switch (e->align) {
+    case 0:
+        break;
+    case 1:
+        x -= (f32)(width >> 1);
+        break;
+    case 2:
+        x -= (f32)width;
+        break;
+    }
+    y = e->base.pos[1] + yAdjust;
+    color = *e->base.color;
+    func_0027FCB0(x, y, color, e->text, width, e->base.scale[0],
+                  GetUiTextureTex0(e->texSlot), e->glyphTable);
+}
+#endif
 
 /* GuiListSetItemCount: set the meter's MAXIMUM (full-scale value) at +0x40.
  * GuiListSetScrollPos divides by it, so it is a range, not a number of items
