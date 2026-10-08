@@ -29,8 +29,8 @@ extern void func_00122760(s64 *value, FpParts *out);
 extern s64 func_00122630(FpParts *parts);
 
 /* dpcmp .. dptofp (0x123028..0x1232EB) and the CDCD pad after them: on the EE
- * this range is the linked libgcc.a member dp-bit.o (task #1837 branch
- * prototype), so the C below is only the TARGET_NATIVE build's stand-ins. */
+ * this range is the linked libgcc.a member dp-bit.o (task #1837), so the C
+ * below is only the TARGET_NATIVE build's stand-ins. */
 #ifdef TARGET_NATIVE
 extern s32 func_00122F10(FpParts *a, FpParts *b);
 

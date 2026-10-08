@@ -3,8 +3,9 @@
  * libgcc.a member _muldi3.o, which the build links from GCC's own source
  * (going-decompiled/libgcc/, RULING #8206; carve: task #879). It holds libgcc's
  * _pure.o, _udivdi3.o and _umoddi3.o as the ROM's asm plus this project's own C.
- * It ends where the linked member dp-bit.o (0x122630..0x1232EB, task #1837
- * branch prototype) begins; everything after that member is cod/022FA8.
+ * It ends where the linked member dp-bit.o (0x122630..0x1232EB, task #1837)
+ * begins; after that member come fp-bit.o's two members around cod/023410
+ * (task #1854), then cod/022FA8.
  *
  * The dp-bit.o functions below (__pack_d .. dpdiv, __fpcmp_parts_d) have no EE
  * code here: on the EE the address range is the linked member, built from the

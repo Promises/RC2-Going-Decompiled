@@ -2616,7 +2616,7 @@ fde_split = 0x001242A0; // type:func CONFIRMED libgcc.a frame.o (whole 372B body
 func_00122F10 = 0x00122F10; // type:func - splat name kept for __fpcmp_parts_d (line above), whose body is now the linked libgcc.a member _fpcmp_parts_df.o (task #918), not game C. func_00123028 (dpcmp, cod/022FA8) is compiled C and calls it by this name. This line holds the token outside its nonmatchings .s (landing_gate ORPHAN_LATENT)
 // dptoli = 0x00123130 - CONFIRMED libgcc.a dp-bit.o (whole 148B body verbatim, 1 reloc-masked words, 24 distinctive)
 // dptoul = 0x001231C8 - CONFIRMED libgcc.a dp-bit.o (whole 160B body verbatim, 1 reloc-masked words, 26 distinctive)
-func_00123268 = 0x00123268; // type:func - splat name kept for dp-bit.o's __make_dp, now inside the linked libgcc.a member dp-bit.o (task #1837 branch prototype). func_001234F0 (fptodp, cod/022FA8) is compiled C and calls it by this name. This line holds the token outside its nonmatchings .s (landing_gate ORPHAN_LATENT)
+func_00123268 = 0x00123268; // type:func - splat name kept for dp-bit.o's __make_dp, now inside the linked libgcc.a member dp-bit.o (task #1837). func_001234F0 (fptodp, cod/022FA8) is compiled C and calls it by this name. This line holds the token outside its nonmatchings .s (landing_gate ORPHAN_LATENT)
 // fptodp = 0x001234F0 - CONFIRMED libgcc.a fp-bit.o (whole 64B body verbatim, 2 reloc-masked words, 5 distinctive)
 // sceGsResetPath = 0x00124418 - CONFIRMED libsn.a vu.o (whole 160B body verbatim, 4 reloc-masked words, 28 distinctive)
 

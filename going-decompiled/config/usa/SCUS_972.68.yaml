@@ -117,7 +117,7 @@ segments:
       # alignment before dpcmp. A lone member has no such tail and SUBALIGN(8)
       # places nothing at 4 mod 8, so the word is a `zeropad` subsegment
       # (tools/splat_ext/zeropad.py): FILL 0 for that gap only, then CDCD again.
-      # Task #1837 (branch prototype, not landed) replaces that member and its
+      # Task #1837 replaces that member and its
       # zeropad with the WHOLE dp-bit.o as the ROM has it: 14 of the SDK
       # object's 15 functions, __negdf2 dead-stripped by the SN linker and the
       # rest packed together (FACT #9756), built from the Cygnus EE fp-bit.c
@@ -125,7 +125,7 @@ segments:
       # One object, so the zero word at 0x123024 is its own assembler alignment
       # again and needs no zeropad. It ends 0x1232EC (4 mod 8): the ROM's word
       # there is the SN linker's CDCD, which is this segment's fill.
-      # Task #1854 (branch, on top of #1837) does the same for fp-bit.o, of
+      # Task #1854 (on top of #1837) does the same for fp-bit.o, of
       # which the ROM keeps 4 of 15 functions (__pack_f __unpack_f __make_fp
       # fptodp). The 11 stripped ones left 0x30 of debris at 0x123490 (NOTE
       # #9777), which stays asm in its own c unit, so the residents are TWO
@@ -166,7 +166,7 @@ segments:
       # dp-bit.o's .bss is fp-bit.c's function-local `thenan` (0x18), which
       # _fpadd_parts, dpmul and dpdiv address with %hi/%lo. The ROM has it at
       # 0x141810 (FACT #9756), so the core bss is cut there for the member's
-      # .bss (task #1837 prototype). Offsets are the same linear +0x100080.
+      # .bss (task #1837). Offsets are the same linear +0x100080.
       - [0x03C000, bss, cod/0013C080] # core.bss (0x13C080..0x14180F)
       - [0x041790, lib, libgcc, dp-bit, .bss] # libgcc.a dp-bit.o .bss (thenan, 0x141810..0x141827)
       - [0x0417A8, bss, cod/00141828] # core.bss (0x141828..0x1A747F)
