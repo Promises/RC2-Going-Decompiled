@@ -340,16 +340,28 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_00
  * dump while it was func_001325E8; decoded instructions since the rename (task #1255). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", snd_BankLoadFromEE_CB);
 
-/* snd_BankLoadFromIOP: request a sound-bank load already resident on the IOP
- * (RPC function 0x59, single 4-byte argument) and block until the IOP posts the
- * result. Returns the load handle/result, or 0 on an early-out / RPC failure.
- * The simplest of the load family — no snd_CheckLoadInProgress gate and no
- * branch-likely. Not matched — same 16-byte save-slot layout wall as
- * snd_SetupDmaTransfer (near-miss). Portable #else body. */
 extern char D_001A7730[]; /* "sound system not ready" diagnostic */
 extern char D_001A7760[]; /* "IOP load RPC failed" diagnostic */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", snd_BankLoadFromIOP);
+
+/**
+ * snd_BankLoadFromIOP - load a sound bank that is already resident on the IOP
+ * (load RPC function 0x59, one 4-byte argument) and wait for the result.
+ *
+ * @arg0: the request word, sent from D_001A71C0.
+ * Returns the IOP's load result (the word it writes over the 0xFFFFFFFF
+ * sentinel in D_001A7180), or 0 when the command ring still has pending work or
+ * the RPC call fails (status 0x106 in D_001A7488); each early-out prints a
+ * diagnostic unless D_001A74F8 suppresses it. The simplest of the load family:
+ * no snd_CheckLoadInProgress gate and no branch-likely.
+ *
+ * Compiled by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, selected in
+ * tools/ee/s136os_functions.txt), with snd_BankLoadByLoc's devices: the
+ * addressing declarations above snd_BankLoadByLoc and R5900_SHORT_LOOP_PAD1 in
+ * the poll loop, which reproduces the ROM's `lw $2,D_001A7180; nop; beq` at
+ * 0x1327F4..0x1327FC (without it 11/79 words, s136os solo TU, task #1914).
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_snd_BankLoadFromIOP)
+S136OS_SLOT(snd_BankLoadFromIOP);
 #else
 s32 snd_BankLoadFromIOP(s32 arg0) {
     D_001A7488 = 0;
@@ -364,7 +376,7 @@ s32 snd_BankLoadFromIOP(s32 arg0) {
 
     /* stage the single-word request and mark the result slot pending */
     D_001A71C0 = arg0;
-    D_001A7180 = -1;
+    D_001A7180 = 0xFFFFFFFF;
 
     /* wait for the load RPC channel to go idle */
     while (sceSifCheckStatRpc(D_001A7140) != 0) {
@@ -384,11 +396,15 @@ s32 snd_BankLoadFromIOP(s32 arg0) {
         return 0;
     }
 
-    /* block until the IOP overwrites the -1 sentinel with the load result */
-    if (D_001A7180 == -1) {
+    /* block until the IOP overwrites the sentinel with the load result */
+    if (D_001A7180 == 0xFFFFFFFF) {
+        u32 pending = 0xFFFFFFFF;
+        u32 result;
         do {
             func_0011AEA0(0);
-        } while (D_001A7180 == -1);
+            result = D_001A7180;
+            R5900_SHORT_LOOP_PAD1(pending, result);
+        } while (result == pending);
     }
     return D_001A7180;
 }
