@@ -1751,6 +1751,17 @@ void func_0027CDC8(void *worldPos, f32 *outX, f32 *outY) {
 }
 #endif
 
+/* Inter-function padding at 0x27CED0..0x27CED7: the two zero words retail
+ * places between func_0027CDC8 and GetUiTextureTex0. They exist only after
+ * `endlabel func_0027CDC8` in its nonmatchings .s, which is no longer included
+ * now that the s136os arm supplies the body, so without this directive every
+ * later function in the unit lands 8 bytes low (landing_gate usa cmp 722533 at
+ * task #2000's first gate run; GetUiTextureTex0 at unit offset 0x4010, retail
+ * 0x4018). Not a codegen device: layout data (RULING #8467). */
+#ifndef TARGET_NATIVE
+__asm__(".word 0\n\t.word 0");
+#endif
+
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", GetUiTextureTex0);
 
 /* AddFxDrawHookPreParticles: register a (func,arg) callback in the
