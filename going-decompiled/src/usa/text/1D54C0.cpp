@@ -1,4 +1,5 @@
 #include "common.h"
+#include "weapon.h"
 
 /* ROM_DATA_ADDR(sym, addr): a ROM data table passed to a callee as an address.
  * The EE arm names the symbol, so the ROM's lui/addiu %hi/%lo pair (with its
@@ -2119,13 +2120,34 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D9178);
  * box). Wall: ~250-instruction draw loop + sq/lq 128-bit struct packing. Bare. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D9718);
 
-/* Position + populate one weapon-grid ammo readout cell. Computes the linear
- * cell index (col + row*obj->0x44), fetches the GUI list element, and — when the
- * weapon in that grid slot has an ammo capacity record — shows it with the
- * current ammo scrolled in; finally re-lays out the cell. Wall: GUI element
- * arithmetic + indexed inventory tables. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D9C18);
+/* Position and fill one weapon-grid cell's XP bar.
+ *
+ * obj: the grid widget (+0x44 = columns per row). entry: the grid entry, whose s16
+ * at +6 is the weapon's item id. col/row: the cell. x/y: its screen position.
+ * The cell index is row * columns + col; its GUI element is that index's 0x48-byte
+ * element in the list func_0034F300 returns for the GUI manager's list at
+ * g_guiInstance + 0x36F28. The element is hidden, then shown again when the
+ * weapon's current variant (g_weaponTable[g_itemEquippedSlot[item]]) has a nonzero
+ * xpThreshold: its scroll position is g_weaponXp[item] >> 5 and its item count is
+ * that threshold (both in units of 32 XP). Finally func_0034EF68 lays the cell out
+ * at (x, y) with shade 0x80.
+ *
+ * MATCHED on the s136os arm (SN 2.95.3 v1.36 -fopt-stack, task #1917), no device.
+ * Each lever's cost when removed alone (solo s136 compile, positional
+ * relocation-masked words against the ROM):
+ *   - The GUI manager is read through g_guiInstance, which this unit's file-scope
+ *     `.extern g_guiInstance, 16` makes absolute (lui/lw) as in the ROM. Through
+ *     the gp-relative g_pGuiManager alias: 63/81, 79 words.
+ *   - The item id is re-read from entry+6 at each of its three uses, as the ROM
+ *     does (entry stays in $17). Cached in a local: 70/81, 77 words.
+ *   - The threshold is read as a WeaponDef field. As byte arithmetic
+ *     (table + slot * 0xE0 + 0x6C), cc1 folds 0x6C into %lo(g_weaponTable) where
+ *     the ROM keeps the bare base and loads +0x6C: 2/81.
+ * The pre-#1917 arm called this an ammo readout and read g_weaponAmmoCapacity;
+ * the ROM's relocation names g_weaponXp, and weapon.h documents +0x6C as
+ * xpThreshold. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002D9C18)
+S136OS_SLOT(func_002D9C18);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
@@ -2135,26 +2157,20 @@ extern void GuiListSetScrollPos(s32 elem, s32 pos);
 extern void GuiListSetItemCount(s32 elem, s32 count);
 extern void func_0034EF68(void *base, s32 index, s32 x, s32 y, s32 shade);
 /* (end of this body's declarations) */
-/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
- * objdiff): sdk29 55.57% / engine96 44.62%; better arm sdk29; 81 differing
- * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
- * insn: ROM `addiu sp,sp,-80` vs `addiu sp,sp,-160`. Not iterated in t495. */
-    /* TODO(match): functional equivalent - not byte-exact. */
 void func_002D9C18(MenuWidget *obj, void *entry, s32 col, s32 row, s32 x, s32 y) {
+    extern char *g_guiInstance;
     extern u8  g_itemEquippedSlot[];
-    extern s32 g_weaponAmmoCapacity[];
-    extern u8  D_00239B8C[];   /* per-weapon ammo-capacity record table (stride 0xE0) */
-    u8 *o = (u8 *)obj;
-    s16 slot = *(s16 *)((u8 *)entry + 6);
-    s32 idx = row * *(s32 *)(o + 0x44) + col;
-    s32 elem = func_0034F300((u8 *)g_pGuiManager + 0x36F28) + idx * 0x48;
+    extern s32 g_weaponXp[];
+    extern u8  g_weaponTable[];
+    s32 idx = row * *(s32 *)((u8 *)obj + 0x44) + col;
+    s32 elem = func_0034F300(g_guiInstance + 0x36F28) + idx * 0x48;
     GuiElementSetVisible(elem, 0);
-    if (*(s32 *)(D_00239B8C + g_itemEquippedSlot[slot] * 0xE0) != 0) {
+    if (((WeaponDef *)g_weaponTable)[g_itemEquippedSlot[*(s16 *)((u8 *)entry + 6)]].xpThreshold != 0) {
         GuiElementSetVisible(elem, 1);
-        GuiListSetScrollPos(elem, g_weaponAmmoCapacity[slot] >> 5);
-        GuiListSetItemCount(elem, *(s32 *)(D_00239B8C + g_itemEquippedSlot[slot] * 0xE0));
+        GuiListSetScrollPos(elem, g_weaponXp[*(s16 *)((u8 *)entry + 6)] >> 5);
+        GuiListSetItemCount(elem, ((WeaponDef *)g_weaponTable)[g_itemEquippedSlot[*(s16 *)((u8 *)entry + 6)]].xpThreshold);
     }
-    func_0034EF68((u8 *)g_pGuiManager + 0x36F28, idx, x, y, 0x80);
+    func_0034EF68(g_guiInstance + 0x36F28, idx, x, y, 0x80);
 }
 #endif
 
