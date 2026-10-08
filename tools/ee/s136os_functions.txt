@@ -586,3 +586,5 @@ usa text/1A00F0 BeginMobyDrawSegment
 usa text/235FE8 func_00341F40
 usa text/235FE8 func_00342998
 usa text/235FE8 func_00341160
+usa text/178E88 func_0027EFA0
+usa text/178E88 func_0027F0A8

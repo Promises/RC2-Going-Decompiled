@@ -178,9 +178,9 @@ void GuiElementSetScale(GuiWidget *e, f32 x, f32 y, f32 z, f32 w);
 s32 *GuiElementGetColor(GuiWidget *e);
 s32 GuiTextElementMeasure(GuiWidget *e);
 void GuiTextElementDraw(GuiWidget *e);
-/* DrawFlatRect2d: corners (x1,y1)-(x2,y2) at depth z, fill = pointer to a packed
- * 64-bit GS colour word (tex0 is a pointer despite the historic u64 typing). */
-void func_0027F168(s32 x1, s32 y1, s32 x2, s32 y2, s64 z, u64 tex0);
+/* DrawFlatRect2d: corners (x1,y1)-(x2,y2) at depth z, colors = pointer to a
+ * packed 64-bit GS colour word (typed u64 until task #1978). */
+void func_0027F168(s32 x1, s32 y1, s32 x2, s32 y2, s64 z, const s32 *colors);
 /* func_0027F790: the unconditional tail call; real defined symbol (returns s32,
  * called for side effect). Identity not yet confirmed - keep the func_ name. */
 s32 func_0027F790(void);
@@ -502,7 +502,7 @@ extern void GuiElementSetText(void *e, s32 text);
 extern char *GetLocalizedString(s32 textId);
 extern s32 *GuiElementGetColor(GuiWidget *e);
 extern s32 GuiTextElementMeasure(GuiWidget *e);
-extern void func_0027F168(s32 x1, s32 y1, s32 x2, s32 y2, s64 z, u64 tex0);
+extern void func_0027F168(s32 x1, s32 y1, s32 x2, s32 y2, s64 z, const s32 *colors);
 extern void GuiTextElementDraw(GuiWidget *e);
 extern s32 func_0027F790(void);
 /* (end of this body's declarations) */
@@ -561,7 +561,7 @@ void GuiMenuListDraw(GuiWidget *self) {
                     s32 w2 = GuiTextElementMeasure((GuiWidget *)self) >> 1;
                     s32 y2 = (s32)(rowY - 2.0f + 16.0f);
                     s32 x2 = (s32)(originX - (f32)w2 - 2.0f - 16.0f + 8.0f);
-                    func_0027F168(x1, y1, x2, y2, 0, (u64)(unsigned long)&packed);
+                    func_0027F168(x1, y1, x2, y2, 0, (const s32 *)&packed);
                 }
 
                 if (*(s32 *)(p + 0x60) != i) {
@@ -579,7 +579,7 @@ void GuiMenuListDraw(GuiWidget *self) {
                         s32 w2 = GuiTextElementMeasure((GuiWidget *)self) >> 1;
                         s32 y2 = (s32)(rowY + 2.0f + 16.0f);
                         s32 x2 = (s32)(originX + (f32)w2 + 9.0f);
-                        func_0027F168(x1, y1, x2, y2, 0, (u64)(unsigned long)&packed);
+                        func_0027F168(x1, y1, x2, y2, 0, (const s32 *)&packed);
                     }
                 }
             }

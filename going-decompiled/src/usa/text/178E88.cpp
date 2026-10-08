@@ -165,8 +165,8 @@ extern s32 g_screenHeight[];    /* 0x1A7344 */
 extern f32 IntToFloat(s32 x);
 extern void func_0027A550(void);
 /* Append a 4-vertex flat (untextured-coord) sprite quad packet given a pointer
- * to four packed XYZ2 corner words and a TEX0 value. */
-extern void func_0027F0A8(const u64 *corners, u64 tex0);
+ * to four packed XYZ2 corner words and a pointer to the two packed colour words. */
+extern void func_0027F0A8(const u64 *corners, const s32 *colors);
 
 /* Scene-cast moby pointer table base (0x1B894C). The screen-grab/occlusion
  * query descriptor table lives at +0x44 (0x1B8990); modelled as a byte base so
@@ -2546,37 +2546,86 @@ void DrawRotatedSprite2d(f32 cx, f32 cy, f32 hh, f32 hw, f32 angle, f32 pivX, f3
 
 extern u8 D_1AC930[]; /* prebuilt GIFtag template (16 bytes) */
 
-/** func_0027EFA0 — append a 4-vertex textured-primitive GS packet to the frame
- *  DMA chain: a DMATAG (cnt, 9 qwords) + the prebuilt GIFtag at D_1AC930, then a
- *  leading control qword (mode ? 5 : 0, prim) and a 0x154 tag, followed by four
- *  vertices each packed as [st, uv, xyz2] (the two attribute arrays are s32[4]
- *  read stride-4; positions are u64[4] XYZ2). Advances g_frameDmaCursor by 0xA0.
- *  (st/uv naming inferred from the GS vertex layout.) */
-/* TODO(match) t493: sdk29 41.06% / engine96 61.38% (unit objdiff, objdiff_build.sh +
- * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
- * every other remaining arm). Residual on the better arm (engine96): GPREL-FORM (first differing
- * insn: ROM `lui v1,0x0  [HI16 0x001B2228]` vs built `lui t4,0x0  [HI16 0x001B2228]`). Levers:
- * cc1-small/absolute globals model RUN: 39.74% (sdk29); -fno-strict-aliasing MEASURED (flag not
- * landed): 66.38% sdk29; engine96 with sched1 MEASURED (flag not landed): 60.35%. */
+/* The 128-bit GIFtag template copies below are one lq/sq pair on EE; gcc -m32
+ * cannot emulate mode(TI), so the native arm copies a 16-byte struct. */
+#ifdef TARGET_NATIVE
+typedef struct { unsigned long long _q[2]; } __attribute__((aligned(16))) u_long128;
+#else
+typedef unsigned long u_long128 __attribute__((mode(TI)));
+#endif
+
+/* g_frameDmaCursorGp: a second assembler name for g_frameDmaCursor (FACT #8036's
+ * equate, the text/1DFF80 / 188858.c precedent), sized 4 so gas makes its
+ * accesses %gp_rel, where g_frameDmaCursorAbs (sized 16, above) is absolute.
+ * The 2D packet appenders below store the cursor %gp_rel only in a branch delay
+ * slot and absolutely everywhere else. An ADDRESSING-MODEL DEVICE (RULING
+ * #8620): it emits nothing, the relocation names g_frameDmaCursor, and the
+ * object has no g_frameDmaCursorGp symbol. Used by func_0027EFA0 and
+ * func_0027F0A8. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027EFA0);
+__asm__(".extern g_frameDmaCursorGp, 4\n\tg_frameDmaCursorGp = g_frameDmaCursor");
+extern s32 g_frameDmaCursorGp;
+#else
+#define g_frameDmaCursorGp (*(s32 *)&g_frameDmaCursor[0])
+#endif
+
+/* func_0027EFA0 (AppendGouraudQuad2d) - append a 4-vertex textured-primitive
+ * GS packet to the frame DMA chain: a DMATAG (cnt, 9 qwords) + the prebuilt
+ * GIFtag at D_1AC930, then a leading control qword (mode ? 5 : 0), `prim`, a
+ * 0x154 tag, and four vertices each packed as [st, uv, xyz2] (`st`/`uv` are
+ * s32[4], sign-extended to 64 bits; `xyz2` is u64[4]), then a zero qword.
+ * Advances g_frameDmaCursor by 0xA0. No return value. (st/uv naming inferred
+ * from the GS vertex layout.)
+ * MATCHED (task #1978): s136os arm (SN 1.36 -fopt-stack, -O2 -G8 -fno-gcse),
+ * spliced. The ROM re-reads the cursor before every header store and after
+ * the vertex stores, copies the template with one lq/sq AFTER publishing
+ * cursor+0x10, and stores the cursor %gp_rel in the beqz delay slot and the
+ * jr slot but absolutely elsewhere. Devices, each priced by removing it alone
+ * (solo s136os compile of this unit with only this guard opened, asm_unit.sh
+ * -G8, word compare against the ROM .s with relocated fields masked; the
+ * closed body reads 0/65):
+ *   - the cursor read/written through g_frameDmaCursorAbs (ADDRESSING-MODEL
+ *     DEVICE, #8620): as g_frameDmaCursor[0] 63/65, built 61;
+ *   - both delay-slot cursor stores through g_frameDmaCursorGp (ADDRESSING-
+ *     MODEL DEVICE): the beqz-slot one absolute 41/65 built 67, the jr-slot
+ *     one absolute 4/65 built 67;
+ *   - REGISTER-PIN DEVICE (RULING #8598): the template pointer pinned to $10,
+ *     the ROM's register, which also leaves cc1 no symbol base for it so the
+ *     lq stays below the cursor store: unpinned 15/65 (the 0x50000009 tag and
+ *     the template swap $9/$10-$11);
+ *   - the empty tied fence on `dst` (RULING #8483): without it 1/65 (cc1
+ *     folds the sq address into 16($11) instead of the stored register);
+ *   - the empty volatile fence after the copy (RULING #8483 rev 2): without
+ *     it 5/65 (the +0x20 address and the 5 load issue above the sq);
+ *   - the control qword as an if/else of two stores: `mode ? 5 : 0` is
+ *     if-converted to movz, 49/65 built 63.
+ * Record of the cc1 2.9 / 2.96 attempts (t493, unit objdiff, objdiff_build.sh
+ * + unit_report.sh): sdk29 41.06% / engine96 61.38%. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0027EFA0)
+S136OS_SLOT(func_0027EFA0);
 #else
 void func_0027EFA0(const u64 *xyz2, const s32 *uv, const s32 *st, u64 prim, s32 mode) {
-    u8 *p = (u8 *)g_frameDmaCursor[0];
+    register const u_long128 *tmpl EE_REG("$10") = (const u_long128 *)D_1AC930;
+    u8 *pkt;
+    u8 *dst;
     u8 *d;
 
-    *(u32 *)(p + 0x00) = 0x10000009; /* DMATAG cnt, 9 qwords */
-    *(u32 *)(p + 0x04) = 0;
-    *(u32 *)(p + 0x08) = 0;
-    *(u32 *)(p + 0x0C) = 0x50000009;
-    g_frameDmaCursor[0] = (u32 *)(p + 0x10);
-
-    *(u64 *)(p + 0x10) = *(u64 *)(D_1AC930 + 0x00); /* GIFtag template (16 bytes) */
-    *(u64 *)(p + 0x18) = *(u64 *)(D_1AC930 + 0x08);
-    g_frameDmaCursor[0] = (u32 *)(p + 0x20);
-
-    d = p + 0x20;
-    *(u64 *)(d + 0x00) = mode ? 5 : 0;
+    ((u32 *)g_frameDmaCursorAbs)[0] = 0x10000009; /* DMATAG cnt, 9 qwords */
+    ((u32 *)g_frameDmaCursorAbs)[1] = 0;
+    ((u32 *)g_frameDmaCursorAbs)[2] = 0;
+    ((u32 *)g_frameDmaCursorAbs)[3] = 0x50000009;
+    pkt = (u8 *)g_frameDmaCursorAbs;
+    dst = pkt + 0x10;
+    g_frameDmaCursorAbs = (s32)dst;
+    __asm__("" : "+r"(dst));
+    *(u_long128 *)dst = *tmpl; /* GIFtag template */
+    __asm__ __volatile__("");
+    d = pkt + 0x20;
+    g_frameDmaCursorGp = (s32)d;
+    if (mode)
+        *(u64 *)(pkt + 0x20) = 5;
+    else
+        *(u64 *)(pkt + 0x20) = 0;
     *(u64 *)(d + 0x08) = prim;
     *(u64 *)(d + 0x10) = 0x154;
     *(s64 *)(d + 0x18) = st[0];
@@ -2592,58 +2641,81 @@ void func_0027EFA0(const u64 *xyz2, const s32 *uv, const s32 *st, u64 prim, s32 
     *(s64 *)(d + 0x68) = uv[3];
     *(u64 *)(d + 0x70) = xyz2[3];
     *(u64 *)(d + 0x78) = 0;
-    g_frameDmaCursor[0] = (u32 *)(p + 0xA0);
+    g_frameDmaCursorGp = g_frameDmaCursorAbs + 0x80;
 }
 #endif
 
 extern u8 D_1AC900[]; /* prebuilt GIFtag template (16 bytes) */
 
-/** func_0027F0A8 — append a 4-corner sprite-quad GS packet to the frame DMA
- *  chain: a DMATAG (cnt, 5 qwords) + the prebuilt GIFtag at D_1AC900, then four
- *  interleaved data qwords built from the four `corners` XYZ2 words and two
- *  sign-extended coordinate words. NOTE: despite the `u64 tex0` param name (a
- *  reconstruction misnomer — see the forward decl above), arg1 is actually a
- *  POINTER: the callers (e.g. func_0027F168) pass an address in it and this
- *  function dereferences its low/high words. Advances g_frameDmaCursor by 0x60. */
-/* TODO(match) t493: sdk29 31.71% / engine96 53.31% (unit objdiff, objdiff_build.sh +
- * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
- * every other remaining arm). Residual on the better arm (engine96): GPREL-FORM (first differing
- * insn: ROM `lui v1,0x0  [HI16 0x001B2228]` vs built `lui t1,0x0  [HI16 0x001B2228]`). Levers:
- * cc1-small/absolute globals model RUN: 35.83% (sdk29); -fno-strict-aliasing MEASURED (flag not
- * landed): 56.88% sdk29; engine96 with sched1 MEASURED (flag not landed): 41.69%. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027F0A8);
+/* func_0027F0A8 (AppendFlatSprite2d) - append a 4-corner sprite-quad GS packet
+ * to the frame DMA chain: a DMATAG (cnt, 5 qwords) + the prebuilt GIFtag at
+ * D_1AC900, then the 0x4C control qword and two strips of [colour, corner,
+ * corner] qwords - colors[0] with corners 0 and 2, colors[1] with corners 1
+ * and 3 (each colour word sign-extended to 64 bits) - and a zero qword.
+ * Advances g_frameDmaCursor by 0x60. No return value.
+ * `colors` is a POINTER (a1 is dereferenced as one, with no sign extension;
+ * DrawFlatRect2d and text/248B50 pass the address of a packed colour pair).
+ * The parameter was declared `u64 tex0` until task #1978: a 64-bit parameter
+ * costs a dsll32/dsra32 truncation before the first load (42/48, built 50).
+ * MATCHED (task #1978): s136os arm (SN 1.36 -fopt-stack, -O2 -G8 -fno-gcse),
+ * spliced; the twin of func_0027EFA0. Devices, each priced by removing it
+ * alone (solo s136os compile of this unit with only this guard opened,
+ * asm_unit.sh -G8, word compare against the ROM .s with relocated fields
+ * masked; the closed body reads 0/48):
+ *   - the cursor through g_frameDmaCursorAbs (ADDRESSING-MODEL DEVICE,
+ *     #8620): as g_frameDmaCursor[0] 46/48, built 41;
+ *   - the jr-slot cursor store through g_frameDmaCursorGp (ADDRESSING-MODEL
+ *     DEVICE): absolute 4/48, built 50;
+ *   - REGISTER-PIN DEVICE (RULING #8598): the template pointer pinned to $8,
+ *     the ROM's register: unpinned 10/48 (it also leaves cc1 no symbol base,
+ *     so the lq stays below the cursor store; unpinned, an empty tied fence on
+ *     it does that much and leaves 6/48, the 0x50000005 tag and the template
+ *     swapping $6/$8);
+ *   - the empty tied fence on `dst` (RULING #8483): without it 1/48 (the sq
+ *     address folds into 16($7));
+ *   - the empty volatile fence after the copy (RULING #8483 rev 2): without
+ *     it 20/48 (the 0x4C load and the +0x20 address issue at the top).
+ * Record of the cc1 2.9 / 2.96 attempts (t493, unit objdiff, objdiff_build.sh
+ * + unit_report.sh): sdk29 31.71% / engine96 53.31%. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0027F0A8)
+S136OS_SLOT(func_0027F0A8);
 #else
-void func_0027F0A8(const u64 *corners, u64 tex0) {
-    u8 *p = (u8 *)g_frameDmaCursor[0];
-    const s32 *coords = (const s32 *)(unsigned long)tex0; /* arg1 is used as a pointer */
+void func_0027F0A8(const u64 *corners, const s32 *colors) {
+    register const u_long128 *tmpl EE_REG("$8") = (const u_long128 *)D_1AC900;
+    u8 *pkt;
+    u8 *dst;
+    u8 *d;
 
-    *(u32 *)(p + 0x00) = 0x10000005; /* DMATAG cnt, 5 qwords */
-    *(u32 *)(p + 0x04) = 0;
-    *(u32 *)(p + 0x08) = 0;
-    *(u32 *)(p + 0x0C) = 0x50000005;
-    g_frameDmaCursor[0] = (u32 *)(p + 0x10);
-
-    *(u64 *)(p + 0x10) = *(u64 *)(D_1AC900 + 0x00); /* GIFtag template (16 bytes) */
-    *(u64 *)(p + 0x18) = *(u64 *)(D_1AC900 + 0x08);
-    g_frameDmaCursor[0] = (u32 *)(p + 0x20);
-
-    *(u64 *)(p + 0x20) = 0x4C;
-    *(s64 *)(p + 0x28) = coords[0];
-    *(u64 *)(p + 0x30) = corners[0];
-    *(u64 *)(p + 0x38) = corners[2];
-    *(s64 *)(p + 0x40) = coords[1];
-    *(u64 *)(p + 0x48) = corners[1];
-    *(u64 *)(p + 0x50) = corners[3];
-    *(u64 *)(p + 0x58) = 0;
-    g_frameDmaCursor[0] = (u32 *)(p + 0x60);
+    ((u32 *)g_frameDmaCursorAbs)[0] = 0x10000005; /* DMATAG cnt, 5 qwords */
+    ((u32 *)g_frameDmaCursorAbs)[1] = 0;
+    ((u32 *)g_frameDmaCursorAbs)[2] = 0;
+    ((u32 *)g_frameDmaCursorAbs)[3] = 0x50000005;
+    pkt = (u8 *)g_frameDmaCursorAbs;
+    dst = pkt + 0x10;
+    g_frameDmaCursorAbs = (s32)dst;
+    __asm__("" : "+r"(dst));
+    *(u_long128 *)dst = *tmpl; /* GIFtag template */
+    __asm__ __volatile__("");
+    d = pkt + 0x20;
+    g_frameDmaCursorAbs = (s32)d;
+    *(u64 *)(pkt + 0x20) = 0x4C;
+    *(s64 *)(d + 0x08) = colors[0];
+    *(u64 *)(d + 0x10) = corners[0];
+    *(u64 *)(d + 0x18) = corners[2];
+    *(s64 *)(d + 0x20) = colors[1];
+    *(u64 *)(d + 0x28) = corners[1];
+    *(u64 *)(d + 0x30) = corners[3];
+    *(u64 *)(d + 0x38) = 0;
+    g_frameDmaCursorGp = g_frameDmaCursorAbs + 0x40;
 }
 #endif
 
 /* DrawFlatRect2d - build four packed XYZ2 corner words for an integer cell
  * rect (x1,y1)-(x2,y2) at depth `z` (each coord scaled *16, GS-window-offset,
- * biased -8) and hand them to the flat-sprite appender with TEX0 `tex0`.
- * No return value.
+ * biased -8) and hand them to the flat-sprite appender with `colors`, a
+ * pointer to the packed colour pair (typed `u64 tex0` until task #1978, which
+ * retyped it with func_0027F0A8's parameter; byte-neutral, 0/39 in the solo
+ * s136os harness). No return value.
  * MATCHED (task #1877): s136os arm (SN 1.36 -fopt-stack, -O2 -G8 -fno-gcse),
  * spliced. The coordinates are formed x1, y1, x2, y2 and the corners stored in
  * index order (the ROM's own order); the offsets are read through
@@ -2658,7 +2730,7 @@ void func_0027F0A8(const u64 *corners, u64 tex0) {
 #if !defined(TARGET_NATIVE) && !defined(S136OS_func_0027F168)
 S136OS_SLOT(func_0027F168);
 #else
-void func_0027F168(s32 x1, s32 y1, s32 x2, s32 y2, s64 z, u64 tex0) {
+void func_0027F168(s32 x1, s32 y1, s32 x2, s32 y2, s64 z, const s32 *colors) {
     u64 corners[4];
     s64 vx1 = x1 * 0x10 + g_gsPixelOffsetXAbs - 8;
     s64 vy1 = (s64)(y1 * 0x10 + g_gsPixelOffsetYAbs - 8) << 0x10;
@@ -2669,7 +2741,7 @@ void func_0027F168(s32 x1, s32 y1, s32 x2, s32 y2, s64 z, u64 tex0) {
     corners[1] = vx2 | vy1 | vz;
     corners[2] = vx1 | vy2 | vz;
     corners[3] = vx2 | vy2 | vz;
-    func_0027F0A8(corners, tex0);
+    func_0027F0A8(corners, colors);
 }
 #endif
 
