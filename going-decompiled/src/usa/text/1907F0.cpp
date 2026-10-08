@@ -337,36 +337,63 @@ void func_00290FD0(void) {
     D_1A9A88 = 0;
 }
 
-/* func_00291148: validate the inventory display order (0xff-out entries no
- * longer ownable per func_00289190, Heli-Pack 0x1E exempt; returns 1 when
- * already clean). Blocked by the 8-byte-packed callee-save layout (saves
- * s0..s5+ra at sp+0x0..0x30; see header). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1907F0", func_00291148);
+__asm__(".extern g_inventoryOwned, 16");
+__asm__(".extern g_inventoryOrder, 16");
+__asm__(".extern g_inventoryNewFlag, 16");
+__asm__(".extern g_itemEquipSlotTable, 16");
+extern u8  g_inventoryOwnedSmall __asm__("g_inventoryOwned");
+extern u8  g_inventoryOrderSmall __asm__("g_inventoryOrder");
+extern u8  g_inventoryNewFlagSmall __asm__("g_inventoryNewFlag");
+extern u32 g_itemEquipSlotSmall __asm__("g_itemEquipSlotTable");
+#define OWNED_AT(i)      ((&g_inventoryOwnedSmall)[i])
+#define ORDER_AT(i)      ((&g_inventoryOrderSmall)[i])
+#define NEW_FLAG_AT(i)   ((&g_inventoryNewFlagSmall)[i])
+#define EQUIP_SLOT_AT(i) ((&g_itemEquipSlotSmall)[i])
+#define F1F0_IN_V0 __asm__("$2")
+#define F1F0_IN_V1 __asm__("$3")
 #else
-/* TODO(match): functional equivalent - not byte-exact; 8-byte-packed
- * callee-save layout (s0..s5+ra). Walks the inventory display order and
- * 0xFF-clears any entry whose item class is no longer ownable. Returns 1 if
- * the order was already clean, 0 if it had to clear an entry. */
+#define OWNED_AT(i)      g_inventoryOwned[i]
+#define ORDER_AT(i)      g_inventoryOrder[i]
+#define NEW_FLAG_AT(i)   g_inventoryNewFlag[i]
+#define EQUIP_SLOT_AT(i) g_itemEquipSlotTable[i]
+#define F1F0_IN_V0
+#define F1F0_IN_V1
+#endif
+
+/**
+ * func_00291148 - drop display-order entries the player can no longer own.
+ *
+ * Walks the 0x20 bytes of g_inventoryOrder (low 6 bits = item id, 0xFF =
+ * empty slot). An entry whose item fails func_00289190 (the vendor-progress
+ * membership test, NOTE #5658), or whose id is 0, is overwritten with 0xFF.
+ * The Heli-Pack (0x1E) is always kept. Returns 1 when nothing had to be
+ * cleared, 0 otherwise. Sole caller: func_002911F0.
+ *
+ * Compiled on the s136os arm (SN 1.36 -fopt-stack): the ROM's six s-register
+ * saves packed 8 bytes apart in a 0x40 frame are that compiler's, which 2.9
+ * cannot emit. The id-0 test comes AFTER the call, as in the ROM, so a zero
+ * id still reaches func_00289190.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00291148)
+S136OS_SLOT(func_00291148);
+#else
 s32 func_00291148(void) {
     s32 i;
     s32 clean = 1;
 
     for (i = 0; i < INVENTORY_ORDER_COUNT; i++) {
-        u8 entry = g_inventoryOrder[i];
-        s32 itemClass;
+        s32 itemId;
 
-        if (entry == 0xFF) {
-            continue;                      /* terminator/empty slot */
+        if (ORDER_AT(i) == 0xFF) {
+            continue;                      /* empty slot */
         }
-        itemClass = entry & 0x3F;
-        if (itemClass == ITEM_HELIPACK) {
-            continue;                      /* Heli-Pack is always exempt */
+        itemId = ORDER_AT(i) & 0x3F;
+        if (itemId == ITEM_HELIPACK) {
+            continue;                      /* Heli-Pack is always kept */
         }
-        /* Clear the entry when the class is no longer ownable, or when it
-         * resolves to class 0 (an invalid order byte). */
-        if (func_00289190(itemClass) == 0 || itemClass == 0) {
-            g_inventoryOrder[i] = 0xFF;
+        if (func_00289190(itemId) == 0 || itemId == 0) {
+            ORDER_AT(i) = 0xFF;
             clean = 0;
         }
     }
@@ -398,29 +425,6 @@ s32 func_00291148(void) {
  * is written owned-first so cc1 issues the newly-acquired store first, as the
  * ROM does. The empty asm after the final call keeps it a `jal` (FACT #8177).
  */
-#ifndef TARGET_NATIVE
-__asm__(".extern g_inventoryOwned, 16");
-__asm__(".extern g_inventoryOrder, 16");
-__asm__(".extern g_inventoryNewFlag, 16");
-__asm__(".extern g_itemEquipSlotTable, 16");
-extern u8  g_inventoryOwnedSmall __asm__("g_inventoryOwned");
-extern u8  g_inventoryOrderSmall __asm__("g_inventoryOrder");
-extern u8  g_inventoryNewFlagSmall __asm__("g_inventoryNewFlag");
-extern u32 g_itemEquipSlotSmall __asm__("g_itemEquipSlotTable");
-#define OWNED_AT(i)      ((&g_inventoryOwnedSmall)[i])
-#define ORDER_AT(i)      ((&g_inventoryOrderSmall)[i])
-#define NEW_FLAG_AT(i)   ((&g_inventoryNewFlagSmall)[i])
-#define EQUIP_SLOT_AT(i) ((&g_itemEquipSlotSmall)[i])
-#define F1F0_IN_V0 __asm__("$2")
-#define F1F0_IN_V1 __asm__("$3")
-#else
-#define OWNED_AT(i)      g_inventoryOwned[i]
-#define ORDER_AT(i)      g_inventoryOrder[i]
-#define NEW_FLAG_AT(i)   g_inventoryNewFlag[i]
-#define EQUIP_SLOT_AT(i) g_itemEquipSlotTable[i]
-#define F1F0_IN_V0
-#define F1F0_IN_V1
-#endif
 void func_002911F0(void) {
     if (OWNED_AT(0x1E) == 0) {
         register s32 orderEntry F1F0_IN_V1;

@@ -504,3 +504,4 @@ usa text/248B50 SetPopupTitleText
 usa text/250080 func_003506A8
 usa text/250080 func_003521B0
 usa text/250080 func_003511A8
+usa text/1907F0 func_00291148
