@@ -12,6 +12,22 @@
 #define R5900_SHORT_LOOP_PAD1(v, next) ((void)0)
 #endif
 
+/* GUI_MINF(a, b) / GUI_MAXF(a, b): the g++ 2.x minimum/maximum operators
+ * `a <? b` / `a >? b`. This unit is C++ and the ROM's GUI is GCC-2.x C++: the
+ * operators build a MIN_EXPR/MAX_EXPR directly, which the R5900 back end emits
+ * as one untied `min.s`/`max.s` — the ROM's shape — where the ternary
+ * `a < b ? a : b` lowers to a compare and branch (task #1936; FACT #8244 had
+ * min.s reachable only under -ffast-math, and only operand-tied, from C).
+ * Plain source, no asm. clang has no `<?`, so native spells the same selection
+ * as a ternary. */
+#ifndef TARGET_NATIVE
+#define GUI_MINF(a, b) ((a) <? (b))
+#define GUI_MAXF(a, b) ((a) >? (b))
+#else
+#define GUI_MINF(a, b) ((a) < (b) ? (a) : (b))
+#define GUI_MAXF(a, b) ((a) > (b) ? (a) : (b))
+#endif
+
 /*
  * text/248B50 — first GUI-block sub-chunk (carve-pipeline pick #3a,
  * 2026-06-13; vaddr 0x348BD0..0x34C007, 65 fns): a run of single-field GUI
@@ -87,7 +103,9 @@ _Static_assert(sizeof(GuiWidget) == 0x154, "GuiWidget size unchanged");
  *   +0x18 step       per-frame phase increment (f32)
  *   +0x1C active     non-zero while the transition is running
  *   +0x20 sink       optional s32* the blended colour word is written through
- *   +0x24 keyframe table base — records the per-channel lerp endpoints walk
+ *   +0x24 dst[2]     per-channel destination 4-vectors (null = channel unused)
+ *   +0x3C from[2]    per-channel start 4-vectors
+ *   +0x6C to[2]      per-channel end 4-vectors
  *   +0x8C colorA / +0x90 colorB   packed colour words blended by ColorLerpPacked */
 typedef struct GuiAnim {
     /* 0x00 */ f32 c0;
@@ -99,7 +117,11 @@ typedef struct GuiAnim {
     /* 0x18 */ f32 step;
     /* 0x1C */ s32 active;
     /* 0x20 */ s32 *sink;
-    /* 0x24 */ u8 keyframes[0x68];
+    /* 0x24 */ f32 *dst[2];
+    /* 0x2C */ u8 pad2C[0x10];
+    /* 0x3C */ f32 from[2][4];
+    /* 0x5C */ u8 pad5C[0x10];
+    /* 0x6C */ f32 to[2][4];
     /* 0x8C */ u32 colorA;
     /* 0x90 */ u32 colorB;
 } GuiAnim;
@@ -1560,79 +1582,69 @@ void func_0034A858(GuiWidget *w, f32 v) {
  * 4-vectors, and (optionally) blends a colour word:
  *
  *  1. Advance the phase by the per-frame step (+0x18): forward (dir +0x14 == 1)
- *     adds and clamps the top to 1.0; reverse adds nothing — it subtracts and
- *     clamps the bottom to 0.0. The active flag (+0x1C) stays set only while the
- *     phase is still inside [0,1]; it clears on the frame the phase saturates.
- *     (The asm writes the un-clamped phase then immediately overwrites it with
- *     the clamped value, so only the clamped phase survives.)
+ *     adds, reverse subtracts; the raw phase is stored, the active flag (+0x1C)
+ *     is set to whether it is still inside [0,1], and the phase is then clamped
+ *     (min 1.0 forward / max 0.0 reverse) and stored again — so it clears on the
+ *     frame the phase saturates and only the clamped phase survives.
  *  2. t = GuiHermiteInterp(phase, 0, c0, c1, 1) — the eased blend factor.
- *  3. For each of the two keyframe channels i (dst ptr at +0x24/+0x28): when the
- *     dst pointer is non-null, lerp the 4-vector  dst[k] = (1-t)*from[k] + t*to[k]
- *     where  from = anim + 0x3C + i*0x10  and  to = anim + 0x6C + i*0x10.
+ *  3. For each of the two channels i whose dst[i] is non-null, lerp the
+ *     4-vector  dst[i][k] = (1-t)*from[i][k] + t*to[i][k].
  *  4. If the colour sink (+0x20) is non-null, blend the two packed colour words
  *     (+0x8C,+0x90) by a SECOND Hermite ease (over c2,c3) via ColorLerpPacked and
  *     store the result through the sink.
  *
- * WALL: 99.x near-miss — the original keeps the saved $f20 (1.0) live across the
- * whole body and fills both bc1t/beql delay slots with the dead un-clamped store
- * / pointer advance; the pinned cc1 reloads 1.0 and reorders the clamp stores.
- * Scalar f32 throughout (no VU0) so the #else is bit-exact. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A860);
+ * MATCHED on the s136os arm (task #1936). What the shape needed, each measured
+ * on the s136os solo screen (task #1936's harness, NOTE #9871's instrument;
+ * positional masked words / ROM words): the clamp written with GUI_MINF /
+ * GUI_MAXF, the g++ `<?`/`>?` operators that give the ROM's untied min.s/max.s
+ * (as the ternary `p < 1.0f ? p : 1.0f`: 87/102, 106 built); every field read
+ * and written through `a->` with no locals, so the stores land where the ROM
+ * puts them (in the bc1t delay slot and the shared tail) and dst[i] is
+ * re-read for each component store, as the ROM's `lw $2,0($4)` x4 does
+ * (master's locals-based body: 84/102, 103 built; it with only the operators
+ * swapped in: 81/102, 99 built). No device.
+ *
+ * GUARD (task #1936): on EE the #else body below is the image's func_0034A860,
+ * compiled alone by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810;
+ * row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0034A860)
+S136OS_SLOT(func_0034A860);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern f32 GuiHermiteInterp(f32 t, f32 c0, f32 c1, f32 c2, f32 c3);
 extern u32 ColorLerpPacked(u32 colorA, u32 colorB, f32 t);
 /* (end of this body's declarations) */
-/* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
- * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
- * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
- * cc1 2.96-ee-001003-1): sdk29 81.26% / engine96 59.26%.
- * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 89/104 words differ;
- * frozen-.s census: 2 callee GPR saves, 1 fp saves.
- * Residual: PACKED-SAVE (2 callee GPR saves, 1 fp) — 3 of the 89 differing words are frame/save-slot; remainder REGALLOC/SCHED, not iterated. */
 void func_0034A860(GuiAnim *a) {
-    f32 phase;
-    f32 clamped;
     f32 t;
-    s32 stillActive;
     s32 i;
 
     if (a->active == 0) {
         return;
     }
-
     if (a->dir == 1) {
-        phase = a->progress + a->step;
-        stillActive = (phase <= 1.0f) ? 1 : 0;
-        clamped = (phase <= 1.0f) ? phase : 1.0f;   /* min(phase, 1.0) */
+        a->progress = a->progress + a->step;
+        a->active = (a->progress <= 1.0f);
+        a->progress = GUI_MINF(a->progress, 1.0f);
     } else {
-        phase = a->progress - a->step;
-        stillActive = (0.0f <= phase) ? 1 : 0;
-        clamped = (0.0f <= phase) ? phase : 0.0f;   /* max(phase, 0.0) */
+        a->progress = a->progress - a->step;
+        a->active = (0.0f <= a->progress);
+        a->progress = GUI_MAXF(a->progress, 0.0f);
     }
-    a->active = stillActive;
-    a->progress = clamped;
-
-    t = GuiHermiteInterp(clamped, 0.0f, a->c0, a->c1, 1.0f);
-
+    t = GuiHermiteInterp(a->progress, 0.0f, a->c0, a->c1, 1.0f);
     for (i = 0; i < 2; i++) {
-        f32 *dst = *(f32 **)((char *)a + 0x24 + i * 4);
-        if (dst != 0) {
-            f32 *from = (f32 *)((char *)a + 0x3C + i * 0x10);
-            f32 *to   = (f32 *)((char *)a + 0x6C + i * 0x10);
-            f32 coF = 1.0f - t;
-            dst[0] = coF * from[0] + t * to[0];
-            dst[1] = coF * from[1] + t * to[1];
-            dst[2] = coF * from[2] + t * to[2];
-            dst[3] = coF * from[3] + t * to[3];
+        if (a->dst[i] != 0) {
+            a->dst[i][0] = (1.0f - t) * a->from[i][0] + t * a->to[i][0];
+            a->dst[i][1] = (1.0f - t) * a->from[i][1] + t * a->to[i][1];
+            a->dst[i][2] = (1.0f - t) * a->from[i][2] + t * a->to[i][2];
+            a->dst[i][3] = (1.0f - t) * a->from[i][3] + t * a->to[i][3];
         }
     }
-
     if (a->sink != 0) {
-        f32 ct = GuiHermiteInterp(clamped, 0.0f, a->c2, a->c3, 1.0f);
-        *a->sink = (s32)ColorLerpPacked(a->colorA, a->colorB, ct);
+        *a->sink = ColorLerpPacked(a->colorA, a->colorB,
+                                   GuiHermiteInterp(a->progress, 0.0f, a->c2, a->c3, 1.0f));
     }
 }
 #endif
