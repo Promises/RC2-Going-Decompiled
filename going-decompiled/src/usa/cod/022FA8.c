@@ -2606,7 +2606,41 @@ void func_0012C008(s32 *pred, s32 rSize, s32 code, s32 residual, s32 fullPel) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012C090);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012C230);
+extern s32 IpuGetBits(s32 *arg0, s32 arg1);
+
+/**
+ * Decode one motion vector (mpeg2decode's motion_vector): for the horizontal
+ * and then the vertical component, read motion_code with VDEC table 2
+ * (func_0012C508) and, when both the code and the component's r_size are
+ * non-zero, an r_size-bit motion_residual (IpuGetBits), and update the
+ * predictor through func_0012C008 (decode_motion_vector). A field vector in a
+ * frame picture (mvScale) has its vertical predictor halved around the
+ * update. With dual-prime (dmv) each component also reads its dmvector
+ * (func_0012B3C0).
+ */
+void func_0012C230(s32 *ipu, s32 *pmv, s32 *dmvector, s32 hRSize, s32 vRSize,
+                   s32 dmv, s32 mvScale, s32 fullPel) {
+    s32 motionCode;
+    s32 motionResidual;
+    motionCode = func_0012C508((s32)ipu, 2);
+    motionResidual = (hRSize != 0 && motionCode != 0) ? IpuGetBits(ipu, hRSize) : 0;
+    func_0012C008(&pmv[0], hRSize, motionCode, motionResidual, fullPel);
+    if (dmv) {
+        dmvector[0] = func_0012B3C0((s32)ipu);
+    }
+    motionCode = func_0012C508((s32)ipu, 2);
+    motionResidual = (vRSize != 0 && motionCode != 0) ? IpuGetBits(ipu, vRSize) : 0;
+    if (mvScale) {
+        pmv[1] >>= 1;
+    }
+    func_0012C008(&pmv[1], vRSize, motionCode, motionResidual, fullPel);
+    if (mvScale) {
+        pmv[1] <<= 1;
+    }
+    if (dmv) {
+        dmvector[1] = func_0012B3C0((s32)ipu);
+    }
+}
 
 extern s32 D_00137F10[];
 
