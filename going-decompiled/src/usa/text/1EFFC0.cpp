@@ -1451,6 +1451,11 @@ extern s32 GetWeaponStatsAtLevel(void *outStatBlock, s32 itemId, s32 level);
  *   and the #else below remains the portable impl.
  *   SCREENED ONLY. Both arms were measured; the residual was not diagnosed to a
  *   mechanism. This is an open arm, not a wall -- do not read it as one. */
+/* RESIDUAL CLASS (task #2021, s136 arm, solo screen): JUMP TABLE. The ROM
+ *   dispatches the (itemId - 0xC) class test through jtbl_0026D1C0_text; on
+ *   s136 the switch compiles to an in-block .rdata table, which
+ *   s136os_splice.sh refuses on SHAPE. The #else reads 62/62 words (built 50).
+ *   Waits for the jump-table route (NOTE #10075). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", GetVendorItemPrice);
 #else
@@ -2521,6 +2526,14 @@ void EnterVendorMenu(s32 arg) {
  *   (better arm: sdk29). Neither reaches 100.00%, so this stays INCLUDE_ASM
  *   and the #else below remains the portable impl.
  *   addressing is A residual but NOT the only one -- measured, not assumed: */
+/* RESIDUAL CLASS (task #2021, s136 arm, solo screen): LENGTH-EQUAL NEAR-MISS.
+ *   The #else below reads 96/96 words (built 102). A re-spelled body (NOTE
+ *   #10075: g_fileLoadVoiceState+0x72 not g_saveImageArea+0x1072, a small
+ *   D_1AD280 for the %gp_rel template address, a split g_bGlobalSceneActive,
+ *   g_nGameStateGp, the -1 stores in reverse order) reaches 21/96 at ROM
+ *   length. Left: the materialised g_fileLoadVoiceState base (lui/addiu then
+ *   114($3)), the lq/sq template-copy order around `move $16,$2`, and one
+ *   $2/$3 allocation. Not promoted. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", TeardownVendorSceneRestorePlayer);
 #else
