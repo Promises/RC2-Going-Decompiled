@@ -2582,7 +2582,15 @@ s32 func_0012B3C0(s32 arg0) {
  * padding. frames[] is the 3x4 table of buffer pointers func_0012FA18 walks:
  * rows at 0x1B8/0x1C8/0x1D8. */
 typedef struct {
-    u8  _pad0[0xD4];
+    u8  _pad0[0x80];
+    s32 field80;               /* 0x080: owner field 0x10, after func_0012DAC0 */
+    s32 _pad84;
+    u64 field88;               /* 0x088: D_00137F38[bits 5..8 of owner field 0x20] */
+    u8  _pad090[0xB0 - 0x90];
+    s32 fieldB0;               /* 0x0B0: non-zero picks func_0012E608 over func_0012D808 */
+    s32 pictureParams[6];      /* 0x0B4: copied from IpuPictureSize.params */
+    s32 fieldCC;               /* 0x0CC: IpuPictureSize.field5C */
+    s32 fieldD0;               /* 0x0D0: IpuPictureSize.field60 */
     s32 firstPictureStructure; /* 0x0D4: the first picture_structure since the
                                   last sequence header */
     s32 _padD8;
@@ -3544,6 +3552,12 @@ typedef struct {
     s32 height;                /* 0x08 */
     s32 blocks;                /* 0x0C: blocks * blockSize is the bytes needed */
     s32 blockSize;             /* 0x10 */
+    u8  _pad14[0x28 - 0x14];
+    s32 field28;               /* 0x28: 1 = decode it (func_0012DC50) */
+    u8  _pad2C[0x44 - 0x2C];
+    s32 params[6];             /* 0x44: copied to IpuDecoder.pictureParams */
+    s32 field5C;               /* 0x5C */
+    s32 field60;               /* 0x60 */
 } IpuPictureSize;
 
 extern s32 sprintf(char *dst, const char *fmt, ...);
@@ -3589,7 +3603,60 @@ void func_0012DA98(s32 *arg0) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012DAC0);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012DC50);
+/* The words of the decoder's owner (IpuDecoder.callbacks) that func_0012DAC0
+ * fills in for func_0012DC50. */
+typedef struct {
+    u8  _pad0[0x10];
+    s32 field10;
+    s32 _pad14;
+    u64 field18;
+    u64 field20;
+} IpuOwnerFields;
+
+extern u32 D_00137F38[];
+extern void func_0012DAC0(IpuDecoder *dec, IpuPictureSize *size, s32 *out10,
+                          u64 *out18, u64 *out20);
+extern void func_0012E608(IpuDecoder *dec, IpuPictureSize *size);
+extern void func_0012D808(IpuDecoder *dec, IpuPictureSize *size);
+
+/**
+ * Take a new picture description (`frame`, an IpuPictureSize pointer held in
+ * the decoder's frame table; `last` is passed by both callers but never read):
+ * let func_0012DAC0 fill three words
+ * of the decoder's owner, copy the owner's word 0x10 and a D_00137F38 entry
+ * (indexed by bits 5..8 of the owner's word 0x20) into the decoder, along with
+ * the picture's parameter words 0x44..0x60. If the decoder's buffers can hold
+ * the picture (func_0012D768) and it is flagged for decoding (field28 == 1),
+ * decode it by func_0012E608 or func_0012D808 (by fieldB0) and run the state
+ * transition func_0012DA98.
+ *
+ * The owner pointer is re-read from the decoder for each use and the two
+ * checks share one `&&`: holding the owner in a local across the call, or two
+ * early returns, gives a different body (26/68 words).
+ */
+void func_0012DC50(IpuDecoder *dec, s32 frame, s32 last) {
+    IpuPictureSize *size = (IpuPictureSize *)frame;
+    IpuOwnerFields *owner = (IpuOwnerFields *)dec->callbacks;
+    func_0012DAC0(dec, size, &owner->field10, &owner->field18, &owner->field20);
+    dec->field80 = ((IpuOwnerFields *)dec->callbacks)->field10;
+    dec->field88 = D_00137F38[(s32)(((IpuOwnerFields *)dec->callbacks)->field20 >> 5) & 0xF];
+    dec->fieldCC = size->field5C;
+    dec->fieldD0 = size->field60;
+    dec->pictureParams[0] = size->params[0];
+    dec->pictureParams[1] = size->params[1];
+    dec->pictureParams[2] = size->params[2];
+    dec->pictureParams[3] = size->params[3];
+    dec->pictureParams[4] = size->params[4];
+    dec->pictureParams[5] = size->params[5];
+    if (func_0012D768(dec, size) && size->field28 == 1) {
+        if (dec->fieldB0 != 0) {
+            func_0012E608(dec, size);
+        } else {
+            func_0012D808(dec, size);
+        }
+        func_0012DA98((s32 *)dec);
+    }
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012DD60);
 
