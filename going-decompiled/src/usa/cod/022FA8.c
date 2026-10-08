@@ -906,7 +906,37 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", BuildGsDrawEnvPa
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00126104);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00126108);
+extern char D_0013B390[];  /* "sceGsPutDrawEnv: DMA Ch.2 does not terminate\r\n" */
+
+/**
+ * sceGsPutDrawEnv: send a drawing-environment GIF packet down DMA channel 2
+ * (GIF). Wait for the channel's STR bit (0x100 of D2_CHCR, 0x1000A000) to
+ * clear; after 0x1000000 polls print the timeout message and return -1. Then
+ * set D2_QWC (0x1000A020) to the packet's NLOOP (bits 0..14 of its first
+ * doubleword) + 1, D2_MADR (0x1000A010) to the packet's physical address
+ * (bit 31 set for a scratchpad address, 0x7xxxxxxx), and start the channel in
+ * normal mode (CHCR = 0x101). Returns 0.
+ *
+ * The poll count is tested before it is incremented (`count++ > 0x1000000`):
+ * the ROM copies the count, then bumps it in the timeout branch's delay slot.
+ */
+s32 func_00126108(u64 *packet) {
+    u32 count = 0;
+    while (*(volatile u32 *)0x1000A000 & 0x100) {
+        if (count++ > 0x1000000) {
+            Kprintf(D_0013B390);
+            return -1;
+        }
+    }
+    *(volatile u32 *)0x1000A020 = (s32)(*packet & 0x7FFF) + 1;
+    if (((u32)packet & 0x70000000) == 0x70000000) {
+        *(volatile u32 *)0x1000A010 = ((u32)packet & 0x0FFFFFFF) | 0x80000000;
+    } else {
+        *(volatile u32 *)0x1000A010 = (u32)packet & 0x0FFFFFFF;
+    }
+    *(volatile u32 *)0x1000A000 = 0x101;
+    return 0;
+}
 
 extern void WaitVblankStartIntc(void);
 extern s64 func_0011B140(void);  /* returns the GS CSR value */
@@ -1504,7 +1534,52 @@ s32 McChdir(s32 arg0, s32 arg1) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", McMkDir);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", McGetEntSpace);
+extern u8  g_mcRpcRequest[];  /* 0x141B80: the shared 48-byte libmc request block */
+extern s32 g_mcPendingCmd;    /* 0x137E68: RPC function number of the call in flight */
+
+/* The libmc request block's argument words as McGetEntSpace fills them. */
+typedef struct McPortSlotRequest {
+    s32 unk0;
+    s32 port;  /* +0x4 */
+    s32 slot;  /* +0x8 */
+} McPortSlotRequest;
+
+/**
+ * McGetEntSpace (libmc): ask for the free directory-entry space of the card
+ * in `port`/`slot`. Same RPC-wrapper shape as McClose (func_00127668): returns
+ * -0x64 (-100) if the RPC client is not bound and -0xC8 (-200) if the libmc
+ * mutex cannot be taken, otherwise stores port and slot in the shared request
+ * block and issues RPC #0x11. On RPC success records 0x11 as the pending
+ * command (the completion path releases the mutex); on failure releases the
+ * mutex itself. Returns the RPC result.
+ *
+ * Two parameters: the ROM's only caller (SaveLoadStateMachine) passes two and
+ * the body reads two, although the vendored libmc.h (a later SDK) declares a
+ * third. The request is written through a typed pointer: spelled as byte
+ * offsets from g_mcRpcRequest, cc1 rebases the two stores off a `+4` address
+ * and the body is 7 of 52 words off.
+ */
+s32 McGetEntSpace(s32 port, s32 slot) {
+    u8 *client = g_mcRpcClient;
+    McPortSlotRequest *req;
+    s32 r;
+    if (*(s32 *)(client + 0x24) == 0) {
+        return -0x64;
+    }
+    if (func_0011AC70(g_mcMutexSema) < 0) {
+        return -0xC8;
+    }
+    req = (McPortSlotRequest *)g_mcRpcRequest;
+    req->port = port;
+    req->slot = slot;
+    r = func_0011D620(client, 0x11, 1, req, 0x30, &g_mcRpcResult, 4, 0, 0);
+    if (r == 0) {
+        g_mcPendingCmd = 0x11;
+    } else {
+        func_0011AC40(g_mcMutexSema);
+    }
+    return r;
+}
 
 extern s32 D_00143108;
 /* Array-typed: func_00128440 stores arg0 at D_00143180[1] and the ARRAY
