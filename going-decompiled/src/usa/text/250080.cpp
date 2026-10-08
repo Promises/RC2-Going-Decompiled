@@ -965,25 +965,33 @@ s32 func_00350F88(u8 *unused, u8 *desc, u8 *ringBase) {
 }
 #endif
 
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003510C0);
+/**
+ * Copy a window of arrived elementary-stream bytes into the pts ring.
+ * Clamps the request to the ring's free header window and the descriptor's
+ * remaining length, queries the ring's two writable spans (func_003506A8),
+ * scatters into them (func_003511A8) and advances the ring (func_00350778).
+ * @param unused   not read
+ * @param desc     stream descriptor: +0x8 window start, +0xC bytes remaining
+ *                 (both carry a 4-byte header)
+ * @param ringBase bitstream ring; +0x50008 is its payload length
+ * @return 1 if any bytes were stored, else 0
+ *
+ * The descriptor length is its own variable (`len`), and the second span
+ * length is a new one (`remain = len - first`). `len` then dies before the
+ * call to func_003506A8, so cc1 keeps the subtraction ahead of that jal and
+ * reorg puts it in the delay slot, as the ROM does. Written `remain -= first`
+ * on one variable, sched1 moves the subu past the call and the clamp's movn
+ * lands in the delay slot instead: 2/57 words (measured by restoring that
+ * spelling alone, task #1888). No devices.
+ * GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+ * (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in tools/ee/s136os_functions.txt)
+ * and spliced over S136OS_SLOT by tools/ee/s136os_splice.sh (task #1888). There
+ * is no asm fallback: a build that skips the splice drops the function. On
+ * native it is plain C.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_003510C0)
+S136OS_SLOT(func_003510C0);
 #else
-/* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 79.61% / engine96 54.65%. Residual: PACKED-SAVE (6 callee saves) + 24 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
-/* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
-   saves (s0..s4/ra). Revisit with the gameplay-TU compiler.
-
-   Copy a window of arrived elementary-stream bytes into the pts ring: clamps
-   the request to the ring's free header window and the descriptor's remaining
-   length, queries the ring's two writable spans (func_003506A8), scatters into
-   them (func_003511A8), advances the ring (func_00350778), and reports whether
-   any bytes were stored.
-
-   NEAR-MISS SCREEN (task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated
-   fields masked): 2/57 words differ, from 37/57, once the second span length
-   is computed in place (`remain -= first`) before the dequeue call. Residual
-   (SCHED): the ROM puts that subu in the jal delay slot and the movn before the
-   jal; cc1 swaps them. Empty fences around it made it worse (31/57, 32/57), and
-   a tied fence on `first` gave 10/57. */
 s32 func_003510C0(u8 *unused, u8 *desc, u8 *ringBase) {
     u8 *span0Ptr;
     s32 span0Len;
@@ -993,18 +1001,19 @@ s32 func_003510C0(u8 *unused, u8 *desc, u8 *ringBase) {
     u32 wantEnd = *(s32 *)(desc + 8) + 4;
     u32 ringTop = (u32)(ringBase + ringEnd);
     s32 first;
+    s32 len;
     s32 remain;
     s32 stored;
 
     if (ringTop <= wantEnd) {
         wantEnd -= ringEnd;
     }
-    remain = *(s32 *)(desc + 0xC) - 4;
+    len = *(s32 *)(desc + 0xC) - 4;
     first = ringTop - wantEnd;
-    if (remain < first) {
-        first = remain;
+    if (len < first) {
+        first = len;
     }
-    remain -= first;
+    remain = len - first;
 
     func_003506A8((FmvPtsQueue *)(g_pFmvArenaBase + FMV_PTS_OFS), &span0Ptr,
                   &span0Len, &span1Ptr, &span1Len);
