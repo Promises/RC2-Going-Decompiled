@@ -802,7 +802,7 @@ typedef struct GsGParam {
     s16 outMode;
     s16 ffMode;          /* field/frame mode */
     s16 version;         /* GS revision; 1 selects the single-circuit display */
-    s32 vsyncFunc;       /* installed V-sync callback (0 = none) */
+    void *vsyncFunc;     /* installed V-sync callback (0 = none) */
     s32 vsyncHandlerId;  /* its INTC handler id */
 } GsGParam;
 
@@ -916,9 +916,10 @@ extern s64 func_0011B140(void);  /* returns the GS CSR value */
  * (sceGsSyncV-shaped). With no V-sync callback installed, wait with
  * WaitVblankStartIntc and read the FIELD bit (13) of the GS CSR (0x12001000)
  * directly; with one installed, func_0011B140 supplies the CSR value instead.
- * In non-interlaced mode the field is always 1.
+ * In non-interlaced mode the field is always 1. `mode` (sceGsSyncV's
+ * argument, which every caller passes as 0) is not read.
  */
-s32 WaitVblankGetField(void) {
+s32 WaitVblankGetField(s32 mode) {
     GsGParam *gp = (GsGParam *)func_00125960();
     s64 field;
     if (gp->vsyncFunc == 0) {
@@ -957,19 +958,19 @@ extern s32 func_0011A900(s32 cause, void *handler, s32 next);  /* AddIntcHandler
 extern s32 func_0011B5F0(s32 cause);                           /* EnableIntc */
 
 /**
- * Install `func` as the V-sync (INTC cause 2) callback, or remove the current
- * one when `func` is 0 (sceGsSyncVCallback-shaped); returns the previous
- * callback. Removing disables the interrupt, removes the handler and clears
- * both GsGParam fields; installing first removes any previous handler, then
- * adds `func` and enables the interrupt.
+ * Install `handler` as the V-sync (INTC cause 2) callback, or remove the
+ * current one when `handler` is 0 (sceGsSyncVCallback-shaped); returns the
+ * previous callback. Removing disables the interrupt, removes the handler and
+ * clears both GsGParam fields; installing first removes any previous handler,
+ * then adds `handler` and enables the interrupt.
  *
  * On removal the handler id is cleared before the callback: the other order
  * swaps the two stores (2 of 40).
  */
-s32 func_00126DC0(s32 func) {
+s32 func_00126DC0(void *handler) {
     GsGParam *gp = (GsGParam *)func_00125960();
-    s32 old = gp->vsyncFunc;
-    if (func == 0) {
+    void *old = gp->vsyncFunc;
+    if (handler == 0) {
         func_0011B588(2);
         func_0011A920(2, gp->vsyncHandlerId);
         gp->vsyncHandlerId = 0;
@@ -979,11 +980,11 @@ s32 func_00126DC0(s32 func) {
             func_0011B588(2);
             func_0011A920(2, gp->vsyncHandlerId);
         }
-        gp->vsyncFunc = func;
-        gp->vsyncHandlerId = func_0011A900(2, (void *)func, -1);
+        gp->vsyncFunc = handler;
+        gp->vsyncHandlerId = func_0011A900(2, handler, -1);
         func_0011B5F0(2);
     }
-    return old;
+    return (s32)old;
 }
 
 extern u32 func_001272A8(volatile u32 *chcr);  /* defined below */
