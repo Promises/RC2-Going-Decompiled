@@ -18,6 +18,9 @@ SECTIONS
         going-decompiled/build/usa/lib/libgcc.a:_muldi3.o(.text*);
         going-decompiled/build/usa/going-decompiled/src/usa/cod/021A98.o(.text*);
         going-decompiled/build/usa/lib/libgcc.a:dp-bit.o(.text*);
+        going-decompiled/build/usa/lib/libgcc.a:fp-bit-pack.o(.text*);
+        going-decompiled/build/usa/going-decompiled/src/usa/cod/023410.o(.text*);
+        going-decompiled/build/usa/lib/libgcc.a:fp-bit-make.o(.text*);
         going-decompiled/build/usa/going-decompiled/src/usa/cod/022FA8.o(.text*);
         going-decompiled/build/usa/lib/libgcc.a:s_isnan.o(.text*);
         going-decompiled/build/usa/going-decompiled/src/usa/cod/031380.o(.text*);
@@ -34,6 +37,7 @@ SECTIONS
         going-decompiled/build/usa/going-decompiled/src/usa/cod/0202D8.o(.data*);
         going-decompiled/build/usa/going-decompiled/src/usa/cod/0213D0.o(.data*);
         going-decompiled/build/usa/going-decompiled/src/usa/cod/021A98.o(.data*);
+        going-decompiled/build/usa/going-decompiled/src/usa/cod/023410.o(.data*);
         going-decompiled/build/usa/going-decompiled/src/usa/cod/022FA8.o(.data*);
         going-decompiled/build/usa/going-decompiled/src/usa/cod/031380.o(.data*);
         going-decompiled/build/usa/going-decompiled/src/usa/cod/0314C0.o(.data*);
@@ -63,6 +67,7 @@ SECTIONS
         going-decompiled/build/usa/going-decompiled/src/usa/cod/0202D8.o(.bss COMMON .scommon);
         going-decompiled/build/usa/going-decompiled/src/usa/cod/0213D0.o(.bss COMMON .scommon);
         going-decompiled/build/usa/going-decompiled/src/usa/cod/021A98.o(.bss COMMON .scommon);
+        going-decompiled/build/usa/going-decompiled/src/usa/cod/023410.o(.bss COMMON .scommon);
         going-decompiled/build/usa/going-decompiled/src/usa/cod/022FA8.o(.bss COMMON .scommon);
         going-decompiled/build/usa/going-decompiled/src/usa/cod/031380.o(.bss COMMON .scommon);
         going-decompiled/build/usa/going-decompiled/src/usa/cod/0314C0.o(.bss COMMON .scommon);

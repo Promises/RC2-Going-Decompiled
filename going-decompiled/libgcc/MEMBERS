@@ -9,6 +9,8 @@ _muldi3  libgcc2.c  -DIN_LIBGCC2 -DFINE_GRAINED_LIBRARIES -DL_muldi3
 _fixunsdfdi  libgcc2.c  -DIN_LIBGCC2 -DFINE_GRAINED_LIBRARIES -DL_fixunsdfdi
 _floatdidf  libgcc2.c  -DIN_LIBGCC2 -DFINE_GRAINED_LIBRARIES -DL_floatdidf
 dp-bit  cygnus-ee/fp-bit.c  -DFLOAT_BIT_ORDER_MISMATCH -DUS_SOFTWARE_GOFAST -DNO_DENORMALS -DFINE_GRAINED_LIBRARIES -DL_pack_df -DL_unpack_df -DL_addsub_df -DL_mul_df -DL_div_df -DL_fpcmp_parts_df -DL_compare_df -DL_si_to_df -DL_df_to_si -DL_df_to_usi -DL_make_df -DL_df_to_sf
+fp-bit-pack  cygnus-ee/fp-bit.c  -DFLOAT -DFLOAT_BIT_ORDER_MISMATCH -DUS_SOFTWARE_GOFAST -DNO_DENORMALS -DFINE_GRAINED_LIBRARIES -DL_pack_sf -DL_unpack_sf
+fp-bit-make  cygnus-ee/fp-bit.c  -DFLOAT -DFLOAT_BIT_ORDER_MISMATCH -DUS_SOFTWARE_GOFAST -DNO_DENORMALS -DFINE_GRAINED_LIBRARIES -DL_make_sf -DL_sf_to_df
 # libm.a members (RULING #9783): not GCC source, so they live in
 # going-decompiled/libm/ with their own PROVENANCE, and the source column is
 # relative to this directory. build_libgcc.sh archives them into the same

@@ -79,6 +79,15 @@ that carries no licence of its own:
   L_negate_df. That gives one object with the 14 ROM functions, in source
   order, with the intra-object alignment word at 0x123024 and one shared
   `thenan` (.bss, 0x18 at 0x141810).
+  Two more members are built from it, for the SDK's fp-bit.o (the SF half,
+  t-r5900's fp-bit.c rule: the same prelude plus FLOAT). The ROM keeps 4 of
+  its 15 functions: __pack_f, __unpack_f, __make_fp and fptodp. The linker
+  dropped the other 11 (FACT #9756) but left 0x30 bytes of debris at
+  0x123490, between __unpack_f and __make_fp (NOTE #9777). The debris stays
+  game asm (INCLUDE_ASM_FRAGMENT in cod/023410), so the four residents are
+  two members, one either side of it, each by the same module selection:
+  fp-bit-pack (L_pack_sf L_unpack_sf, 0x1232F0..0x12348F) and fp-bit-make
+  (L_make_sf L_sf_to_df, 0x1234C0..0x12352F). Task #1854.
 
 Re-derive: curl -sSf <upstream URL> | shasum   — each must print the sha1 above,
 and `cmp` against the file here must be silent.

@@ -124,11 +124,20 @@ segments:
       # with fp-bit.c's own L_* selection minus L_negate_df (libgcc/MEMBERS).
       # One object, so the zero word at 0x123024 is its own assembler alignment
       # again and needs no zeropad. It ends 0x1232EC (4 mod 8): the ROM's word
-      # there is the SN linker's CDCD, which is this segment's fill. cod/022FA8
-      # keeps its name and now starts at 0x1232F0 (fp-bit.o).
+      # there is the SN linker's CDCD, which is this segment's fill.
+      # Task #1854 (branch, on top of #1837) does the same for fp-bit.o, of
+      # which the ROM keeps 4 of 15 functions (__pack_f __unpack_f __make_fp
+      # fptodp). The 11 stripped ones left 0x30 of debris at 0x123490 (NOTE
+      # #9777), which stays asm in its own c unit, so the residents are TWO
+      # members built by fp-bit.c's L_* selection, one either side of it. All
+      # four boundaries are 8-aligned, so each member's own assembler pads are
+      # the ROM's. cod/022FA8 keeps its name and now starts at 0x123530 (frame.o).
       - [0x021A98, c, cod/021A98] # core.text: libgcc _pure.o, _udivdi3.o, _umoddi3.o (0x121B18..0x12262F)
       - [0x0225B0, lib, libgcc, dp-bit] # libgcc.a dp-bit.o .text (0x122630..0x1232EB), pad 0x1232EC
-      - [0x023270, c, cod/022FA8] # core.text: fp-bit.o, frame.o, then libsn/SDK up to libm.a's e_sqrt.o and its CDCD pad (0x1232F0..0x1313C7)
+      - [0x023270, lib, libgcc, fp-bit-pack] # libgcc.a fp-bit.o __pack_f __unpack_f (0x1232F0..0x12348F)
+      - [0x023410, c, cod/023410] # fp-bit.o dead-strip debris (0x123490..0x1234BF)
+      - [0x023440, lib, libgcc, fp-bit-make] # libgcc.a fp-bit.o __make_fp fptodp (0x1234C0..0x12352F)
+      - [0x0234B0, c, cod/022FA8] # core.text: frame.o, then libsn/SDK up to libm.a's e_sqrt.o and its CDCD pad (0x123530..0x1313C7)
       # libm.a's s_isnan.o and w_sqrt.o are linked from newlib's own source
       # (going-decompiled/libm/, RULING #9783), archived by build_libgcc.sh with
       # the libgcc members. Each lib line cuts cod/022FA8's old range, so the

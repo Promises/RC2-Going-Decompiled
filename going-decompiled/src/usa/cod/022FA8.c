@@ -1,14 +1,17 @@
 /*
- * cod/022FA8 (0x1232F0..0x1313C7): the part of the old cod/021A98 after the
- * libgcc.a member dp-bit.o (0x122630..0x1232EB, task #1837; before it this
- * unit started at 0x123028, after _fpcmp_parts_df.o and its zeropad, task
- * #918), which the build links from the Cygnus EE fp-bit.c
- * (going-decompiled/libgcc/, RULING #8206 / #9753). It holds fp-bit.o and
- * frame.o as the ROM's asm plus this project's own C, then the libsn/SDK code
- * that follows, up to libm.a's e_sqrt.o and its CD pad. libm.a's s_isnan.o
- * (0x1313C8) and w_sqrt.o (0x131430) are linked from newlib's own source
- * (going-decompiled/libm/, task #1856); the code around them is cod/031380
- * and cod/0314C0. The unit keeps its name, so no .s path below 0x1313C8 moves.
+ * cod/022FA8 (0x123530..0x1313C7): the part of the old cod/021A98 after the
+ * libgcc.a members dp-bit.o (0x122630..0x1232EB, task #1837) and fp-bit.o's
+ * four residents (0x1232F0..0x12352F, task #1854, as two members around the
+ * dead-strip debris in cod/023410), which the build links from the Cygnus EE
+ * fp-bit.c (going-decompiled/libgcc/, RULING #8206 / #9753). Before them this
+ * unit started at 0x123028, after _fpcmp_parts_df.o and its zeropad (task
+ * #918). It holds frame.o as the ROM's asm plus this project's own C, then the
+ * libsn/SDK code that follows, up to libm.a's e_sqrt.o and its CD pad.
+ * libm.a's s_isnan.o (0x1313C8) and w_sqrt.o (0x131430) are linked from
+ * newlib's own source (going-decompiled/libm/, task #1856); the code around
+ * them is cod/031380 and cod/0314C0. The unit keeps its name, so no .s path
+ * below 0x1313C8 moves. The dp-bit/fp-bit C below is only the TARGET_NATIVE
+ * build's stand-ins.
  */
 #include "common.h"
 
@@ -223,11 +226,13 @@ void func_00123298(s64 a) {
 }
 #endif
 
+/* __pack_f .. fptodp (0x1232F0..0x12352F): on the EE this range is the linked
+ * libgcc.a members fp-bit-pack and fp-bit-make (task #1854) with the fp-bit.o
+ * dead-strip debris between them (cod/023410), so the C below is only the
+ * TARGET_NATIVE build's stand-ins. */
+#ifdef TARGET_NATIVE
 /* __make_dp (dp-bit.o, 0x123268): func_001234F0 below calls it by this name. */
 extern s64 func_00123268(s32 fpClass, s32 sign, s32 exponent, s64 mantissa);
-
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", __pack_f);
-INCLUDE_ASM_ALIAS(func_001232F0, __pack_f);
 
 /* Decomposed IEEE-754 single produced by func_00123400 (32-bit fields). */
 typedef struct {
@@ -244,10 +249,6 @@ typedef struct {
  * 0 for a signalling NaN (a leftover-register quirk ee-gcc won't reproduce).
  * Seedable (float bits -> SpParts): shipped as a cmp-oracle'd portable #else
  * (asm-vs-C proven bit-identical on real R5900 by run_cmp_015180_iso.sh). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", __unpack_f);
-INCLUDE_ASM_ALIAS(func_00123400, __unpack_f);
-#else
 s32 func_00123400(u32 *src, SpParts *out) {
     u32 bits = src[0];
     s32 frac = (s32)(bits & 0x7FFFFF);
@@ -268,9 +269,6 @@ s32 func_00123400(u32 *src, SpParts *out) {
     out->exponent = exp - 0x7F;
     return out->fpClass = 3;
 }
-#endif
-
-INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00123490);
 
 extern void func_001232F0(void *args);
 
@@ -307,6 +305,7 @@ s64 func_001234F0(float f) {
     return func_00123268(sp.fpClass, sp.sign, sp.exponent,
                          (s64)((u64)(u32)sp.mantissa << 30));
 }
+#endif
 
 /**
  * Decode a little-endian base-128 varint from src into *out, 7 bits per byte
