@@ -1254,9 +1254,65 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", McInit);
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00127500);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", McOpen);
+extern u8   g_mcRpcClient[];   /* libmc RPC client block (init flag @+0x24) */
+extern s32  g_mcMutexSema;     /* libmc mutex/semaphore handle */
+extern s32  D_00141B80;        /* libmc RPC send-buffer (fd marshalled @+0) */
+extern u32  g_mcRpcResult;     /* libmc RPC receive-buffer (result code) */
+extern s32  func_0011AC70(s32 sema);
+extern s32 func_0011AC40(s32 sema);
 
-extern s32 McOpen(s32 arg0, s32 arg1, s32 arg2, s32 arg3);
+/* libmc's name-carrying RPC request (McOpen, McMkDir, func_00127E48 = GetDir):
+ * 0x414 bytes, the largest send buffer in the family. */
+typedef struct {
+    s32  port;                 /* 0x000 */
+    s32  slot;                 /* 0x004 */
+    s32  mode;                 /* 0x008: open flags / GetDir mode; 0 for MkDir */
+    s32  maxent;               /* 0x00C: GetDir only */
+    void *table;               /* 0x010: GetDir only */
+    char name[0x400];          /* 0x014: strncpy'd, 1023 chars + forced NUL */
+} McNameRequest;
+extern McNameRequest D_00141BB0;   /* libmc name-request send buffer */
+extern s32 g_mcPendingCmd;    /* 0x137E68: RPC function number of the call in flight */
+
+/**
+ * McOpen (libmc sceMcOpen): open `name` on memory card `port`/`slot` with the
+ * open flags `mode`, as libmc RPC #2. Returns -100 if the RPC client is not
+ * bound, -200 if the libmc mutex cannot be taken (PollSema), -210 for a null
+ * or empty name; else the sceSifCallRpc result (0 = submitted). On success
+ * the mutex stays held and the pending command (2) is recorded for McSync's
+ * completion path; a failed submission releases it here.
+ *
+ * The request is written through the struct global itself, name first: cc1
+ * then addresses every field relative to the name's address (`name - 0x14`),
+ * which is the ROM's form. Through a pointer to the buffer it forms the base
+ * first instead (39/73 words).
+ */
+s32 McOpen(s32 port, s32 slot, const char *name, s32 mode) {
+    u8 *client = g_mcRpcClient;
+    s32 r;
+    if (*(s32 *)(client + 0x24) == 0) {
+        return -0x64;
+    }
+    if (func_0011AC70(g_mcMutexSema) < 0) {
+        return -0xC8;
+    }
+    if (name == NULL || *name == '\0') {
+        func_0011AC40(g_mcMutexSema);
+        return -0xD2;
+    }
+    strncpy(D_00141BB0.name, name, 0x3FF);
+    D_00141BB0.port = port;
+    D_00141BB0.mode = mode;
+    D_00141BB0.slot = slot;
+    D_00141BB0.name[0x3FF] = 0;
+    r = func_0011D620(client, 2, 1, &D_00141BB0, 0x414, &g_mcRpcResult, 4, 0, 0);
+    if (r == 0) {
+        g_mcPendingCmd = 2;
+    } else {
+        func_0011AC40(g_mcMutexSema);
+    }
+    return r;
+}
 extern s32 D_00137E68;
 
 /**
@@ -1264,19 +1320,13 @@ extern s32 D_00137E68;
  * result) record error code 0xB in D_00137E68. Returns the McOpen result.
  */
 s32 func_00127630(s32 arg0, s32 arg1, s32 arg2) {
-    s32 result = McOpen(arg0, arg1, arg2, 0x40);
+    s32 result = McOpen(arg0, arg1, (const char *)arg2, 0x40);
     if (result == 0) {
         D_00137E68 = 0xB;
     }
     return result;
 }
 
-extern u8   g_mcRpcClient[];   /* libmc RPC client block (init flag @+0x24) */
-extern s32  g_mcMutexSema;     /* libmc mutex/semaphore handle */
-extern s32  D_00141B80;        /* libmc RPC send-buffer (fd marshalled @+0) */
-extern u32  g_mcRpcResult;     /* libmc RPC receive-buffer (result code) */
-extern s32  func_0011AC70(s32 sema);
-extern s32 func_0011AC40(s32 sema);
 
 /**
  * func_00127668 = McClose (libmc): close the memory-card file descriptor `fd`.
@@ -1416,7 +1466,6 @@ void McDelayMillis(s32 millis) {
 }
 
 extern s32 sceSifCheckStatRpc(s32 *rpc);
-extern s32 g_mcPendingCmd;    /* 0x137E68: RPC function number of the call in flight */
 
 /**
  * McSync (libmc): poll (mode != 0) or wait for (mode 0) the libmc RPC call in
@@ -1477,7 +1526,6 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", McGetInfo);
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00127E40);
 
-extern u8    D_00141BB0[];   /* libmc GetDir send-buffer (1044 bytes) */
 
 /**
  * func_00127E48 = McGetDir (libmc): request a memory-card directory listing for
@@ -1523,7 +1571,7 @@ s32 func_00127E48(s32 port, s32 slot, const char *name, s32 mode,
         return -0xD2;
     }
 
-    req = D_00141BB0;
+    req = (u8 *)&D_00141BB0;
     *(s32 *)(req + 0x00) = port;
     *(s32 *)(req + 0x04) = slot;
     *(s32 *)(req + 0x08) = mode;
@@ -1624,7 +1672,39 @@ s32 McChdir(s32 arg0, s32 arg1) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", McMkDir);
+/**
+ * McMkDir (libmc sceMcMkdir): create directory `name` on memory card
+ * `port`/`slot`, as libmc RPC #15 through the same 0x414-byte name request as
+ * McOpen (mode word 0). Same guards and return codes as McOpen (-100 / -200 /
+ * -210, else the sceSifCallRpc result); on success the mutex stays held with
+ * the pending command 15 recorded for McSync.
+ */
+s32 McMkDir(s32 port, s32 slot, const char *name) {
+    u8 *client = g_mcRpcClient;
+    s32 r;
+    if (*(s32 *)(client + 0x24) == 0) {
+        return -0x64;
+    }
+    if (func_0011AC70(g_mcMutexSema) < 0) {
+        return -0xC8;
+    }
+    if (name == NULL || *name == '\0') {
+        func_0011AC40(g_mcMutexSema);
+        return -0xD2;
+    }
+    strncpy(D_00141BB0.name, name, 0x3FF);
+    D_00141BB0.port = port;
+    D_00141BB0.slot = slot;
+    D_00141BB0.name[0x3FF] = 0;
+    D_00141BB0.mode = 0;
+    r = func_0011D620(client, 0xF, 1, &D_00141BB0, 0x414, &g_mcRpcResult, 4, 0, 0);
+    if (r == 0) {
+        g_mcPendingCmd = 0xF;
+    } else {
+        func_0011AC40(g_mcMutexSema);
+    }
+    return r;
+}
 
 extern u8  g_mcRpcRequest[];  /* 0x141B80: the shared 48-byte libmc request block */
 extern s32 g_mcPendingCmd;    /* 0x137E68: RPC function number of the call in flight */
