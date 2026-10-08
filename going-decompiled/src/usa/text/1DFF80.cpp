@@ -712,40 +712,65 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E1A58);
  *   4. if usage exceeds 0x400000, print the overflow warning (retail no-op);
  *      track the high-water mark in g_shrubVramPeak;
  *   5. emit a return tag back to openTag+0x10, then fill the reserved close tag.
- * The close tag here is tracked in a local (no close-tag global, unlike sky). */
+ * The close tag here is tracked in a local (no close-tag global, unlike sky).
+ *
+ * GUARD (task #1902): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback. On native it is plain C.
+ * Byte-exact with each open/return tag word stored through its global afresh
+ * (no strict aliasing on that arm, so every store forces the next reload, as the
+ * ROM does; the old cached-openTag form scores 56/72 words differing) and three
+ * ADDRESSING-MODEL DEVICES (RULING #8620 / FACT #8036 equates, the
+ * g_frameDmaCursorGp precedent: they emit nothing, the relocations name the real
+ * symbol, the object has no alias symbol). The ROM reads both globals absolute
+ * except in two delay slots, where it has the one-word %gp_rel form:
+ *   - g_vramAllocCursorGp, the UploadShrubTextures argument in the jal slot
+ *     (0x2E1E18); through g_vramAllocCursor: 74 words, not 72;
+ *   - g_shrubVramPeakGp, the high-water store in the bnel slot (0x2E1E4C);
+ *     through g_shrubVramPeak: 74 words, not 72;
+ *   - `.extern g_shrubVramPeak, 16` for its absolute load (0x2E1E3C); without
+ *     it the load goes %gp_rel and the body re-schedules (37/72 words differ).
+ * Each priced by removing it alone (solo s136os compile). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", CloseShrubDrawSegment);
+__asm__(".extern g_shrubVramPeak, 16");
+__asm__(".extern g_vramAllocCursorGp, 4\n\tg_vramAllocCursorGp = g_vramAllocCursor");
+__asm__(".extern g_shrubVramPeakGp, 4\n\tg_shrubVramPeakGp = g_shrubVramPeak");
+extern s32 g_vramAllocCursorGp;
+extern s32 g_shrubVramPeakGp;
+#else
+#define g_vramAllocCursorGp g_vramAllocCursor
+#define g_shrubVramPeakGp g_shrubVramPeak
+#endif
+#if !defined(TARGET_NATIVE) && !defined(S136OS_CloseShrubDrawSegment)
+S136OS_SLOT(CloseShrubDrawSegment);
 #else
 void CloseShrubDrawSegment(void) {
     u32 *closeTag = (u32 *)g_frameDmaCursor;
-    u32 *openTag;
-    u32 *tag;
     s32 vramUsed;
 
     g_frameDmaCursor = (u8 *)closeTag + 0x10;
 
-    openTag = (u32 *)g_pShrubSegmentOpenTag;
-    openTag[0] = 0x20000000;
-    openTag[1] = (u32)g_frameDmaCursor;
-    openTag[2] = 0;
-    openTag[3] = 0;
+    ((u32 *)g_pShrubSegmentOpenTag)[0] = 0x20000000;
+    ((u32 *)g_pShrubSegmentOpenTag)[1] = (u32)g_frameDmaCursor;
+    ((u32 *)g_pShrubSegmentOpenTag)[2] = 0;
+    ((u32 *)g_pShrubSegmentOpenTag)[3] = 0;
 
-    vramUsed = UploadShrubTextures(g_vramAllocCursor);
+    vramUsed = UploadShrubTextures(g_vramAllocCursorGp);
     AppendTexFlushDefaultTex0();
 
     if (vramUsed > 0x400000) {
         DebugPrintStub(D_1ABE10);
     }
     if (vramUsed > g_shrubVramPeak) {
-        g_shrubVramPeak = vramUsed;
+        g_shrubVramPeakGp = vramUsed;
     }
 
-    tag = (u32 *)g_frameDmaCursor;
-    tag[0] = 0x20000000;
-    tag[1] = (u32)(g_pShrubSegmentOpenTag + 0x10);
-    tag[2] = 0;
-    tag[3] = 0;
-    g_frameDmaCursor = (u8 *)g_frameDmaCursor + 0x10;
+    ((u32 *)g_frameDmaCursor)[0] = 0x20000000;
+    ((u32 *)g_frameDmaCursor)[1] = (u32)(g_pShrubSegmentOpenTag + 0x10);
+    ((u32 *)g_frameDmaCursor)[2] = 0;
+    ((u32 *)g_frameDmaCursor)[3] = 0;
+    g_frameDmaCursor = g_frameDmaCursor + 0x10;
 
     closeTag[0] = 0x20000000;
     closeTag[1] = (u32)g_frameDmaCursor;
@@ -1143,38 +1168,48 @@ void BeginSkyDrawSegment(void) {
  *   5. fill the reserved close tag (DMAcnt, next = cursor);
  *   6. reset the VRAM bump cursor to the dynamic base.
  * Each tag is 4 words: [id/qwc, next-addr, 0, 0]. g_frameDmaCursor is re-read
- * after the flush calls (they mutate it), so the reads are not cached. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", CloseSkyDrawSegment);
+ * after the flush calls (they mutate it), so the reads are not cached.
+ *
+ * GUARD (task #1902): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback. On native it is plain C.
+ * Byte-exact with no device. Every tag word is stored through its global
+ * afresh: that arm compiles without strict aliasing, so each store through a
+ * tag pointer forces the next reload, as the ROM does. The one spelling that
+ * matters is the in-place `cursor += 0x10`: it gives the old and the advanced
+ * cursor one register, so the close-tag store must issue before the add (the
+ * ROM's 0x2E464C). Written `g_frameDmaCursor = cursor + 0x10` they get two
+ * registers and cc1 sinks the store below the prologue's `sd $31` (10/70
+ * words differ; an empty volatile asm after the store gets 4/70). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_CloseSkyDrawSegment)
+S136OS_SLOT(CloseSkyDrawSegment);
 #else
 void CloseSkyDrawSegment(void) {
-    u32 *closeTag = (u32 *)g_frameDmaCursor;
-    u32 *openTag;
-    u32 *tag;
+    u8 *cursor = g_frameDmaCursor;
 
-    g_pSkySegmentCloseTag = (u8 *)closeTag;
-    g_frameDmaCursor = (u8 *)closeTag + 0x10;
+    g_pSkySegmentCloseTag = cursor;
+    cursor += 0x10;
+    g_frameDmaCursor = cursor;
 
-    openTag = (u32 *)g_pSkySegmentOpenTag;
-    openTag[0] = 0x20000000;
-    openTag[1] = (u32)g_frameDmaCursor;
-    openTag[2] = 0;
-    openTag[3] = 0;
+    ((u32 *)g_pSkySegmentOpenTag)[0] = 0x20000000;
+    ((u32 *)g_pSkySegmentOpenTag)[1] = (u32)g_frameDmaCursor;
+    ((u32 *)g_pSkySegmentOpenTag)[2] = 0;
+    ((u32 *)g_pSkySegmentOpenTag)[3] = 0;
 
     FlushPendingTexUploads();
     AppendTexFlushDefaultTex0();
 
-    tag = (u32 *)g_frameDmaCursor;
-    tag[0] = 0x20000000;
-    tag[1] = (u32)(g_pSkySegmentOpenTag + 0x10);
-    tag[2] = 0;
-    tag[3] = 0;
-    g_frameDmaCursor = (u8 *)g_frameDmaCursor + 0x10;
+    ((u32 *)g_frameDmaCursor)[0] = 0x20000000;
+    ((u32 *)g_frameDmaCursor)[1] = (u32)(g_pSkySegmentOpenTag + 0x10);
+    ((u32 *)g_frameDmaCursor)[2] = 0;
+    ((u32 *)g_frameDmaCursor)[3] = 0;
+    g_frameDmaCursor = g_frameDmaCursor + 0x10;
 
-    closeTag[0] = 0x20000000;
-    closeTag[1] = (u32)g_frameDmaCursor;
-    closeTag[2] = 0;
-    closeTag[3] = 0;
+    ((u32 *)g_pSkySegmentCloseTag)[0] = 0x20000000;
+    ((u32 *)g_pSkySegmentCloseTag)[1] = (u32)g_frameDmaCursor;
+    ((u32 *)g_pSkySegmentCloseTag)[2] = 0;
+    ((u32 *)g_pSkySegmentCloseTag)[3] = 0;
 
     g_vramAllocCursor = g_vramDynamicBase;
 }
