@@ -204,32 +204,52 @@ void UpdateMobyAnimLoopSound(Moby *moby) {
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A0360);
 
-/* func_002A0368: compute the moby's current animation frame time (in 1/16 units).
- * Selects the active sequence descriptor (+0x5C when the +0x42 sequence id is 0xFF,
- * else +0x58) and reads its frame count (descriptor +0x4). With no blend
- * (+0x44 == 0) the result is frames/16. When a blend is active and the two sequence
- * ids (+0x42/+0x43) match with +0x41 >= +0x40, it linearly interpolates the frame
- * counts of the +0x58 and +0x5C descriptors by the blend and scales by 1/16;
- * otherwise it is frames/16 + blend. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A0368);
+/* func_002A0368: the moby's current animation frame position, in 1/16 frames.
+ *
+ *   moby     the moby (anim state bytes +0x40..+0x43, blend f32 +0x44,
+ *            sequence descriptors at +0x58 / +0x5C)
+ *   returns  the frame position
+ *
+ * The active descriptor is +0x58 unless the +0x42 sequence id is 0xFF, in
+ * which case it is +0x5C; its frame count is the s16 at descriptor +0x4,
+ * converted by IntToFloat. With no blend (+0x44 == 0.0) the result is
+ * frames/16. With a blend, when the two sequence ids (+0x42/+0x43) match and
+ * +0x41 >= +0x40 it interpolates the active and +0x5C descriptors' frame
+ * counts by the blend and scales by 1/16; otherwise it is frames/16 + blend.
+ *
+ * GUARD (task #1894): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. On native it is plain C.
+ *
+ * No device. Phrasing, priced against the ROM .s by a solo s136os compile
+ * (relocated fields masked, a length difference counted as differing): the
+ * ROM calls IntToFloat on each return path and re-reads the blend after every
+ * call (one shared IntToFloat call up front: 56 words built, 55 differ -- the
+ * NOTE #9699 as-written shape); the non-interpolating path is the
+ * fall-through, written as the early return (`!=` / `||`); the descriptor
+ * select tests `!= 0xFF` (`== 0xFF` flips beql to bnel: 3 words); and
+ * `m[0x40] > m[0x41]` loads +0x40 first (`m[0x41] < m[0x40]`: 2 words).
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002A0368)
+S136OS_SLOT(func_002A0368);
 #else
 extern f32 IntToFloat(s32 n);
 f32 func_002A0368(Moby *moby) {
     u8 *m = (u8 *)moby;
-    void *animA = (m[0x42] == 0xFF) ? *(void **)(m + 0x5C) : *(void **)(m + 0x58);
-    f32 blend = *(f32 *)(m + 0x44);
-    f32 framesA = IntToFloat(*(s16 *)((char *)animA + 4));
+    u8 *anim = (m[0x42] != 0xFF) ? *(u8 **)(m + 0x58) : *(u8 **)(m + 0x5C);
 
-    if (blend == 0.0f) {
-        return framesA * 0.0625f;
+    if (*(f32 *)(m + 0x44) == 0.0f) {
+        return IntToFloat(*(s16 *)(anim + 4)) * 0.0625f;
     }
-    if (m[0x42] == m[0x43] && m[0x41] >= m[0x40]) {
-        void *animB = *(void **)(m + 0x5C);
-        f32 framesB = IntToFloat(*(s16 *)((char *)animB + 4));
-        return (framesA * (1.0f - blend) + framesB * blend) * 0.0625f;
+    if (m[0x42] != m[0x43] || m[0x40] > m[0x41]) {
+        return IntToFloat(*(s16 *)(anim + 4)) * 0.0625f + *(f32 *)(m + 0x44);
     }
-    return framesA * 0.0625f + blend;
+    {
+        u8 *animB = *(u8 **)(m + 0x5C);
+        f32 framesA = IntToFloat(*(s16 *)(anim + 4)) * (1.0f - *(f32 *)(m + 0x44));
+        return (framesA + IntToFloat(*(s16 *)(animB + 4)) * *(f32 *)(m + 0x44)) * 0.0625f;
+    }
 }
 #endif
 
