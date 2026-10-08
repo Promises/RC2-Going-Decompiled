@@ -2508,15 +2508,26 @@ typedef struct ReleaseTag {
     u8 bytes[4];
 } ReleaseTag;
 
+/* The module loader's RPC buffer, sent and received in place. The reply to
+ * function 0xFF is the 4-byte release tag at +0; a module call sends the id
+ * at +0 and the argument block at +0x104 and gets status/result back at
+ * +0 / +4. */
+typedef struct LoadFileBuffer {
+    s32 word0;
+    s32 argLen;
+    u8 path[0xFC];
+    u8 args[0xFC];
+} LoadFileBuffer;
+
 extern IopHeapClient D_00140500; /* client bound to server 0x80000006 */
-extern u8 D_00140300[4];         /* RPC receive buffer */
+extern LoadFileBuffer D_00140300;
 
 /**
  * Bind the RPC client D_00140500 to IOP server 0x80000006 (the module
  * loader) unless already done (D_00134748 >= 0), retrying after a
  * ~1M-iteration busy wait until the server answers; then mark it bound
  * (D_00134748 = 0), call its function 0xFF to fetch the IOP's 4-byte
- * release tag into D_00140300 and keep a copy in D_00140528.
+ * release tag into the RPC buffer D_00140300 and keep a copy in D_00140528.
  *
  * @return 0 on success or if already bound; -1 if sceSifBindRpc fails;
  *         0xFFFEFFFF if the tag query fails
@@ -2535,11 +2546,11 @@ s32 func_0011E938(void) {
             }
             if (D_00140500.serve != 0) {
                 D_00134748 = 0;
-                if (func_0011D620(&D_00140500, 0xFF, 0, 0, 0, D_00140300, 4,
+                if (func_0011D620(&D_00140500, 0xFF, 0, 0, 0, &D_00140300, 4,
                                   0, 0) < 0) {
                     return -0x10001;
                 }
-                *(ReleaseTag *)D_00140528 = *(ReleaseTag *)D_00140300;
+                *(ReleaseTag *)D_00140528 = *(ReleaseTag *)&D_00140300;
                 return 0;
             }
             for (spin = 0x100000; spin != -1; spin--) {
@@ -2580,9 +2591,59 @@ s32 func_0011EAC8(void) {
     return 0;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011EB00);
+/* A module argument block, copied as a unit when it fills the buffer
+ * (cc1's inline block move, with its run-time alignment test). */
+typedef struct ModuleArgs {
+    u8 bytes[0xFC];
+} ModuleArgs;
 
-extern void func_0011EB00(s32 arg0, s32 arg1, s32 arg2, void *outbuf);
+/**
+ * Call module-loader function 6 (load or start a module, with arguments)
+ * over the D_00140500 RPC client: make sure the client is bound
+ * (func_0011E938) and the IOP release is compatible (func_0011EA38), put
+ * `id` and up to 0xFC bytes of `args` into the RPC buffer D_00140300, and
+ * run the call in place.
+ *
+ * @param id       module id / request word, sent at +0
+ * @param argLen   argument bytes; clamped to 0xFC
+ * @param args     argument block, or 0 for none
+ * @param result   receives the reply's second word
+ * @return the reply's first word; -0x10000 if the bind failed, -0x10004 on
+ *         a release mismatch, -0x10001 if the RPC failed
+ *
+ * The reply's status is read into a local before `*result` is stored (the
+ * store may alias the buffer, and the ROM loads the status first).
+ */
+s32 func_0011EB00(s32 id, s32 argLen, const void *args, s32 *result) {
+    if (func_0011E938() < 0) {
+        return -0x10000;
+    }
+    if (func_0011EA38() != 0) {
+        return -0x10004;
+    }
+    D_00140300.word0 = id;
+    if (args != 0) {
+        if (argLen > 0xFC) {
+            *(ModuleArgs *)D_00140300.args = *(const ModuleArgs *)args;
+            D_00140300.argLen = 0xFC;
+        } else {
+            memcpy(D_00140300.args, args, argLen);
+            D_00140300.argLen = argLen;
+        }
+    } else {
+        D_00140300.argLen = 0;
+    }
+    if (func_0011D620(&D_00140500, 6, 0, &D_00140300, 0x200, &D_00140300, 8,
+                      0, 0) < 0) {
+        return -0x10001;
+    }
+    {
+        s32 status = D_00140300.word0;
+
+        *result = D_00140300.argLen;
+        return status;
+    }
+}
 
 /**
  * Forward (arg0, arg1, arg2) to func_0011EB00, supplying a 16-byte scratch
@@ -2590,7 +2651,7 @@ extern void func_0011EB00(s32 arg0, s32 arg1, s32 arg2, void *outbuf);
  */
 void func_0011ED08(s32 arg0, s32 arg1, s32 arg2) {
     u8 buf[16];
-    func_0011EB00(arg0, arg1, arg2, buf);
+    func_0011EB00(arg0, arg1, (const void *)arg2, (s32 *)buf);
 }
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011ED28);
