@@ -608,6 +608,8 @@ usa text/235FE8 GuiMapScreenInit
 usa text/235FE8 GuiStatsPanelScreenInit
 usa text/235FE8 GuiScrollListScreenInit
 usa text/235FE8 GuiInfoPanelScreenInit
+usa text/235FE8 func_00341548
+usa text/235FE8 func_0033DE10
 usa text/191238 func_00297E80
 usa text/191238 DrawSkyShellsScaledSpin
 usa text/191238 MapBeginUpload

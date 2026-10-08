@@ -5351,20 +5351,33 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
  * (0,-143,0,114,0,140), scale 0.67. Builds two identical lists (+0x2DC and +0x324),
  * each: GuiListElementInit(0x96 px wide, v34=1, tag D_1ADC60), 0x10 px tall
  * (SetVisibleRows), meter max 0x400 (SetItemCount), value 0, colour pairs (0x55F0C070 x2, 0x60442D00 x2), +0x44=
- * 0x20FFFFFF / +0x38=0. Clear +0x2D8, then func_0033E070(w, 0). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033DE10);
+ * 0x20FFFFFF / +0x38=0. Clear +0x2D8, then func_0033E070(w, 0).
+ * Params: w = the screen (GuiSystemInit builds it at gui+0x3DA78); pool = the
+ * GUI pool (may be 0). No return value.
+ * MATCHED byte-exact on the s136os arm (task #2027), device-free. Solo s136os
+ * harness, words differing / built words, ROM 151 + 1 alignment pad:
+ *  - master's #else as written: 24 after task #1969's re-spellings (NOTE
+ *    #9988: list pointers formed after the record, the record zeroed
+ *    [1],[2],[3],[0], each seed float stored through a fresh read of +0x36C),
+ *    all of them register renames (local-alloc order);
+ *  - GuiDialogBoxSetText3 declared void: 0. Its definition sits in its own
+ *    guarded arm, so this function's solo TU otherwise calls it as implicit
+ *    int, and that call_value's $v0 shifted every list/box register. Declaring
+ *    GuiListElementInit void as well changes nothing; alone it leaves 24.
+ * GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+ * (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in tools/ee/s136os_functions.txt)
+ * and spliced over S136OS_SLOT by tools/ee/s136os_splice.sh. There is no asm
+ * fallback. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0033DE10)
+S136OS_SLOT(func_0033DE10);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033DE10, unit objdiff): 70.90%,
-   75/170 insns differ. Residual: UNKNOWN-daddu (first differing insn: '' vs 'daddu s5, a0, zero').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
 s32 func_0033E070(void *w, s32 flags);
 extern void GuiDialogBoxInitBorder(void *w, void *pool, void *borderCfg);
+extern void GuiDialogBoxSetText3(void *p, s32 t0, s32 t1, s32 t2);
 extern u8 D_1ADE20[8], D_1ADC60[];
 void func_0033DE10(void *w, GuiPool *pool) {
-    GuiElement *list1 = (GuiElement *)((char *)w + 0x2DC);
-    GuiElement *list2 = (GuiElement *)((char *)w + 0x324);
+    GuiElement *list1;
+    GuiElement *list2;
     void *obj;
     s32 t0, t1, t2;
 
@@ -5372,15 +5385,15 @@ void func_0033DE10(void *w, GuiPool *pool) {
     if (pool != 0) {
         obj = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
         *(void **)((char *)w + 0x36C) = obj;
-        *(s32 *)((char *)obj + 0x0) = 0;
         *(s32 *)((char *)obj + 0x4) = 0;
         *(s32 *)((char *)obj + 0x8) = 0;
         *(s32 *)((char *)obj + 0xC) = 0;
+        *(s32 *)((char *)obj + 0x0) = 0;
     }
-
-    obj = *(void **)((char *)w + 0x36C);
-    *(f32 *)((char *)obj + 0x0) = 255.0f;
-    *(f32 *)((char *)obj + 0x4) = 195.0f;
+    list1 = (GuiElement *)((char *)w + 0x2DC);
+    list2 = (GuiElement *)((char *)w + 0x324);
+    *(f32 *)(*(char **)((char *)w + 0x36C) + 0x0) = 255.0f;
+    *(f32 *)(*(char **)((char *)w + 0x36C) + 0x4) = 195.0f;
     GuiDialogBoxInitBorder((char *)w + 0x8, pool, D_1ADE20);
 
     t0 = GetLocalizedString(0x2C2D);
@@ -7526,59 +7539,110 @@ void func_003413A8(void *self) {
  * pointers to the config locals + to self sub-elements at +0x17C/+0x214/+0x7D0/
  * +0xA78/+0x880, fields from self+0x814/+0x818/+0x80C/+0x820 and the
  * self[+0x81C]==1 flag) and hands it to func_003380B8 to instantiate the elements.
- * Struct layout asm-verified (struct base sp+0x60). Faithful TARGET_NATIVE #else
- * (engine 2.96 = no byte-match). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00341548);
+ * Struct layout asm-verified (struct base sp+0x60).
+ * Params: self = the quick-select screen (its only caller is func_00341160).
+ * No return value.
+ * MATCHED byte-exact on the s136os arm (task #2027), device-free: task #1957's
+ * best body (NOTE #9971: separate 16-aligned config locals copied whole, the
+ * two overwritten defaults, the descriptor fill split around the glyph call)
+ * plus a void declaration of GuiElementSetGlyph. Its definition sits in its own
+ * guarded arm, so this function's solo TU otherwise calls it as implicit int;
+ * the unused $v0 decided one sched2 tie (typeActive's sltiu and its +0xB4
+ * store against the +0xA78 addiu and its +0xA0 store). Solo s136os harness:
+ * without the declaration 4/112 words differ (where #1957's 528
+ * transpositions stalled), with it 0/112.
+ * GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+ * (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in tools/ee/s136os_functions.txt)
+ * and spliced over S136OS_SLOT by tools/ee/s136os_splice.sh. There is no asm
+ * fallback. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00341548)
+S136OS_SLOT(func_00341548);
 #else
-/* Declarations this body needs whose only other declarations sit in other
- * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+/* An 8-byte layout config block, copied whole (ldl/ldr -> sdl/sdr). Each copy is
+ * a separate 16-aligned local in the ROM's frame (stride 0x10), not an array. */
+typedef struct { s32 w[2]; } GuiGridCfg8;
+
+/* The 0x5C screen descriptor func_00341548 hands to func_003380B8. */
+typedef struct {
+    void *label;        /* 0x00  grid table D_259CC0 */
+    s32   cols;         /* 0x04  3 */
+    s32   rows;         /* 0x08  2 */
+    s32   objCfg814;    /* 0x0C  self[0x814] */
+    s32   objCfg818;    /* 0x10  self[0x818] */
+    void *layout0;      /* 0x14  &cfg0 */
+    void *layout1;      /* 0x18  &cfg1 */
+    void *layout2;      /* 0x1C  &cfg2 */
+    void *layout3;      /* 0x20  &cfg3 */
+    void *layout4;      /* 0x24  &cfg4 */
+    void *child17C;     /* 0x28  self+0x17C (the glyph element) */
+    void *child2C;      /* 0x2C  0 */
+    void *child214;     /* 0x30  self+0x214 */
+    void *child34;      /* 0x34  0 */
+    s32   flag38;       /* 0x38  1 */
+    void *child7D0;     /* 0x3C  self+0x7D0 */
+    void *childA78;     /* 0x40  self+0xA78 */
+    void *child880;     /* 0x44  self+0x880 */
+    s32   objCfg80C;    /* 0x48  self[0x80C] */
+    s32   objCfg820;    /* 0x4C  self[0x820] */
+    s32   scratch50;    /* 0x50  &cfg5 (ILP32), 0 until set */
+    s32   typeActive;   /* 0x54  self[0x81C] == 1 */
+    s32   enable;       /* 0x58  0 */
+} GuiGlyphGridDesc;
+
 extern char *g_guiInstance;
-/* (end of this body's declarations) */
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00341548, unit objdiff): 0.00%,
-   153/157 insns differ. Residual: UNKNOWN-addiu + gp/abs-mixed symbol (first differing insn: 'addiu sp, sp, -0x100' vs 'addiu sp, sp, -0xa0').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
+extern void func_003380B8(void *params);
+extern void GuiElementSetGlyph(GuiElement *e, s32 codepoint, s32 font);
 extern u8   D_1AE068[], D_1AE070[], D_1AE078[], D_1AE080[], D_1AE088[];
 extern u8   D_259CC0[];
+
 void func_00341548(void *self) {
+    GuiGridCfg8 cfg0;
+    GuiGridCfg8 cfg1;
+    GuiGridCfg8 cfg2;
+    GuiGridCfg8 cfg3;
+    GuiGridCfg8 cfg4;
+    GuiGridCfg8 cfg5;
+    GuiGlyphGridDesc d;
+    GuiGlyphGridDesc *p;
     u8 *s = (u8 *)self;
-    u8  cfg[6][8];
-    u8  params[0x60];
 
-    memcpy(cfg[0], D_1AE070, 8);
-    memcpy(cfg[1], D_1AE078, 8);
-    memcpy(cfg[2], D_1AE070, 8);
-    memcpy(cfg[3], D_1AE080, 8);
-    memcpy(cfg[4], D_1AE068, 8);
-    memcpy(cfg[5], D_1AE088, 8);
-
-    *(void **)(params + 0x00) = D_259CC0;
-    *(u32 *)(params + 0x04)  = 3;
-    *(u32 *)(params + 0x08)  = 2;
-    *(u32 *)(params + 0x0C)  = *(u32 *)(s + 0x814);
-    *(u32 *)(params + 0x10)  = *(u32 *)(s + 0x818);
-    *(void **)(params + 0x14) = cfg[0];
-    *(void **)(params + 0x18) = cfg[1];
-    *(void **)(params + 0x1C) = cfg[2];
-    *(void **)(params + 0x20) = cfg[3];
-    *(void **)(params + 0x24) = cfg[4];
-    *(void **)(params + 0x28) = s + 0x17C;
-    *(u32 *)(params + 0x2C)  = 0;
-    *(void **)(params + 0x30) = s + 0x214;
-    *(u32 *)(params + 0x34)  = 0;
-    *(u32 *)(params + 0x38)  = 1;
-    *(void **)(params + 0x3C) = s + 0x7D0;
-    *(void **)(params + 0x40) = s + 0xA78;
-    *(void **)(params + 0x44) = s + 0x880;
-    *(u32 *)(params + 0x48)  = *(u32 *)(s + 0x80C);
-    *(u32 *)(params + 0x4C)  = *(u32 *)(s + 0x820);
-    *(void **)(params + 0x50) = cfg[5];
-    *(u32 *)(params + 0x54)  = (*(s32 *)(s + 0x81C) == 1);
-    *(u32 *)(params + 0x58)  = 0;
-
+    p = &d;
+    cfg0 = *(GuiGridCfg8 *)D_1AE070;
+    cfg1 = *(GuiGridCfg8 *)D_1AE078;
+    cfg2 = *(GuiGridCfg8 *)D_1AE070;
+    cfg3 = *(GuiGridCfg8 *)D_1AE080;
+    cfg4 = *(GuiGridCfg8 *)D_1AE068;
+    cfg5 = *(GuiGridCfg8 *)D_1AE088;
+    /* Two defaults the ROM stores and then overwrites: +0x50 = 0, and +0x54 = 1
+     * through the descriptor pointer (a plain `d.` store is dead and flow
+     * deletes it; the ROM's is `sw $14,0x54($22)`). */
+    d.scratch50 = 0;
+    p->typeActive = 1;
+    d.typeActive = (*(s32 *)(s + 0x81C) == 1);
+    d.objCfg820 = *(s32 *)(s + 0x820);
+    d.childA78 = s + 0xA78;
+    d.objCfg814 = *(s32 *)(s + 0x814);
+    d.objCfg818 = *(s32 *)(s + 0x818);
+    d.layout4 = &cfg4;
+    d.flag38 = 1;
+    d.cols = 3;
+    d.rows = 2;
+    d.label = D_259CC0;
+    d.child880 = s + 0x880;
+    d.child34 = 0;
     GuiElementSetGlyph((GuiElement *)(s + 0x17C), (s32)g_guiInstance + 0x8710, 0x5D);
-    func_003380B8(params);
+    d.child17C = s + 0x17C;
+    d.child214 = s + 0x214;
+    d.child7D0 = s + 0x7D0;
+    d.layout3 = &cfg3;
+    d.layout2 = &cfg2;
+    d.layout1 = &cfg1;
+    d.scratch50 = (s32)&cfg5;
+    d.objCfg80C = *(s32 *)(s + 0x80C);
+    d.child2C = 0;
+    d.layout0 = &cfg0;
+    d.enable = 0;
+    func_003380B8(p);
 }
 #endif
 
