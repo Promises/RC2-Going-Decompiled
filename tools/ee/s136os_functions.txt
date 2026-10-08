@@ -500,6 +500,7 @@ usa text/250080 FmvBitstreamObjInit
 usa text/250080 func_003518B8
 usa cod/0321A0 snd_SetupDmaTransfer
 usa cod/0321A0 snd_BankLoadByLoc
+usa cod/0321A0 snd_SendCommandSync
 usa cod/0321A0 snd_BankLoadFromIOP
 usa cod/0321A0 snd_BankLoadAsync
 usa cod/0321A0 func_00133250

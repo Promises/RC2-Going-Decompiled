@@ -613,23 +613,64 @@ void func_00132BC0(s32 arg0, s32 arg1, s32 arg2, s32 arg3, s32 arg4, s32 arg5,
  * before snd_SendCommandSync at 0x132C48. Pure padding, no C. */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_00132C08);
 
-/* snd_SendCommandSync: assemble a 989snd command of `count` bytes and issue it
- * synchronously over the SIF RPC channel, blocking until the reply lands. arg0
- * is the RPC function number, arg1 the parameter-byte count, arg2 the parameter
- * bytes. Returns the RPC reply status word (D_001A7084). Not matched — the
- * multi-callee-save frame hits the same 16-byte save-slot layout wall as
- * snd_SetupDmaTransfer (near-miss). Portable #else body (no branch-likely delay
- * slots; all control flow is plain blez/bnez/beqz/b).
- *
- * func_0011D620 is the sceSifCallRpc-shaped primitive (client, fno, mode, send
- * buf/size, recv buf/size, end callback/param); a zero-length command sends no
- * buffer. */
-extern u8  D_001A70C0[];   /* RPC command parameter byte buffer (absolute) */
-extern u8  D_001A7080[];   /* DMA send / RPC receive scratch buffer (absolute) */
-extern s32 D_001A7084[];   /* RPC reply status word (absolute) */
+/* g_sndCmdRpcSend / g_sndCmdRpcRecv (+ its reply word at +4), the command
+ * channel's RPC send and receive blocks. The ROM forms each address with an
+ * absolute lui/addiu at every use and loads the reply word through the
+ * unsplit `lui $16; lw $16` macro, i.e. cc1-small / assembler-absolute like
+ * D_001A7040: complete small declarations so cc1 prints unsplit macros, and
+ * `.extern ,16` (RULING #8620 term 4, offset 0) so GNU as expands them
+ * absolutely. With incomplete arrays cc1 splits %hi/%lo and hoists the %hi
+ * into a callee-saved register. Cost in snd_SendCommandSync of removing each
+ * alone (words /105, s136os solo TU, task #1914): D_001A70C0's .extern 91 and
+ * [8] 22, D_001A7080's .extern 72 and [8] 71, D_001A7084's .extern 19 and
+ * [1] 9. */
+__asm__(".extern D_001A70C0, 16");
+__asm__(".extern D_001A7080, 16");
+__asm__(".extern D_001A7084, 16");
+extern u8  D_001A70C0[8];  /* RPC command parameter byte buffer */
+extern u8  D_001A7080[8];  /* DMA send / RPC receive block */
+extern s32 D_001A7084[1];  /* RPC reply status word (receive block + 4) */
 extern void snd_FlushCommandRing(void);
+
+/* SCHEDULING DEVICE (RULING #8435): three `noreorder` nops, ordered after the
+ * call that produces `v` and before its test. Two spin loops in the ROM read
+ * `jal <poll>; nop; nop; nop; nop; bnez/beqz $2` — the delay slot plus three
+ * nops cc1 never emits: snd_SendCommandSync's at 0x132D80..0x132D94 and
+ * func_00133250's at 0x133298..0x1332AC. This reproduces those three. No-op on
+ * the native arm. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", snd_SendCommandSync);
+#define R5900_SPIN_PAD3(v) \
+    __asm__(".set noreorder\n\tnop\n\tnop\n\tnop\n\t.set reorder" : "+r"(v))
+#else
+#define R5900_SPIN_PAD3(v) ((void)0)
+#endif
+
+/**
+ * snd_SendCommandSync - send one 989snd command over the SIF RPC command
+ * channel and wait for its reply.
+ *
+ * @fno:      the RPC function number (the command).
+ * @count:    number of parameter bytes; 0 sends no buffer.
+ * @cmdBytes: the parameter bytes, copied into g_sndCmdRpcSend.
+ * Returns the reply status word the IOP writes at g_sndCmdRpcRecv + 4.
+ *
+ * Drains any in-flight command-ring transfer, kicks the receive block's DMA
+ * set-up, waits (pumping, with a diagnostic unless D_001A74F8 suppresses it)
+ * until the channel is idle, issues the RPC and spins until
+ * snd_ServiceRpcCompletion confirms the reply. Before returning it flushes the
+ * active command ring when that ring holds entries and no service is pending.
+ * func_0011D620 is the sceSifCallRpc-shaped primitive (client, fno, mode, send
+ * buf/size, recv buf/size, end callback/param).
+ *
+ * Compiled by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, selected in
+ * tools/ee/s136os_functions.txt). Devices: the declarations above,
+ * R5900_SPIN_PAD3 in the completion spin (24/105 words without it, s136os solo
+ * TU, task #1914), and an empty tied fence on the reply word, which keeps its
+ * load ahead of the ring test as the ROM issues it (0x132DA0) rather than
+ * sunk into the `beqz` delay slot (20/105 without it).
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_snd_SendCommandSync)
+S136OS_SLOT(snd_SendCommandSync);
 #else
 s32 snd_SendCommandSync(s32 fno, s32 count, void *cmdBytes) {
     s32 i;
@@ -663,15 +704,26 @@ s32 snd_SendCommandSync(s32 fno, s32 count, void *cmdBytes) {
     }
 
     /* spin until the completion service confirms the reply landed */
-    while (snd_ServiceRpcCompletion() == 0) {
+    {
+        s32 done;
+
+        do {
+            done = snd_ServiceRpcCompletion();
+            R5900_SPIN_PAD3(done);
+        } while (done == 0);
     }
 
-    /* if the active ring buffer still holds queued entries and no service is
-     * pending, flush it now */
-    if (*D_001A74A0[D_001A74C0] != 0 && D_001A74C4 == 0) {
-        snd_FlushCommandRing();
+    {
+        s32 result = D_001A7084[0]; /* the reply status word */
+
+        __asm__("" : "+r"(result)); /* scheduling device, see the doc comment */
+        /* if the active ring buffer still holds queued entries and no service
+         * is pending, flush it now */
+        if (*D_001A74A0[D_001A74C0] != 0 && D_001A74C4 == 0) {
+            snd_FlushCommandRing();
+        }
+        return result;
     }
-    return D_001A7084[0];
 }
 #endif
 
@@ -873,18 +925,6 @@ s32 func_00133230(void) {
 extern s32 snd_SendCommandSync(s32 sel, s32 count, void *data);
 extern s32 snd_CheckLoadInProgress(s32 noWait);
 extern s32 D_001A74C8; /* nonzero while the command ring still has pending work */
-
-/* SCHEDULING DEVICE (RULING #8435): three `noreorder` nops, ordered after the
- * call that produces `v` and before its test. The ROM's spin loop at
- * 0x133298..0x1332AC is `jal snd_Pump; nop; nop; nop; nop; bnez $2` — the
- * delay slot plus three nops cc1 never emits; this reproduces those three.
- * No-op on the native arm. */
-#ifndef TARGET_NATIVE
-#define R5900_SPIN_PAD3(v) \
-    __asm__(".set noreorder\n\tnop\n\tnop\n\tnop\n\t.set reorder" : "+r"(v))
-#else
-#define R5900_SPIN_PAD3(v) ((void)0)
-#endif
 
 /**
  * func_00133250 - bring up the IOP sound/loader driver.
