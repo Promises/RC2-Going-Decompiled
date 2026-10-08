@@ -17,6 +17,7 @@
 set -euo pipefail
 REGION="$1"; UNIT="$2"
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"; cd "$ROOT"
+. tools/ee/objdiff_cli.sh
 
 # Ensure the real per-unit objects exist (target has markers stripped already).
 tools/ee/objdiff_build.sh "$REGION" "$UNIT"
@@ -58,5 +59,5 @@ os.makedirs(os.path.join(root, proj), exist_ok=True)
 json.dump(cfg, open(os.path.join(root, proj, "objdiff.json"), "w"), indent=2)
 PY
 
-tools/objdiff-cli-macos-arm64 report generate -p "$PROJ" -o "$PROJ/demo-report.json" -f json-pretty
+"$OBJDIFF" report generate -p "$PROJ" -o "$PROJ/demo-report.json" -f json-pretty
 python3 -c "import json,sys; m=json.load(open('$PROJ/demo-report.json'))['measures']; print(f\"DEMO (base==target): {m['matched_code_percent']:.2f}% code, {m['matched_functions']}/{m['total_functions']} functions\")"

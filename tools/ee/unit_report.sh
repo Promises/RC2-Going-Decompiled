@@ -29,7 +29,7 @@ OBJ="going-decompiled/build/$REGION/obj/$UNIT.o"
 OBJ96="going-decompiled/build/$REGION/obj/$UNIT.engine96.o"
 W="tools/ee/.objdiff/$REGION/$UNIT"
 ENGINE_FUNCS="$W/engine_funcs.txt"
-OBJDIFF=tools/objdiff-cli-macos-arm64
+. tools/ee/objdiff_cli.sh
 [ -f "$EXPECTED" ] && [ -f "$OBJ" ] || { echo "FATAL: objects missing ($EXPECTED / $OBJ) — run objdiff_build.sh first" >&2; exit 2; }
 PROJ="$W/report"; mkdir -p "$PROJ"
 

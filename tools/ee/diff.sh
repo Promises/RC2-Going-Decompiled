@@ -11,7 +11,7 @@
 # build.sh and objdiff_build.sh compile it: ee_cc1.sh is the one compile path.
 #
 # Prints the function's match percentage. For the interactive red/green TUI:
-#   tools/objdiff-cli-macos-arm64 diff -1 tools/ee/.diff/target.o \
+#   tools/objdiff-cli-<macos-arm64|linux-x86_64> diff -1 tools/ee/.diff/target.o \
 #       -2 tools/ee/.diff/base.o <func> -c mips.instrCategory=r5900 -c mips.abi=eabi32
 #
 # Requires the colima `ee-x86` VM + `ee-build` image (see CLAUDE.md).
@@ -21,7 +21,7 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"; cd "$ROOT"
 CFILE="${4:-$(sh tools/ee/ee_cc1.sh --resolve "going-decompiled/src/$REGION/$UNIT")}"
 [ -f "$CFILE" ] || { echo "diff.sh: FATAL — no source $CFILE" >&2; exit 2; }
 W=tools/ee/.diff; mkdir -p "$W"
-OBJDIFF=tools/objdiff-cli-macos-arm64
+. tools/ee/objdiff_cli.sh
 INC="-Igoing-decompiled/include -Igoing-decompiled/include/rtl/ee -Igoing-decompiled/include/rtl/common"
 ASF="-march=r5900 -mabi=eabi -no-pad-sections -EL -G0 -Igoing-decompiled/build/$REGION/include"
 CPPDEF="-D__GNUC__=2 -D__GNUC_MINOR__=9 -D__mips__ -D__mips=3 -D__R5900 -D__LANGUAGE_C -D_LANGUAGE_C -D__EE__ -DINCLUDE_ASM_USE_MACRO_INC=1"

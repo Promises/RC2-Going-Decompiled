@@ -33,7 +33,7 @@ CFILE="${4:-$(sh tools/ee/ee_cc1.sh --resolve "going-decompiled/src/$REGION/$UNI
 # false-PASS path when >1 agent builds on the same worktree. Default = .diff96 (workers
 # unaffected). asm_unit.sh's FIXROOT derives from the output path, so it isolates too.
 W="${GRIND_SCRATCH:-tools/ee/.diff96}"; mkdir -p "$W"
-OBJDIFF=tools/objdiff-cli-macos-arm64
+. tools/ee/objdiff_cli.sh
 CC="${CC296:-tools/ee/cc-296}"   # CC296 env = isolated (e.g. split-address patched) cc1 dir for gate validation
 CC1="$CC/lib/gcc-lib/ee/2.96-ee-001003-1/cc1"
 [ -f "$CC1" ] || { echo "2.96 toolchain missing — run scripts/fetch_ee_toolchain.sh" >&2; exit 2; }
