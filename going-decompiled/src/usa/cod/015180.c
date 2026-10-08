@@ -2254,7 +2254,115 @@ void func_0011D590(RpcCallMsg *msg) {
     }
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011D620);
+/* An RPC call request packet (the SDK's SifRpcCallPkt), sent as command
+ * 0x8000000A. */
+typedef struct SifRpcCallPacket {
+    s32 header[4];
+    s32 recId;
+    s32 pktAddr;    /* 0x14: the packet's own address */
+    s32 rpcId;      /* 0x18 */
+    s32 client;     /* 0x1C */
+    s32 rpcNumber;  /* 0x20: the server function asked for */
+    s32 sendSize;   /* 0x24 */
+    s32 receive;    /* 0x28: where the IOP writes the result */
+    s32 recvSize;   /* 0x2C */
+    s32 rmode;      /* 0x30: 1 = the IOP signals completion */
+    s32 server;     /* 0x34: the bound server, from the client */
+} SifRpcCallPacket;
+
+/**
+ * sceSifCallRpc: call function `rpcNumber` of the IOP RPC server `client` is
+ * bound to. Takes an RPC packet (func_0011D140), records it and its id in the
+ * client, writes back the data cache over the send and receive buffers
+ * (unless `mode` bit 1 says the caller already did), and sends the request
+ * (command 0x8000000A) with the `send` data. With `mode` bit 0 (no-wait) it
+ * returns at once and the reply runs `endFunc(endParam)`; otherwise it blocks
+ * on a fresh semaphore until the reply arrives, then deletes it.
+ *
+ * @param client   the bound client (an SifRpcClient)
+ * @return 0 on success; -1 if no packet was free, -2 if the send failed, -3
+ *         if the semaphore could not be created
+ *
+ * Measured spelling, each part priced by removing it alone (solo harness):
+ *  - the packet's rpcId is read into a local before any client store (else
+ *    the load waits behind the pktAddr store: 6 words);
+ *  - `mode & 2` is taken before the client stores (else it sinks below the
+ *    fence: 5 words);
+ *  - the empty volatile fence between the pktAddr and rpcId stores (RULING
+ *    #8483) holds the ROM's store order; without it cc1 issues the rpcId
+ *    store first in every one of the 24 store orders (2 words);
+ *  - `serve` is read as an s32, so it may alias the packet stores and stays
+ *    after them as in the ROM; read as the field's own pointer type it is
+ *    hoisted to the top (10 words).
+ */
+s32 func_0011D620(void *client, s32 rpcNumber, s32 mode, void *send, s32 sendSize,
+                  void *recv, s32 recvSize, s32 endFunc, s32 endParam) {
+    SifRpcClient *cd = client;
+    struct SemaParam sema;
+    SifRpcCallPacket *call;
+    s32 cacheDone;
+    s32 id;
+
+    call = (SifRpcCallPacket *)func_0011D140(&D_0013E900);
+    if (call == 0) {
+        return -1;
+    }
+    id = call->rpcId;
+    cacheDone = mode & 2;
+    cd->endParam = endParam;
+    cd->pktAddr = (s32)call;
+    __asm__ __volatile__("");
+    cd->rpcId = id;
+    cd->endFunc = endFunc;
+    call->rpcNumber = rpcNumber;
+    call->sendSize = sendSize;
+    call->receive = (s32)recv;
+    call->recvSize = recvSize;
+    call->pktAddr = (s32)call;
+    call->server = *(s32 *)&cd->serve;
+    call->client = (s32)cd;
+    if (!cacheDone) {
+        if (send == recv) {
+            sceSifWriteBackDCache(send, sendSize < recvSize ? recvSize : sendSize);
+        } else {
+            if (sendSize > 0) {
+                sceSifWriteBackDCache(send, sendSize);
+            }
+            if (recvSize > 0) {
+                sceSifWriteBackDCache(recv, recvSize);
+            }
+        }
+    }
+    if (mode & 1) {
+        if (endFunc == 0) {
+            call->rmode = 0;
+        } else {
+            call->rmode = 1;
+        }
+        cd->semaId = -1;
+        if (func_0011CD20(0x8000000A, (s32)call, 0x40, (s32)send, cd->buff, sendSize) != 0) {
+            return 0;
+        }
+        func_0011D1E8((s32 *)call);
+        return -2;
+    }
+    sema.maxCount = 1;
+    sema.initCount = 0;
+    cd->semaId = func_0011AC20((s32 *)&sema);
+    if (cd->semaId < 0) {
+        func_0011D1E8((s32 *)call);
+        return -3;
+    }
+    call->rmode = 1;
+    if (func_0011CD20(0x8000000A, (s32)call, 0x40, (s32)send, cd->buff, sendSize) == 0) {
+        func_0011AC30(cd->semaId);
+        func_0011D1E8((s32 *)call);
+        return -2;
+    }
+    func_0011AC60(cd->semaId);
+    func_0011AC30(cd->semaId);
+    return 0;
+}
 
 /**
  * Validity predicate for the RPC handle in arg0: returns 1 iff arg0[0] points
