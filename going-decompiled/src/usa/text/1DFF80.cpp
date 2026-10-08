@@ -474,40 +474,64 @@ void func_002E05C0(s32 a, s32 b, s32 c) {
 }
 #endif
 
-/* Sibling of func_002E07F8: builds the same 32-scanline-strip framebuffer-fill
- * GIF packet, but first appends a standalone GS register write (AppendGsRegPacket),
- * uses a fixed fill colour (0x7F808080) instead of a caller value, and leaves the
- * chain open (advances the cursor without emitting a closing DMAtag). Screen dims
- * from g_gsScreenContext; nRows = h/32. GS AD register-data kept as documented hex.
- * Handwritten-style packet build; portable-only #else. */
-/* DLI lever MEASURED (task #1220; unit objdiff report, objdiff_build.sh, this #else body promoted
- * SOLO, sdk29 arm, colima-ee-x86; every other row in the unit unchanged). cc1 emits
- * `dli $3,0x1000000000000001` and `dli $10,0x2400000000008001`; the ROM holds Ps2EeAs's expansion
- * of that value at 0x2E06AC ($13) and 0x2E06EC ($9), but in a different register. No allowlist row
- * applies to the body AS COMPILED: a row must carry the ROM's words for cc1's register. A #8598
- * pin + row is UNTRIED. Solo score 29.23%. Residual class: REGALLOC at the dli site, plus
- * PACKED-SAVE (ROM saves at stride 8, cc1 2.9 at 16; NOTE #8777). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E0650);
+/* Append the screen-clear prologue packet: a standalone GS register write, then a
+ * DMAtag + GIFtag(A+D) + GS register-setup list and one screen-wide sprite quad per
+ * 32-scanline strip. Sibling of func_002E07F8, which builds the same strip fill but
+ * takes its fill colour from the caller and closes the chain; this one uses a fixed
+ * colour (0x7F808080) and leaves the chain open (the cursor is only advanced past
+ * the reg-writes and quad rows). Screen dims from g_gsScreenContext (+0x150 h,
+ * +0x152 v); nRows = h/32. GS AD register data kept as documented hex. No params,
+ * no return.
+ *
+ * Quad XY packing: each quad word is `y | (s64)x << 16`, built from SIGN-extended
+ * 32-bit values (the ROM's addu/subu + dsll 0x10, no dsll32/dsrl32 zero-extension).
+ * That equals the zero-extended packing whenever the 32-bit fields are
+ * non-negative, which holds for any screen h and v up to 0x1000.
+ *
+ * GUARD (task #1940): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback. On native it is plain C.
+ * What it took (solo s136 screen, words differing of 106; the two DEVICES are priced
+ * by removing each alone, the spellings are cumulative):
+ *   - the four DMAtag stores through g_frameDmaCursor afresh, as func_002E05C0 above
+ *     (the s136 arm has no strict aliasing, so the ROM re-loads the cursor per store);
+ *   - the quad pointer taken from the cursor RE-READ at the advance (`base`), not
+ *     from the first read (the ROM forms it as base + 0x60 from $15);
+ *   - `i` zeroed before the `if` and a do-while with no second guard (the ROM keeps
+ *     an up-counting i);
+ *   - DEVICE: `i` is REGISTER-PINNED to $14 by EE_REG (RULING #8598; empty on
+ *     native). Without it the global allocator ranks `base` (4 refs / 26 insns)
+ *     above `i` (7 refs / 80 insns), gives base $14 and i $15, the ROM's pair
+ *     swapped: 8/106. Pin-free spellings all left that swap (12/106 before the dli
+ *     rows: declaration order, `i = 0` placement, `++i` test, `register` alone, base
+ *     as a u32 or u64 pointer, quad from `ad`); hoisting quad or the loop prelude
+ *     out of the `if` was worse (54, 80);
+ *   - two RULING #8549 sites in tools/ee/ps2eeas_dli_sites.txt for this function:
+ *     `dli $13,0x1000000000000001` (0x2E06AC) and `dli $9,0x2400000000008001`
+ *     (0x2E06EC), where the ROM has Ps2EeAs's li/dsll32/ori and GNU as emits
+ *     lui/dsll32/ori: 2 words each, 4/106 without the rows. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002E0650)
+S136OS_SLOT(func_002E0650);
 #else
 void func_002E0650(void) {
     u8  *ctx     = g_gsScreenContext;
     s32  screenH = *(s16 *)(ctx + 0x150);
     s32  screenV = *(s16 *)(ctx + 0x152);
     s32  nRows   = screenH / 32;
-    u32 *dmatag;
+    u8  *base;
     u64 *ad;
-    s32  i;
+    register s32 i EE_REG("$14");
 
     AppendGsRegPacket(0x42, 0x64);
 
     /* opening DMAtag: qwc = 5 reg-writes + nRows quads */
-    dmatag = (u32 *)g_frameDmaCursor;
-    dmatag[0] = (nRows + 5) | 0x10000000;
-    dmatag[1] = 0;
-    dmatag[2] = 0;
-    dmatag[3] = (nRows + 5) | 0x50000000;
-    g_frameDmaCursor = (u8 *)dmatag + 0x10;
+    ((u32 *)g_frameDmaCursor)[0] = (nRows + 5) | 0x10000000;
+    ((u32 *)g_frameDmaCursor)[1] = 0;
+    ((u32 *)g_frameDmaCursor)[2] = 0;
+    ((u32 *)g_frameDmaCursor)[3] = (nRows + 5) | 0x50000000;
+    base = g_frameDmaCursor;
+    g_frameDmaCursor = base + 0x10;
 
     /* GIFtag(A+D) + AD register-write list; each AD entry = {data @+0, GS reg @+8} */
     ad = (u64 *)g_frameDmaCursor;
@@ -520,26 +544,27 @@ void func_002E0650(void) {
     ad[9] = 0x44;                                           /* AD: data -> GS reg */
 
     /* one screen-spanning sprite quad per strip; XY packed 16.16, Y band += 0x200 */
+    i = 0;
     if (nRows > 0) {
-        s32  vEdge    = screenV << 3;
-        s32  hEdge    = screenH << 3;
-        u64  xLeftHi  = (u64)(u32)(0x8000 - vEdge)          << 16;
-        u64  xRightHi = (u64)(u32)((screenV << 3) + 0x7FF0) << 16;
-        s32  yTop     = 0x8000 - hEdge;
-        s32  yBot     = 0x8200 - hEdge;
-        u64 *quad     = (u64 *)((u8 *)dmatag + 0x60);
+        s32  vEdge  = screenV << 3;
+        s64  xLeft  = (s64)(0x8000 - vEdge) << 16;
+        s64  xRight = (s64)(vEdge + 0x7FF0) << 16;
+        s32  hNeg   = -(screenH << 3);
+        s32  yTop   = hNeg + 0x8000;
+        s32  yBot   = hNeg + 0x8200;
+        u64 *quad   = (u64 *)(base + 0x60);
 
-        for (i = 0; i < nRows; i++) {
-            quad[0] = (u32)yTop | xLeftHi;
-            quad[1] = (u32)yBot | xRightHi;
-            quad += 2;
-            yTop += 0x200;
+        do {
+            *quad++ = yTop | xLeft;
+            *quad++ = yBot | xRight;
             yBot += 0x200;
-        }
+            yTop += 0x200;
+            i++;
+        } while (i < nRows);
     }
 
     /* leave the chain open: just advance past the reg-writes + quad rows */
-    g_frameDmaCursor = (u8 *)g_frameDmaCursor + (nRows << 4) + 0x50;
+    g_frameDmaCursor = g_frameDmaCursor + ((nRows << 4) + 0x50);
 }
 #endif
 
