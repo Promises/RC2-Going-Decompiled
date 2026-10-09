@@ -574,7 +574,22 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0
  * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
  * every other remaining arm). Residual on the better arm (sdk29): UNKNOWN-addiu (first differing
  * insn: ROM `addiu sp,sp,-224` vs built `addiu sp,sp,-256`). Levers: engine96 with sched1 MEASURED
- * (flag not landed): 74.61%. */
+ * (flag not landed): 74.61%.
+ * TODO(match) t2054, s136os arm (solo compile, -O2 -G8 -fno-gcse -fopt-stack, words compared
+ * with relocated fields masked, objdump -z; N/79 = differing ROM words): best 2/79 in two
+ * DIFFERENT shapes, neither closes. The ROM has two nops before `div.s $f2,$f2,$f1` that cc1
+ * does not emit, so both need a RULING #8435 pad plus the RULING #8598 pin q = $f2:
+ *   (a) non-volatile pad `"+f"(q) : "f"(d)` (NOTE #10048's body): 2/79. The tp[1] load
+ *       `lwc1 $f0,0x94($29)` issues after the two nops instead of before them.
+ *   (b) VOLATILE pad `"+f"(q) : "f"(d), "f"(t1)` with t1 = tp[1] read before it: the tail
+ *       is word-exact, but the barrier moves the prologue's jal delay slot. The ROM fills
+ *       it with `swc1 $f20,0xD0($29)` and has `daddu $19,$5,$0` before `sd $31`; ours
+ *       swaps them (2/79). An empty volatile fence before the first call is 8/79, after it
+ *       16/79. The prologue stays swapped with an f32 *worldPos parameter or a hoisted
+ *       1024.0f local. Without the q pin it is 12/79.
+ * Worse: (b) without t1 in the pad 17/79, + a t1 = $f0 pin 4/79, + d = $f1 12/79; a
+ * non-volatile pad taking t1 as an input 22-24/79 in every operand arrangement; a "memory"
+ * clobber in place of volatile 23-24/79. Class: SCHEDULE. Bodies in the store (task #2054). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027A138);
 #else
@@ -2079,7 +2094,13 @@ void FadeOutToBlackBlocking(s32 frames)
  * every other remaining arm). Residual on the better arm (sdk29): SIBCALL (first differing insn:
  * ROM `lui v0,0x0  [HI16 0x001B87F4]` vs built `lw v1,0(gp)  [GPREL16 0x001B87F4]`). Levers:
  * sibcall guard RUN: sdk29 74.68% / engine96 49.36%; cc1-small/absolute globals model RUN: 68.08%
- * (sdk29); engine96 with sched1 MEASURED (flag not landed): 57.05%. */
+ * (sdk29); engine96 with sched1 MEASURED (flag not landed): 57.05%.
+ * TODO(match) t2054, s136os arm: NOTE #10008's pin-free body re-measured at 9/66. Every
+ * re-phrasing gives the same 9 words: frame read into a local, phase computed first,
+ * param as an if over 0x148, 0x17C held in its own local in either declaration order.
+ * Viewing g_sceneFrame through a section(".data") alias (RULING #8620) instead of the
+ * incomplete array is also 9/66. The residual is allocation alone: ROM %hi $2 / 100 $3 /
+ * 0x17C $5 / mfhi $6, ours $3 / $2 / $3 / $5. Class: ALLOCATION. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027DB38);
 #else
@@ -3902,7 +3923,17 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0
  * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
  * every other remaining arm). Residual on the better arm (engine96): UNKNOWN-addiu (first
  * differing insn: ROM `addiu v1,zero,48` vs built `sll v0,a1,0x1`). Levers: engine96 with sched1
- * MEASURED (flag not landed): 67.08%. */
+ * MEASURED (flag not landed): 67.08%.
+ * TODO(match) t2054, s136os arm (solo compile under this unit's -fno-gcse, same harness as
+ * func_0027A138's screen): re-indexing the record after the loop (`rec = g_sceneActorMobys +
+ * 0x44 + actorIdx * 0x30;` before the result store, the loop as a down-counted do-while)
+ * reproduces the ROM's second `mult`/`addu` and is 39 words against the ROM's 40. The
+ * missing word is the ROM's `daddu $10,$2,$0`: it keeps the %hi of g_sceneActorMobys+0x44
+ * live across the loop and re-forms only the %lo after it. That is the gcse cross-block
+ * %hi copy (FACT #9472). With -fno-gcse removed (a diagnostic only: no per-function flag
+ * without a RULING) the copy appears and the body is 38 words. The rest is allocation
+ * (total in $4 rather than $9, no `daddu $4,$6,$0` pixel copy, no nop before the loop).
+ * Class: FLAG (this unit's -fno-gcse) + ALLOCATION. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00281020);
 #else
