@@ -3986,7 +3986,8 @@ s32 func_0012D768(IpuDecoder *dec, IpuPictureSize *size) {
  * field picture is two passes of half-size rows, (blockSize / 2) * 384 bytes,
  * each output row stepping (maxHeight / 16) * 192 bytes, and the destination
  * moves on by bufferSize * 192 bytes after each pass. Called by
- * func_0012DC50 when IpuDecoder.fieldB0 is clear.
+ * func_0012DC50 (jal at 0x12DD2C) when IpuDecoder.fieldB0 is clear, and by
+ * func_0012DD60 (jal at 0x12DEB0).
  *
  * `fields` is declared before the two addresses: that order decides which
  * spilled local gets which stack slot (sp+4 vs sp+8), and the other order
@@ -5181,7 +5182,7 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00
  * same 0x10000 for two different channels. The EE hardware documentation names
  * it CPND, the suspend-all-DMA bit (testimony, not measured here).
  * Callers in the ROM: jal at 0x130BFC (func_00130B80) and 0x130CE4
- * (func_00130C68, sceIpuRestartDMA per NOTE #10137).
+ * (sceIpuRestartDMA, splat func_00130C68 until task #2048).
  * Source: OpenRAC games/rac2/ntsc @421126411 (MIT, © 2026 llesieur99),
  * docs/SDK-RESTART-DMA-EVIDENCE.md + config/boot-units/sdk-ipu-restart-dma.json,
  * v1.01 0x00130ab0 SetD3Chcr — name | identity; re-derived on our ROM: the
@@ -5206,7 +5207,7 @@ void func_00130AB0(s32 chcr) {
  * DMA enable word around the `chcr` store, with interrupts disabled.
  * func_00130E20 is word-for-word the same 26-word body at another address.
  * Callers in the ROM: jal at 0x130B90 (func_00130B80) and the tail `j` at
- * 0x130D98 (func_00130C68, sceIpuRestartDMA per NOTE #10137).
+ * 0x130D98 (sceIpuRestartDMA, splat func_00130C68 until task #2048).
  * Source: OpenRAC games/rac2/ntsc @421126411 (MIT, © 2026 llesieur99),
  * docs/SDK-RESTART-DMA-EVIDENCE.md + config/boot-units/sdk-ipu-restart-dma.json,
  * v1.01 0x00130b18 SetD4Chcr — name | identity; re-derived on our ROM: the
@@ -5242,10 +5243,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00130B80);
  * and if both are non-zero MADR/TADR/QWC are restored and the CHCR with STR
  * set is written through SetD4Chcr (func_00130B18), as a tail call.
  *
- * Identity: CONFIRMED by mechanism on our ROM - the only callers are
- * func_00130AA0, the decoder's restart callback, and its counterpart
- * func_00130B80 (reached from the stop callback D_00130A90) saves D4
- * MADR/TADR/QWC/CHCR into offsets 0x0..0xC of the same env. The env layout this
+ * Identity: CONFIRMED by mechanism on our ROM - its only referrer is the
+ * tail `j` at 0x130AA4 in func_00130AA0, the decoder's restart callback.
+ * The stop-side counterpart func_00130B80 (reached from the stop callback
+ * D_00130A90) does not call it; it saves the env this function restores,
+ * all nine fields including D4 MADR/TADR/QWC/CHCR at offsets 0x0..0xC. The env layout this
  * body reads is the SDK's sceIpuDmaEnv, and the vendored SDK header
  * include/rtl/ee/libipu.h declares `void sceIpuRestartDMA(sceIpuDmaEnv *env)`
  * ("restart toIPU(ch-4) and fromIPU(ch-3) DMA from the saved DMA and IPU state").

@@ -30,6 +30,10 @@
     project already held from the ROM), `SetD3Chcr` (`0x00130AB0`) and
     `SetD4Chcr` (`0x00130B18`). The last two spellings appear in OpenRAC as
     externs in a file that OpenRAC credits to Lombyte.
+  - **The name `sceIpuRestartDMA`** (`0x00130C68`), adopted when that function
+    was promoted (task #2048). It came from their boot function catalogue and
+    was re-derived on our ROM: the function restarts DMA channels 3 and 4
+    through `SetD3Chcr` and `SetD4Chcr`.
   - **References for the level overlays** (not yet in scope here): their
     level-archive format, their code-reuse families, and the `.DVP.ovlytab`
     record layout.
@@ -42,7 +46,7 @@
 - **Lombyte** (MIT, © 2026 Mateusz Kłysz)
   <https://github.com/mateuszklysz/Lombyte> at commit `2c4452dd03f5f7ebb2868dbe073ccdb1afb27f61`
 
-  The spellings `SetD3Chcr` and `SetD4Chcr` that OpenRAC uses come from
-  Lombyte's symbol names. Only those names were taken; both identities were
-  re-derived from the DMA channel registers these functions write in our ROM.
-  No Lombyte code is copied into this tree.
+  The spellings `SetD3Chcr`, `SetD4Chcr` and `sceIpuRestartDMA` that OpenRAC
+  uses come from Lombyte (`src/sdk/dma/sce_ipu_restart_dma.c` for the last).
+  Only those names were taken; each identity was re-derived from what the
+  function does in our ROM. No Lombyte code is copied into this tree.
