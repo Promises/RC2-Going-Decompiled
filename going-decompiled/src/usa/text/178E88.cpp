@@ -861,43 +861,64 @@ extern s32 g_renderTaskWorkBuf[];
  * occlusion cell record, or NULL when any axis falls outside its node's
  * [origin, origin+extent) span or hits an empty child. The leaf cell base is
  * the grid root plus the root's first word (the cell-array offset).
- * Near-miss (best 69.7%): the original keeps the grid root pinned in one
- * register (deriving each node ptr from it) and emits the y-level "child
- * present" test as a branch-likely (`bnezl`), an asymmetric codegen shape that
- * clean structured C with three uniform if-returns does not reproduce. Correct
- * C preserved as the portable body. */
+ *
+ * Params: x, y, z - integer grid cell coordinates; each is rebased in place by
+ * its level's origin before the bounds test.
+ * Returns: the 0x80-byte cell record, or NULL (out of range on any axis, a
+ * zero child at the z/y levels, or the 0xFFFF empty marker at the x level).
+ *
+ * Byte-exact on the s136os arm since task #2054. The earlier note that clean C
+ * cannot reproduce the original's shape (the grid root held in one register
+ * and the y-level `bnezl`) was true of the idx-local body and its 69.7%
+ * screen. It is not true of the body below, where each child index is tested
+ * and then RE-READ, as the ROM does (`lhu; beqz/bnezl; lhu` again). Two devices,
+ * each load-bearing when removed alone:
+ *   - g_occlusionGridRootAbs, a non-zero-offset equate (RULING #8620 / #9574):
+ *     offset +0x4C into g_renderTaskWorkBuf; the ROM instruction is the
+ *     same-register `lui $8,%hi(g_renderTaskWorkBuf+0x4C); lw $8,%lo(..)($8)`
+ *     at 0x27A658/0x27A65C, the assembler's expansion of a one-insn `lw` of a
+ *     16-sized symbol. Through the incomplete-array macro below, cc1 splits the
+ *     address itself and the %hi lands in $2 (2/53).
+ *   - the empty `"r"(y)` fence after x is rebased (RULING #8483: it emits
+ *     nothing). It keeps y live past the x-level origin subtract. Without it
+ *     cc1 gives node $5 and copies y to $7 at entry (`move $7,$5`, 52/53, built
+ *     54); an untied volatile fence in the same place does the same. At the
+ *     other 10 statement boundaries the fence gives 2-54/53. */
 /* TODO(match) t493: sdk29 69.72% / engine96 41.47% (unit objdiff, objdiff_build.sh +
- * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
- * every other remaining arm). Residual on the better arm (sdk29): UNKNOWN-lui (first differing
+ * unit_report.sh, the idx-local #else body plain-promoted resp. MATCH_-guarded, screened together
+ * with every other remaining arm). Residual on the better arm (sdk29): UNKNOWN-lui (first differing
  * insn: ROM `lui t0,0x0  [HI16 0x001B1634]` vs built `lui v0,0x0  [HI16 0x001B1634]`). Levers:
  * cc1-small/absolute globals model RUN: 69.72% (sdk29); engine96 with sched1 MEASURED (flag not
- * landed): 75.64%. */
+ * landed): 75.64%. Superseded: byte-exact on the s136os arm since task #2054. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", LookupOcclusionGridCell);
+__asm__(".extern g_occlusionGridRootAbs, 16\n\tg_occlusionGridRootAbs = g_renderTaskWorkBuf + 0x4C");
+extern u8 *g_occlusionGridRootAbs;
+#else
+#define g_occlusionGridRootAbs g_occlusionGridRoot
+#endif
+#if !defined(TARGET_NATIVE) && !defined(S136OS_LookupOcclusionGridCell)
+S136OS_SLOT(LookupOcclusionGridCell);
 #else
 void *LookupOcclusionGridCell(s32 x, s32 y, s32 z) {
-    u8 *root = g_occlusionGridRoot;
+    u8 *root = g_occlusionGridRootAbs;
     u8 *leafBase = root + *(s32 *)root;
     u8 *node = root + 4;
-    s32 idx;
 
     z -= *(u16 *)(node + 0);
     if (z < 0 || z >= *(u16 *)(node + 2)) return (void *)0;
-    idx = *(u16 *)(node + 4 + z * 2);
-    if (idx == 0) return (void *)0;
+    if (*(u16 *)(node + 4 + z * 2) == 0) return (void *)0;
+    node = root + *(u16 *)(node + 4 + z * 2) * 4;
 
-    node = root + idx * 4;
     y -= *(u16 *)(node + 0);
     if (y < 0 || y >= *(u16 *)(node + 2)) return (void *)0;
-    idx = *(u16 *)(node + 4 + y * 2);
-    if (idx == 0) return (void *)0;
+    if (*(u16 *)(node + 4 + y * 2) == 0) return (void *)0;
+    node = root + *(u16 *)(node + 4 + y * 2) * 4;
 
-    node = root + idx * 4;
     x -= *(u16 *)(node + 0);
+    __asm__ __volatile__("" : : "r"(y));
     if (x < 0 || x >= *(u16 *)(node + 2)) return (void *)0;
-    idx = *(u16 *)(node + 4 + x * 2);
-    if (idx == 0xFFFF) return (void *)0;
-    return leafBase + (idx << 7);
+    if (*(u16 *)(node + 4 + x * 2) == 0xFFFF) return (void *)0;
+    return leafBase + (*(u16 *)(node + 4 + x * 2) << 7);
 }
 #endif
 

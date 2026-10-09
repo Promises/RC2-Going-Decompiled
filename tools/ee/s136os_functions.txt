@@ -626,6 +626,7 @@ usa text/178E88 func_00279E00
 usa text/178E88 func_00279CF0
 usa text/178E88 func_0027E1E8
 usa text/178E88 FadeOutToBlackBlocking
+usa text/178E88 LookupOcclusionGridCell
 usa text/1EFFC0 func_002F8038
 usa text/191238 func_00298918
 usa text/1DFF80 func_002E6D98
