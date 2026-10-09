@@ -2809,7 +2809,8 @@ typedef struct {
     s32 fieldD0;               /* 0x0D0: IpuPictureSize.field60 */
     s32 firstPictureStructure; /* 0x0D4: the first picture_structure since the
                                   last sequence header */
-    s32 _padD8;
+    u32 outputAddr;            /* 0x0D8: where func_0012D808 copies a decoded
+                                  picture; cleared by IpuInitDecoder */
     s32 maxWidth;              /* 0x0DC: widest picture the buffers allow */
     s32 maxHeight;             /* 0x0E0: tallest picture; 0 = check bufferSize */
     s32 bufferSize;            /* 0x0E4 */
@@ -3929,7 +3930,8 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012D4B0);
 
 /* The picture dimensions func_0012D768 checks. */
 typedef struct {
-    s32 _pad0;
+    u32 addr;                  /* 0x00: the decoded picture, copied out by
+                                  func_0012D808 */
     s32 width;                 /* 0x04 */
     s32 height;                /* 0x08 */
     s32 blocks;                /* 0x0C: blocks * blockSize is the bytes needed */
@@ -3967,7 +3969,83 @@ s32 func_0012D768(IpuDecoder *dec, IpuPictureSize *size) {
     return ok;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012D808);
+/**
+ * Copy the decoded picture at size->addr to the decoder's output buffer
+ * (dec->outputAddr) through the scratchpad, one row of macroblocks at a time.
+ * Both addresses are masked to physical (& 0x0FFFFFFF). Each row is DMAed into
+ * scratchpad offset 0 on the toSPR channel (SADR/MADR/QWC/CHCR at 0x1000D480/
+ * D410/D420/D400, CHCR 0x101) and back out to the destination on the fromSPR
+ * channel (0x1000D080/D010/D020/D000, CHCR 0x100). Interrupts are disabled
+ * around each kick (func_0011F5E0, restored by func_0011F628 only if they were
+ * on), and the next row waits for both channels' STR bit and for fromSPR's QWC
+ * to drain.
+ *
+ * A frame picture (pictureStructure 3), or any picture when maxHeight is 0, is
+ * one pass of `size->blocks` rows of blockSize * 384 bytes; output rows step
+ * by (maxHeight / 16) * 384 bytes, or are contiguous when maxHeight is 0. A
+ * field picture is two passes of half-size rows, (blockSize / 2) * 384 bytes,
+ * each output row stepping (maxHeight / 16) * 192 bytes, and the destination
+ * moves on by bufferSize * 192 bytes after each pass. Called by
+ * func_0012DC50 when IpuDecoder.fieldB0 is clear.
+ *
+ * `fields` is declared before the two addresses: that order decides which
+ * spilled local gets which stack slot (sp+4 vs sp+8), and the other order
+ * swaps them (8 words).
+ */
+void func_0012D808(IpuDecoder *dec, IpuPictureSize *size) {
+    s32 fields, rowBytes, qwc, dstStep, i, j, state;
+    u32 src = size->addr & 0x0FFFFFFF;
+    u32 dst = dec->outputAddr & 0x0FFFFFFF;
+    u32 nextSrc, nextDst;
+
+    if (dec->pictureStructure == 3 || dec->maxHeight == 0) {
+        rowBytes = size->blockSize * 0x180;
+        qwc = rowBytes >> 4;
+        if (dec->maxHeight != 0) {
+            dstStep = (dec->maxHeight >> 4) * 0x180;
+        } else {
+            dstStep = rowBytes;
+        }
+        fields = 1;
+    } else {
+        dstStep = (dec->maxHeight >> 4) * 0xC0;
+        rowBytes = (size->blockSize >> 1) * 0x180;
+        fields = 2;
+        qwc = rowBytes >> 4;
+    }
+    for (i = 0; i < fields; i++) {
+        u32 out = dst;
+        for (j = 0; j < size->blocks; j++) {
+            state = func_0011F5E0();
+            *(volatile u32 *)0x1000D480 = 0;
+            *(volatile u32 *)0x1000D410 = src;
+            *(volatile u32 *)0x1000D420 = qwc;
+            *(volatile u32 *)0x1000D400 = 0x101;
+            if (state) {
+                func_0011F628();
+            }
+            nextSrc = src + rowBytes;
+            nextDst = out + dstStep;
+            while (*(volatile u32 *)0x1000D400 & 0x100) {
+            }
+            state = func_0011F5E0();
+            *(volatile u32 *)0x1000D080 = 0;
+            *(volatile u32 *)0x1000D010 = out;
+            *(volatile u32 *)0x1000D020 = qwc;
+            *(volatile u32 *)0x1000D000 = 0x100;
+            if (state) {
+                func_0011F628();
+            }
+            while (*(volatile u32 *)0x1000D000 & 0x100) {
+            }
+            while (*(volatile u32 *)0x1000D020 != 0) {
+            }
+            out = nextDst;
+            src = nextSrc;
+        }
+        dst += dec->bufferSize * 0xC0;
+    }
+}
 
 /**
  * State transition on object arg0: if its state field_0x8 (arg0[2]) is not
@@ -4009,8 +4087,10 @@ extern void func_0012D808(IpuDecoder *dec, IpuPictureSize *size);
  * (indexed by bits 5..8 of the owner's word 0x20) into the decoder, along with
  * the picture's parameter words 0x44..0x60. If the decoder's buffers can hold
  * the picture (func_0012D768) and it is flagged for decoding (field28 == 1),
- * decode it by func_0012E608 or func_0012D808 (by fieldB0) and run the state
- * transition func_0012DA98.
+ * hand it to func_0012E608 or func_0012D808 (by fieldB0) and run the state
+ * transition func_0012DA98. (func_0012D808 copies the decoded picture to the
+ * output buffer through scratchpad, byte-exact since task #2048; func_0012E608
+ * is not yet read.)
  *
  * The owner pointer is re-read from the decoder for each use and the two
  * checks share one `&&`: holding the owner in a local across the call, or two
@@ -4402,7 +4482,7 @@ void *IpuInitDecoder(s32 *obj, u8 *buf, u32 size) {
     dec->fieldCC = 0;
     dec->fieldD0 = 0;
     dec->firstPictureStructure = 0;
-    dec->_padD8 = 0;
+    dec->outputAddr = 0;
     dec->maxWidth = 0;
     dec->maxHeight = 0;
     dec->bufferSize = 0;
