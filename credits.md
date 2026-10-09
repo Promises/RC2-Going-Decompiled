@@ -36,4 +36,13 @@
 
   Each adopted item carries a `Source:` line in the code naming the file and
   commit it came from. The licence is pinned to the commit above because the
-  OpenRAC repository mixes licences, and other paths in it are GPL.
+  OpenRAC repository mixes licences: its top level is GPL-3.0-or-later, and
+  `games/rac2/ntsc/src/libgcc` is GPLv2. Nothing from those paths is used here.
+
+- **Lombyte** (MIT, © 2026 Mateusz Kłysz)
+  <https://github.com/mateuszklysz/Lombyte> at commit `2c4452dd03f5f7ebb2868dbe073ccdb1afb27f61`
+
+  The spellings `SetD3Chcr` and `SetD4Chcr` that OpenRAC uses come from
+  Lombyte's symbol names. Only those names were taken; both identities were
+  re-derived from the DMA channel registers these functions write in our ROM.
+  No Lombyte code is copied into this tree.
