@@ -162,12 +162,17 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001182B8);
  * pad the ROM's assembler put after the load in a short (R5900) loop, which
  * cc1 marks `#nop` and GNU as (r5900, interlocked) drops. Same form as
  * cod/0321A0.c's and cod/0314C0.c's macro of this name. No-op on the native
- * arm. */
+ * arm. The _BARRIER form is the same pad as a volatile asm (text/1A8180.c's
+ * spelling, NOTE #9461): use it only where the plain form, measured in the
+ * same position, is deleted or moved. */
 #ifndef TARGET_NATIVE
 #define R5900_SHORT_LOOP_PAD1(v, next) \
     __asm__(".set noreorder\n\tnop\n\t.set reorder" : "+r"(v) : "r"(next))
+#define R5900_SHORT_LOOP_PAD1_BARRIER(v, next) \
+    __asm__ __volatile__(".set noreorder\n\tnop\n\t.set reorder" : "+r"(v) : "r"(next))
 #else
 #define R5900_SHORT_LOOP_PAD1(v, next) ((void)0)
+#define R5900_SHORT_LOOP_PAD1_BARRIER(v, next) ((void)0)
 #endif
 
 /**
@@ -216,7 +221,54 @@ s32 func_00118460(char *digits, s32 len) {
     return 1;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001184D0);
+/**
+ * func_001184D0 - reverse a NUL-terminated string in place.
+ *
+ * @s: the string; it is rewritten in place.
+ *
+ * Returns @s. Measures the string, then swaps characters from both ends
+ * inward. Only caller: func_00118548 (0x1185D0), in the newlib float
+ * formatter. Kept under its splat name: the body is the only evidence.
+ *
+ * Byte-exact on the s136os arm since task #2056 (SN 2.95.3 v1.36
+ * -fopt-stack, selected in tools/ee/s136os_functions.txt). cc1 2.9 handles
+ * this short loop itself (its own nops, `bne` instead of the ROM's `bnel`),
+ * so the plain arm cannot reach it (NOTE #9721). Devices: three
+ * R5900_SHORT_LOOP_PAD1_BARRIER pads give the ROM's three nops between the
+ * length loop's `lb` and `bnel` at 0x1184F0..0x1184F8. The plain
+ * (non-volatile) pad in the same position is deleted as dead code (`p` is
+ * not used after it), leaving the body three words short. Tying the pads'
+ * output to `len` or `ch` instead keeps them but moves the allocation:
+ * `len`/the end pointer swap $6/$7, or the address and the loaded character
+ * swap $2/$3 (task #2056, s136 solo compiles).
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_001184D0)
+S136OS_SLOT(func_001184D0);
+#else
+char *func_001184D0(char *s) {
+    s32 len, i;
+    char c, ch;
+    char *p;
+
+    len = 0;
+    if (s[0] != 0) {
+        do {
+            len++;
+            p = s + len;
+            ch = *p;
+            R5900_SHORT_LOOP_PAD1_BARRIER(p, ch);
+            R5900_SHORT_LOOP_PAD1_BARRIER(p, ch);
+            R5900_SHORT_LOOP_PAD1_BARRIER(p, ch);
+        } while (ch != 0);
+    }
+    for (i = 0, len--; i < len; i++, len--) {
+        c = s[i];
+        s[i] = s[len];
+        s[len] = c;
+    }
+    return s;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00118548);
 
