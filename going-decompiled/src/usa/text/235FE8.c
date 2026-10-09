@@ -7486,8 +7486,11 @@ void func_00341160(void *self) {
  * a separate 16-aligned local in the ROM's frame (stride 0x10), not an array. */
 typedef struct { s32 w[2]; } GuiGridCfg8;
 
-/* The 0x5C screen descriptor func_003380B8 consumes. Per-builder values are in
- * each builder's doc comment. */
+/* The 0x5C screen descriptor func_003380B8 consumes. The two builders differ in
+ * four fields: func_003413A8 sets child2C = self+0x98, child34 = self+0x260,
+ * flag38 = 0 and scratch50 = 0; func_00341548 sets child2C = 0, child34 = 0,
+ * flag38 = 1 and scratch50 = &cfg5. Every other field is set in each builder's
+ * body. */
 typedef struct {
     void *label;        /* 0x00  grid entry table */
     s32   cols;         /* 0x04 */
@@ -7549,7 +7552,12 @@ typedef struct {
  * GUARD: on EE this C is the image's body, compiled alone by the s136os arm
  * (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in tools/ee/s136os_functions.txt)
  * and spliced over S136OS_SLOT by tools/ee/s136os_splice.sh. There is no asm
- * fallback. On native it is plain C. */
+ * fallback. On native it is plain C.
+ * History: before this match, the engine96 probe (task #466, cc1 2.96 via
+ * MATCH_func_003413A8, unit objdiff) reached 23.67%, with 127 of 129
+ * instructions differing (first: addiu sp,sp,-0xf0 against the ROM's -0xa0),
+ * after -fno-strict-aliasing, per-symbol gp/abs pins and a sibcall barrier were
+ * tried on the whole unit. The s136os arm, not cc1 2.96, closed it (task #2057). */
 #if !defined(TARGET_NATIVE) && !defined(S136OS_func_003413A8)
 S136OS_SLOT(func_003413A8);
 #else
