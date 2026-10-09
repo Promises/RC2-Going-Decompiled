@@ -157,7 +157,64 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00117CA0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001182B8);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00118460);
+/* SCHEDULING DEVICE (RULING #8435): one `noreorder` nop, ordered after the load
+ * of `next` (input) and before the next use of `v` (output). It reproduces the
+ * pad the ROM's assembler put after the load in a short (R5900) loop, which
+ * cc1 marks `#nop` and GNU as (r5900, interlocked) drops. Same form as
+ * cod/0321A0.c's and cod/0314C0.c's macro of this name. No-op on the native
+ * arm. */
+#ifndef TARGET_NATIVE
+#define R5900_SHORT_LOOP_PAD1(v, next) \
+    __asm__(".set noreorder\n\tnop\n\t.set reorder" : "+r"(v) : "r"(next))
+#else
+#define R5900_SHORT_LOOP_PAD1(v, next) ((void)0)
+#endif
+
+/**
+ * func_00118460 - round an ASCII decimal digit string up at its last digit.
+ *
+ * @digits: decimal digits '0'..'9', most significant first.
+ * @len:    number of digits; digits[len - 1] is the digit being rounded away.
+ *
+ * If @len <= 0 or digits[len - 1] < '5', nothing changes and 1 is returned.
+ * Otherwise digits[len - 1] becomes '0' and the carry moves left: every '9'
+ * it passes becomes '0', and the first other digit is incremented (return 1).
+ * digits[0] is never zeroed by the carry: if the carry reaches it and it is
+ * '9', the function returns 0 and leaves it as '9' for the caller to handle.
+ * With @len == 1 the carry lands on digits[-1].
+ *
+ * Only caller: func_001185E8 (0x118A08), the float-to-digits step of the
+ * newlib vfprintf in this unit. No SDK archive holds this body (whole-body
+ * scan of libc.a, libm.a and both 2.95.2 libgcc.a, task #2056), so it keeps
+ * its splat name.
+ *
+ * Byte-exact on the plain 2.9 arm since task #2056. The loop's `*p-- = '0'`
+ * store must come first in the body so sched1 issues it ahead of `--len` and
+ * reorg moves it into the `beql` likely slot. R5900_SHORT_LOOP_PAD1 supplies
+ * the ROM's nop between the loop load and its compare.
+ */
+s32 func_00118460(char *digits, s32 len) {
+    char *p;
+    char c;
+
+    if (len > 0) {
+        len--;
+        p = digits + len;
+        if (*p >= '5') {
+            do {
+                *p-- = '0';
+                if (--len <= 0)
+                    break;
+                c = *p;
+                R5900_SHORT_LOOP_PAD1(c, c);
+            } while (c == '9');
+            if (digits[len] == '9')
+                return 0;
+            digits[len]++;
+        }
+    }
+    return 1;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001184D0);
 
