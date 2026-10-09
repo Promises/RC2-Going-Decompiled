@@ -555,6 +555,12 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AE90);
  * writes only $v1, so $v0 at jr $ra is whatever the kernel left, not a value
  * this function computes, and none of its 100 ROM call sites reads $v0
  * (task #1462, RULING #9122).
+ * Source: OpenRAC games/rac2/ntsc @421126411 (MIT, © 2026 llesieur99),
+ * docs/ENGINE-SYMBOL-NAMES.md, v1.01 0x0011aea0 FlushCache — identity
+ * (corroboration only: this tree held the name from the ROM first, FACT #3909);
+ * re-derived on our ROM: 0x11AEA0 = 24030064 0000000C 03E00008 00000000
+ * (addiu $v1,$0,0x64; syscall; jr $ra; nop), syscall 100 = FlushCache, the
+ * address inside the v1.01/v2.00 byte-identical range 0x100080..0x1a790e.
  */
 void func_0011AEA0(s32 mode) {
 #ifndef TARGET_NATIVE

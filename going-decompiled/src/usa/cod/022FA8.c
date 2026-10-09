@@ -5077,10 +5077,24 @@ void func_00130AA0(void *arg0) {
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00130AAC);
 
 /**
- * Kick a DMA transfer on the channel whose control word lives at 0x1000B000:
- * with interrupts disabled, set the channel's enable bit (0x10000) in the DMA
- * enable register (read 0x1000F520, write 0x1000F590), write `chcr` to the
- * channel, then clear the enable bit again; restore interrupts on the way out.
+ * SetD3Chcr: write `chcr` to D3_CHCR (0x1000B000, DMA channel 3, IPU_FROM)
+ * with the DMAC held. With interrupts disabled (func_0011F5E0 / func_0011F628),
+ * set bit 16 (0x10000) of the DMA enable word (read D_ENABLER 0x1000F520, write
+ * D_ENABLEW 0x1000F590), store `chcr`, then clear bit 16 again. The bit is not
+ * a per-channel enable: this function, func_00130B18 and func_00130E20 set the
+ * same 0x10000 for two different channels. The EE hardware documentation names
+ * it CPND, the suspend-all-DMA bit (testimony, not measured here).
+ * Callers in the ROM: jal at 0x130BFC (func_00130B80) and 0x130CE4
+ * (func_00130C68, sceIpuRestartDMA per NOTE #10137).
+ * Source: OpenRAC games/rac2/ntsc @421126411 (MIT, © 2026 llesieur99),
+ * docs/SDK-RESTART-DMA-EVIDENCE.md + config/boot-units/sdk-ipu-restart-dma.json,
+ * v1.01 0x00130ab0 SetD3Chcr — name | identity; re-derived on our ROM: the
+ * `sw $s0,0($v1)` at 0x130AF4 stores the argument through lui 0x1000 /
+ * ori 0xB000 = 0x1000B000, and 0x130C68's jal at +0x7C reaches it, the
+ * address inside the v1.01/v2.00 byte-identical range 0x100080..0x1a790e;
+ * via Lombyte github.com/mateuszklysz/Lombyte @2c4452dd (MIT, © 2026 Mateusz
+ * Kłysz), src/sdk/dma/sce_ipu_restart_dma.c (the spelling appears there only
+ * as an extern).
  */
 void func_00130AB0(s32 chcr) {
     func_0011F5E0();
@@ -5091,9 +5105,21 @@ void func_00130AB0(s32 chcr) {
 }
 
 /**
- * Identical to func_00130AB0 but kicks the DMA channel whose control word lives
- * at 0x1000B400 (channel +1): toggles the enable bit in the DMA enable register
- * around the channel `chcr` write, with interrupts disabled.
+ * SetD4Chcr: identical to func_00130AB0 (SetD3Chcr) but writes D4_CHCR
+ * (0x1000B400, DMA channel 4, IPU_TO): holds the DMAC by setting bit 16 of the
+ * DMA enable word around the `chcr` store, with interrupts disabled.
+ * func_00130E20 is word-for-word the same 26-word body at another address.
+ * Callers in the ROM: jal at 0x130B90 (func_00130B80) and the tail `j` at
+ * 0x130D98 (func_00130C68, sceIpuRestartDMA per NOTE #10137).
+ * Source: OpenRAC games/rac2/ntsc @421126411 (MIT, © 2026 llesieur99),
+ * docs/SDK-RESTART-DMA-EVIDENCE.md + config/boot-units/sdk-ipu-restart-dma.json,
+ * v1.01 0x00130b18 SetD4Chcr — name | identity; re-derived on our ROM: the
+ * `sw $s0,0($v1)` at 0x130B5C stores the argument through lui 0x1000 /
+ * ori 0xB400 = 0x1000B400, and 0x130C68's tail j at +0x130 reaches it, the
+ * address inside the v1.01/v2.00 byte-identical range 0x100080..0x1a790e;
+ * via Lombyte github.com/mateuszklysz/Lombyte @2c4452dd (MIT, © 2026 Mateusz
+ * Kłysz), src/sdk/dma/sce_ipu_restart_dma.c (the spelling appears there only
+ * as an extern).
  */
 void func_00130B18(s32 chcr) {
     func_0011F5E0();
@@ -5129,9 +5155,10 @@ s32 func_00130DB8(s32 mode, s32 arg1) {
 }
 
 /**
- * Kick the DMA channel at 0x1000B400 (same sequence as func_00130B18):
- * toggle the channel-enable bit in the DMA enable register around the `chcr`
- * write, with interrupts disabled.
+ * Kick the DMA channel at 0x1000B400 (same sequence as func_00130B18, and
+ * word-for-word the same ROM body): hold the DMAC by setting bit 16 of the DMA
+ * enable word around the `chcr` write, with interrupts disabled. Bit 16 is not
+ * a per-channel enable; see func_00130AB0.
  */
 void func_00130E20(s32 chcr) {
     func_0011F5E0();
