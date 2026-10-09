@@ -4189,7 +4189,97 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012E378);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012E538);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012E608);
+/* The toIPU (D4) chain state func_0012E608 hands its DMAC channel-4 handler
+ * func_0012E538 when a picture is larger than one 0xFFFF-quadword transfer:
+ * the quadwords still to send and the next source address. */
+typedef struct {
+    u32 remaining;
+    u32 addr;
+} IpuToIpuChain;
+
+extern s32 func_0011A940(s32 channel, void *handler, s32 next, void *arg);  /* AddDmacHandler */
+extern s32 func_0011A950(s32 channel, s32 handlerId);  /* RemoveDmacHandler */
+extern s32 EnableDmac(s32 channel);
+extern s32 DisableDmac(s32 channel);
+extern s32 func_0012E538();  /* D4 chain handler (hand-written) */
+extern void func_0012E378(IpuDecoder *dec, u32 dst, s32 mbCount);
+
+/**
+ * Colour-convert a decoded picture to the decoder's output buffer through the
+ * IPU (the path func_0012DC50 takes when IpuDecoder.fieldB0 is set, instead of
+ * func_0012D808's scratchpad copy). Sends request 2 to the decoder's callbacks,
+ * resets the IPU if IPU_CTRL reports an error (bit 14), waits for it, clears its
+ * input FIFO with command 0 (BCLR) through func_0012C380 and waits again. The
+ * picture at size->addr (blocks * blockSize macroblocks, 0x18 quadwords each)
+ * then goes to the IPU on the toIPU channel D4 (CHCR 0x101): in one transfer
+ * when it fits in 0xFFFF quadwords, else as a 0xFFFF-quadword first transfer
+ * with the rest left in an IpuToIpuChain for the channel-4 handler func_0012E538
+ * (installed with AddDmacHandler for the duration). The colour conversion runs
+ * through func_0012E110 for fewer than 0x400 macroblocks, else through
+ * func_0012E378, into dec->outputAddr; request 3 follows.
+ *
+ * The IPU reset store is plain (the ROM's `lui $1` absolute form), as in
+ * IpuWaitBdec. Splat name kept (RULING #10083): its identity rests on the body
+ * and on its callers func_0012DC50 and func_0012DD60 (jal at 0x12DD1C and
+ * 0x12DEA0), both unnamed. First spelling
+ * byte-exact (task #2055).
+ */
+void func_0012E608(IpuDecoder *dec, IpuPictureSize *size) {
+    s32 req[8];
+    IpuToIpuChain chain;
+    s32 mbCount = size->blocks * size->blockSize;
+    s32 handlerId;
+    s32 wasEnabled;
+    req[0] = 2;
+    func_0012FA98(dec->callbacks, req);
+    if (*(volatile u32 *)0x10002010 & 0x4000) {
+        *(u32 *)0x10002010 = 0x40000000;
+    }
+    while (*(volatile s32 *)0x10002010 < 0) {
+    }
+    func_0012C380((s32 *)dec, 0);
+    while (*(volatile s32 *)0x10002010 < 0) {
+    }
+    chain.addr = size->addr & 0x0FFFFFFF;
+    chain.remaining = mbCount * 0x18;
+    if (chain.remaining > 0xFFFF) {
+        handlerId = func_0011A940(4, func_0012E538, 0, &chain);
+        *(volatile u32 *)0x1000E010 = 0x10;
+        EnableDmac(4);
+        wasEnabled = func_0011F5E0();
+        *(volatile u32 *)0x1000B410 = chain.addr;
+        *(volatile u32 *)0x1000B420 = 0xFFFF;
+        *(volatile u32 *)0x1000B400 = 0x101;
+        if (wasEnabled) {
+            func_0011F628();
+        }
+        chain.addr = (chain.addr + 0xFFFF0) & 0x0FFFFFFF;
+        chain.remaining -= 0xFFFF;
+        if (mbCount < 0x400) {
+            func_0012E110(dec, dec->outputAddr, mbCount);
+        } else {
+            func_0012E378(dec, dec->outputAddr, mbCount);
+        }
+        DisableDmac(4);
+        func_0011A950(4, handlerId);
+    } else {
+        wasEnabled = func_0011F5E0();
+        *(volatile u32 *)0x1000B410 = size->addr & 0x0FFFFFFF;
+        *(volatile u32 *)0x1000B420 = chain.remaining;
+        *(volatile u32 *)0x1000B400 = 0x101;
+        if (wasEnabled) {
+            func_0011F628();
+        }
+        chain.remaining = 0;
+        if (mbCount < 0x400) {
+            func_0012E110(dec, dec->outputAddr, mbCount);
+        } else {
+            func_0012E378(dec, dec->outputAddr, mbCount);
+        }
+    }
+    req[0] = 3;
+    func_0012FA98(dec->callbacks, req);
+}
 
 extern void func_0012E8E8(u64 *arg0, s32 arg1);
 
