@@ -1548,6 +1548,8 @@ g_sceneDecompressBase
 g_sceneFmvStreamBase
 g_sceneFrame
 g_scenePlayerFadedOut
+g_sceneSubtitleList
+g_sceneVoiceEndFrame
 g_sceneWadBaseLbn
 g_screenBlitPacketB
 g_screenCenterDefaultX
