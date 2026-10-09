@@ -631,3 +631,4 @@ usa text/191238 func_00298918
 usa text/1DFF80 func_002E6D98
 usa text/250080 func_00350778
 usa text/250080 func_003517C0
+usa text/1B4218 ResetDialogVoiceChannels

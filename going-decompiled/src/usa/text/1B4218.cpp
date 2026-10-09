@@ -45,24 +45,26 @@
  * as blocked on that wall on the 2.9 arm and left INCLUDE_ASM (check the
  * prologue: two+ sd of s-regs/$ra at 8-byte spacing). On the s136os arm (SN
  * 1.36 -fopt-stack) the wall does not hold. Read from the ROM prologues at
- * master 77207b5b7, the sentence covers 37 members here: 13 are now MATCHED on
+ * master 77207b5b7, the sentence covers 37 members here: 13 were MATCHED on
  * that arm (CheckTargetInRangeBand DriveMobyTowardPoint CheckMobyGroundMover
  * ResolveMobyEdgeConstraint DriveMobyAlongWaypoints SetMobyWaypointPath
  * CheckMobyPathBlocked StopDialogVoice StopFileLoad StartFileLoad
  * StartFileLoadWithCallback StartFileLoadPumpingVoice PumpDialogVoiceSystem),
- * and 24 are still INCLUDE_ASM. Of those 24, AcquireMobyAutoTarget and
+ * and 24 were still INCLUDE_ASM. Of those 24, AcquireMobyAutoTarget and
  * StartDialogVoice were in FACT #9873's census (C arm does not compile solo),
  * CheckMobyOverWater's residual is the assembler hazard-nop (FACT #9545), and
- * for the other 21 (UpdateMobyThreatFlashAndBurst ClassifyTargetProximity
- * BindMobyToParent CalcMobyTargetThreatDist FindTargetInGroup
- * ApplyMobyLocalTransformDelta InitMobySpringFollowState StepMobySpringFollow
- * RequestGameStateChange UpdateGameState StepMobyMotion
+ * ResetDialogVoiceChannels has been byte-exact on the s136os arm since task
+ * #2049 (its residual was R5900 short-loop nop pads and one store order, not
+ * the save stride). For the other 20 (UpdateMobyThreatFlashAndBurst
+ * ClassifyTargetProximity BindMobyToParent CalcMobyTargetThreatDist
+ * FindTargetInGroup ApplyMobyLocalTransformDelta InitMobySpringFollowState
+ * StepMobySpringFollow RequestGameStateChange UpdateGameState StepMobyMotion
  * UpdateMobyMotionVelocity ResolveMobyMotionCollision ApplyMobyGroundAndEvents
  * ProbeMobyGroundLine ResolveMobySphereCollision UpdateMobyLeanFromTurn
- * UpdateActiveMobys ResetDialogVoiceChannels StepDialogVoiceChannel
- * UpdateDialogVoiceManager) the save stride is NOT re-measured on the s136os
- * arm and the residual is UNMEASURED: tree-wide, 0 of the 111 labeled members
- * that were run reproduce the 16-byte stride there (FACT #9873). A per-member
+ * UpdateActiveMobys StepDialogVoiceChannel UpdateDialogVoiceManager) the save
+ * stride is NOT re-measured on the s136os arm and the residual is UNMEASURED:
+ * tree-wide, 0 of the 111 labeled members that were run reproduce the 16-byte
+ * stride there (FACT #9873). A per-member
  * "WALL (matching build): save-layout" below describes the cc1 2.9 arm.
  * The two switch functions (UpdateGameState 0x2B5B38, StepDialogVoiceChannel
  * 0x2B82A0) also stay INCLUDE_ASM behind the splat jtbl reloc-identity gap.
@@ -3615,41 +3617,78 @@ s32 StartTertiaryVoice(s32 a0, s32 a1, s32 a2, s32 a3) {
  * (func_00133490(1)); then clears every per-channel state/flag/param word. The
  * primary dialog voice id is preserved into ambientArg0 (+0x48) only when it was
  * already allocated (dialogVoiceId != -1), and both dialogVoiceId(+0x3C) and its
- * mirror(+0x3E) are reset to -1.
+ * mirror(+0x3E) are reset to -1. No parameters, no return value.
  *
- * NATIVE SHIM (no byte target; matching build uses INCLUDE_ASM above). Derived
- * register-exact from ResetDialogVoiceChannels.s @0x2B8090.
- *
- * WALL (matching build, cc1 2.9 arm): save-layout — 3 callee-saves + $ra at
- * 8-byte spacing.
- * Save stride NOT re-measured for this member on the s136os arm (SN 1.36
- * -fopt-stack): NOTE #9871's census vocabulary did not match this label, so
- * FACT #9873's re-screen never ran it. Of the 111 labeled members that were
- * run, 0 reproduce the 16-byte save stride there, so the stride is not
- * evidence that this member is walled. Residual: UNMEASURED. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", ResetDialogVoiceChannels);
+ * MATCHED on the s136os arm (SN 2.95.3 v1.36 -fopt-stack, task #2049); not by
+ * cc1 2.9, whose 16-byte save slots cannot give the ROM's 8-byte layout
+ * (sd $18/$16/$17/$31 at 0x10/0x0/0x8/0x18), which the s136os arm emits as is.
+ * Two things carry the match, each measured in the solo s136os TU:
+ *  - R5900_SHORT_LOOP_PAD1, a SCHEDULING DEVICE (RULING #8435): the ROM pads
+ *    each short polling loop with nops the s136os cc1 marks `#nop` or does not
+ *    emit and GNU as drops: 2 between each state-word lw and its beq
+ *    (0x2B80E4/E8, 0x2B8124/28, 0x2B8164/68), 3 after the drain loop's
+ *    jal snd_Pump delay slot (0x2B8188..90). Removing any single pad changes
+ *    the built length (91 or 92 words against the ROM's 93). The pad's output
+ *    is the sentinel register, as in cod/0321A0.c's poll loop.
+ *  - the closing store order: dialogVoiceId(+0x3C) is written before
+ *    dialogVoiceIdPrev(+0x3E) in the source. The s136os scheduler issues the
+ *    source-last store first, so the ROM's 3E-first, 3C-last order needs 3E
+ *    last in the source. In the other order, 13 of 93 words differ (the stores
+ *    and the -1/id registers $5/$4 swapped).
+ * On native this is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_ResetDialogVoiceChannels)
+S136OS_SLOT(ResetDialogVoiceChannels);
 #else
-/* TODO(match): functional equivalent - not byte-exact; save-layout wall on cc1 2.9 (s136os unmeasured, see above). */
+#ifndef TARGET_NATIVE
+#define R5900_SHORT_LOOP_PAD1(v, next) \
+    __asm__(".set noreorder\n\tnop\n\t.set reorder" : "+r"(v) : "r"(next))
+#else
+#define R5900_SHORT_LOOP_PAD1(v, next) ((void)0)
+#endif
 extern void func_00133230(void);   /* 0x133230 snd RPC tick */
 extern s32  snd_Pump(void);        /* 0x133280 snd queue pump (returns busy count) */
 extern void func_00133310(void);   /* 0x133310 flush snd command queue */
 extern void func_00133490(s32 a);  /* 0x133490 release channel */
 void ResetDialogVoiceChannels(void) {
+    s32 status;
     func_00133230();
-    while (g_fileLoadVoiceState.ambientState == -1) {
-        snd_Pump();
+    if (g_fileLoadVoiceState.ambientState == 0xFFFFFFFF) {
+        u32 pending = 0xFFFFFFFF;
+        u32 state;
+        do {
+            snd_Pump();
+            state = g_fileLoadVoiceState.ambientState;
+            R5900_SHORT_LOOP_PAD1(pending, state);
+            R5900_SHORT_LOOP_PAD1(pending, state);
+        } while (state == pending);
     }
-    while (g_fileLoadVoiceState.tertiaryState == -1) {
-        snd_Pump();
+    if (g_fileLoadVoiceState.tertiaryState == 0xFFFFFFFF) {
+        u32 pending = 0xFFFFFFFF;
+        u32 state;
+        do {
+            snd_Pump();
+            state = g_fileLoadVoiceState.tertiaryState;
+            R5900_SHORT_LOOP_PAD1(pending, state);
+            R5900_SHORT_LOOP_PAD1(pending, state);
+        } while (state == pending);
     }
-    while (g_fileLoadVoiceState.secondaryState == -1) {
-        snd_Pump();
+    if (g_fileLoadVoiceState.secondaryState == 0xFFFFFFFF) {
+        u32 pending = 0xFFFFFFFF;
+        u32 state;
+        do {
+            snd_Pump();
+            state = g_fileLoadVoiceState.secondaryState;
+            R5900_SHORT_LOOP_PAD1(pending, state);
+            R5900_SHORT_LOOP_PAD1(pending, state);
+        } while (state == pending);
     }
     func_00133310();
-    while (snd_Pump() != 0) {
-        /* drain the snd command queue */
-    }
+    do {
+        status = snd_Pump();
+        R5900_SHORT_LOOP_PAD1(status, status);
+        R5900_SHORT_LOOP_PAD1(status, status);
+        R5900_SHORT_LOOP_PAD1(status, status);
+    } while (status != 0);
     func_00133490(1);
 
     g_fileLoadVoiceState.ambientFlag = 0;
@@ -3658,7 +3697,6 @@ void ResetDialogVoiceChannels(void) {
     if (g_fileLoadVoiceState.dialogVoiceId != -1) {
         g_fileLoadVoiceState.ambientArg0 = (s16)g_fileLoadVoiceState.dialogVoiceId;
     }
-    g_fileLoadVoiceState.dialogVoiceIdPrev = -1;
     g_fileLoadVoiceState.secondaryFlag = 0;
     g_fileLoadVoiceState.dialogArg2 = 0;
     g_fileLoadVoiceState.secondaryState = 0;
@@ -3667,6 +3705,7 @@ void ResetDialogVoiceChannels(void) {
     g_fileLoadVoiceState.tertiaryState = 0;
     g_fileLoadVoiceState.fileLoadPhase = 0;
     g_fileLoadVoiceState.dialogVoiceId = -1;
+    g_fileLoadVoiceState.dialogVoiceIdPrev = -1;
 }
 #endif
 
