@@ -7478,63 +7478,132 @@ void func_00341160(void *self) {
 }
 #endif
 
-/* func_003413A8(self): build + populate a composite GUI screen descriptor. Copies
- * four 8-byte layout config blocks (D_1AE050/58/050/60/68) to locals, sets a glyph
- * on the self+0x17C element (GuiElementSetGlyph, source = g_guiInstance+0x8710),
- * then assembles a ~0x60-byte parameter block (pointers to the config locals + to
- * self sub-elements at +0x17C/+0x98/+0x214/+0x260/+0x7D0/+0xA78/+0x880, plus fields
- * from self+0x814/+0x818/+0x80C/+0x820 and the self[+0x81C]==0 flag) and hands it
- * to func_003380B8 to instantiate the elements. Struct layout Ghidra-verified.
- * Faithful TARGET_NATIVE #else (engine 2.96 = no byte-match). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003413A8);
+/* The two grid-descriptor builders below (func_003413A8, func_00341548) fill the
+ * same 0x5C descriptor and hand it to func_003380B8. Both types live outside the
+ * guards because the native build compiles both arms.
+ *
+ * An 8-byte layout config block, copied whole (ldl/ldr -> sdl/sdr). Each copy is
+ * a separate 16-aligned local in the ROM's frame (stride 0x10), not an array. */
+typedef struct { s32 w[2]; } GuiGridCfg8;
+
+/* The 0x5C screen descriptor func_003380B8 consumes. Per-builder values are in
+ * each builder's doc comment. */
+typedef struct {
+    void *label;        /* 0x00  grid entry table */
+    s32   cols;         /* 0x04 */
+    s32   rows;         /* 0x08 */
+    s32   objCfg814;    /* 0x0C  self[0x814] */
+    s32   objCfg818;    /* 0x10  self[0x818] */
+    void *layout0;      /* 0x14  &cfg0 */
+    void *layout1;      /* 0x18  &cfg1 */
+    void *layout2;      /* 0x1C  &cfg2 */
+    void *layout3;      /* 0x20  &cfg3 */
+    void *layout4;      /* 0x24  &cfg4 */
+    void *child17C;     /* 0x28  self+0x17C (the glyph element) */
+    void *child2C;      /* 0x2C  a self sub-element or 0 */
+    void *child214;     /* 0x30  self+0x214 */
+    void *child34;      /* 0x34  a self sub-element or 0 */
+    s32   flag38;       /* 0x38 */
+    void *child7D0;     /* 0x3C  self+0x7D0 */
+    void *childA78;     /* 0x40  self+0xA78 */
+    void *child880;     /* 0x44  self+0x880 */
+    s32   objCfg80C;    /* 0x48  self[0x80C] */
+    s32   objCfg820;    /* 0x4C  self[0x820] */
+    s32   scratch50;    /* 0x50  0, or a config pointer (ILP32) */
+    s32   typeActive;   /* 0x54  a self[0x81C] mode test */
+    s32   enable;       /* 0x58  0 */
+} GuiGlyphGridDesc;
+
+/* func_003413A8(self): build + populate the quick-select / weapon-grid screen's
+ * 4x6 grid descriptor (sibling of func_00341548). Copies five 8-byte layout
+ * config blocks (D_1AE050/058/050/060/068) to locals, sets glyph 0x23 on the
+ * self+0x17C element (GuiElementSetGlyph, source = g_guiInstance+0x8710), then
+ * fills the descriptor (grid table D_00259F38 -- the weapon grid's entry array
+ * func_00341708 indexes -- cols 4, rows 6, pointers to the config locals and to
+ * self sub-elements at +0x17C/+0x98/+0x214/+0x260/+0x7D0/+0xA78/+0x880, fields
+ * from self+0x814/+0x818/+0x80C/+0x820, flag38 0, scratch50 0 and the
+ * self[+0x81C]==0 flag) and hands it to func_003380B8 to instantiate the
+ * elements. Name kept: its callee, its twin and its only caller (func_00341160)
+ * are all unnamed (task #2057).
+ * Params: self = the quick-select screen. No return value.
+ * MATCHED byte-exact on the s136os arm (task #2057), device-free. Built on task
+ * #1957's body (NOTE #9971: separate 16-aligned config locals copied whole, the
+ * two overwritten defaults, the fill split around the glyph call) and #2027's
+ * void declaration of GuiElementSetGlyph (its definition sits in another
+ * guarded arm, so the solo TU would call it as implicit int). The rest is the
+ * order of the statements after the call:
+ * - sched2 issues the stores of values already held in callee-saved registers
+ *   in source order and defers the +0x214/+0x98 ones, and the self+offset
+ *   formed last reuses $s0; the ROM's store order (+0x28, +0x3C, +0x20, +0x1C,
+ *   +0x18, +0x30, +0x2C) therefore needs the source order child17C, child214,
+ *   child2C, child7D0, layout3, layout2, layout1;
+ * - reading self[0x80C] between child7D0 and layout3 lengthens &cfg3's sched1
+ *   live range from 22 to 24 insns. Without it the self+0x17C pseudo (3 refs
+ *   over 33 insns) and &cfg3 (2 over 22) tie on global-alloc priority, the tie
+ *   goes to the lower pseudo, and &cfg3 takes $s1 where the ROM has self+0x17C.
+ * #2027's empty tied fence after the call also fixed that allocation, but its
+ * post-call use moved sched2's issue of the +0x17C addiu after the +0x260 one
+ * (2 words), so it is gone. Solo s136os harness, words differing: master's
+ * #else 102/104, #2027's fenced body 5, store order alone 3, without the fence
+ * 6, this body 1 -- the ROM's 104th word, the alignment nop after endlabel.
+ * GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+ * (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in tools/ee/s136os_functions.txt)
+ * and spliced over S136OS_SLOT by tools/ee/s136os_splice.sh. There is no asm
+ * fallback. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_003413A8)
+S136OS_SLOT(func_003413A8);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_003413A8, unit objdiff): 23.67%,
-   127/129 insns differ. Residual: UNKNOWN-addiu + gp/abs-mixed symbol (first differing insn: 'addiu sp, sp, -0xf0' vs 'addiu sp, sp, -0xa0').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
 extern u8   D_1AE050[], D_1AE058[], D_1AE060[], D_1AE068[];
 extern u8   D_00259F38[];
 extern char *g_guiInstance;
 extern void func_003380B8(void *params);
+extern void GuiElementSetGlyph(GuiElement *e, s32 codepoint, s32 font);
 
 void func_003413A8(void *self) {
+    GuiGridCfg8 cfg0;
+    GuiGridCfg8 cfg1;
+    GuiGridCfg8 cfg2;
+    GuiGridCfg8 cfg3;
+    GuiGridCfg8 cfg4;
+    GuiGlyphGridDesc d;
+    GuiGlyphGridDesc *p;
     u8 *s = (u8 *)self;
-    u8  cfg[5][8];
-    u8  params[0x60];
 
-    memcpy(cfg[0], D_1AE050, 8);
-    memcpy(cfg[1], D_1AE058, 8);
-    memcpy(cfg[2], D_1AE050, 8);
-    memcpy(cfg[3], D_1AE060, 8);
-    memcpy(cfg[4], D_1AE068, 8);
-
-    *(void **)(params + 0x00) = D_00259F38;
-    *(u32 *)(params + 0x04)  = 4;
-    *(u32 *)(params + 0x08)  = 6;
-    *(u32 *)(params + 0x0C)  = *(u32 *)(s + 0x814);
-    *(u32 *)(params + 0x10)  = *(u32 *)(s + 0x818);
-    *(void **)(params + 0x14) = cfg[0];
-    *(void **)(params + 0x18) = cfg[1];
-    *(void **)(params + 0x1C) = cfg[2];
-    *(void **)(params + 0x20) = cfg[3];
-    *(void **)(params + 0x24) = cfg[4];
-    *(void **)(params + 0x28) = s + 0x17C;
-    *(void **)(params + 0x2C) = s + 0x98;
-    *(void **)(params + 0x30) = s + 0x214;
-    *(void **)(params + 0x34) = s + 0x260;
-    *(u32 *)(params + 0x38)  = 0;
-    *(void **)(params + 0x3C) = s + 0x7D0;
-    *(void **)(params + 0x40) = s + 0xA78;
-    *(void **)(params + 0x44) = s + 0x880;
-    *(u32 *)(params + 0x48)  = *(u32 *)(s + 0x80C);
-    *(u32 *)(params + 0x4C)  = *(u32 *)(s + 0x820);
-    *(u32 *)(params + 0x50)  = 0;
-    *(u32 *)(params + 0x54)  = (*(s32 *)(s + 0x81C) == 0);
-    *(u32 *)(params + 0x58)  = 0;
-
+    p = &d;
+    cfg0 = *(GuiGridCfg8 *)D_1AE050;
+    cfg1 = *(GuiGridCfg8 *)D_1AE058;
+    cfg2 = *(GuiGridCfg8 *)D_1AE050;
+    cfg3 = *(GuiGridCfg8 *)D_1AE060;
+    cfg4 = *(GuiGridCfg8 *)D_1AE068;
+    /* Two defaults the ROM stores and then overwrites (only +0x54 is
+     * overwritten here): +0x50 = 0, and +0x54 = 1 through the descriptor
+     * pointer (a plain `d.` store is dead and flow deletes it). */
+    d.scratch50 = 0;
+    p->typeActive = 1;
+    d.objCfg820 = *(s32 *)(s + 0x820);
+    d.typeActive = (*(s32 *)(s + 0x81C) == 0);
+    d.objCfg814 = *(s32 *)(s + 0x814);
+    d.objCfg818 = *(s32 *)(s + 0x818);
+    d.childA78 = s + 0xA78;
+    d.layout4 = &cfg4;
+    d.cols = 4;
+    d.rows = 6;
+    d.label = D_00259F38;
+    d.child880 = s + 0x880;
+    d.child34 = s + 0x260;
+    d.flag38 = 0;
     GuiElementSetGlyph((GuiElement *)(s + 0x17C), (s32)g_guiInstance + 0x8710, 0x23);
-    func_003380B8(params);
+    d.child17C = s + 0x17C;
+    d.child214 = s + 0x214;
+    d.child2C = s + 0x98;
+    d.child7D0 = s + 0x7D0;
+    d.objCfg80C = *(s32 *)(s + 0x80C);
+    d.layout3 = &cfg3;
+    d.layout2 = &cfg2;
+    d.layout1 = &cfg1;
+    d.layout0 = &cfg0;
+    d.enable = 0;
+    func_003380B8(p);
 }
 #endif
 
@@ -7565,37 +7634,6 @@ void func_003413A8(void *self) {
 #if !defined(TARGET_NATIVE) && !defined(S136OS_func_00341548)
 S136OS_SLOT(func_00341548);
 #else
-/* An 8-byte layout config block, copied whole (ldl/ldr -> sdl/sdr). Each copy is
- * a separate 16-aligned local in the ROM's frame (stride 0x10), not an array. */
-typedef struct { s32 w[2]; } GuiGridCfg8;
-
-/* The 0x5C screen descriptor func_00341548 hands to func_003380B8. */
-typedef struct {
-    void *label;        /* 0x00  grid table D_259CC0 */
-    s32   cols;         /* 0x04  3 */
-    s32   rows;         /* 0x08  2 */
-    s32   objCfg814;    /* 0x0C  self[0x814] */
-    s32   objCfg818;    /* 0x10  self[0x818] */
-    void *layout0;      /* 0x14  &cfg0 */
-    void *layout1;      /* 0x18  &cfg1 */
-    void *layout2;      /* 0x1C  &cfg2 */
-    void *layout3;      /* 0x20  &cfg3 */
-    void *layout4;      /* 0x24  &cfg4 */
-    void *child17C;     /* 0x28  self+0x17C (the glyph element) */
-    void *child2C;      /* 0x2C  0 */
-    void *child214;     /* 0x30  self+0x214 */
-    void *child34;      /* 0x34  0 */
-    s32   flag38;       /* 0x38  1 */
-    void *child7D0;     /* 0x3C  self+0x7D0 */
-    void *childA78;     /* 0x40  self+0xA78 */
-    void *child880;     /* 0x44  self+0x880 */
-    s32   objCfg80C;    /* 0x48  self[0x80C] */
-    s32   objCfg820;    /* 0x4C  self[0x820] */
-    s32   scratch50;    /* 0x50  &cfg5 (ILP32), 0 until set */
-    s32   typeActive;   /* 0x54  self[0x81C] == 1 */
-    s32   enable;       /* 0x58  0 */
-} GuiGlyphGridDesc;
-
 extern char *g_guiInstance;
 extern void func_003380B8(void *params);
 extern void GuiElementSetGlyph(GuiElement *e, s32 codepoint, s32 font);
