@@ -5034,7 +5034,22 @@ extern u8 D_0013BE58[];
 extern u8 D_0013BE88[];
 extern u8 D_0013BEA0[];
 extern u8 D_0013BED8[];
-extern void func_00130C68(u8 *arg0);
+/* The IPU DMA state sceIpuStopDMA saves and sceIpuRestartDMA restores: the
+ * SDK's sceIpuDmaEnv (include/rtl/ee/libipu.h), field for field. The toIPU
+ * channel is D4 (0x1000B400..), the fromIPU channel D3 (0x1000B000..). */
+typedef struct {
+    u32 d4Madr;   /* 0x00 */
+    u32 d4Tadr;   /* 0x04 */
+    u32 d4Qwc;    /* 0x08 */
+    u32 d4Chcr;   /* 0x0C */
+    u32 d3Madr;   /* 0x10 */
+    u32 d3Qwc;    /* 0x14 */
+    u32 d3Chcr;   /* 0x18 */
+    u32 ipuBp;    /* 0x1C: IPU_BP - BP bits 0..6, IFC bits 8..11, FP bits 16..17 */
+    u32 ipuCtrl;  /* 0x20 */
+} IpuDmaEnv;
+
+extern void sceIpuRestartDMA(IpuDmaEnv *env);
 
 /**
  * Frameless tail-call thunk: dispatch arg0 through func_00130288 with the
@@ -5067,11 +5082,12 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00130A8C);
 
 /**
  * Frameless tail-call thunk: forward the sub-object at arg0->field_0x40 + 0x4C
- * to func_00130C68. Void tail call → sibling-call-optimised to the original's
- * `j func_00130C68` with the +0x4C adjust in the delay slot.
+ * (the decoder's saved IpuDmaEnv) to sceIpuRestartDMA. Void tail call →
+ * sibling-call-optimised to the original's `j sceIpuRestartDMA` with the +0x4C
+ * adjust in the delay slot.
  */
 void func_00130AA0(void *arg0) {
-    func_00130C68(*(u8 **)((u8 *)arg0 + 0x40) + 0x4C);
+    sceIpuRestartDMA((IpuDmaEnv *)(*(u8 **)((u8 *)arg0 + 0x40) + 0x4C));
 }
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00130AAC);
@@ -5131,7 +5147,60 @@ void func_00130B18(s32 chcr) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00130B80);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00130C68);
+/**
+ * sceIpuRestartDMA (libipu): resume the IPU and both of its DMA channels from
+ * the state sceIpuStopDMA saved in `env`.
+ *
+ * The fromIPU channel (D3) restarts first, only when it was stopped mid-transfer
+ * (MADR and QWC both non-zero): MADR and QWC go back into 0x1000B010/0x1000B020
+ * and its CHCR, with the STR bit 0x100 set, is written through SetD3Chcr
+ * (func_00130AB0). Then, with IPU_CTRL (0x10002010) idle, a BCLR command with
+ * the saved bit pointer (IPU_BP bits 0..6) goes to IPU_CMD (0x10002000), which
+ * empties the input FIFO. The quadwords that were still in the FIFO (IPU_BP's
+ * IFC + FP fields) are therefore given back to the toIPU channel (D4): its MADR
+ * is wound back by that many quadwords and its QWC grown by the same count,
+ * and if both are non-zero MADR/TADR/QWC are restored and the CHCR with STR
+ * set is written through SetD4Chcr (func_00130B18), as a tail call.
+ *
+ * Identity: CONFIRMED by mechanism on our ROM - the only callers are
+ * func_00130AA0, the decoder's restart callback, and its counterpart
+ * func_00130B80 (reached from the stop callback D_00130A90) saves D4
+ * MADR/TADR/QWC/CHCR into offsets 0x0..0xC of the same env. The env layout this
+ * body reads is the SDK's sceIpuDmaEnv, and the vendored SDK header
+ * include/rtl/ee/libipu.h declares `void sceIpuRestartDMA(sceIpuDmaEnv *env)`
+ * ("restart toIPU(ch-4) and fromIPU(ch-3) DMA from the saved DMA and IPU state").
+ * RULING #9735's archive test: no libc.a/libm.a/libgcc.a member matches this
+ * body, and no libipu.a is held, so it is decompiled C, not a library link.
+ * Source: OpenRAC games/rac2/ntsc @421126411 (MIT, (c) 2026 llesieur99),
+ * config/function-catalog/boot.ndjson.gz, v1.01 0x130c68 sceIpuRestartDMA, via
+ * Lombyte github.com/mateuszklysz/Lombyte @2c4452dd (MIT, (c) 2026 Mateusz
+ * Klysz), src/sdk/dma/sce_ipu_restart_dma.c - name only (their C was not read);
+ * re-derived on our ROM: the D3/D4 CHCR call graph, the sceIpuDmaEnv offsets and
+ * the vendored libipu.h prototype above (task #2048).
+ */
+void sceIpuRestartDMA(IpuDmaEnv *env) {
+    u32 bp = env->ipuBp & 0x7F;
+    u32 fifoQwc = ((env->ipuBp >> 16) & 3) + ((env->ipuBp >> 8) & 0xF);
+    u32 d4Madr = env->d4Madr - (fifoQwc << 4);
+    u32 d4Qwc = env->d4Qwc + fifoQwc;
+
+    if (env->d3Madr != 0 && env->d3Qwc != 0) {
+        *(volatile u32 *)0x1000B010 = env->d3Madr;
+        *(volatile u32 *)0x1000B020 = env->d3Qwc;
+        func_00130AB0(env->d3Chcr | 0x100);
+    }
+    while (*(volatile s32 *)0x10002010 < 0) {
+    }
+    *(volatile u32 *)0x10002000 = bp;
+    while (*(volatile s32 *)0x10002010 < 0) {
+    }
+    if (d4Madr != 0 && d4Qwc != 0) {
+        *(volatile u32 *)0x1000B410 = d4Madr;
+        *(volatile u32 *)0x1000B430 = env->d4Tadr;
+        *(volatile u32 *)0x1000B420 = d4Qwc;
+        func_00130B18(env->d4Chcr | 0x100);
+    }
+}
 
 /**
  * Poll the GIF/PATH status word at 0x10002010 by mode: mode 0 spins until the
