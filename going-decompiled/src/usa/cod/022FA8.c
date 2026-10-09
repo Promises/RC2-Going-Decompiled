@@ -4143,7 +4143,45 @@ void func_0012E088(u32 madr, s32 size) {
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012E10C);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012E110);
+/**
+ * Colour-convert `mbCount` macroblocks out of the IPU into `dst`: with IPU_CTRL
+ * (0x10002010) idle, program the fromIPU DMA channel (D3) with interrupts
+ * disabled - MADR (0x1000B010) = `dst` as a 28-bit physical address, QWC
+ * (0x1000B020) = mbCount * 64 quadwords (one 16x16 RGBA32 macroblock is 0x400
+ * bytes), CHCR (0x1000B000) = 0x100 (STR) - restoring interrupts only if they
+ * were on; then issue IPU command 7 with `mbCount` through func_0012C380, send
+ * request 4 to the decoder's callbacks (func_0012FA98), and wait for D3's STR
+ * bit to clear and for IPU_CTRL to go idle again.
+ *
+ * Opcode 7 is the IPU's CSC command by the hardware's command table; that
+ * reading is from the IPU documentation, not from a ROM string or a named
+ * caller, so the splat name is kept (RULING #10083: thin evidence).
+ * Its two callers are both in func_0012E608 (jal at 0x12E7A4 and 0x12E838).
+ *
+ * The nops inside the three wait loops and before their labels are the build's
+ * short-loop padding and loop-label alignment, not part of the C; the first
+ * spelling compiled byte-exact (task #2055).
+ */
+void func_0012E110(IpuDecoder *dec, u32 dst, s32 mbCount) {
+    s32 wasEnabled;
+    s32 req[8];
+    while (*(volatile s32 *)0x10002010 < 0) {
+    }
+    wasEnabled = func_0011F5E0();
+    *(volatile u32 *)0x1000B010 = dst & 0x0FFFFFFF;
+    *(volatile u32 *)0x1000B020 = mbCount << 6;
+    *(volatile u32 *)0x1000B000 = 0x100;
+    if (wasEnabled) {
+        func_0011F628();
+    }
+    func_0012C380((s32 *)dec, mbCount | 0x70000000);
+    req[0] = 4;
+    func_0012FA98(dec->callbacks, req);
+    while ((*(volatile u32 *)0x1000B000 >> 8) & 1) {
+    }
+    while (*(volatile s32 *)0x10002010 < 0) {
+    }
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012E238);
 
@@ -5181,7 +5219,7 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00
  * a per-channel enable: this function, func_00130B18 and func_00130E20 set the
  * same 0x10000 for two different channels. The EE hardware documentation names
  * it CPND, the suspend-all-DMA bit (testimony, not measured here).
- * Callers in the ROM: jal at 0x130BFC (func_00130B80) and 0x130CE4
+ * Callers in the ROM: jal at 0x130BFC (sceIpuStopDMA) and 0x130CE4
  * (sceIpuRestartDMA, splat func_00130C68 until task #2048).
  * Source: OpenRAC games/rac2/ntsc @421126411 (MIT, © 2026 llesieur99),
  * docs/SDK-RESTART-DMA-EVIDENCE.md + config/boot-units/sdk-ipu-restart-dma.json,
@@ -5206,7 +5244,7 @@ void func_00130AB0(s32 chcr) {
  * (0x1000B400, DMA channel 4, IPU_TO): holds the DMAC by setting bit 16 of the
  * DMA enable word around the `chcr` store, with interrupts disabled.
  * func_00130E20 is word-for-word the same 26-word body at another address.
- * Callers in the ROM: jal at 0x130B90 (func_00130B80) and the tail `j` at
+ * Callers in the ROM: jal at 0x130B90 (sceIpuStopDMA) and the tail `j` at
  * 0x130D98 (sceIpuRestartDMA, splat func_00130C68 until task #2048).
  * Source: OpenRAC games/rac2/ntsc @421126411 (MIT, © 2026 llesieur99),
  * docs/SDK-RESTART-DMA-EVIDENCE.md + config/boot-units/sdk-ipu-restart-dma.json,
@@ -5226,7 +5264,40 @@ void func_00130B18(s32 chcr) {
     func_0011F628();
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00130B80);
+/**
+ * sceIpuStopDMA (libipu): stop the IPU's DMA traffic and save its state in
+ * `env` for sceIpuRestartDMA. Writes CHCR = 1 (direction bit, STR clear) to the
+ * toIPU channel D4 through SetD4Chcr (func_00130B18) and saves D4's MADR, TADR,
+ * QWC and CHCR (0x1000B410/B430/B420/B400); waits until IPU_CTRL's output
+ * FIFO count (OFC, bits 4..7 of 0x10002010) is zero; stops the fromIPU channel D3 with
+ * SetD3Chcr(0) (func_00130AB0) and saves D3's MADR, QWC and CHCR
+ * (0x1000B010/B020/B000), then IPU_BP and IPU_CTRL.
+ *
+ * Identity (RULING #10083, named at promotion): its only referrer is the tail
+ * `j` at 0x130A94 in the decoder's stop callback D_00130A90 (func_00130A8C + 4),
+ * the twin of the restart callback func_00130AA0 that tail-calls
+ * sceIpuRestartDMA with the same `dec->field40 + 0x4C` env; it fills exactly the
+ * nine sceIpuDmaEnv fields sceIpuRestartDMA reads, and the vendored
+ * include/rtl/ee/libipu.h declares `void sceIpuStopDMA(sceIpuDmaEnv *env)`
+ * beside sceIpuRestartDMA. RULING #9735's archive test: no libc.a/libm.a/
+ * libgcc.a member matches this body and no libipu.a is held. First spelling
+ * byte-exact (task #2055).
+ */
+void sceIpuStopDMA(IpuDmaEnv *env) {
+    func_00130B18(1);
+    env->d4Madr = *(volatile u32 *)0x1000B410;
+    env->d4Tadr = *(volatile u32 *)0x1000B430;
+    env->d4Qwc = *(volatile u32 *)0x1000B420;
+    env->d4Chcr = *(volatile u32 *)0x1000B400;
+    while (*(volatile u32 *)0x10002010 & 0xF0) {
+    }
+    func_00130AB0(0);
+    env->d3Madr = *(volatile u32 *)0x1000B010;
+    env->d3Qwc = *(volatile u32 *)0x1000B020;
+    env->d3Chcr = *(volatile u32 *)0x1000B000;
+    env->ipuBp = *(volatile u32 *)0x10002020;
+    env->ipuCtrl = *(volatile u32 *)0x10002010;
+}
 
 /**
  * sceIpuRestartDMA (libipu): resume the IPU and both of its DMA channels from
@@ -5245,7 +5316,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00130B80);
  *
  * Identity: CONFIRMED by mechanism on our ROM - its only referrer is the
  * tail `j` at 0x130AA4 in func_00130AA0, the decoder's restart callback.
- * The stop-side counterpart func_00130B80 (reached from the stop callback
+ * The stop-side counterpart sceIpuStopDMA (reached from the stop callback
  * D_00130A90) does not call it; it saves the env this function restores,
  * all nine fields including D4 MADR/TADR/QWC/CHCR at offsets 0x0..0xC. The env layout this
  * body reads is the SDK's sceIpuDmaEnv, and the vendored SDK header
