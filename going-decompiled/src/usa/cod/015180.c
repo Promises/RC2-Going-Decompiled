@@ -236,8 +236,10 @@ s32 func_00118460(char *digits, s32 len) {
  * so the plain arm cannot reach it (NOTE #9721). Devices: three
  * R5900_SHORT_LOOP_PAD1_BARRIER pads give the ROM's three nops between the
  * length loop's `lb` and `bnel` at 0x1184F0..0x1184F8. The plain
- * (non-volatile) pad in the same position is deleted as dead code (`p` is
- * not used after it), leaving the body three words short. Tying the pads'
+ * (non-volatile) pad in the same position is dropped as dead code (`p` is
+ * not used after it): in-tree the splice then builds 28 words against the
+ * ROM's 30 and refuses on LENGTH (all three nops missing in a solo
+ * compile). Tying the pads'
  * output to `len` or `ch` instead keeps them but moves the allocation:
  * `len`/the end pointer swap $6/$7, or the address and the loaded character
  * swap $2/$3 (task #2056, s136 solo compiles).
