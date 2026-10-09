@@ -4091,7 +4091,8 @@ extern void func_0012D808(IpuDecoder *dec, IpuPictureSize *size);
  * hand it to func_0012E608 or func_0012D808 (by fieldB0) and run the state
  * transition func_0012DA98. (func_0012D808 copies the decoded picture to the
  * output buffer through scratchpad, byte-exact since task #2048; func_0012E608
- * is not yet read.)
+ * colour-converts it into the same buffer through the IPU, byte-exact on the
+ * sdk29 arm since task #2055.)
  *
  * The owner pointer is re-read from the decoder for each use and the two
  * checks share one `&&`: holding the owner in a local across the call, or two
