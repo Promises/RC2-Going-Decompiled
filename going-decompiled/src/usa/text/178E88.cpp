@@ -4014,7 +4014,20 @@ void func_00281020(u32 *pixels, s32 actorIdx) {
  * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
  * every other remaining arm). Residual on the better arm (sdk29): UNKNOWN-addiu (first differing
  * insn: ROM `addiu sp,sp,-96` vs built `addiu sp,sp,-176`). Levers: cc1-small/absolute globals
- * model RUN: 31.64% (engine96); engine96 with sched1 MEASURED (flag not landed): 62.72%. */
+ * model RUN: 31.64% (engine96); engine96 with sched1 MEASURED (flag not landed): 62.72%.
+ * TODO(match) t2064, s136os arm (solo compile under this unit's -fno-gcse, NOTE #10157's
+ * harness): this #else body is 108/121, built 120. A body re-spelled from the ROM (NOTE
+ * #10173 holds it) is 6/121, built 121: one-insn absolute reads of the count and of
+ * g_frameArenaFlip, a g_sceneActorMobys + 0x44 equate for the table, an indexed init loop,
+ * the count store absolute and its reload %gp_rel. The 6 words are the inner loop's
+ * record-pointer init (0x2811BC..0x2811D0): the ROM forms it as `la; mtlo; madd`, ours as
+ * `mult; lui; addiu; addu`. loop.c strength-reduces both idx*0x30 and the record pointer, and
+ * combine leaves the init mult/addu unfused. Why is not known: it is not cse2's copy of the
+ * duplicate giv (NOTE #10174: -fno-rerun-cse-after-loop as a diagnostic still gives no
+ * madd). Writing the init outside the loop does give the madd, but the outer loop shrinks
+ * below loop.c's movable threshold on its second pass, -6 is hoisted into $fp and the
+ * table base is rematerialised (40-46/121). An EE_REG("$30") pin on the base: 85/121.
+ * Class: LOOP OPTIMISER (giv) + ALLOCATION. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_002810C0);
 #else
