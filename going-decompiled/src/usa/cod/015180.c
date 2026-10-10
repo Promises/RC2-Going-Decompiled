@@ -154,7 +154,7 @@ s32 func_001163B0(void) {
 #endif
 
 /**
- * func_001163E0 - newlib strstr: find the first occurrence of @lookfor in
+ * strstr - newlib strstr: find the first occurrence of @lookfor in
  * @searchee.
  *
  * @searchee: NUL-terminated string to search.
@@ -176,7 +176,7 @@ s32 func_001163B0(void) {
  * pad so reorg puts it in the `beqz` delay slot and the load in the branch
  * slots; the do-while keeps jump.c from peeling a second copy of the test.
  */
-char *func_001163E0(const char *searchee, const char *lookfor) {
+char *strstr(const char *searchee, const char *lookfor) {
     if (*searchee == 0) {
         if (*lookfor)
             return 0;
