@@ -5635,7 +5635,8 @@ extern volatile IpuQword D_00138120[2];   /* SETVQ upload: 2 quadwords */
 /**
  * func_00130E88 — reset and re-initialise the IPU (the shape of libipu's
  * sceIpuInit; the name is not taken, there being no stabs or string to prove it).
- * Holds the toIPU DMA channel via func_00130E20(1), then, waiting for
+ * Stops the toIPU (D4) DMA channel by writing CHCR = 1, STR clear, via
+ * func_00130E20(1). Then, waiting for
  * IPU_CTRL.BUSY (bit 31) to clear after every step: IPU_CTRL reset
  * (0x40000000), BCLR (command 0), eight quadwords of quantiser matrix into the
  * input FIFO followed by SETIQ (0x50000000) and a second SETIQ (0x58000000),
