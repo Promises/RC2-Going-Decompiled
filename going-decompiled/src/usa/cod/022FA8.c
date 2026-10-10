@@ -4662,7 +4662,9 @@ extern void func_00130E88(void);
  * Abort both DMA channels (0x1000B000 and 0x1000B400): with interrupts disabled,
  * set then clear the DMA enable bit while clearing each channel's CHCR.STR
  * (0x100) bit, restore interrupts if they had been on, zero the channels' QWC
- * (0x1000B020 / 0x1000B420), then re-init the GIF path via func_00130E88.
+ * (0x1000B020 / 0x1000B420), then reset and re-initialise the IPU via
+ * func_00130E88 (byte-exact on the sdk29 arm since task #2065). B000/B400 are
+ * the fromIPU/toIPU channels (D3/D4), not the GIF.
  */
 void func_0012F690(void) {
     s32 wasEnabled = func_0011F5E0();
@@ -5609,7 +5611,67 @@ void func_00130E20(s32 chcr) {
     func_0011F628();
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00130E88);
+#ifdef TARGET_NATIVE
+/* gcc -m32 cannot emulate mode(TI); copy-only here, so a 16-byte aligned struct
+ * is an exact portable stand-in. Inert to the matching build. */
+typedef struct { unsigned long long _q[2]; } __attribute__((aligned(16))) IpuQword;
+#else
+typedef unsigned long IpuQword __attribute__((mode(TI)));
+#endif
+
+/* CODEGEN DEVICE (RULING #8404), not an asynchronous-object claim: the ROM
+ * re-loads D_001380D0[4] (lq 0x40) for each of its four FIFO writes, and with
+ * a plain table cc1 loads it once (97.11% diff.sh; `const` 91.42%). Writer
+ * census over asm/usa: 0 stores to either table (they live in .data at
+ * 033B00.data.s and only this function names them); the same query finds the
+ * one writer of D_001363B4 as its control. */
+extern volatile IpuQword D_001380D0[5];   /* SETIQ upload: 5 quadwords, the 5th sent 4 times */
+extern volatile IpuQword D_00138120[2];   /* SETVQ upload: 2 quadwords */
+
+#define IPU_CMD_REG   (*(volatile u32 *)0x10002000)
+#define IPU_CTRL_REG  (*(volatile s32 *)0x10002010)
+#define IPU_IN_FIFO   (*(volatile IpuQword *)0x10007010)
+
+/**
+ * func_00130E88 — reset and re-initialise the IPU (the shape of libipu's
+ * sceIpuInit; the name is not taken, there being no stabs or string to prove it).
+ * Holds the toIPU DMA channel via func_00130E20(1), then, waiting for
+ * IPU_CTRL.BUSY (bit 31) to clear after every step: IPU_CTRL reset
+ * (0x40000000), BCLR (command 0), eight quadwords of quantiser matrix into the
+ * input FIFO followed by SETIQ (0x50000000) and a second SETIQ (0x58000000),
+ * two quadwords into the FIFO and SETVQ (0x60000000), SETTH (0x90000000), then
+ * reset and BCLR again. The in-loop nops in the ROM are the build's short-loop
+ * padding (NOTE #10159), not hand-written code.
+ */
+void func_00130E88(void) {
+    func_00130E20(1);
+    IPU_CTRL_REG = 0x40000000;
+    while (IPU_CTRL_REG < 0) {}
+    IPU_CMD_REG = 0;
+    while (IPU_CTRL_REG < 0) {}
+    IPU_IN_FIFO = D_001380D0[0];
+    IPU_IN_FIFO = D_001380D0[1];
+    IPU_IN_FIFO = D_001380D0[2];
+    IPU_IN_FIFO = D_001380D0[3];
+    IPU_IN_FIFO = D_001380D0[4];
+    IPU_IN_FIFO = D_001380D0[4];
+    IPU_IN_FIFO = D_001380D0[4];
+    IPU_IN_FIFO = D_001380D0[4];
+    IPU_CMD_REG = 0x50000000;
+    while (IPU_CTRL_REG < 0) {}
+    IPU_CMD_REG = 0x58000000;
+    while (IPU_CTRL_REG < 0) {}
+    IPU_IN_FIFO = D_00138120[0];
+    IPU_IN_FIFO = D_00138120[1];
+    IPU_CMD_REG = 0x60000000;
+    while (IPU_CTRL_REG < 0) {}
+    IPU_CMD_REG = 0x90000000;
+    while (IPU_CTRL_REG < 0) {}
+    IPU_CTRL_REG = 0x40000000;
+    while (IPU_CTRL_REG < 0) {}
+    IPU_CMD_REG = 0;
+    while (IPU_CTRL_REG < 0) {}
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", e_sqrt);
 
