@@ -135,7 +135,71 @@ s32 func_001163B0(void) {
     return v & 0x7FFFFFFF;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001163E0);
+/* LOOP-HEAD PAD (SCHEDULING DEVICE, RULING #8435; 191238.cpp's
+ * R5900_SHORT_LOOP_PAD3): the ROM has 3 `nop`s at the head of strstr's outer
+ * loop (0x116400..0x116408), between the delay-slot `lb $3` of lookfor[0] and
+ * the `beqz $3` that tests it. Neither cc1 nor GNU as emits them, so they are
+ * written there. "+r"(v)/"r"(next) on the loaded char keep the load above the
+ * pad (reorg then moves it into both branch delay slots, as in the ROM); the
+ * "memory" clobber stops loop.c hoisting that load out of the loop (without it
+ * the load is hoisted to a sign-extended copy: lbu/sll/sra, the ROM's shape is
+ * lost). The volatile keeps the pad from being scheduled after `i = 0`
+ * (non-volatile, `i = 0` lands above the nops and the beqz slot is a nop).
+ * Emits only nops; empty on native. */
+#ifndef TARGET_NATIVE
+#define R5900_LOOP_HEAD_PAD3(v, next) \
+    __asm__ __volatile__(".set noreorder\n\tnop\n\tnop\n\tnop\n\t.set reorder" : "+r"(v) : "r"(next) : "memory")
+#else
+#define R5900_LOOP_HEAD_PAD3(v, next) ((void)0)
+#endif
+
+/**
+ * func_001163E0 - newlib strstr: find the first occurrence of @lookfor in
+ * @searchee.
+ *
+ * @searchee: NUL-terminated string to search.
+ * @lookfor:  NUL-terminated substring to find.
+ *
+ * Returns a pointer into @searchee at the first match, @searchee itself when
+ * @lookfor is empty, and NULL when there is no match (an empty @searchee
+ * matches only an empty @lookfor).
+ *
+ * Identity: every one of the 27 words of the vendored SDK libc.a's strstr.o
+ * appears here in order; the ROM's other 4 words are the 3 loop-head pad nops
+ * and one `.p2align 3` nop before the inner loop (cc1's own alignment). Not a
+ * whole-body archive hit (find_libc_funcs.py, task #2066), so this is C.
+ * Only caller: 0x2B9184 in text/1B8FA8, which strcpy's a localized string to
+ * the scratchpad and patches the byte after the match of D_1AA290.
+ *
+ * Byte-exact on the plain 2.9 arm since task #2066. lookfor[0] is read into
+ * `c` at the loop head and fed through the pad; `i = 0` is written after the
+ * pad so reorg puts it in the `beqz` delay slot and the load in the branch
+ * slots; the do-while keeps jump.c from peeling a second copy of the test.
+ */
+char *func_001163E0(const char *searchee, const char *lookfor) {
+    if (*searchee == 0) {
+        if (*lookfor)
+            return 0;
+        return (char *)searchee;
+    }
+    while (*searchee) {
+        u32 i;
+        char c = lookfor[0];
+        R5900_LOOP_HEAD_PAD3(c, c);
+        i = 0;
+        if (c == 0)
+            return (char *)searchee;
+        if (c == searchee[0]) {
+            do {
+                i++;
+                if (lookfor[i] == 0)
+                    return (char *)searchee;
+            } while (lookfor[i] == searchee[i]);
+        }
+        searchee++;
+    }
+    return 0;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00116460);
 
