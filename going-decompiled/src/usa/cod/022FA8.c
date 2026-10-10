@@ -1646,7 +1646,83 @@ s32 func_00127888(s32 fd, void *buf, s32 size) {
     return r;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", McWrite);
+extern u8   g_mcRpcRequest[];   /* 0x141B80: the shared 48-byte libmc request block */
+extern s32  g_mcPendingCmd;     /* 0x137E68: RPC function number of the call in flight */
+extern void func_0011AEA0(s32 mode);   /* FlushCache (EE syscall 0x64) */
+
+/* The shared libmc request block (0x141B80, 0x30 bytes sent) as McWrite and
+ * McGetInfo fill it. McWrite sends the unaligned head of the user buffer inline
+ * in `head` and the 16-byte-aligned remainder by DMA; McGetInfo sets three
+ * "wanted" flags and names the DMA staging buffer for the reply. */
+typedef struct McRpcRequest {
+    s32   fd;          /* +0x0 */
+    s32   port;        /* +0x4 */
+    s32   slot;        /* +0x8 */
+    s32   size;        /* +0xC: McWrite: bytes sent by DMA from `buf`; McGetInfo: want format */
+    s32   wantFree;    /* +0x10: McGetInfo */
+    u32   headSize;    /* +0x14: McWrite: leading bytes copied into `head`; McGetInfo: want type */
+    u8   *buf;         /* +0x18: McWrite: 16-byte-aligned DMA source, or 0 */
+    u8   *staging;     /* +0x1C: McGetInfo: DMA staging buffer for the reply */
+    u8    head[16];    /* +0x20 */
+} McRpcRequest;
+
+/* Every access re-forms the block's address from the symbol, as the ROM does:
+ * a request pointer held in a local is kept in a register instead. */
+#define MC_RPC_REQUEST ((McRpcRequest *)g_mcRpcRequest)
+
+/**
+ * McWrite = libmc sceMcWrite (libmc.h: int sceMcWrite(int, void *, int)):
+ * queue a write of `size` bytes from `buf` to the open file `fd` as RPC #6.
+ * Returns -0x64 (sceMcErrUnbind) if the RPC client is not bound and -0xC8
+ * (sceMcErrSemapho) if the libmc mutex cannot be taken, otherwise the RPC
+ * result; on success records 6 as the pending command (the completion path
+ * releases the mutex), on failure releases the mutex itself.
+ *
+ * Up to 16 bytes travel inline in the request. Above that, the bytes before the
+ * next 16-byte boundary go inline and the aligned rest is sent by DMA from
+ * `buf + headSize`; the data cache is flushed (FlushCache(0)) before the RPC so
+ * the IOP sees the bytes.
+ *
+ * The head size is `((buf - 1) & ~0xF) - (buf - 0x10)` with `buf - 0x10` held
+ * in its own local: written as one expression, fold-const rewrites it to
+ * `(((buf - 1) & ~0xF) + 0x10) - buf` and cc1 then derives the DMA pointer
+ * from the aligned value instead of as buf + headSize (97.31%, 11 words off).
+ * The small-write stores go headSize, size, buf in source to give the ROM's
+ * 0x14, 0x18, 0xC issue order.
+ */
+s32 McWrite(s32 fd, u8 *buf, s32 size) {
+    u8 *client = g_mcRpcClient;
+    u32 i;
+    s32 r;
+    if (*(s32 *)(client + 0x24) == 0) {
+        return -0x64;
+    }
+    if (func_0011AC70(g_mcMutexSema) < 0) {
+        return -0xC8;
+    }
+    MC_RPC_REQUEST->fd = fd;
+    if (size < 0x11) {
+        MC_RPC_REQUEST->headSize = size;
+        MC_RPC_REQUEST->size = 0;
+        MC_RPC_REQUEST->buf = 0;
+    } else {
+        s32 base = (s32)buf - 0x10;
+        MC_RPC_REQUEST->headSize = (((s32)buf - 1) & 0xFFFFFFF0) - base;
+        MC_RPC_REQUEST->size = size - MC_RPC_REQUEST->headSize;
+        MC_RPC_REQUEST->buf = buf + MC_RPC_REQUEST->headSize;
+    }
+    for (i = 0; i < MC_RPC_REQUEST->headSize; i++) {
+        MC_RPC_REQUEST->head[i] = buf[i];
+    }
+    func_0011AEA0(0);
+    r = sceSifCallRpc(g_mcRpcClient, 6, 1, g_mcRpcRequest, 0x30, &g_mcRpcResult, 4, 0, 0);
+    if (r == 0) {
+        g_mcPendingCmd = 6;
+    } else {
+        func_0011AC40(g_mcMutexSema);
+    }
+    return r;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00127B18);
 
@@ -1721,7 +1797,59 @@ void func_00127C68(u32 arg0) {
     if (D_00141B30) *D_00141B30 = *(s32 *)((char *)p + 0x90);
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", McGetInfo);
+/**
+ * McGetInfo = libmc sceMcGetInfo (libmc.h: int sceMcGetInfo(int, int, int *,
+ * int *, int *)): ask for the card type, free space and format state of
+ * `port`/`slot` as RPC #1. Each of the three out-pointers may be null; the
+ * request carries a 0/1 "wanted" flag per pointer and the pointers themselves
+ * are parked in D_00141B28/2C/30, where the RPC end-callback func_00127C68
+ * stores the reply (read back from the D_00142000 staging buffer, which is
+ * flushed first). Error returns and pending-command handling as McWrite,
+ * with command 1.
+ *
+ * The flags are if/else stores: a `p ? 1 : 0` spelling becomes branch-free
+ * `sltu` and the body is 60.58% (diff.sh).
+ */
+s32 McGetInfo(s32 port, s32 slot, s32 *type, s32 *free, s32 *format) {
+    u8 *client = g_mcRpcClient;
+    s32 r;
+    if (*(s32 *)(client + 0x24) == 0) {
+        return -0x64;
+    }
+    if (func_0011AC70(g_mcMutexSema) < 0) {
+        return -0xC8;
+    }
+    MC_RPC_REQUEST->port = port;
+    MC_RPC_REQUEST->slot = slot;
+    MC_RPC_REQUEST->staging = D_00142000;
+    if (type != 0) {
+        MC_RPC_REQUEST->headSize = 1;
+    } else {
+        MC_RPC_REQUEST->headSize = 0;
+    }
+    if (free != 0) {
+        MC_RPC_REQUEST->wantFree = 1;
+    } else {
+        MC_RPC_REQUEST->wantFree = 0;
+    }
+    if (format != 0) {
+        MC_RPC_REQUEST->size = 1;
+    } else {
+        MC_RPC_REQUEST->size = 0;
+    }
+    D_00141B28 = type;
+    D_00141B2C = free;
+    D_00141B30 = format;
+    sceSifWriteBackDCache(D_00142000, 0xC0);
+    r = sceSifCallRpc(g_mcRpcClient, 1, 1, g_mcRpcRequest, 0x30, &g_mcRpcResult, 4,
+                      (s32)func_00127C68, (s32)D_00142000);
+    if (r == 0) {
+        g_mcPendingCmd = 1;
+    } else {
+        func_0011AC40(g_mcMutexSema);
+    }
+    return r;
+}
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00127E40);
 
