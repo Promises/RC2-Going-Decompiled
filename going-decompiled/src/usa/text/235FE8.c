@@ -2555,7 +2555,100 @@ void func_00338CD8(void *p, s32 a1, f32 x, f32 y, s32 a2) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00338D48);
+/* func_00338D48(self, mode, x, y, kind): set a multi-line text box's caption
+ * layout. Stores mode (+0x1C4), kind (+0x1B8) and the (x, y) position
+ * (*(self+0x0)), forces the text buffer's last byte to 0, then splits the
+ * caption in place at its 0x01 separators: each separator becomes a NUL, the
+ * start of every line goes into lines[] (+0x1D8, 30 entries, cleared first),
+ * lineCount (+0x1B0) counts them, and maxWidth (+0x1D4) keeps the widest line
+ * as measured by func_0027F7F8 (string pixel width) on a NUL-terminated copy.
+ * A caption with no separator is measured whole. Finally scale.x
+ * (*(self+0x4))[0] = 1.0. Called from func_00338F18 and func_00339678 with
+ * kind 2 and fixed (255, 80/123) positions.
+ * Params: self = the text box; mode/kind = stored as given; x, y = position.
+ * No return value.
+ * MATCHED byte-exact on the s136os arm (task #2067), device-free. What the
+ * ROM's shape needed, each measured in the solo s136os harness:
+ *  - lines[] and text[] as ARRAY members of a typed struct: ARRAY_REF keeps
+ *    `lineCount - 1` undistributed and puts the base first in the addu;
+ *    pointer arithmetic folds the -1 into a -4 displacement;
+ *  - a `text` local used only by the first store and the scan loop, so the
+ *    loop's text[i] giv starts from the first store's p+0xA8 register;
+ *  - &p->text[i + 1] (not text + i + 1) for the line pointer: its own giv;
+ *  - the max written as a ternary that re-reads p->maxWidth (an `m` local
+ *    swaps the v1/a0 pair);
+ *  - n and i zeroed at the top, first = 1 after the stores: the ROM's
+ *    `move s3,s4` (i copied from n) and a separate `li v1,1` for lineCount.
+ * GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+ * (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in tools/ee/s136os_functions.txt)
+ * and spliced over S136OS_SLOT by tools/ee/s136os_splice.sh. There is no asm
+ * fallback. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00338D48)
+S136OS_SLOT(func_00338D48);
+#else
+typedef struct GuiTextBox {
+    f32 *pos;            /* 0x000  x, y */
+    f32 *scale;          /* 0x004  x */
+    u8   _pad008[0xA0];
+    u8   text[0x100];    /* 0x0A8  caption, 0x01-separated lines */
+    u8   _pad1A8[8];
+    s32  lineCount;      /* 0x1B0 */
+    u8   _pad1B4[4];
+    s32  kind;           /* 0x1B8 */
+    u8   _pad1BC[8];
+    s32  mode;           /* 0x1C4 */
+    u8   _pad1C8[0xC];
+    s32  maxWidth;       /* 0x1D4  widest line, pixels */
+    u8  *lines[30];      /* 0x1D8  line start pointers */
+} GuiTextBox;
+extern s32 func_0027F7F8(void *p, s32 mode);
+
+void func_00338D48(void *self, s32 mode, f32 x, f32 y, s32 kind) {
+    GuiTextBox *p = (GuiTextBox *)self;
+    u8 line[0x100];
+    s32 i, n, first;
+    s32 w;
+    u8 *text;
+
+    n = 0;
+    i = 0;
+    p->mode = mode;
+    p->pos[0] = x;
+    p->pos[1] = y;
+    p->kind = kind;
+    p->text[0xFF] = 0;
+    p->maxWidth = 0;
+    p->lineCount = 1;
+    first = 1;
+    memset(line, 0, sizeof(line));
+    memset(p->lines, 0, sizeof(p->lines));
+    text = p->text;
+    p->lines[p->lineCount - 1] = text;
+    for (i = 0; i < 0xFF && text[i] != 0; i++) {
+        if (text[i] == 1) {
+            text[i] = 0;
+            line[n] = 0;
+            first = 0;
+            n = 0;
+            p->lines[p->lineCount] = &p->text[i + 1];
+            p->lineCount++;
+            w = func_0027F7F8(line, -1);
+            p->maxWidth = (p->maxWidth < w) ? w : p->maxWidth;
+        } else {
+            line[n] = text[i];
+            n++;
+        }
+    }
+    if (i < 0xFF && p->text[i] == 0) line[n] = 0;
+    if (first) {
+        p->maxWidth = func_0027F7F8(p->text, -1);
+    } else {
+        w = func_0027F7F8(line, -1);
+        p->maxWidth = (p->maxWidth < w) ? w : p->maxWidth;
+    }
+    p->scale[0] = 1.0f;
+}
+#endif
 
 /* Init a widget sub-block: copy a 0xFF-byte template into p+0x2084, then run the
  * setup helper func_00338D48 on p+0x1FDC with kind 2, a caller id (or the 0x168
