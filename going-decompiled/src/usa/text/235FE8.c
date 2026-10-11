@@ -2564,7 +2564,7 @@ void func_00338CD8(void *p, s32 a1, f32 x, f32 y, s32 a2) {
  * as measured by func_0027F7F8 (string pixel width) on a NUL-terminated copy.
  * A caption with no separator is measured whole. Finally scale.x
  * (*(self+0x4))[0] = 1.0. Called from func_00338F18 and func_00339678 with
- * kind 2 and fixed (255, 80/123) positions.
+ * mode 2, kind = the caller's id, and fixed (255, 80/123) positions.
  * Params: self = the text box; mode/kind = stored as given; x, y = position.
  * No return value.
  * MATCHED byte-exact on the s136os arm (task #2067), device-free. What the
@@ -2651,8 +2651,8 @@ void func_00338D48(void *self, s32 mode, f32 x, f32 y, s32 kind) {
 #endif
 
 /* Init a widget sub-block: copy a 0xFF-byte template into p+0x2084, then run the
- * setup helper func_00338D48 on p+0x1FDC with kind 2, a caller id (or the 0x168
- * default when id == -1), and fixed 255.0/80.0 params. */
+ * setup helper func_00338D48 on p+0x1FDC with mode 2, kind = a caller id (or the
+ * 0x168 default when id == -1), and fixed 255.0/80.0 params. */
 /* GUARD (task #1338): on EE this C is the image's body, compiled alone by the
  * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
  * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
@@ -2862,8 +2862,8 @@ void func_003395F0(void *p, s32 strId, s32 fmtArg, s32 id) {
 #endif
 
 /* Sibling of func_00338F18: copy a 0xFE-byte template into p+0x1E34, then run
- * func_00338D48 on p+0x1D8C with kind 2, a caller id (or the 0xB4 default when
- * id == -1), and fixed 255.0/123.0 params. */
+ * func_00338D48 on p+0x1D8C with mode 2, kind = a caller id (or the 0xB4 default
+ * when id == -1), and fixed 255.0/123.0 params. */
 /* GUARD (task #1338): on EE this C is the image's body, compiled alone by the
  * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
  * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
