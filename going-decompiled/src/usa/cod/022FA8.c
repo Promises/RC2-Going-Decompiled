@@ -1949,55 +1949,39 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00
  * (0x45 PollSema, 0x42 SignalSema), calibrated against this unit's own stubs
  * (0x40 CreateSema, 0x41 DeleteSema, 0x44 WaitSema at func_0011AC60).
  *
- * The ROM arm is raw .word: this body is a RECOVERED splat-dropped function (see the
- * marker below), so the portable arm is the only readable form of it in the tree.
+ * Byte-exact on the plain sdk29 2.9 arm since task #2079 (it was a RECOVERED
+ * splat-dropped function, kept as INCLUDE_ASM with this body as the native-only
+ * arm until then). Two spellings decide the match: the client block held in a
+ * local (`client`, as McClose/McSeek), and the request block taken into its own
+ * pointer local `req` before the two stores, so cc1 forms one %lo base and
+ * passes it as the RPC send buffer; storing through `g_mcRpcRequest + 4/+8`
+ * directly gave 91.06% (diff.sh fuzzy) with a `req+4` base and arg0/arg1 in
+ * swapped s-registers.
  */
-#ifndef TARGET_NATIVE
-// recovered splat-dropped code (epilogue-stump mis-split): raw words, byte-exact
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", McChdir);
-#else
-/* 0x141B00 — SIF RPC client handle for libmc; +0x24 is nonzero once bound. */
-extern u8  g_mcRpcClient[];
-/* 0x1430C0 — where the IOP DMAs the result code for the last call. */
-extern u32 g_mcRpcResult;
-/* 0x137E6C — semaphore serialising libmc RPC calls, created in McInit. */
-extern s32 g_mcMutexSema;
-/* 0x141B80 — the shared 48-byte request block. +4 and +8 are this call's arguments. */
-extern u8  g_mcRpcRequest[];
-/* 0x137E68 — the RPC function number of the call currently in flight. */
-extern s32 g_mcPendingCmd;
-
-extern s32 func_0011AC70(s32 sema);   /* syscall 0x45 PollSema   */
-extern s32 func_0011AC40(s32 sema);  /* syscall 0x42 SignalSema */
-/* sceSifCallRpc is already declared at file scope earlier in
- * this unit; NOT redeclared here. My first draft did redeclare it with `void *` for the
- * trailing end-function/end-param pair and the native gate rejected it as a conflicting
- * type — the existing declaration spells those two as s32. Reusing the unit's own
- * declaration is both correct and the reason the conflict cannot recur. */
-
 s32 McChdir(s32 arg0, s32 arg1) {
+    u8 *client = g_mcRpcClient;
+    u8 *req;
     s32 rc;
 
-    if (*(s32 *)(g_mcRpcClient + 0x24) == 0) {
+    if (*(s32 *)(client + 0x24) == 0) {
         return -100;                       /* client never bound */
     }
     if (func_0011AC70(g_mcMutexSema) < 0) {
-        return -200;                       /* busy — poll, not wait */
+        return -200;                       /* busy - poll, not wait */
     }
 
-    *(s32 *)(g_mcRpcRequest + 4) = arg0;
-    *(s32 *)(g_mcRpcRequest + 8) = arg1;
+    req = g_mcRpcRequest;
+    *(s32 *)(req + 4) = arg0;
+    *(s32 *)(req + 8) = arg1;
 
-    rc = sceSifCallRpc(g_mcRpcClient, 16, 1,
-                       g_mcRpcRequest, 48, &g_mcRpcResult, 4, 0, 0);
-    if (rc != 0) {
-        func_0011AC40(g_mcMutexSema);      /* no completion is coming — release */
-    } else {
+    rc = sceSifCallRpc(client, 16, 1, req, 48, &g_mcRpcResult, 4, 0, 0);
+    if (rc == 0) {
         g_mcPendingCmd = 16;               /* held; the completion path releases */
+    } else {
+        func_0011AC40(g_mcMutexSema);      /* no completion is coming - release */
     }
     return rc;
 }
-#endif
 
 /**
  * McMkDir is libmc's sceMcDelete, not mkdir (FACT #5885: RPC #15 is
