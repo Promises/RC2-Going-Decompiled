@@ -4182,7 +4182,112 @@ void *GuiDialogBoxInitElements(void *p) {
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033BC18);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiDialogBoxInitBorder);
+/* GuiDialogBoxInitBorder: build a dialog box's five border glyph rows and its
+ * three text labels.
+ *  w          the dialog box (callers pass their panel at +0x8, or the box itself)
+ *  pool       element pool; stored at +0x8. When non-null, a zeroed 16-byte
+ *             vector is placement-new'd from it into +0x0.
+ *  borderCfg  five s16 glyph ids, one per border row (D_1ADC50, D_1ADD98, ...)
+ * Row i (element at w+0xC + i*0x4C): when its glyph id is non-zero, init the
+ * element with the D_1ADC60 tag, colour it from D_1ADD18[i] and set its glyph
+ * from g_guiInstance's font at +0x8710. Every id, zero or not, is copied into
+ * the row-active halfwords at +0x188. Then the title (+0x198), body (+0x248)
+ * and footer (+0x1F0) text elements are initialised with their bound pairs
+ * (+0x2A8 / +0x2B8 / +0x2B0) zeroed, position 0 and colour 0x80F0F0F0. Ends by
+ * zeroing the alpha (+0x2A4) and +0x4, and setting +0x2C0 / +0x2C4 / +0x2CC to 1.
+ *
+ * MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+ * byte-exact (task #2078; first body #2074, NOTE #10185).
+ * The glyph cursor is reused after the loop to hold the D_1ADC60 tag. That is
+ * load-bearing: the pseudo then spans blocks, so local-alloc cannot tie the
+ * tag's %hi into it, the %hi goes to $v0 and the tag to the cursor's $s1, and
+ * the label colour takes $s0. With a fresh expression per call the tag ties
+ * its %hi, ranks ahead of the colour and swaps $s0/$s1 (10/143 words, solo
+ * s136os harness).
+ * The pointer locals are formed before the loop in the ROM's order, and
+ * declared pos0, pos1, footer, pos2 so they get the ROM's stack slots.
+ * D_1ADD18 is declared 8 bytes so -G8 addresses it gp-relative (the D_1ADD08
+ * precedent in func_0033BA48).
+ * GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+ * (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_GuiDialogBoxInitBorder)
+S136OS_SLOT(GuiDialogBoxInitBorder);
+#else
+/* Declarations this body needs whose definitions sit in other guarded arms:
+ * the s136os arm compiles this arm alone, so it must see them here. */
+extern char *g_guiInstance;
+extern u8 D_1ADC60[];
+extern s32 D_1ADD18[2];
+extern void GuiElementInit(GuiElement *e, s32 tag, GuiPool *pool);
+extern void GuiTextElementInit(GuiElement *e, s32 tag, GuiPool *pool);
+extern void GuiElementSetGlyph(GuiElement *e, s32 codepoint, s32 font);
+void GuiDialogBoxInitBorder(void *w, void *pool, void *borderCfg) {
+    s16 *glyph;
+    GuiElement *elem;
+    u8 *pos0, *pos1;
+    GuiElement *footer;
+    u8 *pos2;
+    GuiElement *title, *body;
+    s16 *rowActive;
+    s32 *color;
+    void *vec;
+    s32 i;
+
+    *(GuiPool **)((char *)w + 0x8) = (GuiPool *)pool;
+    if (pool != 0) {
+        vec = GuiPlacementNew(0x10, GuiPoolAlloc((GuiPool *)pool));
+        *(void **)((char *)w + 0x0) = vec;
+        *(s32 *)((char *)vec + 0x4) = 0;
+        *(s32 *)((char *)vec + 0x8) = 0;
+        *(s32 *)((char *)vec + 0xC) = 0;
+        *(s32 *)((char *)vec + 0x0) = 0;
+    }
+
+    pos0 = (u8 *)w + 0x2A8;
+    glyph = (s16 *)borderCfg;
+    title = (GuiElement *)((char *)w + 0x198);
+    pos2 = (u8 *)w + 0x2B8;
+    body = (GuiElement *)((char *)w + 0x248);
+    rowActive = (s16 *)((char *)w + 0x188);
+    footer = (GuiElement *)((char *)w + 0x1F0);
+    color = D_1ADD18;
+    elem = (GuiElement *)((char *)w + 0xC);
+    pos1 = (u8 *)w + 0x2B0;
+    for (i = 4; i >= 0; i--) {
+        if (*glyph != 0) {
+            GuiElementInit(elem, (s32)D_1ADC60, (GuiPool *)pool);
+            *GuiElementGetColor(elem) = *color;
+            GuiElementSetGlyph(elem, (s32)(g_guiInstance + 0x8710), *glyph);
+        }
+        *rowActive = *glyph;
+        color++;
+        elem = (GuiElement *)((char *)elem + 0x4C);
+        glyph++;
+        rowActive++;
+    }
+
+    glyph = (s16 *)D_1ADC60;
+    GuiTextElementInit(title, (s32)glyph, (GuiPool *)pool);
+    memset(pos0, 0, 8);
+    GuiElementSetPos(title, 0.0f, 0.0f, 0.0f, 0.0f);
+    *GuiElementGetColor(title) = 0x80F0F0F0;
+    GuiTextElementInit(body, (s32)glyph, (GuiPool *)pool);
+    memset(pos2, 0, 8);
+    GuiElementSetPos(body, 0.0f, 0.0f, 0.0f, 0.0f);
+    *GuiElementGetColor(body) = 0x80F0F0F0;
+    GuiTextElementInit(footer, (s32)glyph, (GuiPool *)pool);
+    memset(pos1, 0, 8);
+    GuiElementSetPos(footer, 0.0f, 0.0f, 0.0f, 0.0f);
+    *GuiElementGetColor(footer) = 0x80F0F0F0;
+    *(f32 *)((char *)w + 0x2A4) = 0.0f;
+    *(s32 *)((char *)w + 0x2C0) = 1;
+    *(s32 *)((char *)w + 0x2C4) = 1;
+    *(s32 *)((char *)w + 0x4) = 0;
+    *(s32 *)((char *)w + 0x2CC) = 1;
+}
+#endif
 
 /* func_0033BE60: store an int at +0x2C0. */
 void func_0033BE60(void *p, s32 v) {
