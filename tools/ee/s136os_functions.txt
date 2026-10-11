@@ -43,6 +43,7 @@ usa text/16E980 AddScreenSpriteFx
 usa text/16E980 StepCameraFovInterp
 usa text/16E980 func_00272560
 usa text/16E980 UpdateScreenFadeBlack
+usa text/16E980 func_00273D20
 usa text/178E88 func_0027FBA8
 usa text/178E88 DrawDebugString
 usa text/178E88 func_00280250

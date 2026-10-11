@@ -37,12 +37,13 @@
  * 05_all29_report.txt, 07_all96_report.txt, classes 08/09_classify*.txt). None
  * reached 100 on either arm; sdk29 >= engine96 on 31 of 40, but 32 of those are
  * PACKED-SAVE-walled there. The wall is a property of the 2.9 arm only: the
- * s136os arm (SN 1.36 -fopt-stack) has the ROM's 8-byte slots, and twenty of
+ * s136os arm (SN 1.36 -fopt-stack) has the ROM's 8-byte slots, and twenty-one of
  * these arms are matched there (FACTs #8830, #9658, #9707, #9856, #10000,
- * #10023, and UpdateScreenFadeBlack from its former MATCH_ guard, task #2092;
- * the s136os re-screen of the remaining arms is NOTE #9857, with
- * func_00270D60, func_00273D20 and func_00270B68 taken further in NOTEs #9994,
- * #9998 and #10024). Table figures below are the
+ * #10023, UpdateScreenFadeBlack from its former MATCH_ guard (task #2092) and
+ * func_00273D20 (task #2101); the s136os re-screen of the remaining arms is
+ * NOTE #9857, with func_00270D60 and func_00270B68 taken further in NOTEs
+ * #9994 and #10024, and func_00273D20's NOTE #9998 ladder closed by task
+ * #2101). Table figures below are the
  * t512 measurements on the two held arms, kept as recorded.
  *   arm                        sdk29%  e96%   saves   residual class (sdk29 arm)
  *   ShowSplashImage             88.84  86.76  3g/0f   PACKED-SAVE,GPREL
@@ -3155,12 +3156,22 @@ s32 func_00273B80(void *moby) {
  * (func_00274778) and, for state 0, plays the impact sound; if it blocked, it just
  * plays the sound. Any spawned sound emitter is anchored at block+0x20. Returns 0
  * once processed, 1 when the state gate rejects.
+ *   moby: the projectile moby; its per-instance block is at moby+0x68.
  *
- * Engine #else (functional; the matching arm hits a packed-save wall). The
- * matching build uses the INCLUDE_ASM arm above.
- */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00273D20);
+ * MATCHED on the s136os arm (task #2101). No device. Two phrasings decide it:
+ *  - the sound id (block+0x5e) is re-read at every use, never held in a local.
+ *    A `u8 soundId` local is allocated to a0 (the PlayMobySound argument), which
+ *    forces branch-likely delay slots and swaps moby/block between s2 and s3:
+ *    96/98 words, 59 positional differences (NOTE #9998). Re-read, it lands in
+ *    v1 as in the ROM.
+ *  - the state test is written `!= 0` with func_002742F8 first (the ROM's
+ *    `beqz` to func_00274138): the `== 0` order costs 1 word.
+ * (An earlier note here blamed a packed-save wall; that is a property of the
+ * 2.9 arm only, FACT #9873.)
+ * GUARD: compiled alone by SN 2.95.3 v1.36 -fopt-stack and spliced over the
+ * S136OS_SLOT line (tools/ee/s136os_splice.sh); plain C on native. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00273D20)
+S136OS_SLOT(func_00273D20);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
@@ -3184,10 +3195,10 @@ s32 func_00273D20(void *moby) {
     if (*(u8 *)(block + 0x5c) >= 3) {
         return 1;
     }
-    if (*(u8 *)(block + 0x5c) == 0) {
-        func_00274138(moby);
-    } else {
+    if (*(u8 *)(block + 0x5c) != 0) {
         func_002742F8(moby);
+    } else {
+        func_00274138(moby);
     }
 
     {
@@ -3198,7 +3209,6 @@ s32 func_00273D20(void *moby) {
             Vec4 basis;
             s32  soundHandle = -1;
             s32  blocked;
-            u8   soundId;
 
             Vec3RescaleToLenVu0(&g_collHitNormal, 1.0f, &g_collHitNormal);
             Vec3CrossVu0(&tangent, &g_collHitNormal, (const Vec4 *)block);
@@ -3206,14 +3216,13 @@ s32 func_00273D20(void *moby) {
             func_002B0E40((u8 *)moby + 0x10, &basis, 1);
             blocked = func_00274BB8(*(f32 *)(block + 0x38), *(f32 *)(block + 0x3c),
                                     block, &g_collHitNormal, &basis);
-            soundId = *(u8 *)(block + 0x5e);
             if (blocked == 0) {
-                if (soundId != 0xff && *(u8 *)(block + 0x5c) == 0) {
-                    soundHandle = PlayMobySound(soundId, 0, moby);
+                if (*(u8 *)(block + 0x5e) != 0xff && *(u8 *)(block + 0x5c) == 0) {
+                    soundHandle = PlayMobySound(*(u8 *)(block + 0x5e), 0, moby);
                 }
                 func_00274778(moby, slot, &basis);
-            } else if (soundId != 0xff) {
-                soundHandle = PlayMobySound(soundId, 0, moby);
+            } else if (*(u8 *)(block + 0x5e) != 0xff) {
+                soundHandle = PlayMobySound(*(u8 *)(block + 0x5e), 0, moby);
             }
             if (soundHandle != -1) {
                 SetSoundEmitterOffset(soundHandle, block + 0x20);
