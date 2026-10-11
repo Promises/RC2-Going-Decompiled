@@ -280,6 +280,22 @@ extern LevelObjective *g_objectiveScanHeadAbs;
 #define g_objectiveScanHeadAbs (((ObjectiveScan *)(g_pRainHeightmap + 0x34))->head)
 #endif
 
+/* ADDRESSING-MODEL DEVICE (RULING #8620, the same size-16 equate form): the
+ * whole scratch pair as one cc1-small object for UpdateLevelObjectiveStates.
+ * The ROM reaches +0x34 and +0x38 only with the assembler-macro shape
+ * (`lui $1; sw $2,%lo(g_pRainHeightmap+0x38)($1)`, `lui $16; lw $16,...`).
+ * As a field of a fixed-address object, `outstanding` may alias the in-struct
+ * `rec->state/flags` reads, so cc1 keeps pass 3's per-objective lw/addiu/sw as
+ * the ROM does instead of holding the count in a register (NOTE #9567 lever 2).
+ * Through a cast of g_pRainHeightmap, 101 of 103 words differ (task #2098).
+ * Emits nothing; the relocations name g_pRainHeightmap+0x34/+0x38. */
+#ifndef TARGET_NATIVE
+__asm__(".extern g_objectiveScan, 16\n\tg_objectiveScan = g_pRainHeightmap + 0x34");
+extern ObjectiveScan g_objectiveScan;
+#else
+#define g_objectiveScan (*(ObjectiveScan *)(g_pRainHeightmap + 0x34))
+#endif
+
 extern u8 g_levelVisitedMarkers[]; /* 0x1A7BF0 per-level visited byte markers */
 
 /* MISNAMED: this is a per-level MAP-BLIP record, not a weapon-upgrade record
@@ -3226,80 +3242,87 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029E5F8);
  * Returns 1 iff no objectives remain outstanding (the level's objectives are
  * all satisfied), else 0. Returns 0 immediately if the level has no list.
  *
- * WALLED (probed 2026-06-25, best 69.08%): the body logic reproduces
- * instruction-for-instruction, but the original (later SN cc1) (a) over-allocates
- * the frame (128 vs 48 bytes, 7 vs 5 callee-saves); (b) fills loop-back delay
- * slots with branch-likely (`beqzl`/`bnezl` + annulled next-iteration load) where
- * the pinned cc1 emits plain `beqz` + `nop`. (The function is void and both
- * builds rematerialise the lui/%lo g_pRainHeightmap+0x38 pair per pass - no
- * callee-save-base trick is involved here.) Same later-cc1 frame-packing/
- * scheduling class as GatherActiveObjectives/EvaluateProgressCondition. The
- * TARGET_NATIVE arm below is the faithful portable body (cmp-oracle'd). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", UpdateLevelObjectiveStates);
+ * Byte-exact on the s136os arm since task #2098, from NOTE #9567's body. The
+ * old wall notes here (frame over-allocation, branch-likely loop fills, a
+ * packed-save stride) were cc1 2.9 / -fno-gcse properties; NOTE #9871 and
+ * FACT #9873 had already measured the stride claim false. What closes it, each
+ * device priced by removing it alone on the solo s136os compile (reloc-masked
+ * words differing from the ROM, of 103):
+ *   - g_objectiveScan, the struct equate above (101 differ without it);
+ *   - the head stored first, and all three passes opened alike as
+ *     `for (rec = g_objectiveScan.head; ...)`: the NULL test then reads the
+ *     loaded value (`bnez $2; daddu $16,$2`) as the ROM does (19 differ when
+ *     rec is assigned with the head and tested instead);
+ *   - g_mapVertexData through a block-local pointer in the entry and another
+ *     in the pass-1 loop. The entry keeps the full address in $4 and pass 1's
+ *     copy of it is the loop-invariant `daddu $20,$4,$0`, as in the ROM (33
+ *     differ without the entry local, 60 without the loop one);
+ *   - g_levelVisitedMarkersAbs, CommitProgressCheckpoint's size-16 equate.
+ *     cc1's one-insn `la` expands to the ROM's `lui $19; addiu $19,$19` and
+ *     leaves the loop-entry `beqz` slot a nop (7 differ through the plain
+ *     symbol, where reorg fills the slot with a split `lui $2`);
+ *   - CODEGEN DEVICE (RULING #8404), not an asynchronous-object claim: the
+ *     `outstanding = 0` store and the final read are volatile accesses. cc1
+ *     sizes a one-insn macro to the small g_objectiveScan as 1 word, so
+ *     without this reorg puts the store in pass 2's exit slot and the read in
+ *     pass 3's entry slot; the ROM has `beqz; nop` at both (51 differ without
+ *     either, 33 with only the store, 50 with only the read). Writer census
+ *     of +0x34 over the USA asm: this function's own two stores (0x29E780,
+ *     0x29E7C8) are the only symbolic references. A register-based access
+ *     into the bss block would not show in that scan. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_UpdateLevelObjectiveStates)
+S136OS_SLOT(UpdateLevelObjectiveStates);
 #else
-/* t511 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 69.18% -> PACKED-SAVE, first differing row @0: ROM `addiu sp, sp, -0x30` vs `(nothing)`;
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing, MATCH_ guard) 68.00% -> SCHED-PROEPI, first differing row @0: ROM `addiu sp, sp, -0x30` vs `addiu sp, sp, -0x40`.
- * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
- * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
- * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
- * property and was measured false as the reason this member stays unmatched (FACT #9873).
- * Residual: the saved-register set; the rest UNMEASURED.
- * TODO(match) re-screened on the s136os arm at its unpinned flags (RULING #9910,
- * -O2 -G8 -fopt-stack, gcse on), task #2039, solo compile + asm_unit.sh, reloc
- * fields masked: this #else is 95 vs 103 words; NOTE #9567's best body (struct
- * equate g_objectiveScan = g_pRainHeightmap + 0x34) reaches 103 = 103 words but
- * still differs in 78 positions - NOTE #9567's residual A (the ROM keeps the FULL
- * g_mapVertexData address in $4/$20 and reads 0x230($4); cc1 folds +0x230 into
- * %lo and keeps only a %hi copy) survives gcse, and the prologue saves interleave
- * differently. A function-scope `u8 *map` makes it worse (105 words). Bodies and
- * figures in NOTE #10118. */
 s32 UpdateLevelObjectiveStates(void) {
     extern s32 EvaluateProgressCondition(s32 cond, s32 arg);  /* defined later in-unit */
-    ObjectiveScan *scan = (ObjectiveScan *)(g_pRainHeightmap + 0x34);
+#ifndef TARGET_NATIVE
+    extern u8 g_levelVisitedMarkersAbs[8];  /* declared in CommitProgressCheckpoint's arm */
+#endif
     LevelObjective *rec;
 
-    rec = g_levelObjectiveLists[*(s32 *)(g_mapVertexData + 0x230)];
-    scan->head = rec;
-    if (rec == NULL) {
+    {
+        u8 *map = g_mapVertexData;
+        g_objectiveScan.head = g_levelObjectiveLists[*(s32 *)(map + 0x230)];
+    }
+    if (g_objectiveScan.head == NULL) {
         return 0;
     }
 
     /* Pass 1: score each objective from its progress conditions. */
-    for (; rec->id != 0; rec++) {
-        if ((rec->flags & 0x4) &&
-            g_levelVisitedMarkers[*(s32 *)(g_mapVertexData + 0x230)] == 0) {
-            rec->state = 0;
-            continue;
+    for (rec = g_objectiveScan.head; rec->id != 0; rec++) {
+        if (rec->flags & 0x4) {
+            u8 *map = g_mapVertexData;
+            if (g_levelVisitedMarkersAbs[*(s32 *)(map + 0x230)] == 0) {
+                rec->state = 0;
+                continue;
+            }
         }
         if (EvaluateProgressCondition(rec->cond1Sel, rec->cond1Arg) == 0) {
             rec->state = 0;
             continue;
         }
-        if (EvaluateProgressCondition(rec->cond2Sel, rec->cond2Arg) != 0) {
-            rec->state = 2;
-        } else {
+        if (EvaluateProgressCondition(rec->cond2Sel, rec->cond2Arg) == 0) {
             rec->state = 1;
+        } else {
+            rec->state = 2;
         }
     }
 
     /* Pass 2: tick callbacks. */
-    for (rec = scan->head; rec->id != 0; rec++) {
+    for (rec = g_objectiveScan.head; rec->id != 0; rec++) {
         if (rec->tickFn != NULL) {
             rec->tickResult = rec->tickFn(rec->tickArg);
         }
     }
 
     /* Pass 3: count outstanding (active, not hidden-when-complete) objectives. */
-    scan->outstanding = 0;
-    for (rec = scan->head; rec->id != 0; rec++) {
+    *(volatile s32 *)&g_objectiveScan.outstanding = 0;
+    for (rec = g_objectiveScan.head; rec->id != 0; rec++) {
         if (rec->state == 1 && (rec->flags & 0x2) == 0) {
-            scan->outstanding += 1;
+            g_objectiveScan.outstanding += 1;
         }
     }
-
-    return scan->outstanding == 0;
+    return *(volatile s32 *)&g_objectiveScan.outstanding == 0;
 }
 #endif
 
