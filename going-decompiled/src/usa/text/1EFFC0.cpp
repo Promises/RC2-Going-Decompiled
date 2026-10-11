@@ -917,8 +917,15 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", ExitCinematicSc
 /* TODO(hle): needs PS2 graphics/IO HLE backend - tie draw-pipeline frame-stack sliver (spimdisasm fragment). */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F6940);
 
-/* TODO(match): functional equivalent pending - per-frame cinematic-camera matrix build: lq/sq + VU0 vec helpers. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F6950);
+/* ApplyCinematicPlaybackCameraKey (named task #2087; was func_002F6950): apply the
+ * in-engine cinematic's camera key for the current sub-chunk frame. Sole caller
+ * TickCinematicPlayback. Reads the key list ApplyCinematicCameraKey also reads
+ * (g_cameraSlotActive+0x990 scene block: list +0x68, frame +0x38, stride 0x20), sets
+ * g_cameraProjScale, g_cameraPos and the g_cameraMatrix rows, runs the three camera
+ * shake channels and returns the key's byte +0xC.
+ * Not matched. Solo s136 screen 5/112 with four empty fences; residual is $2/$3
+ * allocation around its two 128-bit copies (NOTE #10210 holds the body). */
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", ApplyCinematicPlaybackCameraKey);
 
 /* Install the deferred exit-cinematic callback + its argument. */
 void func_002F6B10(void *callback, void *arg) {
