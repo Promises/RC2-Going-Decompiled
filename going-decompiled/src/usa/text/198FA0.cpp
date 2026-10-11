@@ -3506,7 +3506,9 @@ s32 GatherActiveObjectives(s32 *outIds, s32 *outMask, s32 *outVals, s32 wantValu
  * use). The tails are the nested-guard shape (`bnez; addiu $2,1 / daddu
  * $2,0`), which SN 1.36 keeps where cc1 2.9 scc-converts to sltu.
  * func_0029EC70 (HIGH shared, LO_SUM re-materialised) and the 0/1/2 arbiters
- * func_0029EB68/func_0029EBF8 are not closed by this. */
+ * func_0029EB68/func_0029EBF8 are not closed by this. (func_0029EB68 is
+ * byte-exact on the s136os arm since task #2098, by per-arm pointer locals;
+ * see its own comment.) */
 /** Returns 1 iff the misc-extras gate is clear (g_miscExtras == 0) AND the
  *  D_1397E0 busy bit (0x8000000) is set; 0 otherwise.
  *  MATCHED on the s136os arm (task #1344): byte-identical to the ROM in the
@@ -3600,48 +3602,59 @@ s32 func_0029EB38(void) {
 }
 #endif
 
-/* func_0029EB68: cinematic skip-prompt arbiter (posts HUD message 0x1F/0x20
- * into D_257502, returns 0/1/2 on the D_1395B8[0x1D] / cinematic word +0x5C
- * pair). RE-PROBED 2026-06-12, best 76.57%: the original keeps both %hi
- * halves live in registers and re-materialises the D_1395B8 base via addiu
- * before each reload, while the pinned cc1 folds the +0x1D element address
- * into the lui/lbu pair (pointer-local shapes scored worse). Left as asm.
- * TODO(match) re-screened on the s136os arm at its unpinned flags (RULING #9910,
- * gcse on), task #2039, solo compile + asm_unit.sh, reloc fields masked; 35 =
- * 35 words unless stated (the #else below was not re-measured). NOTE #9485's
- * two-local body differs in 10 positions: gcse now gives the ROM's %hi(D_1395B8)
- * copy and hoists %hi(g_cinematicUnlockedFlags) into the first bnez slot, but the gate's
- * miss branch is `bltz` where the ROM has `bltzl` (likely slot = the D_1395B8
- * re-form), and the join's registers are swapped ($3/$2 vs the ROM's $2/$3).
- * Writing the join as an inline helper taking (D_1395B8, &g_cinematicUnlockedFlags)
- * after an `&&` gate gets the ROM's `bltzl` opcode but loses the %hi(cin)
- * hoist (13 positions with %lo addends masked; 14 byte-level, because the
- * bltzl's offset is 6 against the ROM's 7, per FACT #10123's correction of
- * NOTE #10118); the same helper after NOTE #9485's NESTED gate is output-identical
- * to that body (10). So the gate's form alone trades `bltzl` against the hoist;
- * the join's spelling and the helper's parameter order are inert, and a shared
- * function-scope cin pointer is worse (36 words). Bodies in NOTE #10118. */
+/* func_0029EB68: cinematic skip-prompt arbiter. It posts HUD message 0x1F/0x20
+ * into D_257502 and returns 0/1/2 on the D_1395B8[0x1D] / cinematic word +0x5C
+ * pair. Story flag clear with the cinematic ready: 0x1F, return 0. Flag set
+ * with it ready: 0x20, return 1. Flag clear with it locked: 0x1F, return 2.
+ * Flag set with it locked: return 0, D_257502 unchanged. Its only ROM
+ * reference is a function-pointer word in a data table (0x25750C), so the
+ * splat name is kept (RULING #10083: no named caller or global to name it by).
+ *
+ * Byte-exact on the s136os arm since task #2098. NOTE #9485's two-local body
+ * stood 10-11 words off (NOTE #10118: `bltz` where the ROM has `bltzl`, and
+ * the join's $2/$3 swapped). What closes it is ONE block-local cin pointer PER
+ * USE: the gate's, and one in each arm of the join. Measured on the solo
+ * s136os compile (reloc-masked words differing from the ROM, of 35):
+ *   - one cin2 shared by both join arms: 11 (#10118's residual);
+ *   - cin2 declared once and assigned in each arm: 5. That gives the bltzl,
+ *     but each arm's word loads into the address register (`lw $2,0x5C($2)`)
+ *     where the ROM keeps $3;
+ *   - a separate pointer per arm (below): 0.
+ *   Declaration order and a named value local are inert or worse (11, 5-7).
+ * The earlier pinned-cc1 notes (both %hi halves live, the +0x1D fold) were
+ * properties of the -fno-gcse arm; RULING #9910 unpinned this one. */
 extern s16 D_257502 ROM_SPLIT;   /* cinematic-unlock status code (0x1F / 0x20) */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029EB68);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0029EB68)
+S136OS_SLOT(func_0029EB68);
 #else
-/* t511 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 37.97% -> HIREG-LIVE, first differing row @1: ROM `daddu a1, v0, zero` vs `lui v1, %hi(g_cinematicUnlockedFlags+0x5c)`;
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing, MATCH_ guard) 41.80% -> HIREG-LIVE, first differing row @1: ROM `daddu a1, v0, zero` vs `lui v1, %hi(D_1395B8+0x1d)`. */
 s32 func_0029EB68(void) {
-    /* cinematic word sits at &g_cinematicUnlockedFlags + 0x5C (region-anchor
+    /* The cinematic word sits at &g_cinematicUnlockedFlags + 0x5C (region-anchor
      * sibling global; same base-relative access as the +0x90/+0x98 readers). */
-    s32 cinWord = *(s32 *)((char *)&g_cinematicUnlockedFlags + 0x5C);
-
-    if (D_1395B8[0x1D] == 0) {
-        D_257502 = 0x1F;                    /* story flag clear */
-        return (cinWord >= 0) ? 0 : 2;      /* cinematic ready vs still locked */
+    u8 *story = D_1395B8;
+    if (story[0x1D] == 0) {
+        char *cin = (char *)&g_cinematicUnlockedFlags;
+        if (*(s32 *)(cin + 0x5C) >= 0) {
+            D_257502 = 0x1F;            /* story flag clear, cinematic ready */
+            return 0;
+        }
     }
-    if (cinWord >= 0) {
-        D_257502 = 0x20;                    /* story flag set + cinematic ready */
-        return 1;
+    {
+        u8 *story2 = D_1395B8;
+        if (story2[0x1D] != 0) {
+            char *cin2 = (char *)&g_cinematicUnlockedFlags;
+            if (*(s32 *)(cin2 + 0x5C) >= 0) {
+                D_257502 = 0x20;        /* story flag set, cinematic ready */
+                return 1;
+            }
+        } else {
+            char *cin3 = (char *)&g_cinematicUnlockedFlags;
+            if (*(s32 *)(cin3 + 0x5C) < 0) {
+                D_257502 = 0x1F;        /* story flag clear, cinematic locked */
+                return 2;
+            }
+        }
     }
-    return 0;                               /* story flag set, cinematic locked */
+    return 0;                           /* story flag set, cinematic locked */
 }
 #endif
 

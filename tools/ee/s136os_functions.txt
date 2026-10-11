@@ -645,3 +645,4 @@ usa text/1EFFC0 CloseTfragDrawSegment
 usa text/1EFFC0 TeardownVendorSceneRestorePlayer
 usa text/198FA0 PollFrontEndMenu
 usa text/198FA0 UpdateLevelObjectiveStates
+usa text/198FA0 func_0029EB68
