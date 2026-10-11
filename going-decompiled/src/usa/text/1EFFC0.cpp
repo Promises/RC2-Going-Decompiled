@@ -2357,7 +2357,7 @@ extern void  func_0029C4C0(s32 a, s32 b);
 extern void  func_002FA608(void);
 extern void  func_002F85B8(void);
 extern void  func_002898E0(void);
-extern void  func_0026F750(s32, s32);
+extern s32   func_0026F750(s32, s32);
 extern void  func_0026F728(void);
 /* Takes ONE arg: the sound-command word. asm 0x132AF8 does `sw $4,0x0($29)` and
  * hands that stack word to snd_QueueCommandToRing(0x16, 4, &word, 0, 0), so $4
@@ -2607,38 +2607,60 @@ void EnterVendorMenu(s32 arg) {
  * preview moby's (+0x28) origin (+0xC0) and offset (+0x10) via func_00283A48 /
  * Vec4AddVu0, wrap its facing angle (+0xF8) into [-pi,pi] (WrapAnglePiSum) and
  * place it (func_0026F780), then kick the fx queue (func_003363A0(2)). Always:
- * mark the preview moby active (+0x20 = 1), nudge the save-image-area sub-state
- * halfword (+0x1072) out of the {6,7} band to 5, run the +0x8C teardown hook
- * (func_002FBFD8) and free the preview moby (+0x28) when one is parked (+0x60 != 0),
- * then retune music (func_00132B28), mute dialog voices and pump the sound stack.
+ * mark the preview moby active (+0x20 = 1), nudge the file-load voice sub-state
+ * halfword (g_fileLoadVoiceState +0x72) out of the {6,7} band to 5, run the +0x8C
+ * teardown hook (func_002FBFD8) and free the preview moby (+0x28) when one is
+ * parked (+0x60 != 0), then retune music (func_00132B28), mute dialog voices and
+ * pump the sound stack. No parameters, no return value.
  *
- * Engine-region (ee-gcc 2.96): the lq/sq is a plain 16-byte template copy and the
- * VU0/angle math is done by callees, so the body ports faithfully as portable C.
- * Matching-walled — kept as the portable #else impl. Field offsets kept literal
- * (partial VendorUiState). */
-/* RESIDUAL CLASS (task #576): GPREL-MISMATCH-INSUFFICIENT -- g_nGameState; per-arm size 4 measured 65.58 -> 68.62 on engine96, still DIFFERS and still below its own sdk29 arm
- *   Both arms measured at unit objdiff (objdiff_build.sh + unit_report.sh,
- *   whole-unit blanket screen, clean tree): sdk29 75.63%, engine96 65.58%
- *   (better arm: sdk29). Neither reaches 100.00%, so this stays INCLUDE_ASM
- *   and the #else below remains the portable impl.
- *   addressing is A residual but NOT the only one -- measured, not assumed: */
-/* RESIDUAL CLASS (task #2021, s136 arm, solo screen): LENGTH-EQUAL NEAR-MISS.
- *   The #else below reads 96/96 words (built 102). A re-spelled body (NOTE
- *   #10075: g_fileLoadVoiceState+0x72 not g_saveImageArea+0x1072, a small
- *   D_1AD280 for the %gp_rel template address, a split g_bGlobalSceneActive,
- *   g_nGameStateGp, the -1 stores in reverse order) reaches 21/96 at ROM
- *   length. Left: the materialised g_fileLoadVoiceState base (lui/addiu then
- *   114($3)), the lq/sq template-copy order around `move $16,$2`, and one
- *   $2/$3 allocation. Not promoted. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", TeardownVendorSceneRestorePlayer);
+ * Byte-exact on the s136os arm (task #2087; see the GUARD below), from the
+ * task #2021 body of NOTE #10075 (21/96 there). What closed it, each item priced
+ * by removing it ALONE from the final body (solo s136 screen, words differing
+ * of 96, built length in brackets where it moves):
+ *  - the sub-state is reached through a base-pointer local `vs` to
+ *    g_fileLoadVoiceState, with the +0x72 field offset at each use: the ROM
+ *    materialises the base (lui ... addiu $3) and then `lhu`/`sh 114($3)`.
+ *    `g_fileLoadVoiceState + 0x72` spelled at each use instead: 33/96 [94];
+ *  - the template copy goes through a pointer `tp` to the stack quad that is
+ *    tied in an EMPTY fence (RULING #8483), and an untied empty fence follows
+ *    the copy: the ROM issues `move $16,$2`, `addiu $5,$29,32` (=tp, also the
+ *    call's 2nd argument), the `lq`/`sq` through $5, and only then the jal.
+ *    Without the untied fence: 64/96; without both: 8/96;
+ *  - func_0026F750 is declared with its definition's return type, s32
+ *    (16E980.c; the ROM stub writes $v0). Declared void, $2 is free and the
+ *    split `g_bGlobalSceneActive` store takes `lui $2` where the ROM has `lui
+ *    $3` (2/96) — FACT #9266 lever 1(b), RULING #9118's direction;
+ *  - ADDRESSING-MODEL DEVICES (RULING #8620): g_bGlobalSceneActive declared
+ *    ROM_SPLIT (the ROM's split `lui $3` / `sb $0,%lo($3)` in the jal slot):
+ *    72/96 [94]; D_1AD280 declared small (s64), so its address is the ROM's
+ *    `addiu $3,$28,%gp_rel(D_1AD280)`: 63/96 as u8[16]; g_nGameState stored
+ *    through the unit's size-4 g_nGameStateGp equate (`sw $0,%gp_rel` in the
+ *    jal slot): 75/96 [98];
+ *  - the two -1 stores written +0x7C then +0x78: SN 1.36 issues the last store
+ *    of the group first (FACT #9254), which gives the ROM's +0x78-first order:
+ *    3/96 the other way round.
+ * The template is copied as a 16-byte aligned quad (lq/sq), the type NOTE
+ * #10075 measured identical to a TImode copy.
+ * History, kept as observations: task #576's whole-unit blanket screen read the
+ * sdk29 arm 75.63% and engine96 65.58% (a g_nGameState size-4 trial moved
+ * engine96 to 68.62%); task #2021's solo s136 screen read the former portable
+ * #else 96/96 (built 102). Neither arm is the image body: byte-exact on the
+ * s136os arm since task #2087. */
+/* GUARD (task #2087): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C (ROM_SPLIT and the
+ * g_nGameStateGp equate are EE-only; the empty fences emit nothing). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_TeardownVendorSceneRestorePlayer)
+S136OS_SLOT(TeardownVendorSceneRestorePlayer);
 #else
-extern u8   g_bGlobalSceneActive;    /* global sub-scene active flag (byte) */
-extern u8   g_saveImageArea[];       /* +0x1072 = pause/save sub-state halfword */
-extern u8   D_1AD280[16];            /* preview transform template (vec4) */
+extern u8   g_bGlobalSceneActive ROM_SPLIT; /* global sub-scene active flag (byte) */
+extern u8   g_fileLoadVoiceState[];  /* +0x72 = file-load voice sub-state halfword */
+extern s64  D_1AD280;                /* preview transform template (one quad) */
 extern void func_0028C108(s32 handle, s32 arg); /* release a menu sound/anim handle */
 extern void func_0028ECA8(void);     /* quiesce the vendor sub-scene */
-extern void func_0026F750(s32, s32); /* restore top-level game/screen mode */
+extern s32  func_0026F750(s32, s32); /* restore top-level game/screen mode */
 extern void func_0026F730(void);     /* clear global-scene bookkeeping */
 extern void *func_00299980(void);    /* allocate a preview actor, returns handle */
 extern void func_00283A48(void *outXform, void *tmpl, void *origin);
@@ -2651,10 +2673,18 @@ extern void FreeMoby(void *moby);
 extern void func_00132B28(s32);
 extern void snd_Pump(void);
 
+/* One 16-byte quad, copied with lq/sq. */
+typedef struct VendorQuad {
+    f32 v[4];
+} __attribute__((aligned(16))) VendorQuad;
+
 void TeardownVendorSceneRestorePlayer(void) {
     char *ui = (char *)&g_vendorUi;
-    char *pv;
-    u16  *subState;
+    void *actor;
+    f32   xform[4];
+    f32   rot[4];
+    VendorQuad tmpl;
+    u8   *vs;
 
     /* release + blank the two live preview handles */
     if (*(s32 *)(ui + 0x7C) != -1) {
@@ -2663,42 +2693,40 @@ void TeardownVendorSceneRestorePlayer(void) {
     if (*(s32 *)(ui + 0x78) != -1) {
         func_0028C108(*(s32 *)(ui + 0x78), 0);
     }
-    *(s32 *)(ui + 0x78) = -1;
     *(s32 *)(ui + 0x7C) = -1;
+    *(s32 *)(ui + 0x78) = -1;
     func_0028ECA8();
 
     /* return to the world: game state 0, drop the global-scene flag */
-    g_nGameState = 0;
+    g_nGameStateGp = 0;
     func_0026F750(0, 1);
     g_bGlobalSceneActive = 0;
     func_0026F730();
 
     /* no preview parked yet -> spawn the departing preview actor */
     if (*(s32 *)(ui + 0x60) == 0) {
-        void *actor = func_00299980();
-        char *moby  = *(char **)(ui + 0x28);
-        f32   xform[4];
-        f32   rot[4];
-        f32   tmpl[4];
+        VendorQuad *tp;
 
-        memcpy(tmpl, D_1AD280, sizeof(tmpl));
-        func_00283A48(xform, tmpl, moby + 0xC0);
-        Vec4AddVu0(xform, xform, moby + 0x10);
-
+        actor = func_00299980();
+        tp = &tmpl;
+        __asm__ __volatile__("" : "+r"(tp));
+        *tp = *(VendorQuad *)&D_1AD280;
+        __asm__ __volatile__("");
+        func_00283A48(xform, tp, *(char **)(ui + 0x28) + 0xC0);
+        Vec4AddVu0(xform, xform, *(char **)(ui + 0x28) + 0x10);
         rot[0] = 0.0f;
         rot[1] = 0.0f;
-        rot[2] = WrapAnglePiSum(*(f32 *)(moby + 0xF8), PR_PI);
+        rot[2] = WrapAnglePiSum(*(f32 *)(*(char **)(ui + 0x28) + 0xF8), PR_PI);
         func_0026F780(xform, rot, 0, actor);
         func_003363A0(2);
     }
 
-    pv = *(char **)(ui + 0x28);
-    *(u8 *)(pv + 0x20) = 1;
+    *(u8 *)(*(char **)(ui + 0x28) + 0x20) = 1;
 
-    /* bump the save-image-area sub-state out of the {6,7} band */
-    subState = (u16 *)(g_saveImageArea + 0x1072);
-    if ((u32)(*subState - 6) >= 2) {
-        *subState = 5;
+    /* bump the file-load voice sub-state out of the {6,7} band */
+    vs = g_fileLoadVoiceState;
+    if ((u32)(*(u16 *)(vs + 0x72) - 6) >= 2) {
+        *(u16 *)(vs + 0x72) = 5;
     }
 
     if (*(s32 *)(ui + 0x8C) != 0) {
