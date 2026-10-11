@@ -5040,7 +5040,195 @@ s32 func_0012F070(u64 *arg0) {
     return 1;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012F0E0);
+/* One MPEG-2 PES packet header as ParsePesPacketHeader leaves it. */
+typedef struct {
+    u64 streamId;      /* 0x00: stream_id << 32, | the sub-stream word of private streams */
+    s32 length;        /* 0x08: PES_packet_length */
+    s32 scrambling;    /* 0x0C: PES_scrambling_control */
+    s64 pts;           /* 0x10: 33-bit PTS, -1 when absent */
+    s64 dts;           /* 0x18: 33-bit DTS, -1 when absent */
+    s32 payloadPos;    /* 0x20: bit position of the payload */
+    s32 payloadLength; /* 0x24: PES_packet_length - PES_header_data_length - 3 */
+    s32 startPos;      /* 0x28: bit position of the packet start code */
+} PesHeader;
+#define PES_ID(id) ((u64)(id) << 32)
+
+/* Bits taken by ES_rate, DSM_trick_mode, additional_copy_info and
+ * previous_PES_packet_CRC for each combination of their four flags. */
+typedef struct {
+    u8 bits[16];
+} PesOptionalBits;
+extern PesOptionalBits D_0013BCD8;
+extern char D_0013BCE8[];   /* "pack_header_field_flag needs to be '0' in PS\n" */
+/**
+ * Read one PES packet header from the program-stream bit reader `bs` into
+ * `pes` (ISO/IEC 13818-1 PES_packet(), field for field) and skip what the
+ * caller does not consume. Returns 1, or 0 for a header carrying a
+ * pack_header_field, which a program stream must not have (reported through
+ * func_00130288 against `owner`, the decoder).
+ *
+ * The start code, stream_id (kept as stream_id << 32) and PES_packet_length
+ * are read for every packet; PTS and DTS start at -1. For an ordinary
+ * stream it then reads the flags, a PTS and/or DTS (33 bits from the 3+15+15
+ * fields, marker bits skipped), skips the ESCR (48 bits) and the four optional
+ * fields by a table of bit counts, and walks the PES_extension (private data,
+ * sequence counter, P-STD buffer, extension field). The rest of the header
+ * (stuffing) is skipped through func_0012EA18 from PES_header_data_length;
+ * payloadPos/payloadLength record the payload, and private_stream_1 (0xBD)
+ * also folds its 32-bit sub-stream word into streamId before the payload is
+ * skipped. program_stream_map, private_stream_2, ECM, EMM, the directory,
+ * DSMCC and H.222.1 type E packets are skipped whole (private_stream_2 also
+ * keeping its sub-stream word), and padding_stream packets likewise.
+ *
+ * Named at promotion (RULING #10083) from that syntax and its own report
+ * string. Byte-exact on the sdk29 arm since task #2086, device-free. The
+ * spellings that mattered, each measured in a scratch build of the unit
+ * (positional words differing of 364): the PTS and DTS temporaries scoped to
+ * their own blocks and a separate variable for the header stuffing (whole-
+ * function variables lose the allocator's priority to `bs`: 270); a separate
+ * byte count in the special-stream arm (one shared `skip` lets cc1 cross-jump
+ * the 0xBD and 0xBF tails: 95); the 33-bit value as a u32 low part ORed under
+ * the high bit (6 -> 2); dts = -1 written before pts = -1 (2 -> 0, the
+ * last-store-first order); and the bit-count table copied from D_0013BCD8 as
+ * a struct after the startPos store (a local array initializer reads the same
+ * but puts its own copy of the table in .rdata; a copy at the declaration:
+ * 21).
+ */
+s32 ParsePesPacketHeader(s32 owner, struct E890Rec *bs, PesHeader *pes) {
+    PesOptionalBits optionalBits;
+    s32 ptsDtsFlags;
+    s32 escrFlag;
+    s32 optionalFlags;
+    s32 extensionFlag;
+    s32 headerLength;
+    s32 start;
+    s32 privateDataFlag, packHeaderFlag, seqCounterFlag, pstdFlag, extension2Flag;
+    u32 n, i;
+    s32 len, skip;
+    s32 stuffing;
+    s32 bytes;
+
+    pes->startPos = bs->cleared18;
+    optionalBits = D_0013BCD8;
+    func_0012E980((u64 *)bs, 24);
+    pes->streamId = (u64)func_0012E980((u64 *)bs, 8) << 32;
+    pes->length = func_0012E980((u64 *)bs, 16);
+    pes->dts = -1;
+    pes->pts = -1;
+    if (pes->streamId != PES_ID(0xBC) && pes->streamId != PES_ID(0xBE) &&
+        pes->streamId != PES_ID(0xBF) && pes->streamId != PES_ID(0xF0) &&
+        pes->streamId != PES_ID(0xF1) && pes->streamId != PES_ID(0xFF) &&
+        pes->streamId != PES_ID(0xF2) && pes->streamId != PES_ID(0xF8)) {
+        func_0012E980((u64 *)bs, 2);
+        pes->scrambling = func_0012E980((u64 *)bs, 2);
+        func_0012E980((u64 *)bs, 4);
+        ptsDtsFlags = func_0012E980((u64 *)bs, 2);
+        escrFlag = func_0012E980((u64 *)bs, 1);
+        optionalFlags = func_0012E980((u64 *)bs, 4);
+        extensionFlag = func_0012E980((u64 *)bs, 1);
+        headerLength = func_0012E980((u64 *)bs, 8);
+        start = bs->cleared18;
+        if (ptsDtsFlags & 2) {
+            u32 a, b, c;
+
+            func_0012E980((u64 *)bs, 4);
+            a = func_0012E980((u64 *)bs, 3);
+            func_0012E9D0((u64 *)bs);
+            b = func_0012E980((u64 *)bs, 15);
+            func_0012E9D0((u64 *)bs);
+            c = func_0012E980((u64 *)bs, 15);
+            func_0012E9D0((u64 *)bs);
+            {
+                u32 lo = (a << 30) | (b << 15) | c;
+                pes->pts = ((u64)((a >> 2) & 1) << 32) | lo;
+            }
+        }
+        if (ptsDtsFlags == 3) {
+            u32 a, b, c;
+
+            func_0012E980((u64 *)bs, 4);
+            a = func_0012E980((u64 *)bs, 3);
+            func_0012E9D0((u64 *)bs);
+            b = func_0012E980((u64 *)bs, 15);
+            func_0012E9D0((u64 *)bs);
+            c = func_0012E980((u64 *)bs, 15);
+            func_0012E9D0((u64 *)bs);
+            {
+                u32 lo = (a << 30) | (b << 15) | c;
+                pes->dts = ((u64)((a >> 2) & 1) << 32) | lo;
+            }
+        }
+        if (escrFlag == 1) {
+            func_0012E980((u64 *)bs, 48);
+        }
+        if (optionalFlags != 0) {
+            func_0012E980((u64 *)bs, optionalBits.bits[optionalFlags]);
+        }
+        if (extensionFlag == 1) {
+            privateDataFlag = func_0012E980((u64 *)bs, 1);
+            packHeaderFlag = func_0012E980((u64 *)bs, 1);
+            seqCounterFlag = func_0012E980((u64 *)bs, 1);
+            pstdFlag = func_0012E980((u64 *)bs, 1);
+            func_0012E980((u64 *)bs, 3);
+            extension2Flag = func_0012E980((u64 *)bs, 1);
+            if (privateDataFlag == 1) {
+                func_0012E980((u64 *)bs, 48);
+                func_0012E980((u64 *)bs, 48);
+                func_0012E980((u64 *)bs, 32);
+            }
+            if (packHeaderFlag == 1) {
+                func_00130288(owner, D_0013BCE8);
+                return 0;
+            }
+            if (seqCounterFlag == 1) {
+                func_0012E980((u64 *)bs, 16);
+            }
+            if (pstdFlag == 1) {
+                func_0012E980((u64 *)bs, 16);
+            }
+            if (extension2Flag == 1) {
+                func_0012E9D0((u64 *)bs);
+                n = func_0012E980((u64 *)bs, 7);
+                for (i = 0; i < n; i++) {
+                    func_0012E980((u64 *)bs, 8);
+                }
+            }
+        }
+        stuffing = headerLength - (s32)((bs->cleared18 - start) >> 3);
+        if (stuffing != 0) {
+            func_0012EA18(bs, stuffing);
+        }
+        len = pes->length - headerLength;
+        pes->payloadLength = len - 3;
+        pes->payloadPos = bs->cleared18;
+        if (pes->streamId == PES_ID(0xBD)) {
+            pes->streamId |= (u32)func_0012E980((u64 *)bs, 32);
+            skip = len - 7;
+        } else {
+            skip = len - 3;
+        }
+        if (skip != 0) {
+            func_0012EA18(bs, skip);
+        }
+    } else if (pes->streamId == PES_ID(0xBC) || pes->streamId == PES_ID(0xBF) ||
+               pes->streamId == PES_ID(0xF0) || pes->streamId == PES_ID(0xF1) ||
+               pes->streamId == PES_ID(0xFF) || pes->streamId == PES_ID(0xF2) ||
+               pes->streamId == PES_ID(0xF8)) {
+        bytes = pes->length;
+        if (pes->streamId == PES_ID(0xBF)) {
+            pes->streamId |= (u32)func_0012E980((u64 *)bs, 32);
+            bytes -= 4;
+        }
+        if (bytes != 0) {
+            func_0012EA18(bs, bytes);
+        }
+    } else if (pes->streamId == PES_ID(0xBE)) {
+        if (pes->length != 0) {
+            func_0012EA18(bs, pes->length);
+        }
+    }
+    return 1;
+}
 
 extern void func_00130E88(void);
 
