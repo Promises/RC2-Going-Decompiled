@@ -1407,7 +1407,7 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00
 /**
  * McInit (libmc): bring up the EE-side memory-card RPC client.
  * Takes no arguments. Returns 0 on success (the IOP-side status word), or a
- * negative error: SignalSema's result minus 100 if releasing the mutex failed,
+ * negative error: the version RPC's (sceSifCallRpc's) result minus 100 if it failed,
  * -0x78 / -120 if mcserv.irx is older than 0x20A, -0x79 / -121 if mcman.irx is
  * older than 0x20E.
  *
@@ -1420,7 +1420,7 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00
  *  - The bind is a RETRY loop, not a single call. sceSifBindRpc only *starts* the
  *    bind, so the code then polls the client's ready word (g_mcRpcClient + 0x24)
  *    and, while it is still 0, burns a calibrated ~0x100000-iteration delay loop
- *    (padded with nops so the timing does not depend on the pipeline) before
+ *    (its in-loop nops are the build's short-loop padding, NOTE #10159) before
  *    binding again. It only proceeds once the IOP reports the client ready.
  *  - A bind that returns negative is NOT retried: it prints "bind error libmc"
  *    via Kprintf and then HANGS FOREVER in a deliberate infinite loop. Losing the
@@ -1433,23 +1433,82 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00
  *    rather than leaving it for McSync, because the 0xFE handshake is awaited
  *    synchronously here and no completion callback will arrive for it.
  *
- * MATCH STATUS: NOT byte-exact - parked at 89.26% (objdiff, USA cod/015180).
- * The C below is semantically correct and compiles to instruction-for-instruction
- * equivalent code: both delay loops are byte-identical (lui 0x10 / nop / addiu -1
- * / 4x nop / bnez / nop, and the 6-nop hang loop), the SemaParam stores land in
- * the original's order and slots (20(sp), then 24(sp) in the jal delay slot), and
- * every branch form and constant matches (bgezl, slti 522/526, -100/-120/-121).
- * The ONLY residual is register colouring: the original allocates SEVEN
- * callee-saved registers (s0-s6, 176-byte frame) because it keeps a redundant
- * third %hi(0x14) base live alongside both derived pointers, whereas ee-gcc 2.9
- * folds that base away and needs only SIX (s0-s4, 144-byte frame). That is a
- * 6-instruction delta consisting purely of the extra sd/ld pair plus frame
- * padding. No C phrasing controls the allocator here - measured levers, all
- * worse or neutral: hoisting the request pointer above the loop 87.18%, hoisting
- * the result pointer 85.22%, array-form client store in the first error arm
- * 87.59%, in the third arm 87.44%. This is the known register-colouring wall.
+ * Byte-exact on the sdk29 arm since task #2086. The old note here ("parked at
+ * 89.26%, a register-colouring wall: SEVEN callee saves in the ROM, SIX from
+ * ee-gcc 2.9") was measured in cod/015180 and was a SPELLING, not a wall: the
+ * client's ready word has to be read through a TYPED view of the client block,
+ * MC_CLIENT->serve, at each use. cc1 then forms &g_mcRpcClient into a register
+ * after each bind and reads +0x24 from it, and that address is the seventh
+ * callee-saved value. `*(s32 *)(g_mcRpcClient + 0x24)` lets cc1 fold the
+ * offset into its own %hi/%lo pair instead (83/109 words differ, 6 saves);
+ * a `u8 *client` local, in the loop or above it, 84/104.
+ * The two param stores are written max-count (param[2]) first: the ROM issues
+ * param[1] before the CreateSema call and param[2] in its delay slot.
+ * The delay loop's constant 0x100000 is `lui 0x10 / addiu -1` in the ROM, which
+ * splat symbolised as %hi/%lo(D_FFFFF); the bytes are identical.
  */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", McInit);
+typedef struct {
+    u8  _pad0[0x24];
+    s32 serve;                 /* 0x24: non-zero once the IOP server is bound */
+} McRpcClientT;
+#define MC_CLIENT ((McRpcClientT *)g_mcRpcClient)
+
+extern u8   g_mcRpcClient[];   /* libmc RPC client block (init flag @+0x24) */
+extern s32  g_mcMutexSema;     /* libmc mutex/semaphore handle */
+extern u32  g_mcRpcResult;     /* libmc RPC receive-buffer (result code) */
+extern u8   g_mcRpcRequest[];  /* 0x141B80: the shared 48-byte libmc request block */
+extern s32  func_0011AC40(s32 sema);   /* syscall 0x42 SignalSema */
+extern s32  func_0011AC60(s32 sema);   /* syscall 0x44 WaitSema */
+extern void *Kprintf(const char *format, ...);
+extern char D_0013B760[];      /* "bind error libmc \n" */
+extern char D_0013B778[];      /* "libmc: too old release of mcserv.irx\n" */
+extern char D_0013B7A0[];      /* "libmc: too old release of mcman.irx\n" */
+s32 McSync(s32 mode, s32 *cmd, s32 *result);
+
+s32 McInit(void) {
+    s32 param[6];              /* SemaParam: max_count @+4, init_count @+8, option @+0x14 */
+    s32 r;
+    s32 spin;
+
+    if (g_mcMutexSema < 0) {
+        param[5] = 0;
+        param[2] = 1;
+        param[1] = 1;
+        g_mcMutexSema = func_0011AC20(param);
+    }
+    McSync(0, 0, 0);
+    func_0011AC60(g_mcMutexSema);
+    sceSifInitRpc(0);
+    while (1) {
+        if (sceSifBindRpc(g_mcRpcClient, 0x80000400, 0) < 0) {
+            Kprintf(D_0013B760);
+            while (1) {
+            }
+        }
+        if (MC_CLIENT->serve != 0) {
+            break;
+        }
+        for (spin = 0x100000; spin != 0; spin--) {
+        }
+    }
+    r = sceSifCallRpc(g_mcRpcClient, 0xFE, 0, g_mcRpcRequest, 0x30, &g_mcRpcResult, 0xC, 0, 0);
+    func_0011AC40(g_mcMutexSema);
+    if (r < 0) {
+        MC_CLIENT->serve = 0;
+        return r - 100;
+    }
+    if (((s32 *)&g_mcRpcResult)[1] < 0x20A) {
+        Kprintf(D_0013B778);
+        MC_CLIENT->serve = 0;
+        return -120;
+    }
+    if (((s32 *)&g_mcRpcResult)[2] < 0x20E) {
+        Kprintf(D_0013B7A0);
+        MC_CLIENT->serve = 0;
+        return -121;
+    }
+    return g_mcRpcResult;
+}
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00127500);
 
