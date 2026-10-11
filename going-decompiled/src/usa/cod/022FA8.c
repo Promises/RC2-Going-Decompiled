@@ -4796,7 +4796,20 @@ void func_0012E608(IpuDecoder *dec, IpuPictureSize *size) {
     func_0012FA98(dec->callbacks, req);
 }
 
-extern void func_0012E8E8(u64 *arg0, s32 arg1);
+/* The bitstream reader _sysbitFlush advances (Lombyte's layout; the same
+ * record func_0012E890 initialises as struct E890Rec). */
+typedef struct SysbitStream {
+    s64 bits;
+    s32 field8;
+    u8 *ptr;
+    u32 cnt;
+    u32 pad14;
+    s64 total;
+    u8 *base;
+    u8 *end;
+} SysbitStream;
+
+s64 _sysbitFlush(SysbitStream *ctx, s32 amount);
 
 struct E890Rec {
     u64 cleared0;      /* 0x0:  zeroed as one doubleword (sd $0) */
@@ -4814,7 +4827,7 @@ struct E890Rec {
  * func_0012E890: initialise the record at arg0 - store the limit (arg1) at
  * field_0x8 and field_0xC, the end (start+span) at field_0x24, the span (arg3)
  * at field_0x28, the start (arg2) at field_0x20; zero field_0x0..0x4, 0x10 and
- * field_0x18..0x1C - then tail-call func_0012E8E8(arg0, 0).
+ * field_0x18..0x1C - then tail-call _sysbitFlush(arg0, 0) to prime the bit buffer.
  *
  * Matched 2026-06-30 (disproves the ~75% give-up that called this "a codegen
  * shape not expressible in source"): the store SCHEDULE is the whole game.
@@ -4833,7 +4846,7 @@ void func_0012E890(struct E890Rec *rec, s32 limit, s32 start, s32 span) {
     rec->start = start;
     rec->end   = start + span;
     rec->span  = span;
-    func_0012E8E8((u64 *)rec, 0);
+    _sysbitFlush((SysbitStream *)rec, 0);
 }
 
 /**
@@ -4846,29 +4859,77 @@ s32 func_0012E8C8(u64 *arg0, s32 arg1) {
     return (s32)(val >> (0x40 - arg1));
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012E8E8);
+/**
+ * _sysbitFlush: advance the MSB-first bitstream reader `ctx` by `amount` bits
+ * (the advance half of func_0012E980/func_0012E9D0, whose read half is
+ * func_0012E8C8). Shifts the 64-bit bit buffer left by `amount` and drops the
+ * fill count by the same; then, while fewer than 57 bits are buffered, ORs the
+ * next byte from the cursor in under the buffered bits (at bit 56 - count),
+ * wrapping the cursor back to `base` once it reaches `end`, 8 bits a byte.
+ * Adds `amount` to the 64-bit consumed-bit total and returns the new total.
+ * func_0012E890 (init) and func_0012EA18 (skip bytes) tail-call it with 0 to
+ * refill without consuming.
+ *
+ * The fill count is compared unsigned: amount > count wraps it to a huge value
+ * and skips the refill, as the ROM does (sltiu).
+ *
+ * CODEGEN DEVICE, not a semantic claim (RULING #8404's shape): the
+ * identical-arm `if (ctx->cnt)` around the cursor wrap is dead in meaning -
+ * both arms store `base` - but it changes the loop's block structure that
+ * loop.c's load_mems/invariant hoisting sees (NOTE #10144 traced our old 4/38
+ * residual there). Removed alone it reads 6/38 (words 10, 11, 32..35: the
+ * `amount`/`total` setup moves out of its pre-loop and exit-block positions).
+ * Revoke when a spelling without the dead branch reaches 0/38 on this arm.
+ * The permuter's two other leftovers (an unused `new_var` temporary for the
+ * shifted buffer and a `new_var2` alias of ctx) were each removed alone at
+ * 0/38 and are gone.
+ *
+ * EU twin: SCES_516.07 keeps this function as func_0012E8E8 in cod/015180
+ * (EU naming follows its own strategy, RULING #5339); only USA is renamed.
+ *
+ * Source: Lombyte github.com/mateuszklysz/Lombyte @2c4452dd03f5f7ebb2868dbe073ccdb1afb27f61 (MIT, (c) 2026 Mateusz Klysz), src/sdk/debug/sysbit_flush.c - C body adopted verbatim (RULING #10292; less the two inert temporaries above); byte-exact on our ROM: 0/38 differing words raw against SCUS_972.68 (no relocations in the extent), unit objdiff report 149 -> 150/259 with fuzzy_match_percent 100.0, and whole-image cmp 0 under landing_gate usa and eu --strict, all on the XPS 13 (task #2134).
+ */
+s64 _sysbitFlush(SysbitStream *ctx, s32 amount) {
+    s64 bits = ctx->bits;
+    s32 cnt = ctx->cnt - amount;
 
-extern void func_0012E8E8(u64 *arg0, s32 arg1);
+    ctx->bits = bits << amount;
+    ctx->cnt = cnt;
+    if ((u32)cnt < 0x39U) {
+        do {
+            ctx->bits |= (s64)(*(ctx->ptr++)) << (0x38 - ctx->cnt);
+            if ((u32)ctx->ptr >= (u32)ctx->end) {
+                if (ctx->cnt) {
+                    ctx->ptr = ctx->base;
+                } else {
+                    ctx->ptr = ctx->base;
+                }
+            }
+            ctx->cnt += 8;
+        } while (ctx->cnt < 0x39U);
+    }
+    return ctx->total = ctx->total + amount;
+}
 
 /**
  * Read arg1 bits from the bitstream at arg0 (func_0012E8C8(arg0, arg1)) and
- * then advance the stream by arg1 bits (func_0012E8E8(arg0, arg1)), returning
+ * then advance the stream by arg1 bits (_sysbitFlush(arg0, arg1)), returning
  * the value that was read.
  */
 s32 func_0012E980(u64 *arg0, s32 arg1) {
     s32 value = func_0012E8C8(arg0, arg1);
-    func_0012E8E8(arg0, arg1);
+    _sysbitFlush((SysbitStream *)arg0, arg1);
     return value;
 }
 
 /**
  * Read a single bit from the bitstream at arg0 (func_0012E8C8(arg0, 1)) and
- * then advance the stream by one bit (func_0012E8E8(arg0, 1)), returning the
+ * then advance the stream by one bit (_sysbitFlush(arg0, 1)), returning the
  * bit that was read.
  */
 s32 func_0012E9D0(u64 *arg0) {
     s32 bit = func_0012E8C8(arg0, 1);
-    func_0012E8E8(arg0, 1);
+    _sysbitFlush((SysbitStream *)arg0, 1);
     return bit;
 }
 
@@ -4878,7 +4939,7 @@ s32 func_0012E9D0(u64 *arg0) {
  * add bytes*8 to the 64-bit consumed-bit total at 0x18, re-derive the byte
  * cursor (0xC) as the buffer base (0x8) plus total/8 — wrapping it back by the
  * span (0x28) once it reaches the end (0x24) — then refill via
- * func_0012E8E8(rec, 0).
+ * _sysbitFlush(rec, 0).
  *
  * The two clears must come first in the source: written after the total is
  * updated, cc1 issues the total's `sd` ahead of them, where the ROM has it
@@ -4892,7 +4953,7 @@ void func_0012EA18(struct E890Rec *rec, s32 bytes) {
     if ((u32)rec->limit2 >= (u32)rec->end) {
         rec->limit2 -= rec->span;
     }
-    func_0012E8E8((u64 *)rec, 0);
+    _sysbitFlush((SysbitStream *)rec, 0);
 }
 
 /**

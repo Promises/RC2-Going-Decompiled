@@ -38,5 +38,34 @@ scripts download them for a local build.
 ## Acknowledgements
 
 Names and research adopted from other projects are listed, with commit and
-licence, in [credits.md](credits.md). No code from those projects is copied
-into this tree.
+licence, in [credits.md](credits.md). Their code is not copied into this tree,
+with the exception below.
+
+### Lombyte (MIT)
+
+The C body of `_sysbitFlush` in `going-decompiled/src/usa/cod/022FA8.c` is
+taken from Lombyte, <https://github.com/mateuszklysz/Lombyte> at commit
+`2c4452dd03f5f7ebb2868dbe073ccdb1afb27f61`, `src/sdk/debug/sysbit_flush.c`,
+under this notice:
+
+    MIT License
+
+    Copyright (c) 2026 Mateusz Kłysz
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.

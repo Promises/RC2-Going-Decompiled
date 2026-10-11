@@ -48,5 +48,12 @@
 
   The spellings `SetD3Chcr`, `SetD4Chcr` and `sceIpuRestartDMA` that OpenRAC
   uses come from Lombyte (`src/sdk/dma/sce_ipu_restart_dma.c` for the last).
-  Only those names were taken; each identity was re-derived from what the
-  function does in our ROM. No Lombyte code is copied into this tree.
+  Each identity was re-derived from what the function does in our ROM.
+
+  Used so far:
+  - **The C body and name of `_sysbitFlush`** (`0x0012E8E8`), from
+    `src/sdk/debug/sysbit_flush.c`, adopted when that function was promoted
+    (task #2134) under the operator's ruling that Lombyte C may be used
+    verbatim when it is byte-exact on our ROM. Two unused permuter temporaries
+    were dropped; the body is otherwise Lombyte's. Its doc comment in
+    `going-decompiled/src/usa/cod/022FA8.c` carries the `Source:` line.
