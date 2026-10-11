@@ -134,3 +134,12 @@ usa      FadeOutToBlackBlocking  0x0027DA30  $5,0x8000000044  34058000 00052e38 
 # $11,$11,0; ori`; the ROM has the form below at 0x28F570..0x28F578.
 #
 usa      DrawHudIconQuadSized  0x0028F570  $11,0x7400000000008001  340be800 000b5bfc 356b8001
+#
+# func_0028F700 and func_0028FAE0 (text/188858) are compiled from C on the
+# s136os arm (task #2108). Each site is the same A+D GIF tag as
+# DrawHudIconQuadSized's, in reorder mode; func_0028F700's is followed by an
+# `sd`, func_0028FAE0's by a `dsll`. GNU as gives `lui; dsll32 0; ori`; the
+# ROM has the forms below at 0x28F740..0x28F748 and 0x28FB2C..0x28FB34.
+#
+usa      func_0028F700  0x0028F740  $15,0x7400000000008001  340fe800 000f7bfc 35ef8001
+usa      func_0028FAE0  0x0028FB2C  $18,0x7400000000008001  3412e800 001293fc 36528001

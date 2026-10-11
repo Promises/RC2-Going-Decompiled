@@ -273,7 +273,7 @@ func_002898D8 = 0x002898D8; // type:func size:0x8
 func_002898E0 = 0x002898E0; // type:func - real subtitle-clear leaf
 func_0028C698 = 0x0028C698; // type:func size:0x48
 func_0028C6E0 = 0x0028C6E0; // type:func - real HUD-init forwarder
-func_0028F700 = 0x0028F700; // type:func - real fn (DrawHudIconQuadPixel) jal'd by func_002D9D60 in text/1D54C0 - split out of func_0028F6E8 (the preceding 0x14 setup thunk). Replaces a bad bare DrawHudIconQuadPixel pin that truncated func_0028F6E8 and dropped 0x28F700..0x28F8DF. Needs INCLUDE_ASM in text/188858.c
+func_0028F700 = 0x0028F700; // type:func - real fn (DrawHudIconQuadPixel) jal'd by func_002D9D60 in text/1D54C0 - split out of func_0028F6E8 (the preceding 0x14 setup thunk). Replaces a bad bare DrawHudIconQuadPixel pin that truncated func_0028F6E8 and dropped 0x28F700..0x28F8DF. It was INCLUDE_ASM in text/188858.c and is byte-exact on the s136os arm since task 2108 (splat name kept, see its doc comment)
 // text/188580 sub-TU data anchors: give the two .bss objects the unit reads
 // their own symbols (otherwise spimdisasm attaches them to far-away preceding
 // named symbols with huge offsets, which forces raw-offset C).

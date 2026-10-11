@@ -6330,64 +6330,64 @@ void DrawHudIconQuadSized(s32 iconIndex, s32 x, s32 y, s32 w, s32 h, s32 alpha) 
  * Left INCLUDE_ASM (not yet fully traced). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028F6E8);
 
-/* DLI lever MEASURED (task #1220; unit objdiff report, objdiff_build.sh, this #else body promoted
- * SOLO, sdk29 arm, colima-ee-x86; every other row in the unit unchanged). cc1 emits
- * `dli $10,0x7400000000008001`; the ROM holds Ps2EeAs's expansion of that value at 0x28F740 ($15),
- * but in a different register. No allowlist row applies to the body AS COMPILED: a row must carry
- * the ROM's words for cc1's register. A #8598 pin + row is UNTRIED. Solo score 16.50%. Residual
- * class: REGALLOC at the dli site, plus PACKED-SAVE (ROM saves at stride 8, cc1 2.9 at 16; NOTE
- * #8777).
- * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
- * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
- * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
- * property and was measured false as the reason this member stays unmatched (FACT #9873).
- * Residual: the saved-register set; the rest UNMEASURED. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028F700);
+/* Byte-exact on the s136os arm since task #2108 (188858's unpinned arm, S136EXTRA="", RULING
+ * #9450), in the spelling that closed its sibling DrawHudIconQuadSized: every global re-read at
+ * each use, the Z word through g_pActiveTextTableAbs, the far UV summed (vExtent << 20) +
+ * (uExtent << 4), and the dli at 0x28F740 assembled to Ps2EeAs's expansion by its allowlist row
+ * (RULING #8549). The old notes here (task #1220's 16.50% on sdk29 with the dli in $10, NOTE
+ * #9871's 112/120 on s136os) measured the earlier #else, which cached the cursor, both GS offsets
+ * and the Z word in locals. Solo s136os harness, aligned diff over 120 words: that body 132, this
+ * one 2 before the dli row (the two dli words) and 0 with it. No pin, no fence, no flag.
+ * Name: the splat name is kept. Track B's DrawHudIconQuadPixel says "pixel coords", but this
+ * function adds x and y to the GS offsets unshifted, so it takes GS 12.4 fixed-point units where
+ * DrawHudIconQuadSized takes pixels; the qualifier is not supported (RULING #10083 term 5). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0028F700)
+S136OS_SLOT(func_0028F700);
 #else
 /**
- * func_0028F700 = DrawHudIconQuadPixel: draw a HUD icon as a textured-sprite GIF
- * packet (0x60-byte NLOOP=5) at whole-pixel screen coords. Sibling of
- * DrawHudIconQuadSized; the two differences are that screen coordinates are whole
- * pixels here (no <<4 subpixel), and the UV rectangle spans the icon's full
- * texture - 2^wLog2 x 2^hLog2 texels, where wLog2/hLog2 are the bytes at +0x6/
- * +0x7 of the icon's g_hudTextureSlots entry (indexed through
- * g_hudIconMap[iconIndex].textureSlot) - rather than the passed size.
+ * func_0028F700 (Track B: DrawHudIconQuadPixel): draw a HUD icon at its texture's own size.
+ * Same packet as DrawHudIconQuadSized (0x60-byte GIF sprite, NLOOP=5, TEX0 from GetHudIconTex0, RGB 0x7F7F7F, Z from g_pActiveTextTable+0x3C) with two
+ * differences: the screen coordinates are passed already in GS 12.4 fixed point (no <<4 here),
+ * and the UV rectangle spans the icon's whole texture, 2^logW x 2^logH texels, read from the
+ * icon's g_hudTextureSlots entry (through g_hudIconMap[iconIndex].textureSlot) rather than the
+ * passed size.
  *
- *   iconIndex  index into g_hudIconMap (and GetHudIconTex0)
- *   x, y       top-left screen pixel
- *   w, h       screen size in pixels
- *   alpha      tint alpha (RGB fixed 0x7F7F7F)
+ *   iconIndex  HUD icon (g_hudIconMap index, and GetHudIconTex0's argument)
+ *   x, y       top-left screen position, GS fixed point (the -8 bias and g_gsPixelOffsetX/Y
+ *              are added here)
+ *   w, h       screen size, same units
+ *   alpha      vertex alpha
+ *
+ * As in DrawHudIconQuadSized, the XYZ2 words are built from signed 32-bit values, so a
+ * negative coordinate sets the upper bits of its word.
  */
 void func_0028F700(s32 iconIndex, s32 x, s32 y, s32 w, s32 h, s32 alpha) {
-    u8 *p = (u8 *)g_frameDmaCursor;
-    s32 offX = g_gsPixelOffsetX;
-    s32 offY = g_gsPixelOffsetY;
-    u64 z = (u64)(u32)*(s32 *)((u8 *)&g_pActiveTextTable + 0x3C) << 32;
+    u64 *packet;
     HudGsSlot *tex = &g_hudTextureSlots[g_hudIconMap[iconIndex].textureSlot];
-    s32 uExtent = 1 << ((u8 *)tex)[0x6]; /* 2^texWidthLog2 texels */
-    s32 vExtent = 1 << ((u8 *)tex)[0x7]; /* 2^texHeightLog2 texels */
+    s32 uExtent = 1 << tex->logW;
+    s32 vExtent = 1 << tex->logH;
 
-    *(u32 *)(p + 0x0) = 0x10000005;
-    *(u32 *)(p + 0x4) = 0;
-    *(u32 *)(p + 0x8) = 0;
-    *(u32 *)(p + 0xC) = 0x50000005;
-    g_frameDmaCursor = (u32 *)(p + 0x10);
+    g_frameDmaCursor[0] = 0x10000005;
+    g_frameDmaCursor[1] = 0;
+    g_frameDmaCursor[2] = 0;
+    g_frameDmaCursor[3] = 0x50000005;
+    packet = (u64 *)(g_frameDmaCursor + 4);
+    g_frameDmaCursor = (u32 *)packet;
 
-    *(u64 *)(p + 0x10) = ((u64)0xE800 << 47) | 0x8001;
-    *(u64 *)(p + 0x18) = 0x5353106;
-    *(u64 *)(p + 0x20) = GetHudIconTex0(iconIndex);
-    *(u64 *)(p + 0x28) = 0x156;
-    *(u64 *)(p + 0x30) = ((u64)(u32)alpha << 24) | 0x7F7F7F;
-    *(u64 *)(p + 0x38) = 0; /* near UV (0,0) */
-    *(u64 *)(p + 0x40) = (u64)(u32)(x + offX - 8)
-                       | ((u64)(u32)(y + offY - 8) << 16)
-                       | z;
-    *(u64 *)(p + 0x48) = (u64)(u32)((uExtent << 4) + (vExtent << 20)); /* far UV = full texture */
-    *(u64 *)(p + 0x50) = (u64)(u32)((x + w) + offX - 8)
-                       | ((u64)(u32)((y + h) + offY - 8) << 16)
-                       | z;
-    *(u64 *)(p + 0x58) = 0;
+    packet[0] = ((u64)0xE800 << 47) | 0x8001;
+    packet[1] = 0x5353106;
+    packet[2] = GetHudIconTex0(iconIndex);
+    packet[3] = 0x156;
+    packet[4] = ((u64)alpha << 24) | 0x7F7F7F;
+    packet[5] = 0;                                  /* UV0 (0,0) */
+    packet[6] = (u64)(x + g_gsPixelOffsetX - 8)
+              | ((u64)(y + g_gsPixelOffsetY - 8) << 16)
+              | ((u64)*(s32 *)((u8 *)&g_pActiveTextTableAbs + 0x3C) << 32);
+    packet[7] = (vExtent << 20) + (uExtent << 4);   /* UV1 = the whole texture */
+    packet[8] = (u64)((x + w) + g_gsPixelOffsetX - 8)
+              | ((u64)((y + h) + g_gsPixelOffsetY - 8) << 16)
+              | ((u64)*(s32 *)((u8 *)&g_pActiveTextTableAbs + 0x3C) << 32);
+    packet[9] = 0;
 
     g_frameDmaCursor = (u32 *)((u8 *)g_frameDmaCursor + 0x50);
 }
@@ -6458,72 +6458,61 @@ void func_0028F8E0(s32 iconIndex, s32 x, s32 y, s32 w, s32 h, s32 alpha, s32 rgb
 }
 #endif
 
-/* DLI lever MEASURED (task #1220; unit objdiff report, objdiff_build.sh, this #else body promoted
- * SOLO, sdk29 arm, colima-ee-x86; every other row in the unit unchanged). cc1 emits
- * `dli $13,0x7400000000008001`; the ROM holds Ps2EeAs's expansion of that value at 0x28FB2C ($18),
- * but in a different register. No allowlist row applies to the body AS COMPILED: a row must carry
- * the ROM's words for cc1's register. A #8598 pin + row is UNTRIED. Solo score 12.25%. Residual
- * class: REGALLOC at the dli site, plus PACKED-SAVE (ROM saves at stride 8, cc1 2.9 at 16; NOTE
- * #8777).
- * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): this C compiles to a frame
- * that saves no registers where the ROM saves 3 (NOTE #9871), so the stride cannot be observed
- * and the gap is structural. The save-slot wall is a cc1 2.9 property, measured false as a wall
- * on every labeled member that compiles on s136os (FACT #9873). Residual: structural; the rest
- * UNMEASURED. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028FAE0);
+/* Byte-exact on the s136os arm since task #2108 (188858's unpinned arm, S136EXTRA="", RULING
+ * #9450), in the spelling that closed DrawHudIconQuadSized: every global re-read at each use,
+ * the Z word through g_pActiveTextTableAbs, TEX0 and the UV words built from signed values, and
+ * the dli at 0x28FB2C assembled to Ps2EeAs's expansion by its allowlist row (RULING #8549). The
+ * old notes here (task #1220's 12.25% on sdk29 with the dli in $13; NOTE #9871's "saves no
+ * registers where the ROM saves 3") measured the earlier #else, which cached the cursor, both GS
+ * offsets and the Z word in locals: this spelling saves the ROM's three. Solo s136os harness,
+ * aligned diff over 99 words: that body 139, this one 2 before the dli row (the two dli words)
+ * and 0 with it. No pin, no fence, no flag.
+ * Name: the splat name is kept. Track B calls it DrawHudSpriteTex0, and that name is already a
+ * PROVIDE alias with a native weak stub and a block-scope prototype in 1D54C0.cpp that disagrees
+ * with this definition; settling those is outside a promotion row (RULING #10083 term 5). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0028FAE0)
+S136OS_SLOT(func_0028FAE0);
 #else
 /**
- * Append a textured-sprite GIF packet (a 0x60-byte, NLOOP=5 draw) to the frame
- * render-DMA chain (g_frameDmaCursor), then advance the cursor by 0x60. Draws a
- * quad from screen corner (x0,y0) to (x0+w, y0+h) mapped to UV (u0,v0) .. plus
- * the texture extents 2^(uShift+4) / 2^(vShift+4), tinted RGB 0x7F7F7F with the
- * given alpha. The packed Z comes from the render-depth field at
- * &g_pActiveTextTable + 0x3C.
+ * func_0028FAE0 (Track B: DrawHudSpriteTex0): draw a textured sprite whose GS TEX0 the caller
+ * passes directly. Appends the same 0x60-byte GIF sprite packet as DrawHudIconQuadSized to the
+ * frame render-DMA chain: quad (x0,y0)..(x0+w,y0+h), UV (u0,v0)..(u0 + 2^(uShift+4),
+ * v0 + 2^(vShift+4)), RGB 0x7F7F7F with the given alpha, Z from g_pActiveTextTable+0x3C.
  *
- * Layout at cursor p:
- *   p+0x00 : chain tags 0x10000005 / 0x50000005
- *   p+0x10 : GIFtag (NLOOP=5) + register data (0x5353106, reg1, 0x156)
- *   p+0x30 : colour (0x7F7F7F | alpha<<24)
- *   p+0x38 : near UV (u0 | v0<<16)
- *   p+0x40 : near XY (x0+off-8 | (y0+off-8)<<16 | z<<32)
- *   p+0x48 : far UV  (u0+2^(uShift+4) | (v0+2^(vShift+4))<<16)
- *   p+0x50 : far XY  (x0+w+off-8 | (y0+h+off-8)<<16 | z<<32)
- * off = g_gsPixelOffset{X,Y}.
+ *   tex0          the GS TEX0 register value (sign-extended from 32 bits into the packet)
+ *   x0, y0        top-left screen position, GS fixed point (-8 bias and g_gsPixelOffsetX/Y added)
+ *   uShift, vShift log2 of the texture extent in texels; the far UV adds 2^(shift+4)
+ *   w, h          screen size, same units as x0/y0
+ *   u0, v0        near UV, 12.4 fixed point
+ *   alpha         vertex alpha
+ *
+ * The XYZ2 and UV words are built from signed 32-bit values, as the ROM builds them.
  */
-void func_0028FAE0(s32 reg1, s32 x0, s32 y0, s32 uShift, s32 vShift, s32 w, s32 h, s32 u0, s32 v0, s32 alpha) {
-    u8 *p = (u8 *)g_frameDmaCursor;
-    s32 offX = g_gsPixelOffsetX;
-    s32 offY = g_gsPixelOffsetY;
-    u64 z = (u64)(u32)*(s32 *)((u8 *)&g_pActiveTextTable + 0x3C) << 32;
+void func_0028FAE0(s32 tex0, s32 x0, s32 y0, s32 uShift, s32 vShift, s32 w, s32 h, s32 u0, s32 v0, s32 alpha) {
+    u64 *packet;
 
-    /* DMA/GIF chain header (NLOOP=5) */
-    *(u32 *)(p + 0x0) = 0x10000005;
-    *(u32 *)(p + 0x4) = 0;
-    *(u32 *)(p + 0x8) = 0;
-    *(u32 *)(p + 0xC) = 0x50000005;
-    g_frameDmaCursor = (u32 *)(p + 0x10);
+    g_frameDmaCursor[0] = 0x10000005;
+    g_frameDmaCursor[1] = 0;
+    g_frameDmaCursor[2] = 0;
+    g_frameDmaCursor[3] = 0x50000005;
+    packet = (u64 *)(g_frameDmaCursor + 4);
+    g_frameDmaCursor = (u32 *)packet;
 
-    /* GIFtag + fixed register data */
-    *(u64 *)(p + 0x10) = ((u64)0xE800 << 47) | 0x8001;
-    *(u64 *)(p + 0x18) = 0x5353106;
-    *(u64 *)(p + 0x20) = (u64)(u32)reg1;
-    *(u64 *)(p + 0x28) = 0x156;
-
-    /* colour, near UV, near XY */
-    *(u64 *)(p + 0x30) = ((u64)(u32)alpha << 24) | 0x7F7F7F;
-    *(u64 *)(p + 0x38) = (u64)(u32)u0 | ((u64)(u32)v0 << 16);
-    *(u64 *)(p + 0x40) = (u64)(u32)(x0 + offX - 8)
-                       | ((u64)(u32)(y0 + offY - 8) << 16)
-                       | z;
-
-    /* far UV, far XY */
-    *(u64 *)(p + 0x48) = (u64)(u32)(u0 + (1 << (uShift + 4)))
-                       | ((u64)(u32)(v0 + (1 << (vShift + 4))) << 16);
-    *(u64 *)(p + 0x50) = (u64)(u32)((x0 + w) + offX - 8)
-                       | ((u64)(u32)((y0 + h) + offY - 8) << 16)
-                       | z;
-    *(u64 *)(p + 0x58) = 0;
+    packet[0] = ((u64)0xE800 << 47) | 0x8001;
+    packet[1] = 0x5353106;
+    packet[2] = tex0;
+    packet[3] = 0x156;
+    packet[4] = ((u64)alpha << 24) | 0x7F7F7F;
+    packet[5] = (u64)u0 | ((u64)v0 << 16);
+    packet[6] = (u64)(x0 + g_gsPixelOffsetX - 8)
+              | ((u64)(y0 + g_gsPixelOffsetY - 8) << 16)
+              | ((u64)*(s32 *)((u8 *)&g_pActiveTextTableAbs + 0x3C) << 32);
+    packet[7] = (u64)(u0 + (1 << (uShift + 4)))
+              | ((u64)(v0 + (1 << (vShift + 4))) << 16);
+    packet[8] = (u64)((x0 + w) + g_gsPixelOffsetX - 8)
+              | ((u64)((y0 + h) + g_gsPixelOffsetY - 8) << 16)
+              | ((u64)*(s32 *)((u8 *)&g_pActiveTextTableAbs + 0x3C) << 32);
+    packet[9] = 0;
 
     g_frameDmaCursor = (u32 *)((u8 *)g_frameDmaCursor + 0x50);
 }
