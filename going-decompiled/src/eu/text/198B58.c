@@ -1548,7 +1548,7 @@ void func_0029C3C0(void) {
 }
 #endif
 
-/* func_0029C498 — EU twin of USA func_0029C8F0: the front-end screen-action pump.
+/* func_0029C498 — EU twin of USA PollFrontEndMenu (0x29C8F0): the front-end screen-action pump.
  * Returns -1 unless an action is pending (D_1A9B08), the popup-busy gate is clear
  * (D_1A8D14==0) and the GUI is up. GUI down: counts the pending action toward zero
  * (returns 0). GUI up: polls readiness (func_0029C3C0) and, once ready, refreshes
@@ -1559,7 +1559,7 @@ void func_0029C3C0(void) {
  * latching D_1A9B10), and commits it (func_0033C908). Returns the committed item
  * index when an item was committed, else -1. Packed-save wall; matching arm stays
  * INCLUDE_ASM, #else is the model.
- * Word-verified vs USA func_0029C8F0: func_0029C818->func_0029C3C0, func_0029C700->
+ * Word-verified vs USA PollFrontEndMenu: func_0029C818->func_0029C3C0, func_0029C700->
  * func_0029C2A8, func_0033B6D0->func_0033C5B0, func_0033BA40->func_0033C920,
  * func_00349ED0->func_0034B358, func_002EE6F8->func_002EE7B0, func_0034A1C8->
  * func_0034B650, func_0033BA28->func_0033C908; D_1A9A88->D_1A9B08, D_1A8C64->
