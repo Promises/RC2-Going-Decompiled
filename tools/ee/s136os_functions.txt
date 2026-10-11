@@ -658,3 +658,4 @@ usa text/188858 func_0028FAE0
 usa text/188858 func_0028F0D0
 usa text/188858 func_0028FFF0
 usa text/1823B8 DrawGlowSprites
+usa text/16E980 func_00271140

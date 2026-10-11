@@ -37,13 +37,14 @@
  * 05_all29_report.txt, 07_all96_report.txt, classes 08/09_classify*.txt). None
  * reached 100 on either arm; sdk29 >= engine96 on 31 of 40, but 32 of those are
  * PACKED-SAVE-walled there. The wall is a property of the 2.9 arm only: the
- * s136os arm (SN 1.36 -fopt-stack) has the ROM's 8-byte slots, and twenty-one of
+ * s136os arm (SN 1.36 -fopt-stack) has the ROM's 8-byte slots, and twenty-two of
  * these arms are matched there (FACTs #8830, #9658, #9707, #9856, #10000,
- * #10023, UpdateScreenFadeBlack from its former MATCH_ guard (task #2092) and
- * func_00273D20 (task #2101); the s136os re-screen of the remaining arms is
- * NOTE #9857, with func_00270D60 and func_00270B68 taken further in NOTEs
- * #9994 and #10024, and func_00273D20's NOTE #9998 ladder closed by task
- * #2101). Table figures below are the
+ * #10023, UpdateScreenFadeBlack from its former MATCH_ guard (task #2092),
+ * func_00273D20 (task #2101) and func_00271140 (task #2116); the s136os
+ * re-screen of the remaining arms is NOTE #9857, with func_00270D60 and
+ * func_00270B68 taken further in NOTEs #9994 and #10024, func_00273D20's NOTE
+ * #9998 ladder closed by task #2101 and func_00271140's NOTE #10031 ladder by
+ * task #2116). Table figures below are the
  * t512 measurements on the two held arms, kept as recorded.
  *   arm                        sdk29%  e96%   saves   residual class (sdk29 arm)
  *   ShowSplashImage             88.84  86.76  3g/0f   PACKED-SAVE,GPREL
@@ -1740,12 +1741,31 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", BeginCameraTran
  * nine fp/gpr callee-saves at 8-byte slot spacing (the packed-save frame cc1
  * 2.9 cannot produce), interleaved Vec4 math and func_002A8A68/func_002AC468
  * calls. Unmatched; the save layout is a cc1 2.9 property and not the reason
- * on the s136os arm (FACT #9873 / NOTE #9871). The s136os arm WAS retried:
- * with a func_002A8A68 prototype in this arm it compiles at 105/105 words,
- * best 29 positional differences (a ranking screen), residual recorded as the
- * &g_cameraPos formation order and the s0/s1 pointer allocation (NOTE
- * #10031). */
-#ifdef TARGET_NATIVE
+ * on the s136os arm (FACT #9873 / NOTE #9871).
+ *   out:   the active Camera (its position row at +0x30 is the blend target).
+ *   state: the CamBlendState view of CameraTransitionState+0x10.
+ *   Returns 1 when both tracks already sit at 1.0, else 0.
+ * MATCHED on the s136os arm (task #2116). NOTE #10031 found the arm's first
+ * blocker (func_002A8A68 is prototyped only inside StepCameraFovInterp's arm,
+ * so this solo TU promoted its float args to double: the prototype below) and
+ * reached 29 positional with a fenced copy source. What closes it, each priced
+ * by removing it alone in a solo s136 compile (105 words, real differences):
+ *  - the posOut -> g_cameraPos copy reads through a pointer `src` behind an
+ *    empty tied fence (RULING #8483): the ROM copies `addiu $3,s3,0x40; lq
+ *    $2,0($3)` rather than `lq $2,0x40(s3)`. Without it: 65.
+ *  - g_cameraPos is taken once into `pos`, which the +0x230 matrix store
+ *    reuses: the ROM forms it in s2 inside the lerp and adds 0x230 to the same
+ *    register. Writing &g_cameraPos at both uses: 25.
+ *  - an empty untied fence (RULING #8483 rev 2) after the copy keeps the
+ *    lq/sq ahead of func_002AC468's argument setup (ROM: sq, a0, jal, a1 in
+ *    the slot) and the &st->oriOut formation after that call, which gives the
+ *    ROM's s1 = oriOut / s2 = g_cameraPos. Without it: 10 (the sq falls into
+ *    the jal delay slot and s1/s2 swap).
+ * GUARD: compiled alone by SN 2.95.3 v1.36 -fopt-stack and spliced over the
+ * S136OS_SLOT line (tools/ee/s136os_splice.sh); plain C on native. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00271140)
+S136OS_SLOT(func_00271140);
+#else
 /* View of CameraTransitionState+0x10: two smooth-stepped blend tracks
  * (orientation at +0x0, position at +0xC) with per-track step + latched step,
  * the from-pair at +0x20/+0x30 and the out-pair at +0x40/+0x50 (aliasing
@@ -1768,6 +1788,9 @@ extern Vec4 g_heroPos_D0;     /* g_heroPos + 0xD0 per-frame hero delta */
 extern void func_002841C0(void *dst, void *from, void *to, f32 t); /* ori lerp */
 extern void func_00284380(void *ori, void *mtxOut);
 extern void func_00284028(void *mtxDst, void *mtxSrc);
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern f32 func_002A8A68(f32 target, f32 from, f32 s);
 /* Instant-settle / blend-start interpolator (kind-0 path of
  * ApplyCameraTransition). Returns 1 once BOTH tracks have reached 1.0;
  * otherwise drifts the position anchor by the hero frame delta
@@ -1781,6 +1804,8 @@ s32 func_00271140(Vec4 *out, void *state) {
     Vec4 oriNow;
     u8 mtx[0x40];
     f32 t;
+    Vec4 *src;
+    Vec4 *pos;
 
     if (st->posProgress == 1.0f && st->oriProgress == 1.0f) {
         return 1;
@@ -1790,12 +1815,16 @@ s32 func_00271140(Vec4 *out, void *state) {
     st->posOut.x = st->posFrom.x + (*(f32 *)(cam + 0x30) - st->posFrom.x) * t;
     st->posOut.y = st->posFrom.y + (*(f32 *)(cam + 0x34) - st->posFrom.y) * t;
     st->posOut.z = st->posFrom.z + (*(f32 *)(cam + 0x38) - st->posFrom.z) * t;
-    g_cameraPos = st->posOut;
+    src = &st->posOut;
+    pos = &g_cameraPos;
+    __asm__ __volatile__("" : "+r"(src));
+    *pos = *src;
+    __asm__ __volatile__("");
     func_002AC468(&oriNow, (Camera *)cam);
     t = func_002A8A68(0.0f, 1.0f, st->oriProgress);
     func_002841C0(&st->oriOut, &st->oriFrom, &oriNow, t);
     func_00284380(&st->oriOut, mtx);
-    func_00284028((u8 *)&g_cameraPos + 0x230, mtx);
+    func_00284028((u8 *)pos + 0x230, mtx);
     st->posProgress += st->posStep;
     if (st->posProgress > 1.0f) {
         st->posProgress = 1.0f;
@@ -1806,8 +1835,6 @@ s32 func_00271140(Vec4 *out, void *state) {
     }
     return 0;
 }
-#else
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00271140);
 #endif
 
 /* func_002712E8: running-blend interpolation branch of the transition pipeline
