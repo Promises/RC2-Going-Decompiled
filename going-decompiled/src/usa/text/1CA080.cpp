@@ -329,7 +329,13 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CA138);
  * Matching arm was taken as byte-frozen (8-byte-packed saves + qword ops) regardless.
  * Save stride NOT re-measured for this member on the s136os arm: it has no C arm to compile
  * (NOTE #9871). Of the 111 labeled members that were, 0 reproduce the 16-byte save stride there
- * (FACT #9873), so the stride is not evidence that this member is walled. Residual: UNMEASURED. */
+ * (FACT #9873), so the stride is not evidence that this member is walled.
+ * Measured since (task #2093, NOTE #10238, body there): an s136os C body reproduces the ROM's
+ * prologue and 8-byte save stride and reads 137 vs 140 words, 58 aligned. The residual is
+ * allocation (the ROM forms &zoneTable[zoneId] in zoneId's own register, so every s-register
+ * of ours is shifted by one), cse path-following merging the inner block's 0.0 with the
+ * loop-hoisted one, and a pre-header nop; the div.s nop pads and the bc1t/bc1f slot shape
+ * are reproduced (RULING #8435 pads, an empty fence before the prev/cur copy). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CA3E8);
 
 /* func_002CA618: sample a piecewise-linear Vec4 path at distance `dist`.
@@ -395,7 +401,10 @@ void func_002CA618(u8 *path, s32 *outSeg, f32 *outFrac, Vec4 *outVec, f32 dist,
  * s136os arm: a Vec4 struct copy gives lq/sq there (task #2036, NOTE #10111).
  * TODO(match): first body 129 vs 134 words; the first 38 words match, then the
  * ROM copies each Vec4 path point serially with the +0x10 not folded into the
- * lq, where cc1 interleaves the two copies and folds it. */
+ * lq, where cc1 interleaves the two copies and folds it. Task #2093 closed that
+ * part (pointer locals for the copied points + empty fences): 134 = 134 words,
+ * 17 positional, the rest the copy-address register and two call-argument
+ * orders (NOTE #10256, body there). */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CA740);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CA748);
