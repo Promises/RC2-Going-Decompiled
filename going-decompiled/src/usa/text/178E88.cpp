@@ -3983,9 +3983,9 @@ void func_00281020(u32 *pixels, s32 actorIdx) {
  * the real symbols): absolute views of g_frameArenaFlip and of the query table
  * at g_sceneActorMobys + 0x44, the table again as a cc1-small `la` view, and a
  * %gp-relative view of the pending count at g_blobShadowCount + 0x1C. They sit
- * outside func_002810C0's guard so the sdk29 TU it is spliced into sees the
- * same definitions and .extern sizes as the s136os TU it was compiled in
- * (s136os_splice.sh refuses the block otherwise). */
+ * outside ResolveZBufferOcclusionQueries's guard so the sdk29 TU it is spliced
+ * into sees the same definitions and .extern sizes as the s136os TU it was
+ * compiled in (s136os_splice.sh refuses the block otherwise). */
 __asm__(".extern g_frameArenaFlipAbs, 16\n\tg_frameArenaFlipAbs = g_frameArenaFlip");
 extern s32   g_frameArenaFlipAbs;
 __asm__(".extern g_screenGrabQueries, 16\n\tg_screenGrabQueries = g_sceneActorMobys + 0x44");
@@ -4003,9 +4003,10 @@ extern s32   g_frameArenaFlip;                          /* 0x1B2234 active-half 
 #endif
 
 /**
- * func_002810C0 — resolve the pending Z-buffer occlusion queries. No params,
- * no return; a no-op when nothing is queued. Sole ELF caller:
- * LoadLevelAndInitHealth (0x26F39C).
+ * ResolveZBufferOcclusionQueries (splat func_002810C0, named at promotion) —
+ * resolve the pending Z-buffer occlusion queries. No params, no return; a
+ * no-op when nothing is queued. Sole ELF caller: LoadLevelAndInitHealth
+ * (0x26F39C).
  *
  * The query table is 0x20 entries of 0x30 bytes at g_sceneActorMobys+0x44
  * (0x1B8990): +0x10 result float pointer, +0x14 depth threshold, +0x1C flags
@@ -4030,15 +4031,20 @@ extern s32   g_frameArenaFlip;                          /* 0x1B2234 active-half 
  * (NOTE #10173, #10190). Devices, each priced by removing it alone (solo
  * s136os compile of this unit, word compare against the ROM .s, relocated
  * fields masked; N/121 = differing words):
- *   - loop.c size device (RULING #10187): the dead `idx = K; last = K;` pairs
+ *   - loop.c size device (RULING #10187): the nine dead stores to idx/last
  *     at the top of the outer loop. Never read; flow deletes them before
  *     combine. They exist only to raise the outer loop's insn count on
  *     loop.c's second pass. Below the threshold loop.c judges the `-6` mask
  *     constant a desirable movable, hoists it into $fp, and the table base is
  *     then rematerialised every lap. The threshold is not one number: -dL
  *     shows -6 moved at 57/60/61/64 insns and kept at 63/65/66, depending on
- *     the body. With all five pairs this body is 66 and 0/121; with 0..4
- *     pairs it is 39/121, so all five are load-bearing.
+ *     the body (task #2073). Measured on this body: ten stores (five
+ *     `idx = K; last = K;` pairs) and nine (the fifth pair's `last = 6`
+ *     dropped) are both byte-exact (task #2077, unit build + vmu); eight
+ *     (four pairs) builds 122 words and the splice refuses it on LENGTH, and
+ *     0..4 pairs read 39/121 on the solo harness (task #2073). Only one
+ *     eight-store arrangement was built; the count, not which stores, is
+ *     what loop.c sees.
  *   - base = g_screenGrabQueriesLa at the top of the outer loop: a cc1-small
  *     `la` view of the table, held in a local so it lives across the lap and
  *     combine fuses `la; mtlo; madd` for the inner record pointer. Without
@@ -4052,8 +4058,8 @@ extern s32   g_frameArenaFlip;                          /* 0x1B2234 active-half 
  *     (g_screenGrabQueryCountGp), all #8620 directive-only equates.
  *     Spelled through the plain symbols the body is 47/121 before the
  *     indexed scans (NOTE #10173's step table). */
-#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002810C0)
-S136OS_SLOT(func_002810C0);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_ResolveZBufferOcclusionQueries)
+S136OS_SLOT(ResolveZBufferOcclusionQueries);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
@@ -4064,7 +4070,7 @@ extern void  func_002860B8(s16 x, s16 y, s16 w, s16 h,  /* GS->EE PSMZ32 rect re
                            u32 *dst);
 extern void  WaitGsPathsIdle(s32 a, s32 b);             /* GIF/VIF1/VU0 path-idle spin */
 
-void func_002810C0(void) {
+void ResolveZBufferOcclusionQueries(void) {
     u32 *dst[2];
     u8  *rec;
     u8  *base;
@@ -4088,12 +4094,12 @@ void func_002810C0(void) {
     if (last == -1) return;
     cur = last;
     while (cur >= 0) {
-        /* loop.c size device (RULING #10187): dead stores, see the doc comment */
+        /* loop.c size device (RULING #10187): nine dead stores, see the doc comment */
         idx = 2; last = 2;
         idx = 3; last = 3;
         idx = 4; last = 4;
         idx = 5; last = 5;
-        idx = 6; last = 6;
+        idx = 6;
         base = g_screenGrabQueriesLa;
         arenaIdx = 1 - arenaIdx;
         last = -1;

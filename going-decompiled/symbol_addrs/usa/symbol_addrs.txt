@@ -2435,6 +2435,7 @@ func_0027FCB0 = 0x0027FCB0; // type:func (TILE A real next start after pad 0x002
 func_00280CD0 = 0x00280CD0; // type:func size:0x10 (TILE A epilogue pad)
 func_00281010 = 0x00281010; // type:func size:0x10 (TILE A epilogue pad)
 func_00281020 = 0x00281020; // type:func (TILE A real next start after pad 0x00281010)
+ResolveZBufferOcclusionQueries = 0x002810C0; // type:func - named at promotion (task #2077, RULING #10083). Walks the 0x20-entry query table at 0x1B8990 and reads each pending rect back through func_002860B8, which loads g_vramZBuffer, passes psm 0x30 (PSMZ32) to BuildGsStoreImagePacket and calls sceGsExecStoreImage (string-confirmed); func_00281020 then turns the readback into the rect's depth coverage fraction. Called from LoadLevelAndInitHealth 0x26F39C only (NOTE #5673)
 func_002823B8 = 0x002823B8; // type:func (TILE A real prologue - the 0x1823B8 to 0x182338 boundary move (task #314) starts the c unit here so func_002823B8 0x2823B8..0x28278F is one piece - without the pin splat orphans the head and emits NOTHING for 0x2823B8..0x282437 - observed 2026-09-15, same failure the 0x278EC0 pin above was added for)
 func_00282790 = 0x00282790; // type:func size:0x8 (TILE A epilogue pad)
 func_00282798 = 0x00282798; // type:func (TILE A real next start after pad 0x00282790)
