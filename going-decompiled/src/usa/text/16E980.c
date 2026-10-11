@@ -97,7 +97,7 @@
  */
 
 /* Cc1-small / assembler-absolute symbols (one-insn symbolic macro). */
-__asm__(".extern g_screenFadeBlack, 16");
+__asm__(".extern g_screenFadeBlack, 16");   /* func_002721A8, UpdateScreenFadeBlack */
 __asm__(".extern g_vramTextureBase_28, 16");  /* func_0026FE58 */
 __asm__(".extern g_bRawReadFellBack_34, 16"); /* func_0026FE58 */
 __asm__(".extern g_cameraCallbackCount, 16"); /* func_00270220 */
@@ -112,6 +112,24 @@ extern s32 g_nGameState;         /* cc1-small, assembler-absolute: the
                                   * `.extern g_nGameState, 16` above */
 extern f32 g_screenFadeBlack;    /* black screen fade level 0..1 */
 extern f32 g_screenFadeWhite;    /* white screen flash level 0..1 */
+#ifndef TARGET_NATIVE
+/* ADDRESSING-MODEL DEVICE (RULING #8620, FACT #8036's equate): a small-data
+ * view of g_screenFadeBlack, for the ONE load in UpdateScreenFadeBlack that
+ * the ROM issues from a branch delay slot as `lwc1 $f0,%gp_rel(sym)($gp)`
+ * (0x272264), while every straight-line access is the absolute
+ * `lui $at; lwc1/swc1 %lo` expansion of the same one-insn macro. That split
+ * is the SN assembler's rule for a cc1-small symbol of size 9..15;
+ * asm_unit.sh reproduces it for integer memops only (MEMOP_MN has no
+ * l.s/s.s), so through the plain symbol the slot load expands across the
+ * branch and the body builds 1 word LONGER (47 vs 46, the splice's LENGTH
+ * refusal, measured task #2092). Sized 4 for the assembler; the GPREL16
+ * relocation names g_screenFadeBlack and the alias is absent from nm
+ * (measured). Emits nothing. */
+__asm__(".extern g_screenFadeBlackGp, 4\n\tg_screenFadeBlackGp = g_screenFadeBlack");
+extern f32 g_screenFadeBlackGp;
+#else
+#define g_screenFadeBlackGp g_screenFadeBlack
+#endif
 
 /* One 0xA0-byte camera slot (fields per the Track-B pass; only the ones this
  * unit touches are declared). */
@@ -2402,28 +2420,33 @@ void func_002721A8(f32 duration) {
 }
 #endif
 
-/* UpdateScreenFadeBlack: per-frame driver that eases g_screenFadeBlack toward
- * fadeBlackTarget at fadeBlackRate (no-op while the rate is 0). When the level
- * reaches the target a follow-up timer (TickCountdownTimer on the +0x270 field) may
- * re-arm the target to 0; once both target and current level have settled at
- * (or below) 0 the rate is cleared so the driver idles. */
-#if !defined(TARGET_NATIVE) && !defined(MATCH_UpdateScreenFadeBlack)
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", UpdateScreenFadeBlack);
+/* UpdateScreenFadeBlack: per-frame driver for the black screen fade. Eases
+ * g_screenFadeBlack toward g_cameraState.fadeBlackTarget (+0x26C) at
+ * fadeBlackRate (+0x268) through func_002AB150 (target, rate, &level); the
+ * driver is a no-op while the rate is 0 (func_002721A8 arms it). When the
+ * level reaches the target, the +0x270 countdown timer (TickCountdownTimer)
+ * returning 1 re-arms the target to 0, i.e. a fade-in that holds for the
+ * timer and then fades back out; once target and level are both <= 0 the
+ * rate is cleared so the driver idles.
+ * MATCHED on the s136os arm (task #2092), replacing its former MATCH_ guard
+ * (an engine-2.96 candidate that read 86.52% there, walled on the $f20 save
+ * slot that -fopt-stack's 8-byte slots reproduce): the C as written. The
+ * ROM's mix of absolute `lui/lwc1 %lo` (straight line) and
+ * %gp_rel (branch delay slot) loads of g_screenFadeBlack is the unit's
+ * `.extern g_screenFadeBlack, 16` plus ONE device: the final level read goes
+ * through g_screenFadeBlackGp, the small-data equate declared at the top of
+ * the unit (RULING #8620), because asm_unit.sh's delay-slot rule for size
+ * 9..15 symbols does not cover l.s.
+ * GUARD: on EE this C is compiled alone by SN 2.95.3 v1.36 -fopt-stack
+ * (tools/ee/s136os_functions.txt) and spliced over the S136OS_SLOT line by
+ * tools/ee/s136os_splice.sh; native compiles it as written. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_UpdateScreenFadeBlack)
+S136OS_SLOT(UpdateScreenFadeBlack);
 #else
-/* Canonical signature per the callee def (1A8180 line ~1255): f32 return,
- * (target/$f12, rate/$f13, level-ptr/$4) — the rate arg IS read (step clamp).
- * The old 2-arg decl here DROPPED it (caught 2026-07-02, engine lane);
- * cmp-oracle is STALE for this body until re-run with the 3-arg call. */
+/* Canonical signature per the callee def (1A8180): f32 return,
+ * (target/$f12, rate/$f13, level-ptr/$4); the rate arg is a real step clamp. */
 extern f32 func_002AB150(f32 target, f32 rate, f32 *level);
 extern s32 TickCountdownTimer(void *timer);
-/* TODO(match): functional equivalent - not byte-exact. Engine-2.96 pipeline
-   (fable 2026-07-02) reproduces the whole body shape (direct g_cameraState
-   accesses give the %hi-in-s1 + per-arm lo_sum re-derivation), but walls on
-   the FP-SAVE-SLOT ABI: the original allocates $f20 an 8-byte save slot at a
-   16-aligned offset (f20@+0x20, frame 0x30 = FP_INC=2 with swc1); 001003
-   packs a 4-byte slot (f20@+0x18, frame 0x20) and no flag reaches the
-   original model (-mfp64 inert, -mdouble-float emits s.d). Wall class gates
-   every $f2x-saving fn in this TU. */
 void UpdateScreenFadeBlack(void) {
     if (g_cameraState.fadeBlackRate == 0.0f) {
         return;
@@ -2431,11 +2454,11 @@ void UpdateScreenFadeBlack(void) {
     func_002AB150(g_cameraState.fadeBlackTarget, g_cameraState.fadeBlackRate,
                   &g_screenFadeBlack);
     if (g_screenFadeBlack == g_cameraState.fadeBlackTarget) {
-        if (TickCountdownTimer((char *)&g_cameraState + 0x270) == 1) {
+        if (TickCountdownTimer(g_cameraState.fadeBlackTimer) == 1) {
             g_cameraState.fadeBlackTarget = 0.0f;
         }
     }
-    if (g_cameraState.fadeBlackTarget <= 0.0f && g_screenFadeBlack <= 0.0f) {
+    if (g_cameraState.fadeBlackTarget <= 0.0f && g_screenFadeBlackGp <= 0.0f) {
         g_cameraState.fadeBlackRate = 0.0f;
     }
 }
