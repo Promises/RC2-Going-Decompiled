@@ -3979,136 +3979,141 @@ void func_00281020(u32 *pixels, s32 actorIdx) {
 #endif
 
 /**
- * func_002810C0 / ResolvePendingScreenGrabs — resolve the queued screen-grab
- * captures by GS local-to-local blitting each pending region into the two
- * inactive frame-arena halves, then feeding them to the occlusion-query
- * coverage pass. Produces the screen-grab-as-texture sources consumed by
- * GetUiTextureTex0 via negative ids. No-op when nothing is queued.
+ * func_002810C0 — resolve the pending Z-buffer occlusion queries. No params,
+ * no return; a no-op when nothing is queued. Sole ELF caller:
+ * LoadLevelAndInitHealth (0x26F39C).
  *
- * When g_screenGrabQueryCount (g_blobShadowCount+0x1C) is nonzero it walks the
- * 0x20-entry descriptor table at g_sceneActorMobys+0x44 (0x1B8990, stride 0x30):
- * flag bit 2 (+0x1C & 4) marks a pending grab, the source rect is the four
- * shorts at +0x20/+0x22/+0x24/+0x26, and flag bit 0 marks a completed capture
- * whose count is then decremented (clearing bits 0 and 2 -> & 0xFFFFFFFA).
+ * The query table is 0x20 entries of 0x30 bytes at g_sceneActorMobys+0x44
+ * (0x1B8990): +0x10 result float pointer, +0x14 depth threshold, +0x1C flags
+ * (bit 2 pending, bit 0 counted), +0x20/+0x22/+0x24/+0x26 the s16 rect
+ * x/y/w/h. The pending count is g_screenGrabQueryCount (0x1B15D8). The
+ * "screen grab" in those names is the plate's; the ROM reads Z, not colour
+ * (NOTE #5673): func_002860B8 builds a PSMZ32 store-image packet and runs
+ * sceGsExecStoreImage, downloading the rect of the Z-buffer to EE memory.
  *
- * Double-buffering: dst[0] and dst[1] point at the inactive frame-arena half
- * (g_frameArenaBase[1 - g_frameArenaFlip]) and that half + 0x40000 words. An
- * INIT pass (walking entries 0x1F..0 downward) blits every pending region into
- * dst[0] with a WaitGsPathsIdle after each, recording the highest pending index
- * in `lastPending`. Then, while a pending index remains, an OUTER loop ping-
- * pongs between the two halves: an INNER pass blits the still-pending entries
- * below the current index into dst[arenaIdx], ComputeOcclusionQueryCoverage
- * (func_00281020) then reads back the OTHER half dst[1 - arenaIdx], the
- * completed grab's count is decremented, and arenaIdx toggles for the next lap.
+ * dst[0] is the inactive frame-arena half (g_frameArenaBase[1 - flip]) and
+ * dst[1] that half + 0x40000 bytes. The first pass (entries 0x1F..0) reads
+ * back every pending rect into dst[0], waiting for the GS paths after each,
+ * and keeps the lowest pending index. Then, while a pending index `cur`
+ * remains, the outer loop ping-pongs between the two buffers: the inner pass
+ * reads back the pending entries below `cur` into dst[arenaIdx] while
+ * func_00281020 computes `cur`'s coverage (the fraction of its rect at or
+ * below the threshold) from the other buffer, dst[1 - arenaIdx]. If `cur`'s
+ * bit 0 is set its flags lose bits 0 and 2 (& -6) and the count drops by one.
  *
- * Op-for-op-faithful #else transcription (verified against the frozen .s and
- * Ghidra). The two inner-loop head tests are ee-gcc `beql` LIKELY branches:
- * their delay-slot `iVar--` fires only when the branch is taken (flag bit 2
- * clear), while the not-taken (bit set) body path performs the decrement
- * explicitly at the tail — either way the counter decrements exactly once per
- * iteration, so a plain `do { if (bit2) { ...blit... } counter--; ptr -= 0x30;
- * } while (counter >= 0)` is faithful. The loop back-edges are non-likely
- * `bgez`, so their pointer-step delay slots always run. `lastPending` (iVar5)
- * captures the PRE-decrement index and is only assigned inside the bit-2 body. */
-/* TODO(match) t493: sdk29 71.59% / engine96 31.64% (unit objdiff, objdiff_build.sh +
- * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
- * every other remaining arm). Residual on the better arm (sdk29): UNKNOWN-addiu (first differing
- * insn: ROM `addiu sp,sp,-96` vs built `addiu sp,sp,-176`). Levers: cc1-small/absolute globals
- * model RUN: 31.64% (engine96); engine96 with sched1 MEASURED (flag not landed): 62.72%.
- * TODO(match) t2064, s136os arm (solo compile under this unit's -fno-gcse, NOTE #10157's
- * harness): this #else body is 108/121, built 120. A body re-spelled from the ROM (NOTE
- * #10173 holds it) is 6/121, built 121: one-insn absolute reads of the count and of
- * g_frameArenaFlip, a g_sceneActorMobys + 0x44 equate for the table, an indexed init loop,
- * the count store absolute and its reload %gp_rel. The 6 words are the inner loop's
- * record-pointer init (0x2811BC..0x2811D0): the ROM forms it as `la; mtlo; madd`, ours as
- * `mult; lui; addiu; addu`. loop.c strength-reduces both idx*0x30 and the record pointer, and
- * combine leaves the init mult/addu unfused. Why is not known: it is not cse2's copy of the
- * duplicate giv (NOTE #10174: -fno-rerun-cse-after-loop as a diagnostic still gives no
- * madd). Writing the init outside the loop does give the madd, but the outer loop shrinks
- * below loop.c's movable threshold on its second pass, -6 is hoisted into $fp and the
- * table base is rematerialised (40-46/121). An EE_REG("$30") pin on the base: 85/121.
- * Class: LOOP OPTIMISER (giv) + ALLOCATION.
- * t2073: the explicit form reads 0/121, built 121, on the same solo harness (NOT gated; NOTE
- * #10186 holds the body). Five dead `idx = K; last = K;` pairs at the top of the outer loop
- * lift loop.c pass 2's outer-loop count to 66, so -6 is no longer hoisted. A `base` local set
- * from a u8[8] view of the table keeps the madd, and a separate `hit` local for the after-call
- * record keeps its mult below the call. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_002810C0);
+ * MATCHED (task #2077): s136os arm (SN 1.36 -fopt-stack, -O2 -G8 -fno-gcse),
+ * spliced. Body from task #2073 (NOTE #10186), declarations from task #2064
+ * (NOTE #10173, #10190). Devices, each priced by removing it alone (solo
+ * s136os compile of this unit, word compare against the ROM .s, relocated
+ * fields masked; N/121 = differing words):
+ *   - loop.c size device (RULING #10187): the dead `idx = K; last = K;` pairs
+ *     at the top of the outer loop. Never read; flow deletes them before
+ *     combine. They exist only to raise the outer loop's insn count on
+ *     loop.c's second pass. Below the threshold loop.c judges the `-6` mask
+ *     constant a desirable movable, hoists it into $fp, and the table base is
+ *     then rematerialised every lap. The threshold is not one number: -dL
+ *     shows -6 moved at 57/60/61/64 insns and kept at 63/65/66, depending on
+ *     the body. With all five pairs this body is 66 and 0/121; with 0..4
+ *     pairs it is 39/121, so all five are load-bearing.
+ *   - base = g_screenGrabQueriesLa at the top of the outer loop: a cc1-small
+ *     `la` view of the table, held in a local so it lives across the lap and
+ *     combine fuses `la; mtlo; madd` for the inner record pointer. Without
+ *     it: 6/121; from the non-La view: 65/121.
+ *   - the after-call record goes through its own local `hit`: reusing `rec`
+ *     lets the `mult` schedule above the func_00281020 call (14/121); spelled
+ *     inline, 2/121.
+ *   - one-insn absolute reads of g_frameArenaFlip and the count
+ *     (g_frameArenaFlipAbs, the g_screenGrabQueryCount macro) and the
+ *     %gp-relative reload of the count for the decrement
+ *     (g_screenGrabQueryCountGp), all #8620 directive-only equates.
+ *     Spelled through the plain symbols the body is 47/121 before the
+ *     indexed scans (NOTE #10173's step table). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002810C0)
+S136OS_SLOT(func_002810C0);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern void func_00281020(u32 *pixels, s32 actorIdx);
 /* (end of this body's declarations) */
 extern u32  *g_frameArenaBase[];                        /* 0x1B2220 double-buffer half pair */
-extern s32   g_frameArenaFlip;                          /* 0x1B2234 active-half index 0/1 */
-extern void  func_002860B8(s16 x, s16 y, s16 w, s16 h,  /* GS local-to-local blit */
+extern void  func_002860B8(s16 x, s16 y, s16 w, s16 h,  /* GS->EE PSMZ32 rect readback */
                            u32 *dst);
 extern void  WaitGsPathsIdle(s32 a, s32 b);             /* GIF/VIF1/VU0 path-idle spin */
+#ifndef TARGET_NATIVE
+/* #8620 directive-only equates (no instruction emitted; the relocations name
+ * the real symbols): absolute views of g_frameArenaFlip and of the query table
+ * at g_sceneActorMobys + 0x44, the table again as a cc1-small `la` view, and a
+ * %gp-relative view of the pending count at g_blobShadowCount + 0x1C. */
+__asm__(".extern g_frameArenaFlipAbs, 16\n\tg_frameArenaFlipAbs = g_frameArenaFlip");
+extern s32   g_frameArenaFlipAbs;
+__asm__(".extern g_screenGrabQueries, 16\n\tg_screenGrabQueries = g_sceneActorMobys + 0x44");
+extern u8    g_screenGrabQueries[];
+__asm__(".extern g_screenGrabQueriesLa, 16\n\tg_screenGrabQueriesLa = g_sceneActorMobys + 0x44");
+extern u8    g_screenGrabQueriesLa[8];
+__asm__(".extern g_screenGrabQueryCountGp, 4\n\tg_screenGrabQueryCountGp = g_blobShadowCount + 0x1C");
+extern s32   g_screenGrabQueryCountGp;
+#else
+extern s32   g_frameArenaFlip;                          /* 0x1B2234 active-half index 0/1 */
+#define g_frameArenaFlipAbs       g_frameArenaFlip
+#define g_screenGrabQueries       (g_sceneActorMobys + 0x44)
+#define g_screenGrabQueriesLa     (g_sceneActorMobys + 0x44)
+#define g_screenGrabQueryCountGp  g_screenGrabQueryCount
+#endif
 
 void func_002810C0(void) {
-    u32 *dst[4];
+    u32 *dst[2];
     u8  *rec;
-    s32  idx;
-    s32  lastPending;
-    s32  arenaIdx;
+    u8  *base;
+    u8  *hit;
+    s32  idx, cur, last, arenaIdx;
 
-    if (g_screenGrabQueryCount != 0) {
-        rec = g_sceneActorMobys + 0x44 + 0x5D0;         /* 0x1B8F60 = entry 0x1F */
-        arenaIdx = 0;
-        lastPending = -1;
-        dst[0] = g_frameArenaBase[1 - g_frameArenaFlip];
-        dst[1] = g_frameArenaBase[1 - g_frameArenaFlip] + 0x10000;
-
-        /* INIT pass: blit every pending region into dst[0]. */
-        idx = 0x1F;
-        do {
-            if ((*(u32 *)(rec + 0x1C) & 4) != 0) {
-                func_002860B8(*(s16 *)(rec + 0x20), *(s16 *)(rec + 0x22),
-                              *(s16 *)(rec + 0x24), *(s16 *)(rec + 0x26), dst[0]);
-                WaitGsPathsIdle(0, 0);
-                lastPending = idx;
-            }
-            idx = idx - 1;
-            rec = rec - 0x30;
-        } while (idx >= 0);
-
-        if ((lastPending != -1) && (lastPending >= 0)) {
-            arenaIdx = 1 - arenaIdx;                     /* -> 1 before the outer loop */
-            do {
-                s32 inner = lastPending - 1;
-                s32 innerLast = -1;
-
-                if (inner >= 0) {
-                    rec = g_sceneActorMobys + 0x44 + inner * 0x30;
-                    do {
-                        if ((*(u32 *)(rec + 0x1C) & 4) != 0) {
-                            func_002860B8(*(s16 *)(rec + 0x20), *(s16 *)(rec + 0x22),
-                                          *(s16 *)(rec + 0x24), *(s16 *)(rec + 0x26),
-                                          dst[arenaIdx]);
-                            innerLast = inner;
-                        }
-                        inner = inner - 1;
-                        rec = rec - 0x30;
-                    } while (inner >= 0);
-                }
-
-                func_00281020(dst[1 - arenaIdx], lastPending);
-
-                rec = g_sceneActorMobys + 0x44 + lastPending * 0x30;
-                if ((*(u32 *)(rec + 0x1C) & 1) != 0) {
-                    g_screenGrabQueryCount = g_screenGrabQueryCount - 1;
-                    *(u32 *)(rec + 0x1C) = *(u32 *)(rec + 0x1C) & 0xFFFFFFFA;
-                }
-
-                if (innerLast >= 0) {
-                    WaitGsPathsIdle(0, 0);
-                }
-
-                arenaIdx = 1 - arenaIdx;
-                lastPending = innerLast;
-            } while (lastPending >= 0);
+    if (g_screenGrabQueryCount == 0) return;
+    arenaIdx = 0;
+    last = -1;
+    dst[0] = g_frameArenaBase[1 - g_frameArenaFlipAbs];
+    dst[1] = dst[0] + 0x10000;
+    for (idx = 0x1F; idx >= 0; idx--) {
+        rec = g_screenGrabQueries + idx * 0x30;
+        if (*(s32 *)(rec + 0x1C) & 4) {
+            last = idx;
+            func_002860B8(*(s16 *)(rec + 0x20), *(s16 *)(rec + 0x22),
+                          *(s16 *)(rec + 0x24), *(s16 *)(rec + 0x26), dst[arenaIdx]);
+            WaitGsPathsIdle(0, 0);
         }
+    }
+    if (last == -1) return;
+    cur = last;
+    while (cur >= 0) {
+        /* loop.c size device (RULING #10187): dead stores, see the doc comment */
+        idx = 2; last = 2;
+        idx = 3; last = 3;
+        idx = 4; last = 4;
+        idx = 5; last = 5;
+        idx = 6; last = 6;
+        base = g_screenGrabQueriesLa;
+        arenaIdx = 1 - arenaIdx;
+        last = -1;
+        idx = cur - 1;
+        if (idx >= 0) {
+            rec = base + idx * 0x30;
+            do {
+                if (*(s32 *)(rec + 0x1C) & 4) {
+                    last = idx;
+                    func_002860B8(*(s16 *)(rec + 0x20), *(s16 *)(rec + 0x22),
+                                  *(s16 *)(rec + 0x24), *(s16 *)(rec + 0x26), dst[arenaIdx]);
+                }
+                idx--;
+                rec -= 0x30;
+            } while (idx >= 0);
+        }
+        func_00281020(dst[1 - arenaIdx], cur);
+        hit = g_screenGrabQueries + cur * 0x30;
+        if (*(s32 *)(hit + 0x1C) & 1) {
+            *(s32 *)(hit + 0x1C) &= -6;
+            g_screenGrabQueryCount = g_screenGrabQueryCountGp - 1;
+        }
+        if (last >= 0) WaitGsPathsIdle(0, 0);
+        cur = last;
     }
 }
 #endif
