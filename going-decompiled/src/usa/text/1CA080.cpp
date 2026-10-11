@@ -348,6 +348,9 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CA3E8);
  * path[seg] + normalize(path[seg+1] - path[seg]) * frac (VU0 vector helpers).
  * Matching arm stays INCLUDE_ASM (128-bit lq/sq vertex copies the scalar
  * matcher can't emit); the #else is the structure-exact model. */
+/* s136os arm, measured by task #2117 (SN 1.36 -O2 -G8 -fstrict-aliasing -fopt-stack, gcse on):
+ * this #else body builds 64 words against the ROM's 74 (SHORTER), so the splice refuses it on
+ * LENGTH. Residual class: length/structure, not yet attributed. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CA618);
 #else
@@ -743,6 +746,9 @@ void func_002CABC0(void) {
  * ROM's save set at its 8-byte stride, and its frame - is reproduced exactly (NOTE #9871), so
  * the save-slot wall named above is a cc1 2.9 property and was measured false as the reason
  * this member stays unmatched (FACT #9873). Residual: UNMEASURED. */
+/* s136os arm, measured by task #2117 (SN 1.36 -O2 -G8 -fstrict-aliasing -fopt-stack, gcse on):
+ * this #else body builds 97 words against the ROM's 104 (SHORTER), so the splice refuses it on
+ * LENGTH. Residual class: length/structure, not yet attributed. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", RequestMenuScreenChange);
 #else
@@ -2082,6 +2088,9 @@ extern u8  D_1A7A58[];   /* per-cheat unlock flag, indexed by entry */
 extern u8  g_cheatFlags[];
 extern CheatMenuItem D_0025FC70[];
 
+/* s136os arm, measured by task #2117 (SN 1.36 -O2 -G8 -fstrict-aliasing -fopt-stack, gcse on):
+ * this #else body builds 73 words against the ROM's 79 (SHORTER), so the splice refuses it on
+ * LENGTH. Residual class: length/structure, not yet attributed. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", BuildCheatMenuItemList);
 #else
@@ -2985,6 +2994,9 @@ s32 func_002CEA38(void) {
  * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
  * property and was measured false as the reason this member stays unmatched (FACT #9873).
  * Residual: the saved-register set; the rest UNMEASURED. */
+/* s136os arm, measured by task #2117 (SN 1.36 -O2 -G8 -fstrict-aliasing -fopt-stack, gcse on):
+ * this #else body builds 131 words against the ROM's 150 (SHORTER), so the splice refuses it on
+ * LENGTH. Residual class: length/structure, not yet attributed. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", UpdateBestiaryMenuInput);
 #else
@@ -3100,6 +3112,9 @@ s32 UpdateBestiaryMenuInput(void) {
  * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
  * property and was measured false as the reason this member stays unmatched (FACT #9873).
  * Residual: the saved-register set; the rest UNMEASURED. */
+/* s136os arm, measured by task #2117 (SN 1.36 -O2 -G8 -fstrict-aliasing -fopt-stack, gcse on):
+ * this #else body is outside the splice's domain: its block references $LC literals defined
+ * outside .ent..end. Not measured further. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawBestiaryEntry);
 #else
@@ -3404,6 +3419,9 @@ s32 func_002D0240(void) {
 extern u8 g_inventoryOwned[];   /* u8[0x38] per-item have-flag */
 extern u8 g_itemStateFlags[];   /* u8[0x38] per-item persistent state bits */
 extern u8 D_0025C430[], D_0025C5C8[], D_0025CCD8[];  /* extras sub-page records */
+/* s136os arm, measured by task #2117 (SN 1.36 -O2 -G8 -fstrict-aliasing -fopt-stack, gcse on):
+ * this #else body builds 114 words against the ROM's 156 (SHORTER), so the splice refuses it on
+ * LENGTH. Residual class: length/structure, not yet attributed. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D02A0);
 #else
@@ -3485,6 +3503,9 @@ s32 func_002D02A0(void) {
  * sound and toggles g_cheatFlags[cheatId], reloading the player display model for the
  * model-changing cheats (2/9/10/0xB); on deny it plays the reject sound. Returns 1 on
  * exit, the popped value on back, else 0. */
+/* s136os arm, measured by task #2117 (SN 1.36 -O2 -G8 -fstrict-aliasing -fopt-stack, gcse on):
+ * this #else body builds 136 words against the ROM's 144 (SHORTER), so the splice refuses it on
+ * LENGTH. Residual class: length/structure, not yet attributed. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", UpdateCheatMenuInput);
 #else
@@ -3594,6 +3615,9 @@ s32 UpdateCheatMenuInput(void) {
  * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
  * property and was measured false as the reason this member stays unmatched (FACT #9873).
  * Residual: the saved-register set; the rest UNMEASURED. */
+/* s136os arm, measured by task #2117 (SN 1.36 -O2 -G8 -fstrict-aliasing -fopt-stack, gcse on):
+ * this #else body builds 244 words against the ROM's 252 (SHORTER), so the splice refuses it on
+ * LENGTH. Residual class: length/structure, not yet attributed. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawCheatMenu);
 #else
@@ -3703,6 +3727,9 @@ s32 func_002D0B40(void) {
  * ROM's save set at its 8-byte stride, and its frame - is reproduced exactly (NOTE #9871), so
  * the save-slot wall named above is a cc1 2.9 property and was measured false as the reason
  * this member stays unmatched (FACT #9873). Residual: UNMEASURED. */
+/* s136os arm, measured by task #2117 (SN 1.36 -O2 -G8 -fstrict-aliasing -fopt-stack, gcse on):
+ * this #else body builds 110 words against the ROM's 111 (SHORTER), so the splice refuses it on
+ * LENGTH. Residual class: length/structure, not yet attributed. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", UpdateSkillPointsMenu);
 #else
@@ -3797,6 +3824,9 @@ s32 UpdateSkillPointsMenu(void) {
  * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
  * property and was measured false as the reason this member stays unmatched (FACT #9873).
  * Residual: the saved-register set; the rest UNMEASURED. */
+/* s136os arm, measured by task #2117 (SN 1.36 -O2 -G8 -fstrict-aliasing -fopt-stack, gcse on):
+ * this #else body builds 250 words against the ROM's 274 (SHORTER), so the splice refuses it on
+ * LENGTH. Residual class: length/structure, not yet attributed. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawSkillPointsMenu);
 #else
@@ -4071,6 +4101,9 @@ s32 UpdateExtrasMenuInput(void) {
  * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
  * property and was measured false as the reason this member stays unmatched (FACT #9873).
  * Residual: the saved-register set; the rest UNMEASURED. */
+/* s136os arm, measured by task #2117 (SN 1.36 -O2 -G8 -fstrict-aliasing -fopt-stack, gcse on):
+ * this #else body builds 206 words against the ROM's 216 (SHORTER), so the splice refuses it on
+ * LENGTH. Residual class: length/structure, not yet attributed. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawExtrasMenu);
 #else
@@ -4203,6 +4236,9 @@ s32 func_002D1850(void) {
  * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
  * property and was measured false as the reason this member stays unmatched (FACT #9873).
  * Residual: the saved-register set; the rest UNMEASURED. */
+/* s136os arm, measured by task #2117 (SN 1.36 -O2 -G8 -fstrict-aliasing -fopt-stack, gcse on):
+ * this #else body builds 148 words against the ROM's 153 (SHORTER), so the splice refuses it on
+ * LENGTH. Residual class: length/structure, not yet attributed. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", CinematicsMenuTick);
 #else
@@ -4306,6 +4342,9 @@ s32 CinematicsMenuTick(void) {
  * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
  * property and was measured false as the reason this member stays unmatched (FACT #9873).
  * Residual: the saved-register set; the rest UNMEASURED. */
+/* s136os arm, measured by task #2117 (SN 1.36 -O2 -G8 -fstrict-aliasing -fopt-stack, gcse on):
+ * this #else body builds 204 words against the ROM's 218 (SHORTER), so the splice refuses it on
+ * LENGTH. Residual class: length/structure, not yet attributed. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawCinematicsMenu);
 #else
@@ -4395,6 +4434,10 @@ s32 DrawCinematicsMenu(void) {
 extern u8 g_cinematicUnlockedFlags[]; /* 0x139768 - cinematic-watched/unlocked bitfield */
 extern u8 D_26183A[];                 /* cinematics-menu row table (6-byte stride records) */
 
+/* s136os arm, measured by task #2117 (SN 1.36 -O2 -G8 -fstrict-aliasing -fopt-stack, gcse on):
+ * this #else body builds 38 words against the ROM's 40 (SHORTER), so the splice refuses it on
+ * LENGTH. Residual class: length/structure, not yet attributed.
+ * A length-exact re-spelling (40 words, 26/40 words still off) and its ladder: NOTE #10268. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D1E88);
 #else
@@ -4555,6 +4598,9 @@ s32 UpdatePlanetWarpMenuInput(void) {
  * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
  * property and was measured false as the reason this member stays unmatched (FACT #9873).
  * Residual: the saved-register set; the rest UNMEASURED. */
+/* s136os arm, measured by task #2117 (SN 1.36 -O2 -G8 -fstrict-aliasing -fopt-stack, gcse on):
+ * this #else body builds 204 words against the ROM's 217 (SHORTER), so the splice refuses it on
+ * LENGTH. Residual class: length/structure, not yet attributed. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawPlanetWarpMenu);
 #else
@@ -4847,6 +4893,9 @@ s32 UpdateInsomniacMuseumInput(void) {
  * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
  * property and was measured false as the reason this member stays unmatched (FACT #9873).
  * Residual: the saved-register set; the rest UNMEASURED. */
+/* s136os arm, measured by task #2117 (SN 1.36 -O2 -G8 -fstrict-aliasing -fopt-stack, gcse on):
+ * this #else body builds 202 words against the ROM's 208 (SHORTER), so the splice refuses it on
+ * LENGTH. Residual class: length/structure, not yet attributed. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawInsomniacMuseumMenu);
 #else
@@ -4948,6 +4997,9 @@ s32 func_002D2C60(void) {
  * ROM's save set at its 8-byte stride, and its frame - is reproduced exactly (NOTE #9871), so
  * the save-slot wall named above is a cc1 2.9 property and was measured false as the reason
  * this member stays unmatched (FACT #9873). Residual: UNMEASURED. */
+/* s136os arm, measured by task #2117 (SN 1.36 -O2 -G8 -fstrict-aliasing -fopt-stack, gcse on):
+ * this #else body builds 83 words against the ROM's 84 (SHORTER), so the splice refuses it on
+ * LENGTH. Residual class: length/structure, not yet attributed. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", UpdateHelpTopicMenuInput);
 #else
@@ -5097,6 +5149,9 @@ extern u8 D_0025CA80[];
 extern s32 D_25CB30;
 extern u8 D_1ABDEA[]; /* s16 entries on a 4-byte stride */
 extern s32 PlayGlobalSound(s32 id, s32 a, s32 b);
+/* s136os arm, measured by task #2117 (SN 1.36 -O2 -G8 -fstrict-aliasing -fopt-stack, gcse on):
+ * this #else body builds 81 words against the ROM's 91 (SHORTER), so the splice refuses it on
+ * LENGTH. Residual class: length/structure, not yet attributed. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D2FC8);
 #else
@@ -5175,6 +5230,9 @@ s32 func_002D2FC8(void) {
 extern void func_002904B0(s32 x0, s32 y0, s32 x1, s32 y1, s32 color, s32 flag);
 extern s32 D_1ABAA4;      /* glyph row (int, converted to float) */
 extern u8 D_1ABDE8[];     /* per-option label string-id table, s16 on 4-byte stride */
+/* s136os arm, measured by task #2117 (SN 1.36 -O2 -G8 -fstrict-aliasing -fopt-stack, gcse on):
+ * this #else body builds 137 words against the ROM's 148 (SHORTER), so the splice refuses it on
+ * LENGTH. Residual class: length/structure, not yet attributed. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D3138);
 #else
@@ -5323,6 +5381,9 @@ extern u32 func_002AA3F0(u32 color1, u32 color2, s32 period, s32 counterSel, s32
 extern void func_0027FBA8(s32 x, s32 y, u64 color, char *str, s64 wrap);
 extern s32 g_padButtonsHeld;
 extern s32 D_1ABAAC;      /* glyph row (int, converted to float) */
+/* s136os arm, measured by task #2117 (SN 1.36 -O2 -G8 -fstrict-aliasing -fopt-stack, gcse on):
+ * this #else body builds 179 words against the ROM's 189 (SHORTER), so the splice refuses it on
+ * LENGTH. Residual class: length/structure, not yet attributed. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D34E8);
 #else
@@ -5463,6 +5524,9 @@ s32 func_002D37E8(void) {
 extern s32 D_1ABAB0;     /* glyph row (int, converted to float) */
 extern char D_1AB9F8[];  /* sprintf format string (left composed line) */
 extern char D_1ABA38[];  /* sprintf format string (right composed line) */
+/* s136os arm, measured by task #2117 (SN 1.36 -O2 -G8 -fstrict-aliasing -fopt-stack, gcse on):
+ * this #else body builds 162 words against the ROM's 175 (SHORTER), so the splice refuses it on
+ * LENGTH. Residual class: length/structure, not yet attributed. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D38C8);
 #else
@@ -5591,6 +5655,9 @@ extern s32 func_0029D528(s32 padPressed);
 extern s32 g_health;            /* 0x18C2EC - base of the per-cutscene unlock records at +0x464 */
 extern s32 g_gsPixelOffsetY;    /* 0x1A7354 - play-count source at +0x3C */
 extern s32 g_playerProgress;    /* 0x1A79F8 - current progress slot (seen-mask bit index) */
+/* s136os arm, measured by task #2117 (SN 1.36 -O2 -G8 -fstrict-aliasing -fopt-stack, gcse on):
+ * this #else body is REFUSED by the splice on ADDRESSING (the unit's .extern sizes flip a
+ * bare-symbol access between gp-relative and absolute). Not measured further. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D3C98);
 #else
@@ -6111,6 +6178,9 @@ extern s64 func_00122B00(s64 a, s64 b);
 extern s32 func_00123130(s64 x);
 extern void func_0028F2C0(s32 handle, s32 x0, s32 y0, s32 x1, s32 y1, void *quad);
 extern u8 D_26CFD0[];    /* meter record table, stride 0x14 */
+/* s136os arm, measured by task #2117 (SN 1.36 -O2 -G8 -fstrict-aliasing -fopt-stack, gcse on):
+ * this #else body is REFUSED by the splice on ADDRESSING (the unit's .extern sizes flip a
+ * bare-symbol access between gp-relative and absolute). Not measured further. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D4D38);
 #else
