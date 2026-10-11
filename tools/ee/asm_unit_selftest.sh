@@ -563,5 +563,30 @@ for k in "r1_pos:-G8:: f:1:f8830020 03e00008 00000000" \
   verdict "NOAPP $sd $G" "$ok" "'asm_unit.sh: noapp-slot: $np pins in $T/$sd$sfx', .text [$w] (got [$WORDS], '$R1LINE')"
 done
 
+# --- POSHOIST: the -G8 slot hoist fires only where GNU as expands the use (task #2124) ---
+# GNU as sizes a use positionally: a size > 8 in force makes it absolute, else
+# the LAST `.extern` decides. A slot `lw` ABOVE the first `, 16` in a file
+# ending with cc1's `, 4` is one gp word (text/191238
+# MapFindNearestAvailableLevel, 0x29623C): it must stay in the slot. Below
+# the `, 16`, or with no small directive after it, the use is the two-insn
+# macro and the hoist still fires. A first-wins map hoists ph_pre's one gp
+# word too and pads the slot (`8f830000 10400001 00000000 03e00008 00000000`,
+# master 5cbfe5dd0's asm_unit.sh), which the ph_pre arm refuses.
+PB='\t.text\n\t.ent\tF\nF:\n\t.set\tnoreorder\n'
+PU='\tbeq\t$2,$0,$L1\n\tlw\t$3,g_p\n$L1:\n\tj\t$31\n\tnop\n'
+PE='\t.set\treorder\n\t.end\tF\n'
+seed ph_pre   "$PB$PU\t.extern\tg_p, 16\n$PE\t.extern\tg_p, 4\n"
+seed ph_post  "\t.extern\tg_p, 16\n$PB$PU$PE\t.extern\tg_p, 4\n"
+seed ph_nofin "$PB$PU\t.extern\tg_p, 16\n$PE"
+# <seed>:<the whole .text>
+for k in "ph_pre:10400001 8f830000 03e00008 00000000" \
+         "ph_post:3c030000 8c630000 10400001 00000000 03e00008 00000000" \
+         "ph_nofin:3c030000 8c630000 10400001 00000000 03e00008 00000000"; do
+  sd=${k%%:*}; w=${k#*:}
+  run "$sd" -G8
+  ok=$(accepted); [ "$ok" = 1 ] && [ "$WORDS" = "$w" ] || ok=0
+  verdict "POSHOIST $sd -G8" "$ok" ".text [$w] (got [$WORDS])"
+done
+
 echo "asm_unit_selftest: $N arms, $F failed ($AU)"
 [ "$F" = 0 ]

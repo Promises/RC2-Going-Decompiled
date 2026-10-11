@@ -120,6 +120,9 @@ NORE nore_q2 -G0
 NORE nore_q2 -G8
 NORE nore_q2ctl -G0
 NORE nore_q2ctl -G8
+POSHOIST ph_nofin -G8
+POSHOIST ph_post -G8
+POSHOIST ph_pre -G8
 SPELL count
 SPELL lb bare -G8
 SPELL lb tail -G8
