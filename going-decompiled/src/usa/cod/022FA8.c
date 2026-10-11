@@ -2966,8 +2966,9 @@ typedef struct {
     s32 closedGop;             /* 0x1A4 */
     s32 brokenLink;            /* 0x1A8 */
     s32 _pad1AC;
-    s32 field1B0;              /* 0x1B0: set by a skipped macroblock */
-    s32 _pad1B4;
+    s32 field1B0;              /* 0x1B0: set by a skipped or non-intra macroblock; the
+                                  next BDEC's DC-reset bit (26) */
+    s32 quantizerScaleCode;    /* 0x1B4: quantiser_scale_code, sent with each BDEC */
     s32 frames[3][4];          /* 0x1B8 */
     u8  _pad1E8[0x590 - 0x1E8];
     IpuMbRecord mb[2];         /* 0x590: two macroblock records, mbSlot picks one */
@@ -3001,7 +3002,7 @@ extern char D_0013B9F8[];   /* "Invalid modion type -- ignored(%d)" */
 /**
  * mpeg2decode's motion_compensation() on the IPU, for macroblock `mba` of the
  * current picture: IpuDecodeSlice calls it for every macroblock right after
- * decoding it (func_0012BB60) or skipping it (func_0012BAA0), where the
+ * decoding it (IpuDecodeMacroblock) or skipping it (func_0012BAA0), where the
  * reference slice() calls motion_compensation. Returns 1, or 0 for a bad
  * motion type. Named at promotion (RULING #10083) from that call site, the
  * reference's bx/by = 16 * (MBA % mb_width), 16 * (MBA / mb_width), and
@@ -3473,7 +3474,7 @@ s32 func_0012B780(IpuDecoder *dec, s32 mbaMax, s32 *mba, s32 *mbaInc, s32 pmv[2]
 }
 
 extern s32 IpuWaitBdec(IpuDecoder *dec);
-extern s32 func_0012BB60(IpuDecoder *dec, s32 *macroblockType, s32 *motionType,
+extern s32 IpuDecodeMacroblock(IpuDecoder *dec, s32 *macroblockType, s32 *motionType,
                          s32 *dctType, s32 pmv[2][2][2], s32 mvFieldSel[2][2],
                          s32 dmvector[2]);
 extern s32 IpuMotionCompensation(IpuDecoder *dec, s32 mba, s32 mbaInc, s32 macroblockType,
@@ -3492,7 +3493,7 @@ s32 func_0012BAA0(IpuDecoder *dec, s32 pmv[2][2][2], s32 *motionType,
  * a zero 23-bit peek or a bad code ends the slice (3); otherwise decode the
  * next increment (func_0012B568). An address past mbaMax is reported
  * (D_0013BB58) and returns 2. A coded macroblock (increment 1) is decoded by
- * func_0012BB60 (failure: 1), a skipped one by func_0012BAA0 (failure: 2);
+ * IpuDecodeMacroblock (failure: 1), a skipped one by func_0012BAA0 (failure: 2);
  * both are then motion-compensated by IpuMotionCompensation (failure: 2). From the
  * second macroblock on, the previous record (mbSlot ^ 1) is flushed through
  * func_0012A1C8. Every failure clears lastDecodeZero.
@@ -3537,7 +3538,7 @@ s32 IpuDecodeSlice(IpuDecoder *dec, s32 mbaMax) {
             return 2;
         }
         if (mbaInc == 1) {
-            if (func_0012BB60(dec, &macroblockType, &motionType, &dctType, pmv,
+            if (IpuDecodeMacroblock(dec, &macroblockType, &motionType, &dctType, pmv,
                               mvFieldSel, dmvector) == 0) {
             resync:
                 dec->lastDecodeZero = 0;
@@ -3604,7 +3605,147 @@ s32 func_0012BAA0(IpuDecoder *dec, s32 pmv[2][2][2], s32 *motionType,
     return ok;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012BB60);
+extern s32 IpuGetBits(s32 *arg0, s32 arg1);
+extern void func_0012C090(s32 *ipu, s32 pmv[2][2][2], s32 *dmvector, s32 mvFieldSel[2][2],
+                          s32 s, s32 motionVectorCount, s32 mvFormat, s32 hRSize,
+                          s32 vRSize, s32 dmv, s32 mvScale);
+extern void func_0012C230(s32 *ipu, s32 *pmv, s32 *dmvector, s32 hRSize, s32 vRSize,
+                          s32 dmv, s32 mvScale, s32 fullPel);
+extern void func_0012C380(s32 *arg0, u32 cmd);
+extern void func_0012E088(u32 madr, s32 size);
+extern char D_0013BBA8[];   /* "Invalid macroblock_type code: 0" */
+/**
+ * mpeg2decode's decode_macroblock() on the IPU, with macroblock_modes()
+ * inlined: the coded-macroblock step of IpuDecodeSlice's loop. Returns 1, or
+ * 0 on a fault (lastDecodeZero, the reference's Fault_Flag). Named at
+ * promotion (RULING #10083) from that call site and argument list, its
+ * motion_vectors/motion_vector callees and the reference's macroblock_type
+ * error report.
+ *
+ * Puts picture_coding_type into IPU_CTRL bits 24..26, reads macroblock_type
+ * (func_0012C508; 0 is reported, "Invalid macroblock_type code: 0", as a
+ * fault), then frame/field_motion_type, the derived motion_vector_count,
+ * mv_format, dmv and mvscale, dct_type and quantiser_scale_code exactly as
+ * the reference does. Forward and backward vectors go through
+ * func_0012C090 (motion_vectors) for MPEG-2 or func_0012C230 (motion_vector)
+ * for MPEG-1, a concealment marker bit is skipped, and a macroblock with
+ * coded blocks (pattern or intra) is decoded by the IPU: the record's block
+ * buffer is prepared (func_0012E088, 0x300 bytes), the IPU is waited on and
+ * a BDEC command is issued (func_0012C380) with MBI = intra, DCR = field1B0,
+ * DT = dct_type and QSC = quantiser_scale_code. A macroblock without coded
+ * blocks marks its record (field13C). The DC-reset flag is then set for a
+ * non-intra macroblock, and the motion-vector predictors are reset as the
+ * reference resets them (intra without concealment vectors; a P-picture
+ * macroblock with neither forward motion nor intra, which also derives
+ * motion_type and the field select).
+ *
+ * Byte-exact on the sdk29 arm since task #2086, device-free. Two spellings
+ * mattered, both measured in a scratch build of the unit (positional words
+ * differing of 298): frame_motion_type written as one
+ * `if (frame picture && frame_pred_frame_dct) MC_FRAME else Get_Bits(2)`
+ * (the reference's nested ternary: 248, every later word shifted); and the
+ * BDEC command's OR order, which decides when the dct_type pointer is
+ * reloaded from its stack slot: 3 of the 24 orders of the first four terms
+ * (dct_type last) give 0, the rest 4..16. The opcode-first order is used.
+ */
+s32 IpuDecodeMacroblock(IpuDecoder *dec, s32 *macroblockType, s32 *motionType, s32 *dctType,
+                  s32 pmv[2][2][2], s32 mvFieldSel[2][2], s32 dmvector[2]) {
+    s32 mbType;
+    s32 motionVectorCount;
+    s32 mvFormat;
+    s32 dmv;
+    s32 mvScale;
+
+    *(volatile u32 *)0x10002010 =
+        (*(volatile u32 *)0x10002010 & 0xF8FFFFFF) | (dec->pictureCodingType << 24);
+    mbType = func_0012C508((s32)dec, 1);
+    *macroblockType = mbType;
+    if (mbType == 0) {
+        func_00130288((s32)dec, D_0013BBA8);
+        dec->lastDecodeZero = 1;
+        return 0;
+    }
+    if (mbType & 0xC) {
+        if (dec->pictureStructure == 3 && dec->framePredFrameDct) {
+            *motionType = 2;
+        } else {
+            *motionType = IpuGetBits((s32 *)dec, 2);
+        }
+    } else if ((mbType & 1) && dec->concealmentMotionVectors) {
+        *motionType = dec->pictureStructure == 3 ? 2 : 1;
+    }
+    if (dec->pictureStructure == 3) {
+        motionVectorCount = *motionType == 1 ? 2 : 1;
+        mvFormat = *motionType == 2;
+    } else {
+        motionVectorCount = *motionType == 2 ? 2 : 1;
+        mvFormat = 0;
+    }
+    dmv = *motionType == 3;
+    mvScale = mvFormat == 0 && dec->pictureStructure == 3;
+    *dctType = dec->pictureStructure == 3 && !dec->framePredFrameDct && (*macroblockType & 3)
+               ? IpuGetBits((s32 *)dec, 1) : 0;
+    if (*macroblockType & 0x10) {
+        dec->quantizerScaleCode = IpuGetBits((s32 *)dec, 5);
+    }
+    if ((*macroblockType & 8) || ((*macroblockType & 1) && dec->concealmentMotionVectors)) {
+        if (dec->mpeg2) {
+            func_0012C090((s32 *)dec, pmv, dmvector, mvFieldSel, 0, motionVectorCount, mvFormat,
+                          dec->fCode[0][0] - 1, dec->fCode[0][1] - 1, dmv, mvScale);
+        } else {
+            func_0012C230((s32 *)dec, pmv[0][0], dmvector, dec->forwardFCode - 1,
+                          dec->forwardFCode - 1, 0, 0, dec->fullPelForward);
+        }
+    }
+    if (dec->lastDecodeZero) {
+        return 0;
+    }
+    if (*macroblockType & 4) {
+        if (dec->mpeg2) {
+            func_0012C090((s32 *)dec, pmv, dmvector, mvFieldSel, 1, motionVectorCount, mvFormat,
+                          dec->fCode[1][0] - 1, dec->fCode[1][1] - 1, 0, mvScale);
+        } else {
+            func_0012C230((s32 *)dec, pmv[0][1], dmvector, dec->backwardFCode - 1,
+                          dec->backwardFCode - 1, 0, 0, dec->fullPelBackward);
+        }
+    }
+    if (dec->lastDecodeZero) {
+        return 0;
+    }
+    if ((*macroblockType & 1) && dec->concealmentMotionVectors) {
+        IpuSkipBits((s32 *)dec, 1);
+    }
+    if (*macroblockType & 3) {
+        func_0012E088((u32)dec->mb[dec->mbSlot].field04, 0x300);
+        IpuWaitReady((s32 *)dec);
+        func_0012C380((s32 *)dec, 0x20000000 | ((*macroblockType & 1) << 27) |
+                                  (dec->field1B0 << 26) | (dec->quantizerScaleCode << 16) |
+                                  (*dctType << 25));
+    } else {
+        dec->mb[dec->mbSlot].field13C = 1;
+    }
+    dec->field1B0 = 0;
+    if (dec->lastDecodeZero) {
+        return 0;
+    }
+    if (!(*macroblockType & 1)) {
+        dec->field1B0 = 1;
+    }
+    if ((*macroblockType & 1) && !dec->concealmentMotionVectors) {
+        pmv[0][0][0] = pmv[0][0][1] = pmv[1][0][0] = pmv[1][0][1] = 0;
+        pmv[0][1][0] = pmv[0][1][1] = pmv[1][1][0] = pmv[1][1][1] = 0;
+    }
+    if (dec->pictureCodingType == 2 && !(*macroblockType & 9)) {
+        pmv[0][0][0] = pmv[0][0][1] = pmv[1][0][0] = pmv[1][0][1] = 0;
+        if (dec->pictureStructure == 3) {
+            *motionType = 2;
+        } else {
+            *motionType = 1;
+            mvFieldSel[0][0] = dec->pictureStructure == 2;
+        }
+    }
+    return 1;
+}
 
 /**
  * Decode one motion-vector component in place (mpeg2decode's
