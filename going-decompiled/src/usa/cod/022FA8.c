@@ -2865,9 +2865,15 @@ typedef struct {
 
 /* One of the decoder's two macroblock records (0x140 bytes). */
 typedef struct {
-    u8  _pad0[0x128];
+    s32 _pad0;
+    void *field04;             /* 0x04: halfword block data func_0012A1C8 packs or adds */
+    u8  _pad8[0x28 - 0x8];
+    void (*fnA[4])(void *);    /* 0x28: run on blockA[i] by func_0012A1C8 */
+    void (*fnB[4])(void *);    /* 0x38: run on blockB[i] */
+    u8  blockA[4][0x1C];       /* 0x48 */
+    u8  blockB[4][0x1C];       /* 0xB8 */
     s32 addr;                  /* 0x128: destination of the decoded macroblock */
-    s32 _pad12C;
+    s32 count;                 /* 0x12C: fnA/fnB pairs to run */
     s32 intra;                 /* 0x130 */
     s32 pattern;               /* 0x134: coded with a block pattern */
     s32 motion;                /* 0x138: motion-compensated */
@@ -3071,7 +3077,51 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_001296A0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00129DA8);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012A1C8);
+extern void func_00130288(s32 arg0, void *buf);
+extern void func_0012B0D8(u8 *dst, void *src, void *add);
+void func_0012B138(u8 *dst, const s16 *src);
+extern char D_0013BA80[];   /* "intra && skip MB" */
+
+/**
+ * Flush macroblock record `slot` (IpuDecodeSlice passes the record it is NOT
+ * filling, i.e. the previous macroblock's).
+ *
+ * A motion-compensated record first runs its `count` pairs of block routines,
+ * fnA[i](blockA[i]) then fnB[i](blockB[i]). A record marked both intra and
+ * skipped (field13C) is reported through func_00130288 ("intra && skip MB")
+ * and then handled as intra. The result is written to the record's
+ * destination `addr`: an intra record is clamp-packed from its own field04
+ * by func_0012B138 (384 halfwords to bytes); a skipped one is packed from the
+ * decoder's scratchpad buffer field81C the same way; any other is combined
+ * from field81C and field04 by func_0012B0D8 (hand-written MMI). All three are
+ * the ROM's tail `j`s, the void sibcall of FACT #9983.
+ *
+ * Byte-exact on the sdk29 arm since task #2086, first spelling, no device.
+ * What it needs is the record as the typed IpuDecoder.mb[slot] member (the
+ * ROM keeps dec + 0x6B8/0x6BC/0x6C0 and the two fn-table bases in saved
+ * registers or stack slots and adds slot * 0x140 at each use), the shape
+ * func_00129450 needed too.
+ */
+void func_0012A1C8(IpuDecoder *dec, s32 slot) {
+    s32 i;
+
+    if (dec->mb[slot].motion) {
+        for (i = 0; i < dec->mb[slot].count; i++) {
+            dec->mb[slot].fnA[i](dec->mb[slot].blockA[i]);
+            dec->mb[slot].fnB[i](dec->mb[slot].blockB[i]);
+        }
+    }
+    if (dec->mb[slot].intra && dec->mb[slot].field13C) {
+        func_00130288((s32)dec, D_0013BA80);
+    }
+    if (dec->mb[slot].intra) {
+        func_0012B138((u8 *)dec->mb[slot].addr, dec->mb[slot].field04);
+    } else if (dec->mb[slot].field13C) {
+        func_0012B138((u8 *)dec->mb[slot].addr, dec->field81C);
+    } else {
+        func_0012B0D8((u8 *)dec->mb[slot].addr, dec->field81C, dec->mb[slot].field04);
+    }
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012A3E8);
 
