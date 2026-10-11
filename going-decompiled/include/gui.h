@@ -276,7 +276,10 @@ _Static_assert(__builtin_offsetof(GuiWidget, rowEnabled)   == 0x6C, "rowEnabled"
 /* Shared 2D UI draw primitives (recovered signatures; definitions live in
  * src/usa/text/188858.c / 178E88.c). Include this header in a menu-draw TU to
  * write faithful #else bodies without guessing arg boundaries (#67 unblock).
- * Byte-neutral for the matching build (those arms stay INCLUDE_ASM). */
+ * Byte-neutral for the matching build: these are declarations only. When this
+ * was written those arms stayed INCLUDE_ASM; func_0028EDF0 is byte-exact on the
+ * s136os arm since task #1740 and func_0028FFF0 since task #2108, and each
+ * prototype here agrees with its definition. */
 void func_002904B0(s32 x0, s32 y0, s32 x1, s32 y1, u64 reg4, s32 mode);        /* box/line quad */
 void func_0028FFF0(s32 iconIndex, s32 x0, s32 y0, s32 x1, s32 y1,
                    s32 u0, s32 v0, s32 u1, s32 v1, s32 alpha);                  /* icon/sprite */
