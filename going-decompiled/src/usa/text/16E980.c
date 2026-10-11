@@ -449,9 +449,13 @@ void func_0026EB98(s32 *a, s32 *b, s32 *c) {
 #endif
 
 /* BuildAttractReelPlaylist: seed the RNG from the RTC (sceCdReadClock) and build
- * a randomized attract-reel playlist. WALL: six callee-saves at 8-byte slot
- * spacing (the 0x20-vs-0x10 packed-save frame) plus the multi-field RNG-seed
- * mult chain; left INCLUDE_ASM. The TARGET_NATIVE #else is faithful coverage:
+ * a randomized attract-reel playlist. The ROM saves six callee-saves at 8-byte
+ * slot spacing (the 0x20-vs-0x10 packed-save frame on the cc1 2.9 arm) and
+ * carries the multi-field RNG-seed mult chain. Unmatched; the save layout is a
+ * cc1 2.9 property and not the reason on the s136os arm, whose 8-byte stride
+ * is the ROM's (FACT #9873 / NOTE #9871). The s136os arm was screened only as
+ * written (NOTE #9857 at 75e6b6c1: 110 built vs 100 ROM words, a ranking
+ * screen) and not retried. The TARGET_NATIVE #else is faithful coverage:
  * it seeds srand from (sec+1)(hour+1)(min+1)(day+1)(month+1) of the RTC clock,
  * then fills the reel-playlist struct with three randomized slot orderings
  * (func_0026EB98) offset by 0xB9 / and a coin-flipped 0xB3<->0xB6 pair. */
@@ -522,10 +526,12 @@ void BuildAttractReelPlaylist(void *reelState) {
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", BuildAttractReelPlaylist);
 #endif
 
-/* LoadLevelAndInitHealth: large level-load + health/stat init driver. WALL:
- * jump-table switch + many callee-saves at 8-byte slot spacing (packed-save
- * wall); the body spans 660+ instructions with opaque sub-systems. Left
- * INCLUDE_ASM (not honestly decompilable without extensive cross-tracing). */
+/* LoadLevelAndInitHealth: large level-load + health/stat init driver. The ROM
+ * has a jump-table switch and many callee-saves at 8-byte slot spacing (the
+ * packed-save frame cc1 2.9 cannot produce; a cc1 2.9 property, not a wall on
+ * the s136os arm: FACT #9873 / NOTE #9871); the body spans 660+ instructions
+ * with opaque sub-systems. Left INCLUDE_ASM: it has no C arm, so the s136os
+ * arm has never been tried (not decompiled without extensive cross-tracing). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", LoadLevelAndInitHealth);
 
 /* func_0026F718: stub-table entry — compiled-out hook, always returns 0. */
@@ -682,9 +688,11 @@ void func_0026F818(void) {
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/16E980", func_0026F820);
 
-/* func_0026F850: large boot/menu still-image build helper. WALL: jump-table
- * switch + eight callee-saves at 8-byte slot spacing (packed-save wall). Left
- * INCLUDE_ASM. */
+/* func_0026F850: large boot/menu still-image build helper. The ROM has a
+ * jump-table switch and eight callee-saves at 8-byte slot spacing (the
+ * packed-save frame cc1 2.9 cannot produce; a cc1 2.9 property, not a wall on
+ * the s136os arm: FACT #9873 / NOTE #9871). Left INCLUDE_ASM: it has no C
+ * arm, so the s136os arm has never been tried. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_0026F850);
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/16E980", func_0026FC80);
@@ -1241,9 +1249,11 @@ void CallCameraEnterHandler(Camera *cam) {
 /* SwitchActiveCamera: activate a new camera slot - pick transition kind/duration
  * (default 0.018), save the old camera into g_prevCamera with a history copy,
  * reset the frames-since-cut counter, run the enter handler and snap g_cameraPos
- * to the new slot pos +0x30. WALL: deep nested branching with multiple
- * callee-saves at 8-byte slot spacing (packed-save wall); 0x2A0 bytes. Left
- * INCLUDE_ASM (too large to honestly decompile without subtle ordering risk). */
+ * to the new slot pos +0x30. The ROM has deep nested branching with multiple
+ * callee-saves at 8-byte slot spacing (the packed-save frame cc1 2.9 cannot
+ * produce; a cc1 2.9 property, not a wall on the s136os arm: FACT #9873 /
+ * NOTE #9871); 0x2A0 bytes. Left INCLUDE_ASM: it has no C arm, so the s136os
+ * arm has never been tried. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", SwitchActiveCamera);
 
 /* Camera takeover trigger-table row (pointed to by the word at
@@ -1265,8 +1275,12 @@ typedef struct CamTakeRow {
 
 /* TestCameraTakeover: decide whether a candidate camera slot should take over
  * the active camera (mode-vtbl takeover handler + a per-type priority switch).
- * WALL: jump-table switch (jtbl_0026C4F0_text) + three callee-saves at 8-byte
- * slot spacing (packed-save wall). Left INCLUDE_ASM. */
+ * The ROM has a jump-table switch (jtbl_0026C4F0_text) and three callee-saves
+ * at 8-byte slot spacing (the packed-save frame cc1 2.9 cannot produce).
+ * Unmatched; the save layout is a cc1 2.9 property and not the reason on the
+ * s136os arm (FACT #9873 / NOTE #9871). The s136os arm was screened only as
+ * written (NOTE #9857 at 75e6b6c1: 112 built vs 113 ROM words, a ranking
+ * screen) and not retried. */
 #ifdef TARGET_NATIVE
 extern s32 g_cameraCallbackCount;
 extern char g_soundBankHandlesBlk[]; /* g_soundBankHandles + 0x20 */
@@ -1431,8 +1445,14 @@ s32 DispatchCameraMode(void) {
 
 /* func_00270B68: camera-transition curve builder (consumed by func_00270D60).
  * Builds the blend basis/control points from the three normalised key vectors.
- * WALL: thirteen callee-saves at 8-byte slot spacing (packed-save wall) +
- * heavy interleaved fp/qword math. Left INCLUDE_ASM. */
+ * The ROM has thirteen callee-saves at 8-byte slot spacing (the packed-save
+ * frame cc1 2.9 cannot produce) and heavy interleaved fp/qword math.
+ * Unmatched; the save layout is a cc1 2.9 property and not the reason on the
+ * s136os arm (FACT #9873 / NOTE #9871). The s136os arm WAS retried: best 124
+ * of 125 words, 35 positional differences (a ranking screen), residual
+ * recorded as FP-constant register rotation, #8435 pad / div.s placement and
+ * a div.s delay slot (NOTE #10024; NOTE #10002's .lit4 class was a screen
+ * artifact). */
 #ifdef TARGET_NATIVE
 extern void Vec4SubVu0(Vec4 *dst, const Vec4 *a, const Vec4 *b);
 extern f32 Vec3DotVu0(const Vec4 *a, const Vec4 *b);
@@ -1507,8 +1527,13 @@ extern void func_00270B68(void *a, void *b, void *c, Vec4 *d, Vec4 *e, Vec4 *f);
  * unaffected; native ILP32 is positional, so the scalar must come second. */
 extern void Vec3RescaleToLenVu0(Vec4 *dst, f32 len, const Vec4 *src);
 extern char g_soundBankHandlesBlk[]; /* g_soundBankHandles + 0x20 */
-/* TODO(match): functional equivalent - not byte-exact; five callee-saves
-   (incl. $f20) at 8-byte slot spacing (the 0x20-vs-0x10 packed-save wall). */
+/* TODO(match): functional equivalent - not byte-exact. The ROM saves five
+   callee-saves (incl. $f20) at 8-byte slot spacing (the 0x20-vs-0x10
+   packed-save frame on the cc1 2.9 arm); that layout is a cc1 2.9 property
+   and not the reason on the s136os arm (FACT #9873 / NOTE #9871). The s136os
+   arm WAS retried: best 55/55 words, 18 positional differences (a ranking
+   screen), residual recorded as call-argument issue order, the epilogue ld
+   interleave and the final-copy register (NOTE #9994). */
 void func_00270D60(void) {
     CameraTransitionState *t = &g_cameraTransitionState;
     /* +0x2290 holds the live cinematic camera-key block pointer (reloaded each
@@ -1711,9 +1736,15 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", BeginCameraTran
 #endif
 
 /* func_00271140: instant-settle / blend-start branch of the transition pipeline
- * (forwarded from ApplyCameraTransition when no blend is pending). WALL: nine
- * fp/gpr callee-saves at 8-byte slot spacing (packed-save wall) + interleaved
- * Vec4 math and func_002A8A68/func_002AC468 calls. Left INCLUDE_ASM. */
+ * (forwarded from ApplyCameraTransition when no blend is pending). The ROM has
+ * nine fp/gpr callee-saves at 8-byte slot spacing (the packed-save frame cc1
+ * 2.9 cannot produce), interleaved Vec4 math and func_002A8A68/func_002AC468
+ * calls. Unmatched; the save layout is a cc1 2.9 property and not the reason
+ * on the s136os arm (FACT #9873 / NOTE #9871). The s136os arm WAS retried:
+ * with a func_002A8A68 prototype in this arm it compiles at 105/105 words,
+ * best 29 positional differences (a ranking screen), residual recorded as the
+ * &g_cameraPos formation order and the s0/s1 pointer allocation (NOTE
+ * #10031). */
 #ifdef TARGET_NATIVE
 /* View of CameraTransitionState+0x10: two smooth-stepped blend tracks
  * (orientation at +0x0, position at +0xC) with per-track step + latched step,
@@ -1801,9 +1832,12 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00271140);
  *    applications; final rows renormalized (row1 = cross with
  *    g_heroFacingDir, len -1.0!), func_002AC468 captures into src1 AND oriB,
  *    TickCountdownTimer ticks blendTarget; return 0. */
-/* WALL:
- * fourteen callee-saves at 8-byte slot spacing (packed-save wall); 0x410 bytes
- * of interleaved fp/qword math. Left INCLUDE_ASM. */
+/* The ROM has fourteen callee-saves at 8-byte slot spacing (the packed-save
+ * frame cc1 2.9 cannot produce); 0x410 bytes of interleaved fp/qword math.
+ * Unmatched; the save layout is a cc1 2.9 property and not the reason on the
+ * s136os arm (FACT #9873 / NOTE #9871). The s136os screen (NOTE #9857 at
+ * 75e6b6c1) could not compile this arm on EE (an undeclared identifier: a
+ * native-only declaration); not retried. Left INCLUDE_ASM. */
 #ifdef TARGET_NATIVE
 extern void Vec3CrossVu0(Vec4 *dst, const Vec4 *a, const Vec4 *b);
 extern void Vec4ScaleVu0(Vec4 *dst, f32 s, const Vec4 *src);
@@ -2147,9 +2181,13 @@ typedef struct HeroCamMotion {
 } HeroCamMotion;
 
 /* TrackHeroMotionForCamera: smooth the hero facing / velocity / speed / lateral
- * direction from g_heroPos deltas for the camera logic to consume. WALL: twelve
- * callee-saves at 8-byte slot spacing (packed-save wall) + heavy interleaved fp
- * math. Left INCLUDE_ASM for the matching build. */
+ * direction from g_heroPos deltas for the camera logic to consume. The ROM has
+ * twelve callee-saves at 8-byte slot spacing (the packed-save frame cc1 2.9
+ * cannot produce) and heavy interleaved fp math. Unmatched; the save layout is
+ * a cc1 2.9 property and not the reason on the s136os arm (FACT #9873 / NOTE
+ * #9871). The s136os arm was screened only as written (NOTE #9857 at
+ * 75e6b6c1: 182 built vs 190 ROM words, a ranking screen) and not retried.
+ * Left INCLUDE_ASM for the matching build. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", TrackHeroMotionForCamera);
 #else
@@ -2167,8 +2205,10 @@ extern Vec4 g_heroFacingDir;    /* 0x18A0E0 hero forward unit dir (negated here)
 extern f32 g_heroOrientVec[4];  /* 0x189EB0 hero orientation quad */
 extern s32 g_heroState;         /* 0x18C0B4 hero action-state code */
 extern s32 g_cameraZoneType;    /* 0x18C2C0 current camera zone/type id */
-/* TODO(match): functional equivalent - not byte-exact; twelve callee-saves at
-   8-byte slot spacing (packed-save wall) + the interleaved fp pipeline. Float
+/* TODO(match): functional equivalent - not byte-exact. The ROM's twelve
+   callee-saves at 8-byte slot spacing and its interleaved fp pipeline: the
+   save layout is a cc1 2.9 wall only (FACT #9873); for the s136os arm see the
+   header above. Float
    constants are exact: 0.015f=0x3c75c28f, 0.2f=0x3e4ccccd, -0.98f=0xbf7ae148,
    0.0075f=0x3bf5c28f, 0.175f=0x3e333333. */
 void TrackHeroMotionForCamera(void) {
@@ -2543,8 +2583,12 @@ extern Vec4 g_cameraShakeRight;
 extern Vec4 g_cameraShakeRoll;
 extern Vec4 g_cinematicCameraBlock[]; /* g_nNanotechBonusHealTimer + 0x12F4 */
 extern u8 D_1A7A4C;
-/* TODO(match): functional equivalent - not byte-exact; four callee-saves
-   (incl. $f20) at 8-byte slot spacing (the 0x20-vs-0x10 packed-save wall). */
+/* TODO(match): functional equivalent - not byte-exact. The ROM saves four
+   callee-saves (incl. $f20) at 8-byte slot spacing (the 0x20-vs-0x10
+   packed-save frame on the cc1 2.9 arm); that layout is a cc1 2.9 property
+   and not the reason on the s136os arm (FACT #9873 / NOTE #9871). The EE arm
+   of this body is effectively empty (NOTE #9857 at 75e6b6c1: 2 built vs 118
+   ROM words; native-only body), so the s136os arm has not been tried. */
 void UpdateCamera(void) {
     /* IN-LEVEL native frame-path: UpdateCamera is an out-of-scope driven-frame
      * TRAP (tester state/inlevel_trap_list.md). It dereferences cs->activeCamera
@@ -2601,9 +2645,11 @@ s32 func_00272560(f32 *out, const Vec4 *from, const Vec4 *to) {
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/16E980", func_002725D8);
 
 /* DrawLensFlare: project the sun/light source to screen space and draw the
- * lens-flare sprite chain. WALL: seventeen callee-saves at 8-byte slot spacing
- * (packed-save wall) + interleaved projection/draw fp math; 0x10C bytes. Left
- * INCLUDE_ASM. */
+ * lens-flare sprite chain. The ROM has seventeen callee-saves at 8-byte slot
+ * spacing (the packed-save frame cc1 2.9 cannot produce; a cc1 2.9 property,
+ * not a wall on the s136os arm: FACT #9873 / NOTE #9871) and interleaved
+ * projection/draw fp math; 0x10C bytes. Left INCLUDE_ASM: it has no C arm, so
+ * the s136os arm has never been tried. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", DrawLensFlare);
 
 /* DrawScreenSpriteFxEntry(x, y, fx): render one queued screen-sprite effect at
@@ -2619,8 +2665,11 @@ extern f32 SinfVu0(f32 a);
 extern void DrawRotatedSprite2d(f32 x, f32 y, f32 w, f32 h, f32 angle,
                                 f32 u0, f32 v0, s32 u1, s32 v1, u64 tex0,
                                 u32 color, u32 rgba, s32 mirrorX, s32 mirrorY);
-/* TODO(match): functional equivalent - not byte-exact; nine callee-saves +
-   the fp-pipeline scheduling of the repeated Cos/Sin reloads (packed-save wall). */
+/* TODO(match): functional equivalent - not byte-exact. The ROM has nine
+   callee-saves and the fp-pipeline scheduling of the repeated Cos/Sin reloads;
+   its save layout is a cc1 2.9 wall only (FACT #9873 / NOTE #9871). The
+   s136os arm was screened only as written (NOTE #9857 at 75e6b6c1: 196/196
+   words, 192 positional differences, a ranking screen) and not retried. */
 void DrawScreenSpriteFxEntry(f32 x, f32 y, ScreenSpriteFx *fx) {
     u64 tex0 = GetUiTextureTex0(fx->texId);
     s32 mode = fx->mode;
@@ -2655,9 +2704,11 @@ void DrawScreenSpriteFxEntry(f32 x, f32 y, ScreenSpriteFx *fx) {
 #endif
 
 /* func_00272CC0: screen-sprite-FX pre-pass (run by DrawScreenSpriteFxQueue
- * before the per-entry draw). WALL: sixteen callee-saves at 8-byte slot spacing
- * (packed-save wall); 0x1B8 bytes of interleaved projection/draw math. Left
- * INCLUDE_ASM. */
+ * before the per-entry draw). The ROM has sixteen callee-saves at 8-byte slot
+ * spacing (the packed-save frame cc1 2.9 cannot produce; a cc1 2.9 property,
+ * not a wall on the s136os arm: FACT #9873 / NOTE #9871); 0x1B8 bytes of
+ * interleaved projection/draw math. Left INCLUDE_ASM: it has no C arm, so the
+ * s136os arm has never been tried. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00272CC0);
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00273320);
@@ -2773,8 +2824,10 @@ extern s32 g_screenCenterDefaultX; /* DAT_001a7348 */
 extern s32 g_screenCenterDefaultY; /* DAT_001a734c */
 extern s32 g_nGsPixelOffsetX;
 extern s32 g_nGsPixelOffsetY;
-/* TODO(match): functional equivalent - not byte-exact; eight callee-saves at
-   8-byte slot spacing (packed-save wall). */
+/* TODO(match): functional equivalent - not byte-exact. The ROM's eight
+   callee-saves at 8-byte slot spacing are a cc1 2.9 wall only (FACT #9873 /
+   NOTE #9871). The s136os arm was screened only as written (NOTE #9857 at
+   75e6b6c1: 92 built vs 95 ROM words, a ranking screen) and not retried. */
 void DrawScreenSpriteFxQueue(void) {
     s32 i;
     f32 cx, cy;
@@ -2891,7 +2944,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", SampleCameraFog
  * velocity to func_00273988 (motion init), then installs the debris-physics update
  * fp (func_00311A80). Returns the spawned child (0 on spawn failure).
  *
- * Engine #else (functional; matching arm hits a packed-save wall).
+ * Engine #else (functional). The packed-save wall the 2.9 matching arm hits is
+ * a cc1 2.9 property, not the reason on the s136os arm (FACT #9873 / NOTE
+ * #9871). The s136os arm was screened only as written (NOTE #9857 at
+ * 75e6b6c1: 158 built vs 145 ROM words, a ranking screen) and not retried.
  */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00273740);
@@ -2997,7 +3053,10 @@ long func_00273740(f32 launchAngle, f32 rate, long templateMoby, long mode,
  *        stash the +0x2c speed term, then aim + project.
  *   - other: leave the block seeded but unaimed.
  *
- * Engine #else (functional; matching arm hits a packed-save wall).
+ * Engine #else (functional). The packed-save wall the 2.9 matching arm hits is
+ * a cc1 2.9 property, not the reason on the s136os arm (FACT #9873 / NOTE
+ * #9871). The s136os arm was screened only as written (NOTE #9857 at
+ * 75e6b6c1: 112 built vs 126 ROM words, a ranking screen) and not retried.
  */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00273988);
@@ -3075,7 +3134,11 @@ void func_00273988(f32 rate, void *moby, s32 mode, s32 index, void *srcPos,
  * Finally, despawn (return 1) if the projectile has left the [2, 1021] world box;
  * otherwise return the per-state result.
  *
- * Engine #else (functional; matching arm hits a jump-table + packed-save wall).
+ * Engine #else (functional). The 2.9 matching arm hits a jump-table +
+ * packed-save wall; the save layout is a cc1 2.9 property, not the reason on
+ * the s136os arm (FACT #9873 / NOTE #9871). The s136os arm was screened only
+ * as written (NOTE #9857 at 75e6b6c1: 104 built vs 103 ROM words, a ranking
+ * screen) and not retried.
  */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00273B80);
@@ -3262,9 +3325,12 @@ s32 func_00273D20(void *moby) {
  *
  * Always returns 0. `block` = *(moby+0x68) is the projectile physics block.
  *
- * Engine #else (functional coverage; the matching arm hits the packed-save
- * wall — eight callee-saves at 8-byte spacing + interleaved fp/qword math).
- * The matching build uses the INCLUDE_ASM arm above.
+ * Engine #else (functional coverage). The ROM has eight callee-saves at
+ * 8-byte spacing + interleaved fp/qword math; the 2.9 matching arm's
+ * packed-save wall is a cc1 2.9 property, not the reason on the s136os arm
+ * (FACT #9873 / NOTE #9871). The s136os arm was screened only as written
+ * (NOTE #9857 at 75e6b6c1: 156 built vs 159 ROM words, a ranking screen) and
+ * not retried. The matching build uses the INCLUDE_ASM arm above.
  */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00273EA8);
