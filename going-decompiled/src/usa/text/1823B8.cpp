@@ -71,14 +71,18 @@ _Static_assert(__builtin_offsetof(UiSpritePacket, alpha) == 0x88, "alpha");
  * behind cc1's divide-by-zero trap `beql $4,$0` / `break 0,7`
  * (0x2825F4/0x2825F8).
  * Before writing C: its outer loops are NOT strength-reduced in the ROM
- * (`mult k,0x90` recomputed per iteration) while every natural C loop is, the
- * same wall DrawGlowSprites hit under -fno-gcse (NOTE #9807, task #1863).
- * Wall class: SN 1.36 loop.c giv reduction, not addressing or allocation. No
- * residual is measured here yet: NOTE #9807's one first-draft compile was 231
- * words against the ROM's 245, a LENGTH miss, not a near-miss. DrawGlowSprites
- * is byte-exact since task #2115, once this unit's s136os arm compiled with
- * gcse ON and its slot base was pinned in the loop (NOTE #10258); that lever
- * is untried on this function. */
+ * (`mult k,0x90` recomputed per iteration). Under the old -fno-gcse s136os
+ * arm every natural C loop was (NOTE #9807, task #1863), the wall
+ * DrawGlowSprites also hit. Since the arm compiles with gcse ON (task #2115)
+ * that no longer holds here: the natural init loop already gives the ROM's
+ * two `mult ...,0x90` per iteration (task #2125, solo s136os compile, XPS 13;
+ * first seen by w2 on the M1), so there is no giv wall left on this function.
+ * Task #2125 tried NOTE #10258's lever and the rest of the ladder; best draft
+ * 245 words = ROM, 73 positional diffs, not byte-exact (NOTE #10286 has the
+ * body and the price of each lever). The ROM's `nop; nop` before
+ * `div.s $f22,$f1,$f0` (0x28243C/0x282440) needs RULING #8435's pad, as in
+ * 16E980's func_002721A8. What remains is allocation and stack-slot order, plus
+ * one ordering residual (lw $4 vs the pad, NOTE #10286). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1823B8", func_002823B8);
 
 /* MIS-SPLIT fragment: a bare `addiu $29,$29,0x100; nop` stack-restore tail that
