@@ -2921,11 +2921,18 @@ s32 func_002CF550(void) {
     return 0;
 }
 
-/* menu/HUD draw routine: cc1 2.9 8-byte-packed-save wall (saves 4 GPRs incl $31; later cc1
- * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM.
- * Save stride NOT re-measured for this member on the s136os arm: it has no C arm to compile
- * (NOTE #9871). Of the 111 labeled members that were, 0 reproduce the 16-byte save stride there
- * (FACT #9873), so the stride is not evidence that this member is walled. Residual: UNMEASURED. */
+/* DrawBestiaryPagingArrows: draws the bestiary's two corner-bracket frames (eight
+ * func_002904B0 bars whose y ends are scaled by the HUD Y scale at +0x8A of
+ * g_swapGadgetItemIndex, rounded, and shifted by D_1ABA18 (-24.0f) when the word at
+ * +0x86 is 1), then the L1/R1 trigger glyphs 0x4B/0x4A when leftEnabled/rightEnabled,
+ * white while the trigger is held and in a func_002AA3F0 pulse colour otherwise.
+ * Stays INCLUDE_ASM. Measured on the s136os arm (task #2093, NOTE #10235): a C body
+ * there assembles, through asm_unit.sh, to the ROM's 383 words plus 15 nops, and to
+ * the ROM word for word once those are removed. The nops are asm_unit.sh's COP1
+ * load-delay flush after each gp-relative `l.s D_1ABA18` that directly precedes a
+ * cc1-filled `bne`; the ROM has no pad at any of those 15 sites (cf. FACT #9205).
+ * The 8-byte-packed-save wall named here before does not apply: the s136os body
+ * reproduces the ROM's prologue exactly. Blocked on that tool rule, not on the C. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawBestiaryPagingArrows);
 
 /* menu/HUD draw routine: cc1 2.9 8-byte-packed-save wall (saves 6 GPRs incl $31; later cc1
