@@ -2597,7 +2597,7 @@ void EnterVendorMenu(s32 arg) {
 #endif
 
 /* TeardownVendorSceneRestorePlayer [SEEDABLE] — tear down the vendor UI's preview widgets and hand
- * control back to the world, optionally spawning the departing preview actor.
+ * control back to the world, placing the player in front of a level-placed vendor.
  *
  * Releases the two live preview handles (+0x7C, +0x78) through func_0028C108 and
  * blanks them, quiesces the vendor sub-scene (func_0028ECA8), returns to game
@@ -2609,8 +2609,8 @@ void EnterVendorMenu(s32 arg) {
  * wrapped (WrapAnglePiSum) — through func_0026F780, then kick the fx queue
  * (func_003363A0(2)). NOTE #5477 reads that actor as the player, which the
  * function's name assumes. Always: set the vendor moby's +0x20 = 1, nudge the
- * file-load voice sub-state
- * halfword (g_fileLoadVoiceState +0x72) out of the {6,7} band to 5, run the +0x8C
+ * file-load voice sub-state halfword (g_fileLoadVoiceState +0x72) out of the
+ * {6,7} band to 5, run the +0x8C
  * teardown hook (func_002FBFD8) and free the vendor moby (+0x28) when it was
  * spawned for the menu (+0x60 != 0), then retune music (func_00132B28), mute
  * dialog voices and pump the sound stack. No parameters, no return value.
