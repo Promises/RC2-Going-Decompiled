@@ -2917,25 +2917,61 @@ extern s32 g_mobyClassCountNoHeader;            /* 0x1B1AC4 headerless slot coun
  * the first entry whose key is `classId` or the -1 terminator (counting the index
  * reached); writes that entry's fn to g_mobyClassUpdateFuncs[g_mobyClassCount] —
  * or, when `headerless`, to g_mobyClassUpdateFuncsNoHeader[g_mobyClassCountNoHeader].
- * WALL: address-CSE / induction. The original holds the table base live in a
- * preserved register ($t0) across the whole function and reuses it for the final
- * bindings[index] access; this cc1 re-materialises the base (lui/%lo) at the end,
- * which cascades into a different register coloring (best 60.81%). Genuine
- * address-rematerialise-vs-preserve wall — functional equivalent only. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", BindMobyClassUpdateFunc);
+ *   classId     class id to look up
+ *   headerless  nonzero: install into the headerless table instead
+ * No return value. The class counts are read, not advanced: the caller bumps them.
+ *
+ * MATCHED on the s136os arm (SN 2.95.3 v1.36 -fopt-stack, task #2080) at the
+ * unit's -O2 default (S136EXTRA="", RULING #9004). This replaces the WALL note
+ * that stood here ("address-CSE / induction ... genuine address-rematerialise-
+ * vs-preserve wall"): that was the cc1 2.9 arm under the unit's -fno-gcse
+ * (FACT #7922). With gcse on, the s136os cc1 keeps the table %hi in $8 across
+ * the function by itself (FACT #9472's cross-block %hi copy). Measured in the
+ * solo s136os TU, three things carry the match:
+ *  - two R5900_SHORT_LOOP_PAD_IN (RULING #8435, 188858.c's input-only form):
+ *    the ROM pads the search loop with two nops between the terminator beq's
+ *    delay slot and the classId bne (0x2B750C/0x2B7510). The "+r" PAD1 form
+ *    turns the bne into a bnel (FACT #7986's symptom).
+ *  - the loop written already rotated (pre-test of entry 0, then a do-while from
+ *    entry 1): a pad inside the while condition blocks cc1's exit-test
+ *    duplication and loses the pointer giv, and the ROM's pre-test copy carries
+ *    no pads.
+ *  - the pads' operands: the terminator as a named `end` tied to one pad and
+ *    `index` to the other. They set the allocation priority of the -1 pseudo
+ *    between index and the %hi copy (index $6, -1 $7, %hi $8 as in the ROM);
+ *    with both pads on key/classId the -1 and %hi copy swap $7/$8, and with
+ *    `end` on both pads the -1 outranks index ($6/$7 swap). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_BindMobyClassUpdateFunc)
+S136OS_SLOT(BindMobyClassUpdateFunc);
 #else
-/* TODO(match): functional equivalent - not byte-exact; table-base address-CSE wall. */
 /* WEAK (TARGET_NATIVE arm only, byte-neutral): cmp_191238d.c supplies a strong
  * BindMobyClassUpdateFunc mock; weak lets it win the link when this unit is
  * co-linked into the cmp suite (this body is untested here; gc-sections drops
- * it). Inert in the matching build (INCLUDE_ASM arm). */
-__attribute__((weak))
+ * it). The EE image's body is the s136os splice of this C. */
+#ifndef TARGET_NATIVE
+#define R5900_SHORT_LOOP_PAD_IN(v, p) \
+    __asm__ __volatile__(".set noreorder\n\tnop\n\t.set reorder" : : "r"(v), "r"(p))
+#define BIND_WEAK
+#else
+#define R5900_SHORT_LOOP_PAD_IN(v, p) ((void)0)
+#define BIND_WEAK __attribute__((weak))
+#endif
+BIND_WEAK
 void BindMobyClassUpdateFunc(s32 classId, s32 headerless) {
     s32 index = 0;
-    while (g_builtinMobyUpdateBindings[index].classId != -1 &&
-           g_builtinMobyUpdateBindings[index].classId != classId) {
-        index++;
+    if (g_builtinMobyUpdateBindings[0].classId != -1 &&
+        g_builtinMobyUpdateBindings[0].classId != classId) {
+        s32 end = -1;
+        s32 key;
+        do {
+            index++;
+            key = g_builtinMobyUpdateBindings[index].classId;
+            if (key == end) {
+                break;
+            }
+            R5900_SHORT_LOOP_PAD_IN(key, end);
+            R5900_SHORT_LOOP_PAD_IN(key, index);
+        } while (key != classId);
     }
     if (headerless) {
         g_mobyClassUpdateFuncsNoHeader[g_mobyClassCountNoHeader] =
