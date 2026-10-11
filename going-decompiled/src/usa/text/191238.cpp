@@ -6795,6 +6795,16 @@ void FormatMapBlipLabel(s32 blipIdx, u8 *dest) {
 }
 #endif
 
+/* Inter-function padding (LAYOUT DATA, RULING #8467): retail places three zero
+ * words at 0x2988BC..0x2988C7 between FormatMapBlipLabel and func_002988C8. They
+ * existed only after `endlabel` in its nonmatchings .s, which is no longer
+ * included; the next function's 8-byte alignment restores one, so without these
+ * two every later function lands 8 bytes low (landing_gate cmp 628694 at task
+ * #2104's first gate run). */
+#ifndef TARGET_NATIVE
+__asm__(".word 0\n\t.word 0");
+#endif
+
 /* func_002988C8(idx) — UI element slot for `idx`: on level 0x14
  * (g_playerProgress) one of two 0x10-byte slots at D_1A9428, picked by the
  * parity of the s32 at g_pointLights+0x2400 (signed n % 2); otherwise
