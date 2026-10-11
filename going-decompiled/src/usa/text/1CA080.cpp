@@ -1466,12 +1466,202 @@ void func_002CBD68(void) {
 }
 #endif
 
-/* menu data/list builder: cc1 2.9 8-byte-packed-save wall (saves 3 GPRs incl $31; later cc1
- * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM.
- * Save stride NOT re-measured for this member on the s136os arm: it has no C arm to compile
- * (NOTE #9871). Of the 111 labeled members that were, 0 reproduce the 16-byte save stride there
- * (FACT #9873), so the stride is not evidence that this member is walled. Residual: UNMEASURED. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", BuildPausePromptPopup);
+/* ADDRESSING-MODEL DEVICE for BuildPausePromptPopup and func_002CE230 (RULING #8620 terms;
+ * offset-0 equate, RULING #9073 / #9574). It emits nothing. The ROM reads g_guiInstance in
+ * asm_unit.sh's size-12 class in both: absolute (lui/lw) in straight-line code, one-insn
+ * %gp_rel where a read fills a delay slot (func_002CE230: absolute at 0x002CE268 and
+ * 0x002CE2E0, %gp_rel at 0x002CE28C, 0x002CE29C, 0x002CE2A8; BuildPausePromptPopup:
+ * %gp_rel in the slots at 0x002CBEF8, 0x002CBFE8, 0x002CC0FC, 0x002CC1B0, 0x002CC1C0,
+ * 0x002CC1D4, 0x002CC330, 0x002CC43C, absolute elsewhere). This unit declares
+ * `.extern g_guiInstance, 16` (absolute everywhere, which its other readers need), and
+ * the first directive wins, so the size-12 model needs a name of its own. Relocations
+ * name g_guiInstance; GNU as never writes an equate of an undefined symbol to the
+ * symtab. File scope so the unit's 2.9 TU declares it too and the splice does not carry
+ * it (FACT #9067; precedent 1EFFC0.cpp's D_1A7390Abs). Native reads the real symbol.
+ * (Moved here from above func_002CE230 by task #2093, so it precedes its first user.) */
+#ifndef TARGET_NATIVE
+__asm__(".extern g_guiInstanceSize12, 12\n\tg_guiInstanceSize12 = g_guiInstance");
+extern char *g_guiInstanceSize12;
+#else
+#define g_guiInstanceSize12 g_guiInstance
+#endif
+
+/* BuildPausePromptPopup: (re)builds the pause-menu prompt popup that lives at
+ * g_guiInstance+0x39160, then refreshes it (UpdatePopupMenu(popup, 0)). Does nothing
+ * while the GUI is down. The variant comes from the first predicate that holds:
+ *   func_0026F7F0       5 items D_1AB810, actions D_1AB870, items 0-4 enabled;
+ *   func_0026F7D0 and func_0026F7D8
+ *                       5 items D_1AB828, actions D_1AB8B0, items 0 and 3 enabled,
+ *                       1, 2 and 4 enabled only while func_0026F7C8() is 0;
+ *   func_0026F7E8       3 items D_1AB840, actions D_1AB8F0, items 0-2 enabled;
+ *   func_0026F800() is 0x31 or 0x1C, or func_0026F7F8
+ *                       2 items D_1AB850, actions D_1AB858, items 0-1 enabled;
+ *   otherwise           7 items D_1AB7F0, actions D_2614C8; items 0-2 enabled unless
+ *                       the byte at g_soundBankHandlesBlk+0x22B4 is 1, 3-5 enabled,
+ *                       item 6 (and the popup's visible flag) follows func_002DFFC8;
+ *                       the initial cursor is 3 when that byte is 1, else 0.
+ * Every variant uses layout mode 1 and the title D_1AB7C8; the others leave the popup
+ * hidden-flag 0 and the cursor 0. (The func_0026F7xx predicates are 16E980's game-mode
+ * queries; this reading does not name them.)
+ *
+ * Byte-exact on the s136os arm (task #2093). What carries it (solo s136 compile at this
+ * unit's flags through asm_unit.sh, aligned against the ROM; each alone):
+ *   - g_guiInstanceSize12 (above): with the 16-sized name the slot reads are absolute;
+ *   - every field store goes through a block-local popup pointer, which is also the next
+ *     call's first argument where the ROM shares it: spelled on the global,
+ *     `gui + 0x39160 + 0x484` folds to `gui + 0x395E4` and cc1 splits it 0x38000/0x15E4,
+ *     costing a register (384 vs 372 words, 73 off); one function-scope pointer for all
+ *     arms is a global pseudo that takes $7 where the ROM ties it to $2 (371, 43 off; the
+ *     cursor stores alone through it, 16 off);
+ *   - the gp-relative list declarations above.
+ * No asm device. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_BuildPausePromptPopup)
+S136OS_SLOT(BuildPausePromptPopup);
+#else
+extern void SetPopupVisible(void *w, s32 visible);
+extern void SetPopupLayoutMode(void *w, s32 mode);
+extern void SetPopupTitleText(void *w, s32 *src);
+extern void SetPopupItemEnabled(void *w, s32 idx, s32 enabled);
+extern void SetPopupItemText(void *w, s32 count, s32 *ids);
+extern void UpdatePopupMenu(void *w, s32 arg);
+extern s32 func_0026F7C8(void);
+extern s32 func_0026F7D0(void);
+extern s32 func_0026F7D8(void);
+extern s32 func_0026F7E8(void);
+extern s32 func_0026F7F0(void);
+extern s32 func_0026F7F8(void);
+extern s32 func_0026F800(void);
+extern s32 func_002DFFC8(void);
+/* Popup title / item-id lists and action tables. The ROM forms every one of these
+ * addresses gp-relative (`addiu $r,$gp,%gp_rel(sym)`) although the lists are longer than
+ * this unit's -G8 limit, so each is declared as a scalar: an ADDRESSING-MODEL device of
+ * declaration size (it moves no data, emits nothing; RULING #8620 class). As arrays
+ * (`[]`) cc1 forms them absolute (lui/addiu). */
+extern s32 D_1AB7C8;    /* title */
+extern s32 D_1AB7F0;    /* 7 item ids (default) */
+extern s32 D_1AB810;    /* 5 item ids */
+extern s32 D_1AB828;    /* 5 item ids */
+extern s32 D_1AB840;    /* 3 item ids */
+extern s32 D_1AB850;    /* 2 item ids */
+extern s32 D_1AB858;    /* actions */
+extern s32 D_1AB870;    /* actions */
+extern s32 D_1AB8B0;    /* actions */
+extern s32 D_1AB8F0;    /* actions */
+extern u8 D_2614C8[];
+extern u8 g_soundBankHandlesBlk[];
+#define PAUSE_POPUP (g_guiInstanceSize12 + 0x39160)
+#define POPUP_ACTIONS(p) (*(void **)((p) + 0x484))   /* per-item action table */
+#define POPUP_CURSOR(p) (*(s32 *)((p) + 0x4AC))       /* initially selected item */
+void BuildPausePromptPopup(void) {
+    if (g_guiInstanceSize12 == 0) {
+        return;
+    }
+    if (func_0026F7F0() != 0) {
+        SetPopupLayoutMode(PAUSE_POPUP, 1);
+        SetPopupItemText(PAUSE_POPUP, 5, &D_1AB810);
+        SetPopupTitleText(PAUSE_POPUP, &D_1AB7C8);
+        {
+            char *p = PAUSE_POPUP;
+            POPUP_ACTIONS(p) = &D_1AB870;
+            SetPopupVisible(p, 0);
+        }
+        SetPopupItemEnabled(PAUSE_POPUP, 0, 1);
+        SetPopupItemEnabled(PAUSE_POPUP, 2, 1);
+        SetPopupItemEnabled(PAUSE_POPUP, 3, 1);
+        SetPopupItemEnabled(PAUSE_POPUP, 1, 1);
+        SetPopupItemEnabled(PAUSE_POPUP, 4, 1);
+        {
+            char *q = PAUSE_POPUP;
+            POPUP_CURSOR(q) = 0;
+        }
+    } else if (func_0026F7D0() != 0 && func_0026F7D8() != 0) {
+        SetPopupLayoutMode(PAUSE_POPUP, 1);
+        SetPopupItemText(PAUSE_POPUP, 5, &D_1AB828);
+        SetPopupTitleText(PAUSE_POPUP, &D_1AB7C8);
+        {
+            char *p = PAUSE_POPUP;
+            POPUP_ACTIONS(p) = &D_1AB8B0;
+            SetPopupItemEnabled(p, 0, 1);
+        }
+        SetPopupItemEnabled(PAUSE_POPUP, 1, func_0026F7C8() ^ 1);
+        SetPopupItemEnabled(PAUSE_POPUP, 2, func_0026F7C8() ^ 1);
+        SetPopupItemEnabled(PAUSE_POPUP, 3, 1);
+        SetPopupItemEnabled(PAUSE_POPUP, 4, func_0026F7C8() ^ 1);
+        SetPopupVisible(PAUSE_POPUP, 0);
+        {
+            char *q = PAUSE_POPUP;
+            POPUP_CURSOR(q) = 0;
+        }
+    } else if (func_0026F7E8() != 0) {
+        SetPopupLayoutMode(PAUSE_POPUP, 1);
+        SetPopupItemText(PAUSE_POPUP, 3, &D_1AB840);
+        SetPopupTitleText(PAUSE_POPUP, &D_1AB7C8);
+        {
+            char *p = PAUSE_POPUP;
+            POPUP_ACTIONS(p) = &D_1AB8F0;
+            SetPopupVisible(p, 0);
+        }
+        SetPopupItemEnabled(PAUSE_POPUP, 0, 1);
+        SetPopupItemEnabled(PAUSE_POPUP, 1, 1);
+        SetPopupItemEnabled(PAUSE_POPUP, 2, 1);
+        {
+            char *q = PAUSE_POPUP;
+            POPUP_CURSOR(q) = 0;
+        }
+    } else if (func_0026F800() == 0x31 || func_0026F7F8() != 0 || func_0026F800() == 0x1C) {
+        SetPopupLayoutMode(PAUSE_POPUP, 1);
+        SetPopupItemText(PAUSE_POPUP, 2, &D_1AB850);
+        SetPopupTitleText(PAUSE_POPUP, &D_1AB7C8);
+        {
+            char *p = PAUSE_POPUP;
+            POPUP_ACTIONS(p) = &D_1AB858;
+            SetPopupVisible(p, 0);
+        }
+        SetPopupItemEnabled(PAUSE_POPUP, 0, 1);
+        SetPopupItemEnabled(PAUSE_POPUP, 1, 1);
+        {
+            char *q = PAUSE_POPUP;
+            POPUP_CURSOR(q) = 0;
+        }
+    } else {
+        SetPopupLayoutMode(PAUSE_POPUP, 1);
+        SetPopupItemText(PAUSE_POPUP, 7, &D_1AB7F0);
+        SetPopupTitleText(PAUSE_POPUP, &D_1AB7C8);
+        char *p = PAUSE_POPUP;
+        POPUP_ACTIONS(p) = D_2614C8;
+        if (g_soundBankHandlesBlk[0x22B4] == 1) {
+            SetPopupItemEnabled(p, 0, 0);
+            SetPopupItemEnabled(PAUSE_POPUP, 1, 0);
+            SetPopupItemEnabled(PAUSE_POPUP, 2, 0);
+        } else {
+            SetPopupItemEnabled(p, 0, 1);
+            SetPopupItemEnabled(PAUSE_POPUP, 1, 1);
+            SetPopupItemEnabled(PAUSE_POPUP, 2, 1);
+        }
+        SetPopupItemEnabled(PAUSE_POPUP, 3, 1);
+        SetPopupItemEnabled(PAUSE_POPUP, 4, 1);
+        SetPopupItemEnabled(PAUSE_POPUP, 5, 1);
+        if (func_002DFFC8() != 0) {
+            SetPopupVisible(PAUSE_POPUP, 1);
+            SetPopupItemEnabled(PAUSE_POPUP, 6, 1);
+        } else {
+            SetPopupVisible(PAUSE_POPUP, 0);
+            SetPopupItemEnabled(PAUSE_POPUP, 6, 0);
+        }
+        if (g_soundBankHandlesBlk[0x22B4] == 1) {
+            char *q = PAUSE_POPUP;
+            POPUP_CURSOR(q) = 3;
+        } else {
+            char *q = PAUSE_POPUP;
+            POPUP_CURSOR(q) = 0;
+        }
+    }
+    UpdatePopupMenu(PAUSE_POPUP, 0);
+}
+#undef PAUSE_POPUP
+#undef POPUP_ACTIONS
+#undef POPUP_CURSOR
+#endif
 
 /* Level-select slot-index validity gate (idx < 0x15 or idx == 0x18). */
 s32 IsLevelListEntryEnabled(s32 idx) {
@@ -2244,22 +2434,6 @@ extern u8 *g_pNextMenuScreen;
 extern u8 D_00259308[];
 extern struct PresentRecord D_00259E50;   /* per-screen present record */
 extern s32 D_259E34;      /* ptr-to-live-object global */
-
-/* ADDRESSING-MODEL DEVICE for func_002CE230 (RULING #8620 terms; offset-0 equate, RULING
- * #9073 / #9574). It emits nothing. The ROM reads g_guiInstance in asm_unit.sh's size-12
- * class here: absolute (lui/lw) at 0x002CE268 and 0x002CE2E0, one-insn %gp_rel where a
- * read fills a delay slot (0x002CE28C, 0x002CE29C, 0x002CE2A8). This unit declares
- * `.extern g_guiInstance, 16` (absolute everywhere, which its other readers need), and
- * the first directive wins, so the size-12 model needs a name of its own. Relocations
- * name g_guiInstance; GNU as never writes an equate of an undefined symbol to the
- * symtab. File scope so the unit's 2.9 TU declares it too and the splice does not carry
- * it (FACT #9067; precedent 1EFFC0.cpp's D_1A7390Abs). Native reads the real symbol. */
-#ifndef TARGET_NATIVE
-__asm__(".extern g_guiInstanceSize12, 12\n\tg_guiInstanceSize12 = g_guiInstance");
-extern char *g_guiInstanceSize12;
-#else
-#define g_guiInstanceSize12 g_guiInstance
-#endif
 
 /* GUARD: on EE this C is the image's body, compiled alone by the s136os arm (SN 2.95.3
  * v1.36 -fopt-stack, FACT #8810; tools/ee/s136os_functions.txt) and spliced over the
