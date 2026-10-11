@@ -671,6 +671,7 @@ D_1AC870
 D_1AC880
 D_1AC900
 D_1AC930
+D_1AD110
 D_1AD1A0
 D_1AD1F8
 D_1AD238
@@ -1601,6 +1602,7 @@ g_textColorCodeEnabled
 g_tfragRelightList
 g_tfragTexPatchList
 g_tfragTexVramTable
+g_tfragVramPeak
 g_tieClassQueue
 g_tieDrawTemplate
 g_tieTexVramTable
