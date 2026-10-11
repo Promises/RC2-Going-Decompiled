@@ -4878,7 +4878,9 @@ s32 func_0012E8C8(u64 *arg0, s32 arg1) {
  * both arms store `base` - but it changes the loop's block structure that
  * loop.c's load_mems/invariant hoisting sees (NOTE #10144 traced our old 4/38
  * residual there). Removed alone it reads 6/38 (words 10, 11, 32..35: the
- * `amount`/`total` setup moves out of its pre-loop and exit-block positions).
+ * same six instructions keep their positions but $9/$10 swap, a register-
+ * allocation residual: built `daddu $10,$5,$0; ld $9`, ROM `daddu $9,$5,$0;
+ * ld $10`; task #2135).
  * Revoke when a spelling without the dead branch reaches 0/38 on this arm.
  * The permuter's two other leftovers (an unused `new_var` temporary for the
  * shifted buffer and a `new_var2` alias of ctx) were each removed alone at
