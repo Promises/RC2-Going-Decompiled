@@ -2129,14 +2129,19 @@ s32 func_002CD660(s32 *list) {
 }
 
 /* func_002CD670: a UI screen renderer (~2.1 KB). Dispatches on a screen/mode
- * selector through a jump table (sltiu + jr $3) and builds GS register packets
+ * selector and builds GS register packets
  * (AppendGsRegPacket) for the selected panel — localized strings
  * (GetLocalizedString), UI textures (GetUiTextureTex0), the active-objectives
  * list (GatherActiveObjectives), etc. — with ldl/ldr/sdl/sdr unaligned copies.
  * PARK (INCLUDE_ASM): high transcription risk per the blast-radius guardrail —
  * combines a splat-jtbl-reloc switch, raw-GS packet assembly (raw-GS-HLE), and
  * a large unverifiable body; a hand-written #else here is not worth the silent-
- * error surface in coverage-only C. Matching arm is byte-frozen regardless. */
+ * error surface in coverage-only C. Matching arm is byte-frozen regardless.
+ * Correction (task #2093): there is NO jump table here and no switch wall. The
+ * splat .s has one `jr` (the `jr $31` at 0x002CDEA4) and no jtbl_ reference (the
+ * same count gives 2 on func_002CC7D8, a real jtbl member); the selector dispatch
+ * is an if-chain of `andi` tests on the flags word at arg+0x30. The other wall
+ * reasons above (ldl/ldr copies, size) were not re-measured. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CD670);
 
 /* Cheat-flag mirror: for each source toggle byte (D_1A7BDn) write 3 ("on") or 0
