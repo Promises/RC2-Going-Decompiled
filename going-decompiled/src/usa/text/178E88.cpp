@@ -4027,7 +4027,12 @@ void func_00281020(u32 *pixels, s32 actorIdx) {
  * madd). Writing the init outside the loop does give the madd, but the outer loop shrinks
  * below loop.c's movable threshold on its second pass, -6 is hoisted into $fp and the
  * table base is rematerialised (40-46/121). An EE_REG("$30") pin on the base: 85/121.
- * Class: LOOP OPTIMISER (giv) + ALLOCATION. */
+ * Class: LOOP OPTIMISER (giv) + ALLOCATION.
+ * t2073: the explicit form reads 0/121, built 121, on the same solo harness (NOT gated; NOTE
+ * #10186 holds the body). Five dead `idx = K; last = K;` pairs at the top of the outer loop
+ * lift loop.c pass 2's outer-loop count to 66, so -6 is no longer hoisted. A `base` local set
+ * from a u8[8] view of the table keeps the madd, and a separate `hit` local for the after-call
+ * record keeps its mult below the call. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_002810C0);
 #else
