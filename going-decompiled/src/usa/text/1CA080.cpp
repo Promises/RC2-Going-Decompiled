@@ -1240,12 +1240,146 @@ void MenuScreenCommitTransition(void) {
     block[0x4 / 4] = 0;
 }
 
-/* menu-screen lifecycle routine: cc1 2.9 8-byte-packed-save wall (saves 8 GPRs incl $31; later cc1
- * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM.
- * Save stride NOT re-measured for this member on the s136os arm: it has no C arm to compile
- * (NOTE #9871). Of the 111 labeled members that were, 0 reproduce the 16-byte save stride there
- * (FACT #9873), so the stride is not evidence that this member is walled. Residual: UNMEASURED. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", MenuScreenUpdate);
+/* MenuScreenUpdate: per-frame tick of the active menu screen (g_menuScreenBlock+0x14),
+ * a MenuScreen object holding 14 item pointers at +0xEC whose first words are
+ * {tick, -, enter, exit} handlers.
+ *   - While D_1AB7C4 is set, TickActiveMenuScreen() runs first (on the galactic map,
+ *     before the screen has started, func_002D8778 resets the map's active slot); if
+ *     it reports the screen still busy, `started` is latched to 1 and the frame ends.
+ *   - On the screen's first frame (`started` == 0) every item's enter(item, 0) runs,
+ *     then `started` is incremented.
+ *   - Every item with a tick handler is ticked; the cheat-menu item (D_00259178)
+ *     first refreshes its flag mirrors (func_002CDEB0). A nonzero tick sets the
+ *     block's subState to 2 in mode 4, else 1 (as TickActiveMenuScreen does).
+ *   - A pending focus change (+0x128) runs exit(old, 1), moves it to +0xE8, clears
+ *     it, and runs enter(new, 1).
+ *   - A requested screen change (+0x18) plays sound 0x11 (re-entering the same
+ *     screen) or 0x12, runs every item's exit(item, 0), and sets state 3, saves the
+ *     screen at +0xE0 and clears the active screen and `started`.
+ * The item array is taken from the screen read at entry; the other passes re-read
+ * the block's screen pointer, as the ROM does.
+ *
+ * Byte-exact on the s136os arm (task #2093), no devices. What carries it (solo s136
+ * compile at this unit's flags, aligned against the ROM; each alone):
+ *   - every pointer field of the block and screen has ONE type (u8 *): under this
+ *     arm's -fstrict-aliasing, distinct struct-pointer types let cc1 keep the
+ *     screen pointer across the focus stores, where the ROM re-reads it (167 vs 171
+ *     words, 36 off);
+ *   - the enter and exit passes count with their own variables: one shared counter
+ *     takes the item pass's register (171 words, 20 off);
+ *   - the teardown stores in the order state, previous, screen, started (state,
+ *     previous, started, screen: 2 off);
+ *   - func_002D8778 is defined (void) in 1D54C0 but the ROM passes (0, 0) - the
+ *     menu-handler shape - so it is called through that pointer type; a (void *,
+ *     s32) declaration would be a new DECLDEF arity disagreement. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_MenuScreenUpdate)
+S136OS_SLOT(MenuScreenUpdate);
+#else
+extern s32 TickActiveMenuScreen(void);
+extern void func_002CDEB0(void);
+extern s32 func_002D8778(void);
+extern s32 PlayGlobalSound(s32 id, s32 a, s32 b);
+extern s32 D_1AB7C4;
+extern u8 g_MenuScreen_GalacticMap[];
+extern u8 D_00259178[];
+struct MenuItem {
+    s32 (*tick)(struct MenuItem *item);           /* 0x0 */
+    u8 unk4[0x4];
+    void (*enter)(struct MenuItem *item, s32 arg); /* 0x8 */
+    void (*exit)(struct MenuItem *item, s32 arg);  /* 0xC */
+};
+struct MenuScreen {
+    u8 unk0[0xE8];
+    u8 *focus;                    /* 0x0E8: struct MenuItem * */
+    struct MenuItem *items[14];   /* 0x0EC */
+    u8 unk124[0x4];
+    u8 *nextFocus;                /* 0x128: struct MenuItem * */
+};
+struct MenuUpdateBlock {
+    s32 state;                    /* 0x00 */
+    s32 started;                  /* 0x04 */
+    s32 mode;                     /* 0x08 */
+    u8  unkC[0x8];
+    u8 *screen;                   /* 0x14: struct MenuScreen * */
+    u8 *pending;                  /* 0x18: requested next screen */
+    s32 subState;                 /* 0x1C */
+    u8  unk20[0xC0];
+    u8 *previous;                 /* 0xE0 */
+};
+#define g_menuUpd (*(struct MenuUpdateBlock *)g_menuScreenBlock)
+#define SCREEN(p) ((struct MenuScreen *)(p))
+void MenuScreenUpdate(void) {
+    struct MenuScreen *screen = SCREEN(g_menuUpd.screen);
+    struct MenuItem **items = screen->items;
+    s32 i;
+
+    if (D_1AB7C4 != 0) {
+        if (g_menuUpd.started == 0 && screen == (struct MenuScreen *)g_MenuScreen_GalacticMap) {
+            ((s32 (*)(void *, s32))func_002D8778)(0, 0);
+        }
+        if (TickActiveMenuScreen() != 0) {
+            if (g_menuUpd.started == 0) {
+                g_menuUpd.started = 1;
+            }
+            return;
+        }
+    }
+    if (g_menuUpd.started == 0) {
+        s32 j;
+        for (j = 0; j < 14; j++) {
+            struct MenuItem *item = SCREEN(g_menuUpd.screen)->items[j];
+            if (item != 0 && item->enter != 0) {
+                item->enter(item, 0);
+            }
+        }
+        g_menuUpd.started++;
+    }
+    for (i = 0; i < 14; i++) {
+        if (items != 0 && items[i] != 0 && items[i]->tick != 0) {
+            if (items[i] == (struct MenuItem *)D_00259178) {
+                func_002CDEB0();
+            }
+            if (items[i]->tick(items[i]) != 0) {
+                g_menuUpd.subState = (g_menuUpd.mode == 4) ? 2 : 1;
+            }
+        }
+    }
+    if (g_menuUpd.screen != 0 && SCREEN(g_menuUpd.screen)->nextFocus != 0) {
+        struct MenuItem *focus = (struct MenuItem *)SCREEN(g_menuUpd.screen)->focus;
+        if (focus->exit != 0) {
+            focus->exit(focus, 1);
+        }
+        SCREEN(g_menuUpd.screen)->focus = SCREEN(g_menuUpd.screen)->nextFocus;
+        SCREEN(g_menuUpd.screen)->nextFocus = 0;
+        focus = (struct MenuItem *)SCREEN(g_menuUpd.screen)->focus;
+        if (focus->enter != 0) {
+            focus->enter(focus, 1);
+        }
+    }
+    if (g_menuUpd.pending != 0) {
+        if (g_menuUpd.screen == g_menuUpd.pending) {
+            PlayGlobalSound(0x11, 0, 0);
+        } else {
+            PlayGlobalSound(0x12, 0, 0);
+        }
+        {
+            s32 k;
+            for (k = 0; k < 14; k++) {
+                struct MenuItem *item = SCREEN(g_menuUpd.screen)->items[k];
+                if (item != 0 && item->exit != 0) {
+                    item->exit(item, 0);
+                }
+            }
+        }
+        g_menuUpd.state = 3;
+        g_menuUpd.previous = g_menuUpd.screen;
+        g_menuUpd.screen = 0;
+        g_menuUpd.started = 0;
+    }
+}
+#undef SCREEN
+#undef g_menuUpd
+#endif
 
 /* Screen-state-5 handler (the terminal "leaving the front-end" state, dispatched
  * from TickFrontEndScreenMachine). Runs a per-frame countdown (g_menuScreenBlock
