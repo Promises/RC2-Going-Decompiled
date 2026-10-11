@@ -5002,26 +5002,28 @@ void MapBeginUpload(void) {
  * order index, returning the first ordered level that has map data and isn't
  * already cached. Returns the level id (|flag), or -1 if none qualifies.
  *
- * NOT MATCHED; still INCLUDE_ASM (task #1406, FACT #8830 solo screen on the
- * s136os arm with -fno-gcse dropped as RULING #9070 ships it): 37/86 words,
- * built 87, edit 6. Pinned (-fno-gcse): 84/86, so this body needs the unpinned
- * flags (the ROM keeps %hi(g_mapVertexData) in $17 across the first call, the
- * gcse shape).
- * The whole residual is ONE instruction placement, and it is not in this C:
- * cc1 puts `lw $3,g_pLevelOrder` in the `beqz` delay slot exactly as the ROM
- * does (0x29623C, %gp_rel). tools/ee/asm_unit.sh then hoists it out of the slot
- * and leaves a nop, because its .extern size map is file-global (first
- * directive wins) and the first `.extern g_pLevelOrder` in this unit is
- * MapGetLevelOrderIndex's `, 16` device below. GNU as still assembles the load
- * as one gp-relative word, so the hoist's premise (an absolute two-insn macro)
- * does not hold here. With only that one directive removed from a scratch copy
- * of the .s, this body screens EXACT 86/86, RELOC-EQUAL. Not worked around: a
- * size-4 alias of g_pLevelOrder is the RULING-blocked OFFSET-0 gp-alias form.
- * Levers, each undone alone (unpinned, same instrument): the three-nop pad (see
- * MFNAL_SHORT_LOOP_PAD3); the pad tied to orderIndex as well; `cur` read once;
- * the nested range check (folded `probe >= 0 && probe < 0x1C` becomes one
- * sltiu, the ROM keeps bltz + slti); the g_mapVertexData name (relocations
- * only). */
+ * MATCHED on the s136os arm (task #2124): byte-exact, 86/86 words (SN 2.95.3
+ * v1.36 -fopt-stack, unpinned as RULING #9070 ships it; the landing gate's
+ * image cmp 0 and a base-seeded verify_match_unit). Pinned (-fno-gcse) it read
+ * 84/86 (task #1406), so this body needs the unpinned flags: the ROM keeps
+ * %hi(g_mapVertexData) in $17 across the first call, the gcse shape.
+ * The last residual was not in this C (task #1406, FACT #9078: 37/86 words,
+ * built 87): cc1 puts `lw $3,g_pLevelOrder` in the `beqz` delay slot exactly as
+ * the ROM does (0x29623C, %gp_rel), and tools/ee/asm_unit.sh hoisted it out and
+ * left a nop, because its .extern size map was file-global (first directive
+ * wins) and the first `.extern g_pLevelOrder` in this unit is
+ * MapGetLevelOrderIndex's `, 16` device below. GNU as sizes a use
+ * positionally: a use above the first `, 16` takes the file's LAST size, here
+ * cc1's own `, 4`, so it assembled the load as one gp-relative word and the
+ * hoist's premise (a two-insn macro) did not hold. Task #2124 measured that and
+ * made asm_unit.sh hoist only a use GNU as really expands; nothing in this C
+ * changed. (A size-4 alias of g_pLevelOrder, the RULING-blocked OFFSET-0
+ * gp-alias form, was the other way round it.)
+ * Levers, each undone alone (unpinned, task #1406's solo screen): the three-nop
+ * pad (see MFNAL_SHORT_LOOP_PAD3); the pad tied to orderIndex as well; `cur`
+ * read once; the nested range check (folded `probe >= 0 && probe < 0x1C`
+ * becomes one sltiu, the ROM keeps bltz + slti); the g_mapVertexData name
+ * (relocations only). */
 /* R5900 SHORT-LOOP PAD (SCHEDULING DEVICE, RULING #8435, FACT #7918/#8434; the
  * same device as R5900_SHORT_LOOP_PAD3 above func_00294970): the order search
  * loop is 4 instructions and the ROM's assembler padded it with 3 `nop`s
@@ -5046,17 +5048,13 @@ extern s32 *g_pLevelOrderAbs;
 #define MFNAL_SHORT_LOOP_PAD3(v, n) ((void)0)
 #define g_pLevelOrderAbs g_pLevelOrder
 #endif
-#ifndef TARGET_NATIVE
-/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
- * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 56.58% PACKED-SAVE /
- * engine96 60.14% GPREL-DECL; best arm engine96, first differing insn there: 'lui v0,
- * %hi(g_mapVertexData)' vs ''
- * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): this member's prologue - the
- * ROM's save set at its 8-byte stride, and its frame - is reproduced exactly (NOTE #9871), so
- * the save-slot wall named above is a cc1 2.9 property and was measured false as the reason
- * this member stays unmatched (FACT #9873). Residual: the asm_unit -G8 delay-slot hoist
- * (FACT #9078/#9089; 37/86 words). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapFindNearestAvailableLevel);
+/* GUARD (task #2124): on EE this C is the image's body, compiled alone by SN
+ * 2.95.3 v1.36 -fopt-stack (tools/ee/s136os_functions.txt) and spliced over the
+ * S136OS_SLOT line by tools/ee/s136os_splice.sh; the 2.9 compile sees only the
+ * slot, so a build that skips the splice loses the function. On native it is
+ * plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_MapFindNearestAvailableLevel)
+S136OS_SLOT(MapFindNearestAvailableLevel);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */

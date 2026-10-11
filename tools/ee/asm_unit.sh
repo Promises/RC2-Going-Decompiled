@@ -194,10 +194,12 @@ cd "$FIXROOT"
 # in both cases, so we expand the pseudo ourselves, deciding smallness exactly
 # like the assembler does - from the `.extern SYM, SIZE` directives in the
 # same unit .s, keyed on the BASE symbol for the +OFF form (first directive
-# wins, matching observed GAS behaviour; a file-scope __asm__(".extern SYM,
-# 16") in the C overrides cc1's own size, which is how a cc1-small but
-# assembler-absolute original symbol is reproduced). Not applied at -G0,
-# where cc1 never relies on gp-relative `la`.
+# wins; a file-scope __asm__(".extern SYM, 16") in the C overrides cc1's own
+# size, which is how a cc1-small but assembler-absolute original symbol is
+# reproduced). That is this script's model, NOT GNU as's, which is
+# positional (see the delay-slot hoist below, task #2124); the `la` path
+# keeps first-wins, unmeasured against a site where the two disagree. Not
+# applied at -G0, where cc1 never relies on gp-relative `la`.
 #
 # Also reproduce the SN ee-as COP1 load-delay flush (proven by the original
 # bytes in text/183178): when a `.set noreorder` region begins directly after
@@ -238,8 +240,16 @@ cd "$FIXROOT"
 # a branch delay slot" warning + the store half landing dead after the jump
 # - outright broken code, so this can never affect an already-matched
 # function). We reproduce the SN placement: macro first, then the branch,
-# then a nop in the slot. Only inside `.set noreorder` regions and only for
-# symbols the .extern size map does NOT class as small.
+# then a nop in the slot. Only inside `.set noreorder` regions, only for
+# symbols the .extern size map does NOT class as small, and only where GNU as
+# really expands THIS use to more than one word (task #2124). GNU as sizes a
+# use positionally, not "first directive wins": measured on 2.40 -G8 by
+# assembling `lw` before and after an `.extern SYM,16`, a size > 8 in force
+# at the use makes it absolute, and otherwise the file's LAST `.extern SYM`
+# decides (FACT #9123's seven arms; task #2124's). So a use spliced ABOVE the
+# unit's first `,16` device, in a file that ends with cc1's own `.extern SYM,
+# 4`, is one gp-relative word: hoisting it only adds a nop (FACT #9078,
+# MapFindNearestAvailableLevel). Such a use stays in the slot.
 #
 # The hoist is only a legal reordering when the slot insn is independent of
 # the branch (task #979, FACT #8385). Two shapes are not, and hoisting them
@@ -443,8 +453,26 @@ if [ "$GFLAG" = "-G8" ]; then
         line=$0; sub(/^[ \t]*\.extern[ \t]+/,"",line)
         n=split(line,a,/[, \t]+/)
         if (n>=2 && !(a[1] in sz)) sz[a[1]]=a[2]+0
+        if (n>=2) fin[a[1]]=a[2]+0   # the LAST directive: GNU as decides a deferred use from it
       }
       next
+    }
+    # the size in force at this point of the second pass (the positional test
+    # of the slot hoist, see the delay-slot block below)
+    /^[ \t]*\.extern[ \t]/ {
+      line=$0; sub(/^[ \t]*\.extern[ \t]+/,"",line)
+      n=split(line,a,/[, \t]+/)
+      if (n>=2) cur[a[1]]=a[2]+0
+    }
+    # 1 when GNU as 2.40 at -G8 assembles a bare-symbol memop of `s` HERE as
+    # the one-word %gp_rel form (task #2124, measured by assembling): a size
+    # > 8 already in force makes the use absolute at once; otherwise the use
+    # is deferred and the LAST `.extern s` in the file decides (none, or > 8:
+    # absolute). So a use above the first large directive takes the final
+    # size, which in a cc1 unit is the end-of-file `.extern s, 4` cc1 writes.
+    function gas_small(s) {
+      if ((s in cur) && cur[s] > 8) return 0
+      return (s in fin) && fin[s] <= 8
     }
     function f32bits(v,    s, e, m) {
       s = 0; if (v < 0) { s = 1; v = -v }
@@ -523,6 +551,9 @@ if [ "$GFLAG" = "-G8" ]; then
     #               other access absolutely (size > G threshold).
     #   size >= 16 / unknown: truly absolute - SN-as hoists the 2-insn
     #               expansion above the branch and fills the slot with a nop.
+    #               Except where gas_small() says GNU as assembles THIS use
+    #               as one word (a use above the first large directive in a
+    #               file whose last directive is small): untouched, in the slot.
     /^[ \t]*\.set[ \t]+reorder/ { nore = 0 }
     {
       if (pendbr != "") {
@@ -542,6 +573,13 @@ if [ "$GFLAG" = "-G8" ]; then
             line = $0
             sub(/,[A-Za-z_][A-Za-z0-9_+]*$/, ",%gp_rel(" mfull ")($28)", line)
             print pendbr; print line
+          } else if (gas_small(msym)) {
+            # GNU as assembles this use as ONE gp-relative word, so the
+            # premise of the hoist (a multi-insn macro) is false: leave it in
+            # the slot, as the SN ee-as did. MapFindNearestAvailableLevel:
+            # `lw $3,g_pLevelOrder` at 0x29623C is %gp_rel in the beqz slot of
+            # the ROM and sits above the first `.extern g_pLevelOrder, 16`.
+            print pendbr; print $0
           } else if ((why = dslot_hazard(pendbr, $0)) == "at") {
             printf "asm_unit.sh: REFUSED: %s: `%s` in the delay slot of `%s`, which reads $at - no placement of the $at expansion keeps the program\n", curfn, substr($0, 2), substr(pendbr, 2) | "cat 1>&2"
             print "\t.error \"asm_unit.sh: absolute macro in the slot of a branch reading $at (" curfn ")\""
