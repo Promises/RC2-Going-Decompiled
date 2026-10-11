@@ -639,3 +639,4 @@ usa text/235FE8 func_00338D48
 usa text/235FE8 GuiDialogBoxInitBorder
 usa text/1B4218 BindMobyClassUpdateFunc
 usa text/178E88 ResolveZBufferOcclusionQueries
+usa text/1EFFC0 CloseTfragDrawSegment

@@ -38,6 +38,24 @@ extern u8 *g_vramAllocCursorGp;
 #endif
 extern u8 *g_vramAllocCursor;   /* 0x1A72D0 byte-addressed VRAM bump cursor */
 
+/* ADDRESSING-MODEL DEVICES (RULING #8620; FACT #8036 equate form, as
+ * g_vramAllocCursorGp above): BuildTfragDrawSegment stores g_pTfragSegmentOpenTag
+ * absolute (0x2F0220 lui $1 / 0x2F0224 sw), and CloseTfragDrawSegment reads it absolute
+ * (0x2F0044 and every reload), although the symbol is otherwise gp-addressable,
+ * and stores g_frameDmaCursor %gp_rel in the delay slot of its first jal
+ * (0x2F0240, slot of jal MatrixIdentityVu0) although the unit sizes it 16 (absolute). Each store names a
+ * distinct assembler symbol EQUATED to the real one with the size it needs; the
+ * relocations name the real symbols and nothing reaches the symbol table. */
+#ifndef TARGET_NATIVE
+__asm__(".extern g_pTfragSegmentOpenTagAbs, 16\n\tg_pTfragSegmentOpenTagAbs = g_pTfragSegmentOpenTag");
+__asm__(".extern g_frameDmaCursorGp, 4\n\tg_frameDmaCursorGp = g_frameDmaCursor");
+extern u8 *g_pTfragSegmentOpenTagAbs;
+extern u8 *g_frameDmaCursorGp;
+#else
+#define g_pTfragSegmentOpenTagAbs g_pTfragSegmentOpenTag
+#define g_frameDmaCursorGp g_frameDmaCursor
+#endif
+
 void UploadTieTextures(u8 *vramCursor);
 void AppendTexFlushDefaultTex0(void);
 void RequestLevelExit(s32 destination, s32 commitSave);
@@ -102,8 +120,88 @@ __asm__(".extern g_screenFadeBlack, 16");
 extern f32 g_screenFadeBlack; /* 0x1B1520 black screen-fade level 0..1 */
 void FadeOutToBlackBlocking(s32 mode);
 
-/* TODO(hle): needs PS2 graphics/IO HLE backend - closes a tfrag DMA draw segment (writes the 0x20000000 GIF tag into the chain). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", CloseTfragDrawSegment);
+/**
+ * CloseTfragDrawSegment — close the tfrag draw segment that
+ * BuildTfragDrawSegment opened, splicing this frame's tfrag texture uploads in
+ * front of the tfrag geometry with a DMA "next" detour.
+ *
+ * On entry g_frameDmaCursor points at one reserved qword (`head`) just after
+ * the geometry; g_pTfragSegmentOpenTag is the segment's head tag.
+ *  1. head tag <- NEXT (0x20000000) to the qword after `head`, where the
+ *     uploads are about to be built;
+ *  2. CullTfragPointLights selects the tfrag textures this frame needs,
+ *     UploadTfragTextures builds their GIF upload packets from the dynamic VRAM
+ *     cursor and returns the VRAM end, AppendTexFlushDefaultTex0 flushes;
+ *  3. an end past 0x400000 prints the overflow message (D_1AD110, a retail
+ *     no-op through DebugPrintStub); the peak is kept in g_tfragVramPeak;
+ *  4. a NEXT tag after the uploads jumps back to the geometry (head tag + 0x10),
+ *     and the reserved `head` qword becomes a NEXT tag onward to the cursor.
+ * So the chain runs head -> uploads -> geometry -> head -> on. No parameters,
+ * no return value (NOTE #5471 reads the dataflow against the asm).
+ *
+ * Byte-exact on the s136os arm (task #2087; see the GUARD below). Its three
+ * addressing devices (RULING #8620, FACT #8036 equate form), each priced by
+ * removing it ALONE (solo s136 screen, words differing of 74):
+ *  - the head tag is read absolute through g_pTfragSegmentOpenTagAbs (the ROM's
+ *    `lui`/`lw %lo` at 0x2F0044 and every reload): 73/74;
+ *  - the VRAM cursor argument is the ROM's %gp_rel load in the jal delay slot
+ *    (0x2F00B0), through g_vramAllocCursorGp: 50/74;
+ *  - g_tfragVramPeak is LOADED absolute (0x2F00D0 lui/lw) but STORED %gp_rel in
+ *    the bnel slot (0x2F00E0), so the load goes through the size-16
+ *    g_tfragVramPeakAbs equate and the store names the symbol itself: 38/74.
+ * Every global is re-read after each store through a pointer, as the ROM does;
+ * only `head` is held in a register ($17). */
+/* GUARD (task #2087): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#ifndef TARGET_NATIVE
+__asm__(".extern g_tfragVramPeakAbs, 16\n\tg_tfragVramPeakAbs = g_tfragVramPeak");
+extern s32 g_tfragVramPeakAbs;
+#else
+#define g_tfragVramPeakAbs g_tfragVramPeak
+#endif
+#if !defined(TARGET_NATIVE) && !defined(S136OS_CloseTfragDrawSegment)
+S136OS_SLOT(CloseTfragDrawSegment);
+#else
+extern u8  *g_pTfragSegmentOpenTag;  /* 0x1B211C tfrag draw-segment head tag */
+extern s32  g_tfragVramPeak;         /* 0x1B2124 peak tfrag texture VRAM end */
+extern char D_1AD110[];              /* tfrag texture VRAM overflow message */
+s32 DebugPrintStub(const char *fmt, ...);
+void CullTfragPointLights(void);
+s32 UploadTfragTextures(u8 *vramCursor);
+
+void CloseTfragDrawSegment(void) {
+    u32 *head;
+    s32 vramEnd;
+
+    head = (u32 *)g_frameDmaCursor;
+    g_frameDmaCursor = (u8 *)(head + 4);
+    ((u32 *)g_pTfragSegmentOpenTagAbs)[0] = 0x20000000;
+    ((u32 *)g_pTfragSegmentOpenTagAbs)[1] = (u32)g_frameDmaCursor;
+    ((u32 *)g_pTfragSegmentOpenTagAbs)[2] = 0;
+    ((u32 *)g_pTfragSegmentOpenTagAbs)[3] = 0;
+    CullTfragPointLights();
+    vramEnd = UploadTfragTextures(g_vramAllocCursorGp);
+    AppendTexFlushDefaultTex0();
+    if (vramEnd > 0x400000) {
+        DebugPrintStub(D_1AD110);
+    }
+    if (g_tfragVramPeakAbs < vramEnd) {
+        g_tfragVramPeak = vramEnd;
+    }
+    ((u32 *)g_frameDmaCursor)[0] = 0x20000000;
+    ((u32 *)g_frameDmaCursor)[1] = (u32)(g_pTfragSegmentOpenTagAbs + 0x10);
+    ((u32 *)g_frameDmaCursor)[2] = 0;
+    ((u32 *)g_frameDmaCursor)[3] = 0;
+    g_frameDmaCursor += 0x10;
+    head[0] = 0x20000000;
+    head[1] = (u32)g_frameDmaCursor;
+    head[2] = 0;
+    head[3] = 0;
+}
+#endif
 
 /* One tfrag GIF packet (0x50 bytes). Two TEX0 low words carry a GS TBP field
  * in bits 0..13. */
@@ -181,22 +279,6 @@ void PatchTfragPacketTex0(void) {
  * Byte-exact on the s136os arm since task #1351 (see its GUARD below); the
  * 2.96-arm save-slot and gp/abs-split notes of tasks #576 and earlier no longer
  * apply to the image body. */
-/* ADDRESSING-MODEL DEVICES (RULING #8620; FACT #8036 equate form, as
- * g_vramAllocCursorGp above): BuildTfragDrawSegment stores g_pTfragSegmentOpenTag
- * absolute (0x2F0220 lui $1 / 0x2F0224 sw) although the symbol is otherwise gp-addressable,
- * and stores g_frameDmaCursor %gp_rel in the delay slot of its first jal
- * (0x2F0240, slot of jal MatrixIdentityVu0) although the unit sizes it 16 (absolute). Each store names a
- * distinct assembler symbol EQUATED to the real one with the size it needs; the
- * relocations name the real symbols and nothing reaches the symbol table. */
-#ifndef TARGET_NATIVE
-__asm__(".extern g_pTfragSegmentOpenTagAbs, 16\n\tg_pTfragSegmentOpenTagAbs = g_pTfragSegmentOpenTag");
-__asm__(".extern g_frameDmaCursorGp, 4\n\tg_frameDmaCursorGp = g_frameDmaCursor");
-extern u8 *g_pTfragSegmentOpenTagAbs;
-extern u8 *g_frameDmaCursorGp;
-#else
-#define g_pTfragSegmentOpenTagAbs g_pTfragSegmentOpenTag
-#define g_frameDmaCursorGp g_frameDmaCursor
-#endif
 /* GUARD (task #1351): on EE this C is the image's body, compiled alone by the
  * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
  * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
