@@ -3978,6 +3978,30 @@ void func_00281020(u32 *pixels, s32 actorIdx) {
 }
 #endif
 
+#ifndef TARGET_NATIVE
+/* #8620 directive-only equates (no instruction emitted; the relocations name
+ * the real symbols): absolute views of g_frameArenaFlip and of the query table
+ * at g_sceneActorMobys + 0x44, the table again as a cc1-small `la` view, and a
+ * %gp-relative view of the pending count at g_blobShadowCount + 0x1C. They sit
+ * outside func_002810C0's guard so the sdk29 TU it is spliced into sees the
+ * same definitions and .extern sizes as the s136os TU it was compiled in
+ * (s136os_splice.sh refuses the block otherwise). */
+__asm__(".extern g_frameArenaFlipAbs, 16\n\tg_frameArenaFlipAbs = g_frameArenaFlip");
+extern s32   g_frameArenaFlipAbs;
+__asm__(".extern g_screenGrabQueries, 16\n\tg_screenGrabQueries = g_sceneActorMobys + 0x44");
+extern u8    g_screenGrabQueries[];
+__asm__(".extern g_screenGrabQueriesLa, 16\n\tg_screenGrabQueriesLa = g_sceneActorMobys + 0x44");
+extern u8    g_screenGrabQueriesLa[8];
+__asm__(".extern g_screenGrabQueryCountGp, 4\n\tg_screenGrabQueryCountGp = g_blobShadowCount + 0x1C");
+extern s32   g_screenGrabQueryCountGp;
+#else
+extern s32   g_frameArenaFlip;                          /* 0x1B2234 active-half index 0/1 */
+#define g_frameArenaFlipAbs       g_frameArenaFlip
+#define g_screenGrabQueries       (g_sceneActorMobys + 0x44)
+#define g_screenGrabQueriesLa     (g_sceneActorMobys + 0x44)
+#define g_screenGrabQueryCountGp  g_screenGrabQueryCount
+#endif
+
 /**
  * func_002810C0 — resolve the pending Z-buffer occlusion queries. No params,
  * no return; a no-op when nothing is queued. Sole ELF caller:
@@ -4039,26 +4063,6 @@ extern u32  *g_frameArenaBase[];                        /* 0x1B2220 double-buffe
 extern void  func_002860B8(s16 x, s16 y, s16 w, s16 h,  /* GS->EE PSMZ32 rect readback */
                            u32 *dst);
 extern void  WaitGsPathsIdle(s32 a, s32 b);             /* GIF/VIF1/VU0 path-idle spin */
-#ifndef TARGET_NATIVE
-/* #8620 directive-only equates (no instruction emitted; the relocations name
- * the real symbols): absolute views of g_frameArenaFlip and of the query table
- * at g_sceneActorMobys + 0x44, the table again as a cc1-small `la` view, and a
- * %gp-relative view of the pending count at g_blobShadowCount + 0x1C. */
-__asm__(".extern g_frameArenaFlipAbs, 16\n\tg_frameArenaFlipAbs = g_frameArenaFlip");
-extern s32   g_frameArenaFlipAbs;
-__asm__(".extern g_screenGrabQueries, 16\n\tg_screenGrabQueries = g_sceneActorMobys + 0x44");
-extern u8    g_screenGrabQueries[];
-__asm__(".extern g_screenGrabQueriesLa, 16\n\tg_screenGrabQueriesLa = g_sceneActorMobys + 0x44");
-extern u8    g_screenGrabQueriesLa[8];
-__asm__(".extern g_screenGrabQueryCountGp, 4\n\tg_screenGrabQueryCountGp = g_blobShadowCount + 0x1C");
-extern s32   g_screenGrabQueryCountGp;
-#else
-extern s32   g_frameArenaFlip;                          /* 0x1B2234 active-half index 0/1 */
-#define g_frameArenaFlipAbs       g_frameArenaFlip
-#define g_screenGrabQueries       (g_sceneActorMobys + 0x44)
-#define g_screenGrabQueriesLa     (g_sceneActorMobys + 0x44)
-#define g_screenGrabQueryCountGp  g_screenGrabQueryCount
-#endif
 
 void func_002810C0(void) {
     u32 *dst[2];
