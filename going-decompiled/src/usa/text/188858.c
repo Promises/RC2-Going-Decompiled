@@ -1509,11 +1509,14 @@ s32 IsLevelExitRequested(void) {
     return g_nLevelExitRequested != 0;
 }
 
-/* func_00289768: mis-split handwritten stub-table fragment — `daddu $2,$0,$0;
- * nop; addiu $sp,+0x10; nop; addiu $sp,+0x10` with NO jr $ra (it falls through
- * into the following function's prologue). Not expressible as a returning C
- * function; left INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_00289768);
+/* func_00289768: 20-byte unreferenced epilogue debris, not a function —
+ * `daddu $2,$0,$0; nop; addiu $sp,+0x10; nop; addiu $sp,+0x10` with NO jr $ra.
+ * The old "falls through into the following function's prologue" reading does
+ * not hold: IsVendorUpgradesUnlocked is a leaf with no prologue, and a whole-ROM
+ * scan (literal / j / jal / branch / %hi-%lo) finds nothing reaching
+ * 0x289768..0x28977B (FACT #9570, re-derived in task #2126). Marked a fragment
+ * in task #2126; the bytes stay in the image. */
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/188858", func_00289768);
 
 /* True once the vendor's weapon-upgrade tier has been unlocked. */
 s32 IsVendorUpgradesUnlocked(void) {
@@ -4384,10 +4387,12 @@ void func_0028C6E0(s32 arg) {
     __asm__ __volatile__("");
 }
 
-/* func_0028C710: mis-split handwritten stub-table fragment — three `addiu
- * $sp,+N; nop` epilogue tails (+0x10/+0x10/+0x50) with NO jr $ra. Not a real
- * returning function; left INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028C710);
+/* func_0028C710: 20-byte unreferenced epilogue debris, not a function — three
+ * `addiu $sp,+N; nop` epilogue tails (+0x10/+0x10/+0x50) with NO jr $ra. A
+ * whole-ROM scan (literal / j / jal / branch / %hi-%lo) finds nothing reaching
+ * 0x28C710..0x28C723 (FACT #9570, re-derived in task #2126). Marked a fragment
+ * in task #2126; the bytes stay in the image. */
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028C710);
 
 /* func_0028C728(): rebuild the 8-slot weapon-select wheel icon list. Stores the
  * slot count (8) and the &D_1A8DD0 callback into g_hudMobySpawnStart+0x28/+0x2C,
@@ -6333,12 +6338,17 @@ void DrawHudIconQuadSized(s32 iconIndex, s32 x, s32 y, s32 w, s32 h, s32 alpha) 
 }
 #endif
 
-/* func_0028F6E8(...): HUD icon slot setup thunk (0x14 bytes) that falls into
- * DrawHudIconQuadPixel at 0x28F700.
- *
- * WALL: callee-saves + jal gates; register colouring not reproducible from C.
- * Left INCLUDE_ASM (not yet fully traced). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028F6E8);
+/* func_0028F6E8: 20-byte unreferenced epilogue debris, not a function — three
+ * `addiu $sp,+0x50` epilogue tails separated by nops, with NO jr $ra, no
+ * prologue and no argument-register use. It was once read as a HUD icon slot
+ * setup thunk that falls into DrawHudIconQuadPixel (0x28F700) behind a
+ * "callee-saves + jal gates; register colouring" WALL; the bytes carry no
+ * save, no jal and no register to colour, and a whole-ROM scan (literal / j /
+ * jal / branch / %hi-%lo) finds nothing reaching 0x28F6E8..0x28F6FB while
+ * DrawHudIconQuadPixel itself is reached directly (jal at 0x2DA1B0) (FACT
+ * #9570, re-derived in task #2126). Marked a fragment in task #2126; the bytes
+ * stay in the image. */
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028F6E8);
 
 /* Byte-exact on the s136os arm since task #2108 (188858's unpinned arm, S136EXTRA="", RULING
  * #9450), in the spelling that closed its sibling DrawHudIconQuadSized: every global re-read at
