@@ -3162,7 +3162,58 @@ s32 func_0012B568(s32 *ipu) {
     return increment;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012B678);
+extern s32 IpuDecodeSlice(IpuDecoder *dec, s32 mbaMax);
+extern void func_0012A1C8(IpuDecoder *dec, s32 slot);
+extern char D_0013BAF0[];
+
+/**
+ * IpuDecodePictureData (0x12B678; splat func_0012B678): decode the slices of
+ * one picture (mpeg2decode's picture_data). Resets the macroblock slot (0x810)
+ * and word 0x814, takes mbWidth * mbHeight macroblocks (halved for a field
+ * picture, pictureStructure != 3) and runs IpuDecodeSlice until it returns
+ * neither 1 (resync) nor 3 (slice ended early). Then waits for the IPU
+ * (IpuWaitReady, IpuWaitBdec - a failed BDEC wait turns the result into 2)
+ * and for bit 8 (STR) of 0x1000D400, DMA channel 9's (toSPR) CHCR, to clear. A clean picture (0) flushes the last macroblock record through
+ * func_0012A1C8 with the slot `mbSlot == 0`; a result of 1 or 2 reports
+ * "= Skip to the next picture =" (D_0013BAF0).
+ *
+ * @param ipu the IpuDecoder.
+ * @return 1 if the picture decoded cleanly (IpuDecodeSlice returned 0), else 0.
+ *
+ * Named at promotion (RULING #10083) from its string and its callees: the
+ * slice loop over the picture's macroblock count with IpuDecodeSlice, and the
+ * skip-picture message. Byte-exact from the first plain spelling, no device;
+ * the two nops ahead of the poll loop's `bnez` are the build's short-loop
+ * padding.
+ */
+s32 IpuDecodePictureData(s32 *ipu) {
+    IpuDecoder *dec = (IpuDecoder *)ipu;
+    s32 mbaMax;
+    s32 ret;
+
+    dec->mbSlot = 0;
+    dec->_pad814 = 0;
+    mbaMax = dec->mbWidth * dec->mbHeight;
+    if (dec->pictureStructure != 3) {
+        mbaMax >>= 1;
+    }
+    do {
+        ret = IpuDecodeSlice(dec, mbaMax);
+    } while (ret == 1 || ret == 3);
+    IpuWaitReady(ipu);
+    if (IpuWaitBdec(dec) == 0) {
+        ret = 2;
+    }
+    while ((*(volatile u32 *)0x1000D400 >> 8) & 1) {
+    }
+    if (ret == 0) {
+        func_0012A1C8(dec, dec->mbSlot == 0);
+    }
+    if (ret == 1 || ret == 2) {
+        func_00130288((s32)dec, D_0013BAF0);
+    }
+    return ret == 0;
+}
 
 extern void func_0012C9C8(s32 *ipu);
 extern s32 func_0012CA48(s32 *arg0);
@@ -3303,7 +3354,7 @@ s32 IpuDecodeSlice(IpuDecoder *dec, s32 mbaMax) {
 /* A decoded-picture buffer, as far as func_0012D350 shows it. */
 typedef struct {
     u8  _pad0[0x28];
-    s32 decoded;               /* 0x28: set once func_0012B678 succeeds */
+    s32 decoded;               /* 0x28: set once IpuDecodePictureData succeeds */
 } IpuFrameBuf;
 
 extern void func_00130288(s32 arg0, void *buf);
@@ -3857,7 +3908,6 @@ void func_0012CFE8(struct ScrollObj *obj, s32 delta) {
     obj->extent = extent;
 }
 
-extern s32 func_0012B678(s32 *ipu);
 extern char D_0013BBF8[];
 extern char D_0013BC20[];
 extern char D_0013BC50[];
@@ -3977,8 +4027,8 @@ void func_0012D2C0(s32 *ipu) {
  * still unpaired is reported ("odd number of field pictures") and the pair
  * abandoned; the destination buffer is chosen by picture structure (frames
  * row 0, 1 or 2, slot 2), an unknown structure being reported and decoded into
- * row 0's. Runs func_0012B678 and, if it succeeds, marks the buffer decoded.
- * Returns func_0012B678's result.
+ * row 0's. Runs IpuDecodePictureData and, if it succeeds, marks the buffer decoded.
+ * Returns IpuDecodePictureData's result.
  *
  * The case order (frame, top, bottom, default) is the one that gives the
  * ROM's block layout; the other 23 orders of the four labels do not.
@@ -4006,7 +4056,7 @@ s32 func_0012D350(s32 *ipu) {
         func_00130288((s32)ipu, D_0013BC70);
         break;
     }
-    r = func_0012B678(ipu);
+    r = IpuDecodePictureData(ipu);
     if (r != 0) {
         frame->decoded = 1;
     }
