@@ -273,7 +273,7 @@ func_002898D8 = 0x002898D8; // type:func size:0x8
 func_002898E0 = 0x002898E0; // type:func - real subtitle-clear leaf
 func_0028C698 = 0x0028C698; // type:func size:0x48
 func_0028C6E0 = 0x0028C6E0; // type:func - real HUD-init forwarder
-func_0028F700 = 0x0028F700; // type:func - real fn (DrawHudIconQuadPixel) jal'd by func_002D9D60 in text/1D54C0 - split out of func_0028F6E8 (the preceding 0x14 setup thunk). Replaces a bad bare DrawHudIconQuadPixel pin that truncated func_0028F6E8 and dropped 0x28F700..0x28F8DF. It was INCLUDE_ASM in text/188858.c and is byte-exact on the s136os arm since task 2108 (splat name kept, see its doc comment)
+func_0028F700 = 0x0028F700; // type:func - real fn (DrawHudIconQuadPixel) jal'd by func_002D9D60 in text/1D54C0 - split out of func_0028F6E8 (the preceding 0x14 bytes, unreferenced epilogue debris per task 2126, not a setup thunk). Replaces a bad bare DrawHudIconQuadPixel pin that truncated func_0028F6E8 and dropped 0x28F700..0x28F8DF. It was INCLUDE_ASM in text/188858.c and is byte-exact on the s136os arm since task 2108 (splat name kept, see its doc comment)
 // text/188580 sub-TU data anchors: give the two .bss objects the unit reads
 // their own symbols (otherwise spimdisasm attaches them to far-away preceding
 // named symbols with huge offsets, which forces raw-offset C).
@@ -593,7 +593,7 @@ g_nBoltCounterDisplayed = 0x001B18C8; // CONFIRMED - displayed (animated) bolt c
 //   0x0028C390 LayoutHudCounterDigits- sizes a numeric element box: clamps smoothed display value, counts decimal digits, grows w/h (+0x5c/+0x58) per digit
 //   0x0028F0D0 DrawHudIconQuadTiled  - HUD icon GS sprite quad (PRIM 0x156) at tile coords (*0x10), icon-native UV, alpha tint; TEX0 via GetHudIconTex0
 //   0x0028F540 DrawHudIconQuadSized  - HUD icon sprite quad, explicit pixel w/h, tile coords, alpha tint
-//   0x0028F700 DrawHudIconQuadPixel  - HUD icon GS sprite quad (PRIM 0x156) at pixel coords (no *0x10), icon-native UV size, alpha tint, TEX0 via GetHudIconTex0, GS Z word DAT_001b17fc. This is the identity of func_0028F700 (jal'd by func_002D9D60), split out of func_0028F6E8 via the func_0028F700 type-func pin - kept as the func_ glabel (do NOT add an active DrawHudIconQuadPixel=addr entry - that bare pin truncated func_0028F6E8 and dropped 0x28F700..0x28F8DF)
+//   0x0028F700 DrawHudIconQuadPixel  - HUD icon GS sprite quad (PRIM 0x156) at pixel coords (no *0x10), icon-native UV size, alpha tint, TEX0 via GetHudIconTex0, GS Z word DAT_001b17fc. This is the identity of func_0028F700 (jal'd by func_002D9D60), split out of func_0028F6E8 (20 bytes of epilogue debris, task 2126) via the func_0028F700 type-func pin - kept as the func_ glabel (do NOT add an active DrawHudIconQuadPixel=addr entry - that bare pin truncated func_0028F6E8 and dropped 0x28F700..0x28F8DF)
 //   0x0028F8E0 DrawHudIconQuadPixelRgb - HUD icon sprite quad at pixel coords, full RGB color
 //   0x0028FFF0 DrawHudIconQuadExplicitUv - HUD icon sprite quad with explicit UV + size, alpha tint
 //   0x0028F2C0 DrawHudIconQuadPerCornerUv - HUD icon textured quad, per-corner UVs from int[4], 4-vertex
