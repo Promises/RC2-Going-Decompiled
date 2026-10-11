@@ -72,10 +72,13 @@ _Static_assert(__builtin_offsetof(UiSpritePacket, alpha) == 0x88, "alpha");
  * (0x2825F4/0x2825F8).
  * Before writing C: its outer loops are NOT strength-reduced in the ROM
  * (`mult k,0x90` recomputed per iteration) while every natural C loop is, the
- * same wall DrawGlowSprites hit (NOTE #9807, task #1863). Wall class: SN 1.36
- * loop.c giv reduction, not addressing or allocation. No residual is measured
- * here yet: NOTE #9807's one first-draft compile was 231 words against the
- * ROM's 245, a LENGTH miss, not a near-miss. */
+ * same wall DrawGlowSprites hit under -fno-gcse (NOTE #9807, task #1863).
+ * Wall class: SN 1.36 loop.c giv reduction, not addressing or allocation. No
+ * residual is measured here yet: NOTE #9807's one first-draft compile was 231
+ * words against the ROM's 245, a LENGTH miss, not a near-miss. DrawGlowSprites
+ * is byte-exact since task #2115, once this unit's s136os arm compiled with
+ * gcse ON and its slot base was pinned in the loop (NOTE #10258); that lever
+ * is untried on this function. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1823B8", func_002823B8);
 
 /* MIS-SPLIT fragment: a bare `addiu $29,$29,0x100; nop` stack-restore tail that
@@ -160,14 +163,20 @@ extern Vec4 D_1A9FD0[4];    /* unit billboard quad corners */
  * DrawLockOnArcFxSlots (FACT #6026) and func_002EE310 (FACT #7153).
  *
  * Compiled on the s136os arm (SN 1.36 -fopt-stack: the $16..$20/$31 saves are
- * 8 bytes apart, FACT #8810). `origin` must stay the local right after
- * `basis`: func_00283A70 reads it as the matrix's fourth row (sp+0xC0).
- * Four empty asm fences, each a SCHEDULING/ALLOCATION DEVICE that emits
+ * 8 bytes apart, FACT #8810), which compiles this unit with gcse ON since
+ * task #2115. `origin` must stay the local right after `basis`:
+ * func_00283A70 reads it as the matrix's fourth row (sp+0xC0).
+ * Five empty asm fences, each a SCHEDULING/ALLOCATION DEVICE that emits
  * nothing (RULING #8483, rev 3: volatile or not is itself a measured lever).
- * Each is priced two ways, one line changed ALONE: REMOVED, and with the
- * OTHER form (volatile <-> non-volatile). Words differing of the 120, real
- * USA unit build, linked image vs retail (task #1903; the same figures as
- * task #1861's unit objdiff/vmu and, for removal, task #1850's solo harness):
+ * REMOVED-alone prices are on the gcse-ON arm (task #2115, real USA build,
+ * function words vs retail); they equal the earlier -fno-gcse figures for
+ * F1..F4. The OTHER-form (volatile <-> non-volatile) prices were measured on
+ * the -fno-gcse arm (task #1903) and not re-measured:
+ *  - F0, `view` tied right after `mtx = view` — removed 64/120. gcse
+ *    copy-propagates `mtx` into `view`'s register and the ROM's separate copy
+ *    (`daddu $20,$17,$0` in Vec4SubVu0's delay slot) is lost. Tying `mtx`
+ *    instead reads 11/120 ($19/$20 swapped: the extra refs raise mtx's
+ *    allocation priority over `o`); volatile on `mtx` 18/120;
  *  - F1, `pos` tied after the stores, volatile — removed 4/120; non-volatile
  *    builds 122 words, LENGTH-refused by the splice. `pos` becomes multi-set,
  *    so alias analysis cannot prove the `lq` from it independent of the stack
@@ -222,6 +231,7 @@ void func_00282868(f32 size, f32 towardCam, f32 roll, Vec4 *pos, s32 texId,
     Vec3RescaleToLenVu0(&basis[1], 1.0f, &basis[1]);
     Vec3CrossVu0(&basis[2], &basis[1], view);
     mtx = view;
+    __asm__("" : "+r"(view));   /* F0 */
     off = &offset;
     if (roll != 0.0f) {
         Vec4 *rollIn = off;
@@ -293,13 +303,19 @@ extern void func_0027CDC8(void *worldPos, f32 *outX, f32 *outY);
  * towardCam + 0.01 and never reads the result.
  *
  * Compiled on the s136os arm (SN 1.36 -fopt-stack: $16..$23/$30/$31 saved
- * 8 bytes apart, FACT #8810). `origin` must stay the local right after
- * `basis`: func_00283A70 reads it as the matrix's fourth row (sp+0xC0).
- * Two empty asm fences (RULING #8483, rev 3) that emit nothing, both
- * volatile. Each is priced two ways, one line changed ALONE: REMOVED, and
- * NON-volatile. Words differing of the 244, real USA unit build, linked image
- * vs retail (task #1903; the same figures as task #1861's unit objdiff/vmu
- * and, for removal, task #1850's solo harness):
+ * 8 bytes apart, FACT #8810), which compiles this unit with gcse ON since
+ * task #2115. `origin` must stay the local right after `basis`:
+ * func_00283A70 reads it as the matrix's fourth row (sp+0xC0).
+ * Three empty asm fences (RULING #8483, rev 3) that emit nothing. REMOVED-
+ * alone prices are on the gcse-ON arm (task #2115, real USA build, function
+ * words vs retail); G1/G2 equal the earlier -fno-gcse figures. The
+ * NON-volatile prices were measured on the -fno-gcse arm (task #1903) and
+ * not re-measured:
+ *  - G0, `view` tied right after `mtx = view`, non-volatile — removed: 242
+ *    words, LENGTH-refused by the splice. gcse copy-propagates `mtx` into
+ *    `view`'s register and the ROM's separate copy (`daddu $21,$17,$0`) is
+ *    lost. Tying `mtx` instead reads 6/244 ($20/$21 swapped with `s`);
+ *    volatile on `mtx` 55/244; the copy and fence above Vec4SubVu0 13/244;
  *  - G1, `o` tied before the copy — removed 1/244; non-volatile 10/244, so
  *    here the `volatile` is worth more than the fence: the copy stores
  *    through $18 (`sq $2,0($18)`) instead of cse folding it to `192($sp)`;
@@ -348,6 +364,7 @@ void func_00282A80(f32 size, f32 jitter, f32 towardCam, Vec4 *pos, s32 alpha,
     Vec4ScaleVu0(off, towardCam, view);
     Vec4AddVu0(o, o, off);
     mtx = view;
+    __asm__("" : "+r"(view));   /* G0 */
     keep = off;
     s = &quad.st[0][0];
     t = &quad.st[0][1];
@@ -398,19 +415,178 @@ void func_00282A80(f32 size, f32 jitter, f32 towardCam, Vec4 *pos, s32 alpha,
  * INCLUDE_ASM (documented mis-split). */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1823B8", func_00282E50);
 
-/* DrawGlowSprites: iterates the 16 g_glowSpriteSlots, and for each visible slot
- * computes its camera-space distance/scale, derives screen-space sprite corner
- * coords (FloatToInt/IntToFloat), and writes a full GS sprite DMA packet to
- * g_frameDmaCursor (GIFtag + TEX0 + UV/XYZ registers via sd stores), bracketed
- * by AppendGsRegPacket scissor/alpha setup. Two claims, kept apart:
- * - NATIVE: its semantics write GS packet words through g_frameDmaCursor, so a
- *   native body needs the platform render backend. That is TRUE and parked
- *   (RULING #9559); there is no speculative native body.
- * - EE byte match: does NOT need it. The packet words are written with plain
- *   integer stores; the body has 0 COP2/VU0-macro and 0 MMI ops and saves
- *   8 bytes apart (s136os arm) — ordinary compiled C (FACT #9771). It stays
- *   INCLUDE_ASM only because no byte-exact C has been written. The best body
- *   so far (task #1863) is 2/227 words off in the unit build: NOTE #9806 holds
- *   it as a patch with every device priced, and NOTE #9807 the loop
- *   strength-reduction wall behind its remaining residual. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1823B8", DrawGlowSprites);
+/* One additive glow slot of g_glowSpriteSlots (16 x 0x20, NOTE #5687). The
+ * slot writers are overlay-side; this unit only reads them and clears a slot
+ * that falls outside the view. */
+typedef struct GlowSlot {
+    Vec4 pos;       /* 0x00 world position */
+    s16 life;       /* 0x10 the slot draws while > 0 */
+    s16 bright;     /* 0x12 alpha of the sprite, also scales its size */
+    s32 pad14;      /* 0x14 not read here */
+    f32 angle;      /* 0x18 sprite rotation */
+    f32 scale;      /* 0x1C size factor */
+} GlowSlot;
+
+extern GlowSlot g_glowSpriteSlots[16];
+extern f32 Vec3LengthVu0(const Vec4 *v);
+extern void func_00283728(Vec4 *dst, Vec4 *v, void *planes);
+extern s32 func_00283590(Vec4 *clip);
+extern void FillMemory32(void *dst, s32 pattern, s32 nbytes);
+extern s32 FloatToInt(f32 x);
+extern f32 IntToFloat(s32 x);
+extern f32 func_00283B48(f32 x);
+extern f32 func_00283B30(f32 x);
+extern u8 g_sceneActorMobys[];
+extern u8 D_1AC930[];  /* prebuilt GIFtag template (16 bytes) */
+#ifndef TARGET_NATIVE
+__asm__(".extern g_frameDmaCursorAbs, 16\n\tg_frameDmaCursorAbs = g_frameDmaCursor");
+__asm__("g_cameraClipPlanes = g_cameraProjScale + 0xD0");
+extern u32 *g_frameDmaCursorAbs;
+extern u8 g_cameraClipPlanes[];
+#endif
+
+/* EE_REG(r): an EE-arm register pin (RULING #8598), empty on native. */
+#ifndef TARGET_NATIVE
+#define EE_REG(r) __asm__(r)
+#else
+#define EE_REG(r)
+#endif
+
+/**
+ * DrawGlowSprites (0x282E68) — draw every live slot of g_glowSpriteSlots as an
+ * additive, rotated, camera-facing sprite.
+ * No params, no return. Brackets the loop with ALPHA_1 = additive
+ * (AppendGsRegPacket(0x42, 0x80_00000048)) and back to 0x80_00000044.
+ * Per slot with life > 0: v = pos - g_cameraPos (w = 1), dist = |v|, v scaled
+ * by 1024 and taken through the view matrix 0x100 below g_cameraPos; a frustum
+ * test (func_00283728 + func_00283590) against the planes at 0x1B9140 clears
+ * the slot (FillMemory32) when it fails. Otherwise the point is projected
+ * (scale +0x210 / w of the camera block at 0x1B8FC0), packed into a GS XYZ2
+ * word (x,y in 1/16 px + 0x8000, z * 0.9997 + bias +0x1A8), the distance is
+ * clamped to [2, 18], the half-size is scale/64 * (bright + 16) * 16 *
+ * (24 - dist), and the four rotated corners go out as one tri-strip packet
+ * written straight at g_frameDmaCursor: DMA cnt tag (9 qwords), the GIFtag
+ * template D_1AC930, then PRIM 0x154 / TEX0 (UI texture 0x13) and four
+ * RGBAQ (alpha = bright, rgb 0x80) / UV / XYZ2 triples.
+ * EE-only: the native port needs the render backend (parked, RULING #9559).
+ *
+ * Compiled on the s136os arm with gcse ON (this unit's arm since task #2115;
+ * found by task #2099, NOTE #10258): gcse hoists %hi(g_glowSpriteSlots) alone
+ * (ROM: lui before the loop and in the back-edge delay slot) while the %lo
+ * add stays in the loop. Under -fno-gcse the best body was 2/227 (NOTE #9806).
+ * The three EE_REG pins are CODE-GENERATION DEVICES (RULING #8598), not a
+ * claim about what those registers hold: they only steer allocation, cc1
+ * still emits every instruction. Each device removed ALONE (gcse-on arm,
+ * function words vs retail, NOTE #10258):
+ *   base pinned $2                     -> 228 words, LONGER: the slot address
+ *                                         becomes a giv; the splice refuses it
+ *   life pinned $4                     -> 2/227
+ *   planes pinned $6, formed in-loop   -> 3/227
+ *   tied fence on tagDst + "memory"    -> 7/227
+ *   untied "memory" barrier after copy -> 29/227
+ *   g_frameDmaCursorAbs / g_cameraClipPlanes equates: NOTE #9806's prices
+ *   (measured under -fno-gcse, not re-priced on this arm).
+ * The tied fence on `slot` NOTE #9806 needed (86 words there) is not needed
+ * with the in-loop base and is not used. Revoke: if a pin-free spelling ever
+ * reaches byte-exact on this arm, the pins are dropped.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_DrawGlowSprites)
+S136OS_SLOT(DrawGlowSprites);
+#elif !defined(TARGET_NATIVE)
+void DrawGlowSprites(void) {
+    Vec4 v;
+    Vec4 clip;
+    GlowSlot *slot;
+    u8 *camData;
+    u8 *camPos;
+    u8 *gifTag;
+    s32 i;
+    f32 dist;
+    f32 bright;
+    f32 fade;
+    u64 colour;
+    s64 x;
+    s32 y;
+    s32 z;
+    u64 xyz;
+    s32 sx;
+    s32 sy;
+    u32 *p;
+    u32 *tagDst;
+    u64 *q;
+
+    AppendGsRegPacket(0x42, ((u64)0x8000 << 24) | 0x48);
+    camPos = (u8 *)&g_cameraPos;
+    camData = g_sceneActorMobys + 0x674;
+    gifTag = D_1AC930;
+    for (i = 0; i < 16; i++) {
+        register s32 life EE_REG("$4");
+        register GlowSlot *base EE_REG("$2");
+
+        base = g_glowSpriteSlots;
+        slot = &base[i];
+        life = slot->life;
+        if (life > 0) {
+            Vec4SubVu0(&v, &slot->pos, (Vec4 *)camPos);
+            v.w = 1.0f;
+            dist = Vec3LengthVu0(&v);
+            Vec4ScaleVu0(&v, 1024.0f, &v);
+            func_00283A70(&v, &v, (Vec4 *)(camPos - 0x100));
+            {
+            register u8 *planes EE_REG("$6");
+            planes = g_cameraClipPlanes;
+            func_00283728(&clip, &v, planes);
+            }
+            if (func_00283590(&clip)) {
+                FillMemory32(slot, 0, 0x20);
+                continue;
+            }
+            Vec4ScaleVu0(&v, *(f32 *)(camData + 0x210) / v.w, &v);
+            colour = (slot->bright << 24) | 0x808080;
+            x = FloatToInt(v.x * 16.0f) + 0x8000;
+            y = FloatToInt(v.y * 16.0f) + 0x8000;
+            z = FloatToInt(v.z * 0.9997f + *(f32 *)(camData + 0x1A8));
+            xyz = ((u64)z << 32) | ((u64)y << 16) | x;
+            if (18.0f < dist) dist = 18.0f;
+            else if (dist < 2.0f) dist = 2.0f;
+            bright = IntToFloat(slot->bright + 16);
+            fade = 24.0f - dist;
+            dist = slot->scale * 0.015625f * bright;
+            dist = dist * 16.0f * fade;
+            sx = FloatToInt(dist * func_00283B48(slot->angle));
+            sy = FloatToInt(dist * func_00283B30(slot->angle));
+            p = g_frameDmaCursorAbs;
+            p[0] = 0x10000009;
+            g_frameDmaCursorAbs[1] = 0;
+            g_frameDmaCursorAbs[2] = 0;
+            g_frameDmaCursorAbs[3] = 0x50000009;
+            p = g_frameDmaCursorAbs;
+            tagDst = p + 4;
+            g_frameDmaCursorAbs = tagDst;
+            __asm__("" : "+r"(tagDst) : : "memory");
+            *(u_long128 *)tagDst = *(u_long128 *)gifTag;
+            __asm__("" : : : "memory");
+            g_frameDmaCursorAbs = p + 8;
+            q = (u64 *)(p + 8);
+            q[0] = 5;
+            q[1] = GetUiTextureTex0(0x13);
+            q[2] = 0x154;
+            q[3] = colour;
+            q[4] = 0;
+            q[5] = (sy << 16) + xyz + sx;
+            q[6] = colour;
+            q[7] = 0x200;
+            q[8] = (-sx << 16) + xyz + sy;
+            q[9] = colour;
+            q[10] = 0x2000000;
+            q[11] = (sx << 16) + xyz - sy;
+            q[12] = colour;
+            q[13] = 0x2000200;
+            q[14] = (-sy << 16) + xyz - sx;
+            q[15] = 0;
+            g_frameDmaCursorAbs += 0x20;
+        }
+    }
+    AppendGsRegPacket(0x42, ((u64)0x8000 << 24) | 0x44);
+}
+#endif

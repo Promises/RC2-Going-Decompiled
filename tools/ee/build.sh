@@ -111,7 +111,7 @@ if [ -d "$SRC" ]; then
       */usa/text/1B4218.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse"; S136EXTRA="";; # moby-bind band (carve pick #5/moby-bind). S136EXTRA: the s136os arm compiles at the -O2 default (RULING #9004, FACT #9003); the 2.9 compile keeps -fno-gcse
       # USA CARVE MEGA-BATCH PHASE A (2026-06-14): 7 new c-units from TILE A/B/C/D.
       */usa/text/178E88.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # TILE A render/draw-2D A
-      */usa/text/1823B8.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # TILE A render/draw-2D B
+      */usa/text/1823B8.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse"; S136EXTRA="";; # TILE A render/draw-2D B. S136EXTRA: the s136os arm compiles at the -O2 default (RULING #9491 shape, task #2115); the 2.9 compile keeps -fno-gcse
       */usa/text/1DFF80.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # TILE B moby-glow/shrub/sky/sound-emit/cinematic
       */usa/text/1EFFC0.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # TILE B tfrag/tie draw + vendor shop + GS/VIF
       */usa/text/1FCF48.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # frame-arena/render-task-list sub-TU: the ROM stores g_sceneArenaCursor, g_frameArenaFlip and g_renderTaskWorkBuf %gp_rel, which cc1 cannot emit at -G0 (task #889)
