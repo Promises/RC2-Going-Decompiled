@@ -2475,16 +2475,179 @@ s32 func_002DA4F0(MenuWidget *obj) {
 }
 #endif
 
-/* Draw the active-objectives list (gathered via GatherActiveObjectives) with a
- * scrolling text box + per-row checkboxes. The #67 draw-primitive sigs
- * (func_0027FBA8/func_00280BB8) are in gui.h (d2994265), but that only removes the
- * arg-boundary guessing for those two — the body stays PARK-class (#70) on harder
- * walls: ~200-instr draw loop (11 branches) + a 128-bit sq/lq-packed text-box struct
- * (ldl/ldr copy) + a break-0,7 divide trap + still-UNRECOVERED secondary callees
- * (func_0027F208 / func_0027F7A0 / func_0027F790 row helpers, func_002DAA50). A
- * faithful #else would guess those layouts/sigs = silent-bug risk. Bare INCLUDE_ASM
- * pending their recovery. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DA740);
+/* Draw the galactic map's active-objectives panel: vtable slot 1 (draw) of
+ * the records at 0x25A610 and 0x25E790, whose slot 0 is
+ * HandleGalacticMapPlanetSelectInput and slot 2 func_002D8270. Lists every
+ * objective GatherActiveObjectives reports for the current level as a
+ * localized string under the 0x2C5B header, highlights the selected one,
+ * keeps it scrolled into view, and ticks the done ones.
+ *
+ * widget: the MenuWidget. +0x18/+0x1C origin (used unless D_1AB930 is set,
+ * else 4,4), +0x20/+0x24 width/height of the clip box, +0x30 the selected
+ * objective per level (indexed by g_mapVertexData+0x230, the map cache's
+ * current level), +0xA4 the scroll offset in pixels. Returns 2.
+ *
+ * GatherActiveObjectives writes the objective string ids to the scratchpad
+ * at 0x70000000 and a done bit per row to doneMask. Each row is drawn
+ * through func_00280BB8 with a copy of a 0x18-byte text-box layout (clip box
+ * top/bottom/left/right, text x/y), which reports the drawn block's height
+ * back at +0xE; rows advance by 16 pixels per line (+0x10). For the selected
+ * row the text colour is 0x8020FFFF instead of 0x80FFA888, inline colour
+ * codes are switched off around it (func_0027F7A0 / func_0027F790), and the
+ * scroll offset is nudged 4 pixels toward keeping the row inside the box.
+ * A row's checkbox (func_002DAA50) is drawn only when it lies inside the box.
+ * With D_1ABB90 set the clip box gets a 0x40-pixel 0x202020 frame
+ * (func_0027F208).
+ *
+ * MATCHED on the s136os arm (SN 2.95.3 v1.36 -fopt-stack, task #2090). The
+ * ROM's `addiu $23,$23,%lo(D_70000004)` is splat's symbolisation of the
+ * scratchpad pointer step 4; the C emits `addiu $23,$23,4`, the same word
+ * once linked. Each device below is a REGISTER-PIN DEVICE (EE_REG, RULING
+ * #8598) or an empty tied fence (RULING #8483), priced by removing it alone
+ * (in-tree splice, words differing of 196, built length in brackets; 1 is
+ * the relocation row above):
+ *   - selected pinned to $17: cc1 sets a temporary and copies it into the
+ *     long-lived register; the ROM's sltiu writes $17 directly. 113 (197).
+ *   - lines pinned to $16: the quotient is mflo'd straight into the
+ *     long-lived register in the ROM (the AllocMenuWorkBuffer / FACT #9913
+ *     quotient copy). 43 (197).
+ *   - shownLevel pinned to $3: 10.
+ *   - the numerator (height) pinned to $2: with lines pinned it would
+ *     otherwise share $16. 7.
+ *   - the line step pinned to $2: with lines pinned, `lines << 4` lands in
+ *     $16 and reorg annuls the branches around the checkbox call. 7.
+ *   - the empty tied fence on shownLevel after the XOR: without it the XOR
+ *     result is given $17. 3.
+ *   - func_00280BB8's tint declared s64 (DECL-LEVER; its C definition in
+ *     178E88 takes s32): as s32, box.x and box.y are formed in each other's
+ *     registers. 6. Its box declared void * or s32 makes no difference.
+ * Spellings that carried it, each measured: g_mapVertexData through a local
+ * (the ROM forms the base, then +0x230); the scratchpad ids as a pointer
+ * local indexed by i (loop.c's giv starts after the entry test, as the
+ * ROM's $23 does; a pointer bumped by the loop starts before it); the
+ * per-level index added as widget + (level << 2) + 0x30 (the ROM's
+ * `addu $2,$18,$2`); x + 4 formed inside the loop, so loop.c hoists it
+ * past the entry test and spills it to $sp+0x44; the colour and the
+ * func_0027F7A0 call in two separate ifs (one if loses the movn); y
+ * initialised before x (the prologue's issue order); bottom stored before
+ * right in the layout. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_DrawActiveObjectivesList)
+S136OS_SLOT(DrawActiveObjectivesList);
+#else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void *memset(void *s, s32 c, u32 n);
+extern s32 D_1AB930;
+extern s32 D_1ABB90;
+extern u8  g_mapVertexData[];
+extern s32 GatherActiveObjectives(s32 outIds, s32 outMask, s32 outVals, s32 wantValues);
+extern void AppendGsRegPacket(s32 regId, u64 value);
+extern s32 GetLocalizedString(s32 id);
+#ifndef TARGET_NATIVE
+/* The ROM symbol with its ROM signature (a 64-bit colour, loaded with a dli);
+ * the native build keeps the five-s32 declaration declared above. */
+extern void func_0027FBA8(s32 x, s32 y, u64 color, s32 str, s64 wrap);
+#endif
+extern void func_0027F208(s32 top, s32 bottom, s32 left, s32 right, s32 thickness, s32 color);
+extern void func_0027F7A0(void);
+extern s32 func_0027F790(void);
+extern void func_00280BB8(s32 box, s64 tint, s32 str, s32 mode); /* DECL-LEVER(#2090): defined s32 tint; an s64 tint is the ROM's $2/$3 colouring at the box.x/box.y stores (s32: 6 of 196) */
+extern void func_002DAA50(s32 x, s32 y, s32 on);
+/* (end of this body's declarations) */
+typedef struct ObjectiveTextBox {
+    s16 top;         /* 0x00 clip box */
+    s16 bottom;      /* 0x02 */
+    s16 left;        /* 0x04 */
+    s16 right;       /* 0x06 */
+    s16 x;           /* 0x08 text position */
+    s16 y;           /* 0x0A */
+    s16 _0C;
+    s16 height;      /* 0x0E drawn block height, written back by func_00280BB8 */
+    s16 lineHeight;  /* 0x10 */
+    s16 _12[3];
+} ObjectiveTextBox;
+s32 DrawActiveObjectivesList(MenuWidget *widget) {
+    u8 *w = (u8 *)widget;
+    s32 doneMask = 0;
+    s32 count;
+    s32 y = 4;
+    s32 x = 4;
+    s32 i;
+    s32 checkX;
+    ObjectiveTextBox box, layout;
+    s32 *objectiveIds = (s32 *)0x70000000;
+
+    Begin2dDrawBatch(0);
+    count = GatherActiveObjectives((s32)objectiveIds, (s32)&doneMask, 0, 0);
+    AppendGsRegPacket(0x42, 0x44);
+    AppendGsRegPacket(0x47, 0x10B);
+    if (D_1AB930 == 0) {
+        x = *(s32 *)(w + 0x18);
+        y = *(s32 *)(w + 0x1C);
+    }
+    func_0027FBA8(x, y, 0x80FFA888, GetLocalizedString(0x2C5B), -1);
+    y += 0x14;
+    memset(&layout, 0, sizeof(layout));
+    layout.bottom = *(s32 *)(w + 0x24);
+    layout.right = *(s32 *)(w + 0x20);
+    layout.lineHeight = 0x10;
+    layout.top = y;
+    layout.left = x;
+    box = layout;
+    if (D_1ABB90 != 0) {
+        func_0027F208(y, *(s32 *)(w + 0x24), x, *(s32 *)(w + 0x20), 0x40, 0x202020);
+    }
+    for (i = 0; i < count; i++) {
+        s32 color = 0x80FFA888;
+        s32 rowY = y + 0xA;
+        u8 *mapCache = g_mapVertexData;
+        register s32 shownLevel EE_REG("$3") = *(s32 *)(w + (*(s32 *)(mapCache + 0x230) << 2) + 0x30);
+        register s32 selected EE_REG("$17");
+        register s32 lines EE_REG("$16");
+        s32 checkY;
+
+        shownLevel ^= i;
+        __asm__("" : "+r"(shownLevel));
+        selected = shownLevel == 0;
+        checkX = x + 4;
+        if (selected) {
+            color = 0x8020FFFF;
+        }
+        if (selected) {
+            func_0027F7A0();
+        }
+        box.x = x + 0x10;
+        box.y = y - *(s32 *)(w + 0xA4);
+        func_00280BB8((s32)&box, color, GetLocalizedString(objectiveIds[i]), -1);
+        if (selected) {
+            if (box.y < box.top + 4) {
+                *(s32 *)(w + 0xA4) -= 4;
+            }
+            if (box.bottom - box.height - 4 < box.y) {
+                *(s32 *)(w + 0xA4) += 4;
+            }
+            func_0027F790();
+        }
+        {
+            register s32 height EE_REG("$2") = box.height;
+            lines = height / box.lineHeight;
+        }
+        if (lines == 2) {
+            rowY += 6;
+        }
+        checkY = rowY - *(s32 *)(w + 0xA4);
+        if (checkY >= box.top + 4 && checkY <= box.bottom - 4) {
+            func_002DAA50(checkX + 5, checkY, (doneMask >> i) & 1);
+        }
+        {
+            register s32 step EE_REG("$2") = lines << 4;
+            y += step;
+        }
+    }
+    End2dDrawBatch();
+    return 2;
+}
+#endif
 
 /* Draw a small checkbox/indicator at (x,y): a 10px highlight rect, an 8px inner
  * rect, and (when `on`) a 0x1E-px tick glyph on top. */
@@ -2838,9 +3001,16 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DB080);
  * re-draws through func_00280BB8 with per-field decrements (drop-shadow) — the
  * 128-bit packed descriptor's field roles are only partially recovered, so a
  * portable #else would guess them (silent-bug risk, #else not byte-gated). The
- * bottom DrawGlyphQuad path is transparent, but the fn can't be split. Shared
- * blocker with func_002DA740/002D9178/002DD450: define the func_00280BB8 text-box
- * descriptor struct ONCE in a Ghidra pass, then convert all four. Bare INCLUDE_ASM. */
+ * bottom DrawGlyphQuad path is transparent, but the fn can't be split. The
+ * descriptor was named as a blocker shared with func_002DA740/002D9178/002DD450;
+ * its roles are now recovered from func_002DA740, byte-exact as
+ * DrawActiveObjectivesList since task #2090 (clip box top/bottom/left/right at
+ * +0/+2/+4/+6, text x/y at +8/+0xA, drawn height read back at +0xE, line height
+ * at +0x10). This function's measured wall is different: the ROM keeps
+ * %hi(g_menuScreenBlock) in $16 across Begin2dDrawBatch and re-forms %lo at each
+ * use, which SN 1.36 cc1 emits only with gcse on, and this unit's s136os arm
+ * inherits -fno-gcse (task #2090, NOTE #10224, which holds the best body).
+ * Bare INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DB700);
 
 /* Load a menu background-image pair (front/back) from disc into the bg buffers.

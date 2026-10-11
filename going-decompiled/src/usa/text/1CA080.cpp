@@ -1590,7 +1590,9 @@ s32 func_002CCA18(s32 action) {
  *     two empty arms make, and re-reads the screen after every read of it; a
  *     plain read lets cc1 delete both empty tests (82 words). Writer census:
  *     no store in asm/usa names D_1AB930; its other readers are
- *     RenderMenuScreenWidgets and 1D54C0's func_002DA740, both still asm;
+ *     RenderMenuScreenWidgets (still asm) and 1D54C0's func_002DA740, which
+ *     was asm when this was written and is byte-exact as
+ *     DrawActiveObjectivesList since task #2090 (one plain read, no store);
  *   - the two empty arms themselves (without them: 82 words);
  *   - the list handler is called with the pad buttons, which the ROM already
  *     holds in $a0 from the 0x910 test. Called with no argument: 4 off;
