@@ -208,8 +208,8 @@ _Static_assert(__builtin_offsetof(MenuCmd, arg) == 0x4, "arg");
  *   +0x50  s32  cached state / slot  CONFIRMED
  *   +0x54  s32  cached state / slot  CONFIRMED (func_002DC838/878/CCC8)
  *   +0x58  s32  cached state / uv    CONFIRMED (func_002DAE70/DB080)
- *   +0x5C  s32  stream frame counter CONFIRMED (func_002DAAF8/DB080)
- *   +0x60  s32  stream scroll offset CONFIRMED (func_002DA358/DAAF8/DB080)
+ *   +0x5C  s32  stream frame counter CONFIRMED (TickStreamedImageWidget/func_002DB080)
+ *   +0x60  s32  stream scroll offset CONFIRMED (func_002DA358/TickStreamedImageWidget/func_002DB080)
  *   +0x44..0xA0  s32[24] level/objective id array (objectives subtype) CONFIRMED
  *   +0xA0  s32  active-objective count (func_002D8270)                  CONFIRMED
  *   +0xA4..0xBB  u8[24] per-level handled-flag array (func_002DA358)    CONFIRMED
@@ -2520,23 +2520,180 @@ void func_002DAA50(s32 x, s32 y, s32 on) {
 }
 #endif
 
-/* Streaming-image widget state machine: selects a source index from obj->0x34
- * flags (0x1 obj->0x58 / 0x2 g_mapCurrentLevel / 0x4 screen->0xE8->0x3C / 0x100
- * area-record path / else screen->0xE8->0x40, each clamped via movz), then runs a
- * phase machine on obj->0x44 (even=kick StartFileLoad from the obj->0x30 slot
- * table with an lbn base chosen by obj->0x34 bits 0x10000/0x10; odd=wait
- * g_fileLoadState, DecompressWad(src=obj->0x48+obj->0x60, dst=obj->0x48),
- * Log2Floor tex setup, QueueGsTextureUpload, FlushPendingTexUploads), counter obj->0x5C
- * capped 0x100.
- * PARK (flag-not-guess, attempted-and-verified): the control flow is saturated
- * with branch-LIKELY delay-slot side effects (bnel/beql/beqz whose delay loads of
- * $2/$16 are nullified per-branch) + movz saturation clamps; a full trace gives a
- * contradictory $2-source flag into the two StartFileLoad convergence paths,
- * i.e. real transcription-error risk on a body that is NOT byte-gated as #else.
- * Needs a dedicated fresh-context pass with per-branch likely-bit verification.
- * DecompressWad's 2nd arg (dst) is load-bearing — do NOT drop it (poison-bug
- * class). Bare INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DAAF8);
+/* Per-frame tick of the streamed-image widget: vtable slot 0 of the records at
+ * 0x25A5A8 and 0x25E598, whose other slots are func_002DAE70 (draw),
+ * InitMenuBgImageBuffers (init) and func_002DB028 (release). It picks which
+ * image to show, streams it from disc into the widget's work buffer, and once
+ * the read completes decompresses it and queues its texture upload.
+ *
+ * widget: the MenuWidget. Fields this tick uses (offsets into the opaque record):
+ *   +0x30  slot table: StreamImageSlot[] {lbn, sectors}, indexed by image
+ *   +0x34  flags: 0x1 index from +0x58 (-1 = nothing to show), 0x2 the
+ *          current map level, 0x4 the focused widget's +0x3C, 0x100 an area
+ *          record's image (see below), else the focused widget's +0x40;
+ *          0x20 compressed image, 0x10000 / 0x10 select the LBN base,
+ *          0x40000 hold at least 5 frames before finishing a load
+ *   +0x44  load phase: 0 / 2 start a read, 1 / 3 wait for it, -1 failed
+ *   +0x48  image work buffer
+ *   +0x50  index of the image last read
+ *   +0x5C  frame counter, saturating at 0x100
+ *   +0x60  offset of the compressed image within the work buffer
+ * Returns 0.
+ *
+ * In the 0x100 case the focused widget's +0x40 (clamped to 0..4) indexes the
+ * 0x1C-byte records at g_areaTable+0x30, but only while g_areaTable+0x15C < 3,
+ * g_areaTable+0x164 < 0 and g_menuScreenBlock+0x164 >= 11; otherwise the phase
+ * is set to -1. A read starts only when the image changed, the buffer exists,
+ * no file load is in flight and the slot has sectors; a compressed image is
+ * read into the END of the buffer (GetMenuWorkBufferSize minus its size) and
+ * DecompressWad expands it in place to the start. The image is a 256-colour
+ * texture: width and height at +0x8 / +0xC (QueueGsTextureUpload takes their
+ * log2), the CLUT at +0x20, the pixels at +0x420; the returned GS register
+ * word is stored at g_mapVertexData+0x268. Both LBN-base branches that use
+ * g_globalWadBaseLbn are kept separate, as the ROM has two copies of that call.
+ *
+ * MATCHED on the s136os arm (SN 2.95.3 v1.36 -fopt-stack, task #2090), with no
+ * device. Two spellings carry it (solo s136 compile, in-tree splice, words
+ * differing of 221): g_menuScreenBlock and g_areaTable held in locals, so the
+ * address is formed once and offset (inline, cse folds +0x15C into the base
+ * and the 0x1C-stride record reads at -300: 217 words); the CLUT and pixel
+ * pointers formed before the two Log2Floor calls (inline in the call, the
+ * frame loses a callee-saved register: 217 words). The buffer copied into a
+ * separate destination before the size adjustment: 3 words as one variable. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_TickStreamedImageWidget)
+S136OS_SLOT(TickStreamedImageWidget);
+#else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern s32 g_mapCurrentLevel[];
+extern u8  g_menuScreenBlock[];
+extern u8  g_areaTable[];
+extern s16 g_fileLoadState ROM_SPLIT;
+extern s32 D_14D11C ROM_SPLIT;            /* g_discToc+0x1BDC: alternate LBN base */
+extern s32 g_globalWadBaseLbn ROM_SPLIT;  /* g_discToc+0x36C: global WAD LBN base */
+extern u8  g_mapVertexData[];
+extern s32 GetMenuWorkBufferSize(s32 id);
+extern s32 StartFileLoad(s32 dest, s32 lbn, s32 sectors);
+extern s32 func_002DF560(s32 id);
+extern s32 func_002DF5B0(s32 id);
+extern void DecompressWad(void *src, void *dest);
+extern s32 Log2Floor(s32 x);
+extern u64 QueueGsTextureUpload(s32 logW, s32 logH, s32 clut, s32 pixels, s32 clutDims, s32 texDims);
+extern void FlushPendingTexUploads(void);
+/* (end of this body's declarations) */
+typedef struct StreamImageSlot {
+    s32 lbn;      /* 0x0: LBN relative to the selected base */
+    s32 sectors;  /* 0x4: length in 2 KB sectors, 0 = no image */
+} StreamImageSlot;
+#define STREAM_SLOT(w, i) (*(StreamImageSlot **)((w) + 0x30))[i]
+s32 TickStreamedImageWidget(MenuWidget *widget) {
+    u8 *w = (u8 *)widget;
+    s32 flags = *(s32 *)(w + 0x34);
+    s32 image;
+
+    if (flags & 0x1) {
+        image = *(s32 *)(w + 0x58);
+        if (image == -1) {
+            return 0;
+        }
+    } else if (flags & 0x2) {
+        image = g_mapCurrentLevel[0];
+    } else if (flags & 0x4) {
+        image = *(s32 *)(*(u8 **)((u8 *)g_pCurrentMenuScreen[0] + 0xE8) + 0x3C);
+    } else if (flags & 0x100) {
+        u8 *block = g_menuScreenBlock;
+        u8 *area = g_areaTable;
+        image = *(s32 *)(*(u8 **)(*(u8 **)(block + 0x14) + 0xE8) + 0x40);
+        if (image < 0) image = 0;
+        if (image >= 5) image = 4;
+        if (*(s32 *)(area + 0x15C) < 3 && *(s32 *)(area + 0x164) < 0
+            && *(s32 *)(block + 0x164) >= 0xB) {
+            if (*(s32 *)(w + 0x44) == -1) {
+                *(s32 *)(w + 0x44) = 0;
+            }
+            image = *(s32 *)(area + image * 0x1C + 0x30);
+        } else {
+            *(s32 *)(w + 0x44) = -1;
+        }
+    } else {
+        image = *(s32 *)(*(u8 **)((u8 *)g_pCurrentMenuScreen[0] + 0xE8) + 0x40);
+        if (image < 0) image = 0;
+    }
+
+    switch (*(s32 *)(w + 0x44)) {
+    case 0:
+    case 2:
+        if (image != *(s32 *)(w + 0x50)) {
+            s32 buffer = *(s32 *)(w + 0x48);
+            if (buffer != 0 && g_fileLoadState == 0 && STREAM_SLOT(w, image).sectors != 0) {
+                s32 dest = buffer;
+                s32 started;
+                if (*(s32 *)(w + 0x34) & 0x20) {
+                    *(s32 *)(w + 0x60) = GetMenuWorkBufferSize(buffer)
+                                         - (STREAM_SLOT(w, image).sectors << 11);
+                    dest += *(s32 *)(w + 0x60);
+                }
+                if (*(s32 *)(w + 0x34) & 0x10000) {
+                    started = StartFileLoad(dest, STREAM_SLOT(w, image).lbn + D_14D11C,
+                                            STREAM_SLOT(w, image).sectors);
+                } else if (*(s32 *)(w + 0x34) & 0x10) {
+                    started = StartFileLoad(dest, STREAM_SLOT(w, image).lbn + g_globalWadBaseLbn,
+                                            STREAM_SLOT(w, image).sectors);
+                } else {
+                    started = StartFileLoad(dest, STREAM_SLOT(w, image).lbn + g_globalWadBaseLbn,
+                                            STREAM_SLOT(w, image).sectors);
+                }
+                if (started != 0) {
+                    func_002DF560(*(s32 *)(w + 0x48));
+                    *(s32 *)(w + 0x50) = image;
+                    *(s32 *)(w + 0x44) = *(s32 *)(w + 0x44) + 1;
+                } else {
+                    *(s32 *)(w + 0x44) = -1;
+                }
+                *(s32 *)(w + 0x5C) = 0;
+                return 0;
+            }
+        }
+        break;
+    case 1:
+    case 3:
+        if (g_fileLoadState == 0
+            && (!(*(s32 *)(w + 0x34) & 0x40000) || *(s32 *)(w + 0x5C) >= 5)) {
+            u8 *img;
+            u8 *clut, *pixels;
+            s32 logW, logH;
+            func_002DF5B0(*(s32 *)(w + 0x48));
+            if (*(s32 *)(w + 0x34) & 0x20) {
+                DecompressWad(*(u8 **)(w + 0x48) + *(s32 *)(w + 0x60), *(u8 **)(w + 0x48));
+                *(s32 *)(w + 0x60) = 0;
+            }
+            img = *(u8 **)(w + 0x48);
+            clut = img + 0x20;
+            pixels = img + 0x420;
+            logW = Log2Floor(*(s32 *)(img + 0x8));
+            logH = Log2Floor(*(s32 *)(img + 0xC));
+            {
+                u8 *vd = g_mapVertexData;
+                *(u64 *)(vd + 0x268) = QueueGsTextureUpload(logW, logH, (s32)clut, (s32)pixels,
+                                                            *(s32 *)(vd + 0x250), *(s32 *)(vd + 0x254));
+            }
+            FlushPendingTexUploads();
+            *(s32 *)(w + 0x44) = 2;
+            *(s32 *)(w + 0x5C) = 0;
+            return 0;
+        }
+        break;
+    default:
+        return 0;
+    }
+    *(s32 *)(w + 0x5C) = *(s32 *)(w + 0x5C) + 1;
+    if (*(s32 *)(w + 0x5C) > 0x100) {
+        *(s32 *)(w + 0x5C) = 0x100;
+    }
+    return 0;
+}
+#undef STREAM_SLOT
+#endif
 
 /* Draw the streamed full-screen image widget once it has loaded (state >= 2 and
  * +0x58 not negative): blit the decoded glyph quad over the whole screen
