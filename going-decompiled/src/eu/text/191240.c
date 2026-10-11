@@ -1273,8 +1273,10 @@ void func_00294BB0(s32 level, s32 arg2, void *dest, s32 variant) {
  * stride 5 ints, up to 0x30 entries). If absent (idx == 0x30) do nothing.
  * Otherwise, unless the per-slot in-flight record (D_0014B5C0+0x7790 + slot, field
  * +0x34) already equals the found index, kick the load via func_00294BB0 with the
- * per-slot dest buffer (slot*0xC800 + table+0x40). See USA twin for the daddu/move
- * version wall; kept as the portable #else.
+ * per-slot dest buffer (slot*0xC800 + table+0x40). The USA twin's comment once
+ * recorded a daddu/move version wall; that twin is byte-exact on the sdk29 arm
+ * since task #679, and this EU twin was NOT re-tried after that. Kept as the
+ * portable #else.
  */
 extern void func_00294BB0(s32 idx, s32 slot, void *dest, s32 a3);
 #ifndef TARGET_NATIVE
@@ -1586,7 +1588,9 @@ s32 MapFindCacheSlot(s32 levelAndFlag) {
  * The 0x100 flag selects the primary map-data TOC when set (+0x14F4 sector count),
  * the secondary (+0x15D4) when clear; low byte is the level (stride 8 into g_discToc).
  * Returns 1 if the sector count > 0. Matching arm stays INCLUDE_ASM; #else is the
- * structure model (register-coloring wall, same as USA — see USA twin).
+ * structure model (register-coloring wall; EU-only claim now: the USA twin is
+ * byte-exact on the sdk29 arm since task #895, and this EU twin was NOT
+ * re-tried after that).
  * Word-verified vs USA MapDataExistsForLevel (raw .s): only ref g_discToc ->
  * D_0014B5C0; offsets 0x14F4 / 0x15D4 and stride 8 unchanged (region delta is the
  * base +0x80 only). */
@@ -1772,7 +1776,9 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", MapCompositeThum
 /* MapSetCurrentLevel(level) — set the galactic-map current level and refresh the
  * availability flag: store `level` into the current-level slot, then call
  * MapUpdateLevelAvailability. Matching arm stays INCLUDE_ASM; #else is the
- * structure model (store-into-jal-delay scheduling wall, same as USA).
+ * structure model (store-into-jal-delay scheduling wall; EU-only claim now:
+ * the USA twin is byte-exact on the s136os arm since task #1309, and this EU
+ * twin was NOT re-tried after that).
  * Word-verified vs USA MapSetCurrentLevel: jal MapUpdateLevelAvailability
  * (named, unchanged); the current-level field is labeled g_mapCurrentLevel in
  * the EU .s (== g_mapVertexData+0x230 = 0x1C51D0, USA g_mapCache.currentLevel
@@ -1794,7 +1800,9 @@ void MapSetCurrentLevel(s32 level) {
  * `available` flag from MapDataExistsForLevel(currentLevel), then force it clear
  * on the hub level (0) with any story progress. Returns available!=0. Matching
  * arm stays INCLUDE_ASM; #else is the structure model (bnel/clamp scheduling
- * wall, same as USA). Word-verified vs USA MapUpdateLevelAvailability: jal
+ * wall; EU-only claim now: the USA twin is byte-exact on the s136os arm since
+ * task #1405, and this EU twin was NOT re-tried after that). Word-verified vs
+ * USA MapUpdateLevelAvailability: jal
  * MapDataExistsForLevel + gp/abs g_playerProgress (named, unchanged); cache
  * currentLevel/available at g_mapVertexData +0x230/+0x24 (offsets unchanged;
  * base +0x80 lane). */
@@ -1876,7 +1884,9 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_00297FC8);
  * by the source descriptor's low flag bit: bit0 set -> packed path
  * func_00298108(dst, src, arg3); bit0 clear -> plain path func_00298338(dst,
  * src). Matching arm stays INCLUDE_ASM; #else is the structure model (beql
- * early-out + callee-save wall, same as USA). Word-verified vs USA
+ * early-out + callee-save wall; EU-only claim now: the USA twin is byte-exact on
+ * the s136os arm since task #1702, and this EU twin was NOT re-tried after
+ * that). Word-verified vs USA
  * MapBuildBitmap: g_mapHasData (named, unchanged); jal ORDER func_00298AA0 ->
  * func_00298AD0, func_002980D8 -> func_00298108, func_00298308 -> func_00298338. */
 #ifndef TARGET_NATIVE

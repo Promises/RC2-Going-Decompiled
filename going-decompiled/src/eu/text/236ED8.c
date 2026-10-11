@@ -446,8 +446,10 @@ GuiElement *func_00337C90(GuiElement *e) {
  * (color), +0x10 (visible). Then record the element tag (a1) at +0x28, zero the
  * scalar fields +0x14/+0x18/+0x1C/+0x20/+0x24, and mark the element visible. */
 #ifndef TARGET_NATIVE
-/* TODO(match): functional equivalent - not byte-exact; the same 8-byte-packed
-   callee-save frame wall + per-block store scheduling as USA GuiElementBaseInit. */
+/* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee-save
+   frame wall + per-block store scheduling. EU-only claim now: USA
+   GuiElementBaseInit is byte-exact on the s136os arm since task #1520, and this
+   EU twin was NOT re-tried after that. */
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiElementBaseInit);
 #else
 void GuiElementBaseInit(GuiElement *e, s32 tag, GuiPool *pool) {

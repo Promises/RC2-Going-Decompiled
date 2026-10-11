@@ -1313,7 +1313,9 @@ void func_0029BFC0(void) {
 
 /* func_0029BFF0(a,b): EU twin of USA func_0029C448 — forward two args to the
  * widget at g_guiInstance+0x36F28 (method func_0033A248). Register-coloring wall
- * (same $v0/$v1 residue as USA); matching arm stays INCLUDE_ASM, #else is the model.
+ * ($v0/$v1 residue; EU-only claim now: the USA twin is byte-exact on the sdk29
+ * arm since task #888, and this EU twin was NOT re-tried after that); matching
+ * arm stays INCLUDE_ASM, #else is the model.
  * Word-verified vs USA func_0029C448: method func_00339398->func_0033A248; widget
  * offset 0x36F28 UNCHANGED (widget-embed offsets are NOT +0xB0-shifted in EU). */
 #ifndef TARGET_NATIVE
@@ -1380,7 +1382,9 @@ s32 func_0029C118(void) {
 
 /* func_0029C158(a,b,idx): EU twin of USA func_0029C5B0 — if the GUI is up and
  * idx<2, store the (a,b) pair into the slot table at g_guiInstance+0x3FAC8+idx*8
- * and return 1; else 0. Register-coloring wall (same as USA); #else is the model.
+ * and return 1; else 0. Register-coloring wall (EU-only claim now: the USA twin
+ * is byte-exact on the s136os arm since task #1668, and this EU twin was NOT
+ * re-tried after that); #else is the model.
  * Word-verified vs USA func_0029C5B0: 0x38000 base + idx*8 unchanged; slot inner
  * offsets 0x7A18/0x7A1C -> 0x7AC8/0x7ACC (GUI instance field +0xB0). */
 #ifndef TARGET_NATIVE
@@ -2267,8 +2271,10 @@ typedef struct ObjectiveScan {
 } ObjectiveScan;
 
 /* UpdateLevelObjectiveStates: EU twin. WALLED (later-cc1 register-coloring/frame
- * wall, same class as the USA twin and the unit's GatherActiveObjectives /
- * EvaluateProgressCondition); the TARGET_NATIVE arm is the faithful portable
+ * wall, same class as the unit's GatherActiveObjectives /
+ * EvaluateProgressCondition). That is now an EU-only claim: the USA twin is
+ * byte-exact on the s136os arm since task #2098, and this EU twin was NOT
+ * re-tried after that close. The TARGET_NATIVE arm is the faithful portable
  * body, cmp-oracle'd 69/69 on the USA twin (region-identical logic). See the USA
  * 198FA0.c doc comment for the per-pass behaviour. */
 #ifndef TARGET_NATIVE

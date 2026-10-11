@@ -103,7 +103,9 @@ extern void  func_0011B500(void *dst, void *src); /* poll IOP load status into d
 /* snd_ServiceRpcCompletion: poll the cmd-channel RPC result buffer after
  * func_0011AEA0/sceSifCheckStatRpc; returns 1 when the transfer is complete (both
  * terminators consumed), 0 while it is still running. Not matched — branch-layout
- * shape this cc1 won't reproduce (same wall as USA). Portable #else body (EU
+ * shape this cc1 won't reproduce (EU-only claim now: the USA twin is byte-exact
+ * on the sdk29 arm since task #855; this EU twin was NOT re-tried after that).
+ * Portable #else body (EU
  * lockstep with USA snd_ServiceRpcCompletion; data globals +0x80). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/0321A0", snd_ServiceRpcCompletion);
@@ -133,7 +135,9 @@ s32 snd_ServiceRpcCompletion(void) {
 
 /* snd_SetupDmaTransfer: record the DMA buffer/count and write the two -0-header/
  * terminator slots, flushing both to memory. Not matched — multi-callee-save
- * 16-byte save-slot layout wall (same as USA). Portable #else body (EU lockstep
+ * 16-byte save-slot layout wall (EU-only claim now: the USA twin is byte-exact on
+ * the s136os arm since task #1790; this EU twin was NOT re-tried after that).
+ * Portable #else body (EU lockstep
  * with USA snd_SetupDmaTransfer; data globals +0x80). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/0321A0", snd_SetupDmaTransfer);
@@ -205,7 +209,9 @@ s32 snd_BankLoadByLoc(s32 arg0, s32 arg1) {
 /* snd_BankLoadAsync: fire-and-forget variant of snd_BankLoadByLoc — stage the
  * request (plus async context arg2/arg3), mark a load pending (D_001A7548 = 1),
  * issue the load RPC (fn 3), and return without waiting. Returns nothing. Not
- * matched — same frame wall as USA. Portable #else body (EU lockstep with USA
+ * matched — frame wall (EU-only claim now: the USA twin is byte-exact on the
+ * s136os arm since task #1914; this EU twin was NOT re-tried after that).
+ * Portable #else body (EU lockstep with USA
  * snd_BankLoadAsync; globals +0x80). Same `bnel` (D_001A7240 = arg0 only on the
  * proceed path); arg3 lands in D_001A7558 as a sign-extended 64-bit qword. */
 #ifndef TARGET_NATIVE
@@ -493,7 +499,9 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/0321A0", func_00132C68);
  * synchronously over the SIF RPC channel, blocking until the reply lands. arg0 is
  * the RPC function number, arg1 the parameter-byte count, arg2 the parameter
  * bytes. Returns the RPC reply status word (D_001A7104). Not matched — multi-
- * callee-save frame wall (same as USA). Portable #else body (EU lockstep with
+ * callee-save frame wall (EU-only claim now: the USA twin is byte-exact on the
+ * s136os arm since task #1914; this EU twin was NOT re-tried after that).
+ * Portable #else body (EU lockstep with
  * USA snd_SendCommandSync; data globals +0x80). No branch-likely delay slots. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/0321A0", snd_SendCommandSync);
@@ -652,7 +660,9 @@ s32 snd_CommitRingEntry(void) {
 
 /* snd_FlushCommandRing: DMA-kick + SIF-RPC flush of the active 989snd command
  * ring buffer, then flip to the other buffer. Not matched — multi-callee-save
- * frame wall (same as USA). Portable #else body (EU lockstep with USA
+ * frame wall (EU-only claim now: the USA twin is byte-exact on the s136os arm
+ * since task #1965; this EU twin was NOT re-tried after that). Portable #else
+ * body (EU lockstep with USA
  * snd_FlushCommandRing; data globals +0x80). No branch-likely delay slots. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/0321A0", snd_FlushCommandRing);
@@ -873,7 +883,9 @@ s32 CdStartRead(s32 arg0, s32 arg1, s32 arg2, void *rmode) {
  * (via func_0011B500 + snd_Pump), caching the result in D_001A7518. When noWait
  * is set, report progress without blocking; otherwise pump the sound engine until
  * the load finishes. Blocked by the re-materialised lui-macro loop plus the
- * multi-callee-save wall (same as USA) (near-miss). Portable #else body (EU
+ * multi-callee-save wall (near-miss; EU-only claim now: the USA twin is
+ * byte-exact on the s136os arm since task #1914, and this EU twin was NOT
+ * re-tried after that). Portable #else body (EU
  * lockstep with USA snd_CheckLoadInProgress; data globals +0x80). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/0321A0", snd_CheckLoadInProgress);
