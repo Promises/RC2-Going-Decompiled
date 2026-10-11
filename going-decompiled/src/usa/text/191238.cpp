@@ -2245,9 +2245,11 @@ void DecompressHudBankWad(s32 slot, u8 *dest) {
  * undeclared-return / no indirect) BUT ~200 instrs of DENSE op-for-op u64
  * bit-packing across 4 paths (dsll/dsll32/or building ~16 GS-register fields with
  * exact shift amounts <<6/<<14/<<19/<<24/<<26/<<30/dsll32<<32+5 etc.) — a single
- * wrong shift silently mis-renders. Capacity-appropriate park: pin the GS-register
- * field layouts + oracle-gate, then transcribe op-for-op (u64) in fresh context.
- * Bare INCLUDE_ASM (byte-neutral). */
+ * wrong shift silently mis-renders. That is an effort reason; task #2104 (FACT
+ * #10255) found the mechanism that bars it: SN Ps2EeAs dli expansions with no
+ * tools/ee/ps2eeas_dli_sites.txt row (bit-63 `addiu -1; dsll32 31` at 0x293584
+ * and 0x29365C, the 5-insn 0x80000004CC007FFB at 0x293700), the RULING #8549
+ * class. Bare INCLUDE_ASM (byte-neutral). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00293438);
 
 /* TODO(match): functional equivalent - not byte-exact (48.12%); strength-reduce/
@@ -6171,10 +6173,15 @@ void MapDraw(int useHudPass, long applyScissor) {
 
 /* Per-state writer of two f32 out-params (A=$4, B=$5) selected by g_playerProgress
  * (cases 2/0xB/7/0x14) with float-threshold gating on g_soundBankHandlesBlk+0x80/
- * +0x84; returns a written flag. PARK (#70): func_00301430 is called 4x with
- * ambiguous/unset args and its return drives bltz/slti branches (arg+return
- * semantics unrecovered), plus ~14 unnamed D_1A9xxx float globals — a faithful
- * #else would guess the callee contract (silent-bug risk). Bare INCLUDE_ASM. */
+ * +0x84; returns a written flag. The PARK (#70) note here said func_00301430's
+ * arguments and return were unrecovered and the D_1A9xxx words were ~14 unnamed
+ * float globals. Task #2104 (NOTE #10252) read both from the ROM:
+ * func_00301430 takes no arguments and returns -1 or 0..3 (the hero ground
+ * moby's class), and the D_1A96xx/D_1A94xx words are float literals in
+ * data/lit (x/y pairs and a 4-entry x/y table). Still bare INCLUDE_ASM: the
+ * s136os body reaches 55/122 positional, and the residual is literal-pair
+ * addressing (the ROM reads each pair's first word gp-relative and its second
+ * absolute through $at), not the callee contract. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00297B48);
 
 /*
