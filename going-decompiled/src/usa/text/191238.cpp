@@ -6705,7 +6705,8 @@ void func_002984E0(u8 *out) {
  *
  * Named at promotion (task #2104, RULING #10083): its sole caller is MapDraw
  * (jal 0x297818), which passes the blip loop index in $4 and its stack buffer
- * (sp+0xB8) in $5, then hands that same buffer to DrawFont2TextBox (0x280BB8,
+ * (sp+0x40; the pointer is spilled at sp+0xB8) in $5, then hands that same
+ * buffer to DrawFont2TextBox (0x280BB8,
  * jal 0x297880) as the label it draws. The format words D_1A9758 = "%d" and
  * D_1A9760 = "error" were read from the image; the old PARK (#70) note called
  * them unrecovered and the price word a weapon name.
