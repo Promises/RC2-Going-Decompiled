@@ -2602,16 +2602,18 @@ void EnterVendorMenu(s32 arg) {
  * Releases the two live preview handles (+0x7C, +0x78) through func_0028C108 and
  * blanks them, quiesces the vendor sub-scene (func_0028ECA8), returns to game
  * state 0 (func_0026F750) and clears the global-scene-active flag (func_0026F730).
- * Then, only when no preview actor is already parked (+0x60 == 0): allocate one
- * (func_00299980), seed its transform from the D_1AD280 template plus the current
- * preview moby's (+0x28) origin (+0xC0) and offset (+0x10) via func_00283A48 /
- * Vec4AddVu0, wrap its facing angle (+0xF8) into [-pi,pi] (WrapAnglePiSum) and
- * place it (func_0026F780), then kick the fx queue (func_003363A0(2)). Always:
- * mark the preview moby active (+0x20 = 1), nudge the file-load voice sub-state
+ * Then, only when the vendor moby was level-placed rather than spawned for the
+ * menu (+0x60 == 0): put the actor func_00299980 returns in front of the vendor
+ * moby (+0x28) — position = vendor matrix (+0xC0) applied to the D_1AD280 offset
+ * (func_00283A48) plus the vendor position (+0x10), yaw = vendor yaw (+0xF8) + pi
+ * wrapped (WrapAnglePiSum) — through func_0026F780, then kick the fx queue
+ * (func_003363A0(2)). NOTE #5477 reads that actor as the player, which the
+ * function's name assumes. Always: set the vendor moby's +0x20 = 1, nudge the
+ * file-load voice sub-state
  * halfword (g_fileLoadVoiceState +0x72) out of the {6,7} band to 5, run the +0x8C
- * teardown hook (func_002FBFD8) and free the preview moby (+0x28) when one is
- * parked (+0x60 != 0), then retune music (func_00132B28), mute dialog voices and
- * pump the sound stack. No parameters, no return value.
+ * teardown hook (func_002FBFD8) and free the vendor moby (+0x28) when it was
+ * spawned for the menu (+0x60 != 0), then retune music (func_00132B28), mute
+ * dialog voices and pump the sound stack. No parameters, no return value.
  *
  * Byte-exact on the s136os arm (task #2087; see the GUARD below), from the
  * task #2021 body of NOTE #10075 (21/96 there). What closed it, each item priced
@@ -2703,7 +2705,7 @@ void TeardownVendorSceneRestorePlayer(void) {
     g_bGlobalSceneActive = 0;
     func_0026F730();
 
-    /* no preview parked yet -> spawn the departing preview actor */
+    /* level-placed vendor -> put the actor back in front of it */
     if (*(s32 *)(ui + 0x60) == 0) {
         VendorQuad *tp;
 
