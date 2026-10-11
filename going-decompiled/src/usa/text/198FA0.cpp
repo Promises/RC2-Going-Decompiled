@@ -2109,7 +2109,104 @@ void func_0029C818(void) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029C8F0);
+/** PollFrontEndMenu: per-frame poll of the front-end menu, run by the GUI pump
+ *  (func_0029CA98, which discards the result).
+ *
+ *  Returns -1 while the GUI-active gate D_1A9A88 is 0 or a notice is up
+ *  (g_noticeOwner). With the GUI instance down it counts D_1A9A88 toward 0 and
+ *  returns 0. Otherwise it refreshes readiness (func_0029C818) and returns -1
+ *  until g_menuScreenReady is set. When ready == 1 it refreshes the buttons
+ *  (func_0029C700) and latches pad flag 0x10 at D_138180+0x1C0 into D_001A9AE0
+ *  (also writing 2 to +0x1CC); the latch clearing on release is the "changed"
+ *  event. It then updates the button widget (gui+0x3F7B0) with the latch,
+ *  resolves the pointed button against the list at gui+0x3CD48
+ *  (func_00349ED0), drops it (-1) when its g_menuButtonChainHeads chain has no
+ *  free tail slot, and on a change commits the list (func_0034A1C8) and sets
+ *  g_menuSelectedButton if none is latched yet. The widget gets the button
+ *  index; the return value is that index on a change, else -1.
+ *
+ *  Byte-exact on the s136os arm since task #2098 (NOTE #9568 / #9600 body).
+ *  Three source shapes are load-bearing, each priced by removing it alone on
+ *  the solo s136os compile (reloc-masked words differing from the ROM, of 102):
+ *   - the redundant `changed = 0` in the ready != 1 arm (83 differ, 99 words).
+ *     It keeps that arm a basic block at gcse time, so PRE inserts
+ *     %hi(D_138180) at its end (the ROM's `b; lui $19`) and keeps the
+ *     ready == 1 path's own %hi after the func_0029C700 call, copied to $19
+ *     for the join. Without it the else edge is critical and PRE hoists the
+ *     %hi above the call into the branch block (NOTE #9600's residual);
+ *   - the pad pointer taken after the call (97 differ, 98 words): it keeps
+ *     +0x1C0/+0x1CC as offsets from one %lo base instead of folding them;
+ *   - the GUI-down tail reached by goto (78 differ): the ROM places it last. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_PollFrontEndMenu)
+S136OS_SLOT(PollFrontEndMenu);
+#else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern s32  FindChainTailFreeSlot(s32 head);
+extern void func_0029C700(void);
+extern void func_0029C818(void);
+extern void func_0033BA28(void *p, s32 idx);
+extern s32  g_menuButtonChainHeads;
+extern u8   D_138180[];
+extern s32  func_00349ED0(void *list, void *pad);  /* button under the pointer, or < 0 */
+extern void func_0034A1C8(void *list);
+extern void func_0033B6D0(void *widget);
+extern void func_0033BA40(void *widget, s32 latched);
+extern s32  D_001A9AE0;   /* latched state of pad flag 0x10 (0/1) */
+
+/* The two words of the D_138180 controller block this poll touches. */
+typedef struct {
+    u8  _pad000[0x1C0];
+    s32 flags;          /* 0x1C0: bit 0x10 is latched into D_001A9AE0 */
+    u8  _pad1C4[8];
+    s32 state;          /* 0x1CC: set to 2 while bit 0x10 is held */
+} MenuPadState;
+
+s32 PollFrontEndMenu(void) {
+    s32 gate = D_1A9A88;
+    s32 ready, changed, latched, button;
+
+    if (gate == 0) return -1;
+    if (g_noticeOwner != 0) return -1;
+    if (g_guiInstance == 0) goto down;
+    func_0029C818();
+    ready = g_menuScreenReady;
+    if (ready == 0) return -1;
+    latched = 0;
+    changed = 0;
+    if (ready != 1) {
+        changed = 0;   /* redundant on purpose: see the doc comment */
+    } else {
+        MenuPadState *pad;
+        func_0029C700();
+        pad = (MenuPadState *)D_138180;
+        if (pad->flags & 0x10) {
+            D_001A9AE0 = ready;
+            pad->state = 2;
+        } else if (D_001A9AE0 != 0) {
+            D_001A9AE0 = 0;
+            changed = 1;
+        }
+        func_0033B6D0(g_guiInstance + 0x3F7B0);
+        latched = D_001A9AE0;
+    }
+    func_0033BA40(g_guiInstance + 0x3F7B0, latched);
+    button = func_00349ED0(g_guiInstance + 0x3CD48, D_138180);
+    if (button >= 0) {
+        if (FindChainTailFreeSlot((&g_menuButtonChainHeads)[button]) < 0) button = -1;
+    }
+    if (changed) {
+        func_0034A1C8(g_guiInstance + 0x3CD48);
+        if (g_menuSelectedButton < 0) g_menuSelectedButton = button;
+    }
+    func_0033BA28(g_guiInstance + 0x3F7B0, button);
+    return changed ? button : -1;
+down:
+    D_1A9A88 = gate - 1;
+    if (gate - 1 < 0) D_1A9A88 = 0;
+    return 0;
+}
+#endif
 
 /** Clear the front-end menu's latched selection (g_menuSelectedButton = -1). */
 void func_0029CA88(void) {
@@ -2118,7 +2215,7 @@ void func_0029CA88(void) {
 
 /* func_0029CA98: the GUI pump, run each frame through func_0029DC70. Skipped
  * while the HUD-busy word (g_hudClutSlots+0x10) is set. With the GUI up it
- * polls the front-end menu (func_0029C8F0), then offers the frame to the
+ * polls the front-end menu (PollFrontEndMenu), then offers the frame to the
  * manager's pre-tick hook, its four handler hooks and its two pending-pair
  * hooks (g_guiInstance+0x3F9F0/+0x3F9F8/+0x3FA18); any nonzero result ends
  * the frame there. Otherwise, unless the game is in state 4 (menu) with an
@@ -2168,7 +2265,7 @@ typedef struct {
     GuiHookSlot pending[2];     /* 0x3FA18, the GuiPendingPairs table */
 } GuiTickHooks;
 
-extern s32  func_0029C8F0(void);
+extern s32  PollFrontEndMenu(void);
 extern s32  func_0029C648(void);
 extern s32  GetMenuOverlayModeLive(void);
 
@@ -2185,7 +2282,7 @@ s32 func_0029CA98(void)
         goto done;
     }
     if (g_guiInstance != 0) {
-        func_0029C8F0();
+        PollFrontEndMenu();
         if (((GuiTickHooks *)g_guiInstance)->preTick != 0 &&
             ((GuiTickHooks *)g_guiInstance)->preTick() != 0) {
             goto done;

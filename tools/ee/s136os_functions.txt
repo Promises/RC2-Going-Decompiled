@@ -643,3 +643,4 @@ usa text/1B4218 BindMobyClassUpdateFunc
 usa text/178E88 ResolveZBufferOcclusionQueries
 usa text/1EFFC0 CloseTfragDrawSegment
 usa text/1EFFC0 TeardownVendorSceneRestorePlayer
+usa text/198FA0 PollFrontEndMenu
