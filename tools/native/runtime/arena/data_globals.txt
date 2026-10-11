@@ -351,6 +351,7 @@ D_1397C4
 D_1397E0
 D_1398A8
 D_139A28
+D_14D11C
 D_152CD0
 D_152CE4
 D_189EB8
@@ -653,6 +654,7 @@ D_1ABB1C
 D_1ABB20
 D_1ABB38
 D_1ABB6C
+D_1ABB90
 D_1ABBB0
 D_1ABBB4
 D_1ABBB8
@@ -1329,6 +1331,7 @@ g_gameStateTransitionDoneFlag
 g_gameStateTransitionTimer
 g_gameTime
 g_globalSoundDefsPtr
+g_globalWadBaseLbn
 g_gsPixelOffsetX
 g_gsPixelOffsetY
 g_gsScreenContext
