@@ -3506,9 +3506,9 @@ s32 GatherActiveObjectives(s32 *outIds, s32 *outMask, s32 *outVals, s32 wantValu
  * use). The tails are the nested-guard shape (`bnez; addiu $2,1 / daddu
  * $2,0`), which SN 1.36 keeps where cc1 2.9 scc-converts to sltu.
  * func_0029EC70 (HIGH shared, LO_SUM re-materialised) and the 0/1/2 arbiters
- * func_0029EB68/func_0029EBF8 are not closed by this. (func_0029EB68 is
- * byte-exact on the s136os arm since task #2098, by per-arm pointer locals;
- * see its own comment.) */
+ * func_0029EB68/func_0029EBF8 are not closed by this. (Both are byte-exact on
+ * the s136os arm since task #2098, func_0029EB68 by per-arm pointer locals and
+ * func_0029EBF8 device-free once gcse is on; see their own comments.) */
 /** Returns 1 iff the misc-extras gate is clear (g_miscExtras == 0) AND the
  *  D_1397E0 busy bit (0x8000000) is set; 0 otherwise.
  *  MATCHED on the s136os arm (task #1344): byte-identical to the ROM in the
@@ -3659,31 +3659,37 @@ s32 func_0029EB68(void) {
 #endif
 
 /* func_0029EBF8: dialog-skip arbiter twin of func_0029EB68 on the D_1A7BDD/
- * D_1A7B10 byte pair (posts 0x28/0x29 into D_2579B2, returns 0/1/2). WALLED
- * (probed 2026-06-12): the original (later SN cc1) copies the first byte to
- * $a0 and re-narrows it with a redundant `andi 0xFF` at each re-test; the
- * pinned cc1 tracks the lbu value range and deletes the narrowing on every
- * shape probed (u8 locals, s32 locals + (u8) casts, a|b joint test). Best
- * 52.77%. */
+ * D_1A7B10 byte pair. It posts 0x28/0x29 into D_2579B2 and returns 0/1/2:
+ * neither flag set: 0x28, return 0. Only the first: 0x29, return 1. Only the
+ * second: 0x29, return 2. Both: return 0, D_2579B2 unchanged.
+ *
+ * Byte-exact on the s136os arm since task #2098, device-free: the two-test
+ * shape below, re-reading both globals after the early-out. With gcse on
+ * (RULING #9910 unpinned this arm), gcse turns the second read of D_1A7BDD
+ * into a copy of the first (`daddu $4,$2,$0`). That copy's byte is re-narrowed
+ * (`andi $2,$4,0xFF`) at each re-test, which is the ROM's shape. The old WALLED
+ * note here ("the pinned cc1 tracks the lbu value range and deletes the
+ * narrowing", best 52.77%) and NOTE #9485's combine / nonzero_bits diagnosis
+ * (~30 spellings) were measured with -fno-gcse, where no such copy exists.
+ * On the solo s136os compile, the helper body #9485 kept as best still
+ * differs in 25 of 30 words unpinned; this body differs in 0. */
 extern s16 D_2579B2 ROM_SPLIT;   /* dialog-skip status code (0x28 / 0x29) */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029EBF8);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0029EBF8)
+S136OS_SLOT(func_0029EBF8);
 #else
-/* t511 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 60.57% -> IFCONV, first differing row @1: ROM `lbu v0, %lo(D_1A7BDD)(v0)` vs `lbu v1, %lo(D_1A7BDD)(v0)`;
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing, MATCH_ guard) 58.57% -> REGNUM-COLORING, first differing row @1: ROM `lbu v0, %lo(D_1A7BDD)(v0)` vs `lbu v1, %lo(D_1A7BDD)(v0)`. */
 s32 func_0029EBF8(void) {
-    if (D_1A7BDD == 0) {
+    if (D_1A7BDD == 0 && D_1A7B10 == 0) {
+        D_2579B2 = 0x28;       /* neither flag: base skip code, no arbitration */
+        return 0;
+    }
+    if (D_1A7BDD != 0) {
         if (D_1A7B10 == 0) {
-            D_2579B2 = 0x28;   /* neither flag: base skip code, no arbitration */
-            return 0;
+            D_2579B2 = 0x29;   /* only the first flag set */
+            return 1;
         }
+    } else if (D_1A7B10 != 0) {
         D_2579B2 = 0x29;       /* only the second flag set */
         return 2;
-    }
-    if (D_1A7B10 == 0) {
-        D_2579B2 = 0x29;       /* only the first flag set */
-        return 1;
     }
     return 0;                  /* both set: no skip, D_2579B2 unchanged */
 }
