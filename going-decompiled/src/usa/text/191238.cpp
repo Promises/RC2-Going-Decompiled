@@ -1,5 +1,6 @@
 #include "common.h"
 #include "vec.h"             /* Vec4 (16-byte xyzw) */
+#include "weapon.h"          /* WeaponDef (g_weaponTable records) */
 
 /*
  * text/191238 — boot/IRX init + sky render + segment/asset loader + MAP/minimap
@@ -4675,8 +4676,16 @@ s32 MapFindReadyCacheSlot(s32 fromEnd) {
  */
 /* MapCache type is shared by the matched MapFindCacheSlot body and the
  * TARGET_NATIVE #else bodies, so it lives outside the TARGET_NATIVE guard. */
+/* One galactic-map blip record, 0x28 bytes (MapDraw's g_pMapBlipList entries). */
+typedef struct MapBlipListEntry {
+    u8  _pad00[0xA];
+    s16 labelTextId;       /* +0xA  GetLocalizedString id of the blip's label */
+    s16 labelItemSlot;     /* +0xC  g_itemEquippedSlot index whose price "%b" shows */
+    u8  _pad0E[0x28 - 0xE];
+} MapBlipListEntry;
 typedef struct MapCache {
-    u8  _pad00[0x24];
+    u8  _pad00[0x20];
+    MapBlipListEntry *blipList; /* +0x20 g_pMapBlipList (0x1C4F40) */
     s32 available;         /* +0x24  */
     u8  _pad28[0x230 - 0x28];
     s32 currentLevel;      /* +0x230 */
@@ -5504,7 +5513,7 @@ s32 MapUpdate(void) {
  *       scratch array, pass 2b runs overlap-avoidance (nudges overlapping boxes
  *       apart along the minimum-penetration axis), pass 2c draws each blip's icon
  *       (DrawHudIconQuadPixelRgb) or rotated sprite (DrawHudSpriteRotated) plus an
- *       optional label (func_00298730 + DrawFont2TextBox).
+ *       optional label (FormatMapBlipLabel + DrawFont2TextBox).
  *   (3) the player-position marker (tex 0xE99A) when the story progress index
  *       equals the active slot, rotated by the compass/planet angle tables.
  *
@@ -5610,7 +5619,7 @@ extern void  func_00280BB8(void *box, u64 tint, void *str, s64 mode);           
 extern void  func_0028F8E0(u64 tex, s32 x, s32 y, s32 w, s32 h, s32 alpha, s32 rgb); /* DrawHudIconQuadPixelRgb */
 extern void  func_0028FC78(f32 x, f32 y, f32 w, f32 h, f32 angle, s32 a, s32 b, u64 tex); /* DrawHudSpriteRotated ($f16 = angle) */
 extern f32   WrapAnglePiSum(f32 angle, f32 sum);
-extern void  func_00298730(s32 blipIdx, void *outBuf);                           /* build blip label */
+extern void  FormatMapBlipLabel(s32 blipIdx, u8 *dest);                          /* build blip label */
 extern s32   func_00297B48(f32 x, f32 z, void *outX, void *outY, s32 progress);  /* project hero pos */
 extern void  func_00298918(f32 x, f32 z, void *outX, void *outY, s32 progress);  /* project hero fallback */
 extern void  func_00298AA8(f32 a, f32 b, f32 c, f32 d, f32 e);                   /* extra player marker */
@@ -6092,7 +6101,7 @@ void MapDraw(int useHudPass, long applyScissor) {
                                 }
                                 func_002904B0(lx - 2, ly, lx + lwi + 2, ly + lh + 8,
                                               0x40000000, 0);
-                                func_00298730(i, labelStr);
+                                FormatMapBlipLabel(i, (u8 *)labelStr);
                                 memset(&labelBox, 0, 0x18);
                                 labelBox.x0 = (s16)ly;          /* +0x00 */
                                 labelBox.y0 = (s16)(ly + lh);   /* +0x02 */
@@ -6673,26 +6682,118 @@ void func_002984E0(u8 *out) {
 }
 #endif
 
-/* func_00298730(idx, dest): expand a localized template string (id from
- * g_mapVertexData[+0x20] entry idx*0x28 +0xA) into dest, substituting the FIRST
- * "%<c>" sequence then copying the remainder literally. On "%b" it inserts the
- * equipped weapon's name via the deep indirection mapVertexData[+0x20] +
- * idx*0x28 -> entry[+0xC] (slot) -> g_itemEquippedSlot[slot] (item) ->
- * g_weaponTable[item*0xE0]+0x80 (name), formatted func_00115DA8(dest_scratch,
- * D_1A9758, name); any other "%<c>" formats through D_1A9760 (no arg).
+/*
+ * FormatMapBlipLabel (0x298730) — build the text label of galactic-map blip
+ * `blipIdx` into `dest`.
  *
- * PARK (#70) — fresh whole-.s trace 2026-07 (blockers pinned, still won't verify):
- * (1) D_1A9758 / D_1A9760 are UNRECOVERED format-string globals (not in
- *     symbol_addrs, referenced only from asm/data) — the sprintf output shape is
- *     unknown, so a faithful #else must GUESS the %b/other substitution text.
- * (2) the copy is threaded through FIVE likely-branches (beql/bnel @0x298790/
- *     /987B4/987C0/987DC/298878) whose delay slots interleave dest++ (beqz slot,
- *     unconditional) with the char store (bnel slot, taken-only) — the exact
- *     segment-boundary pointer/store ordering is the …l-nullify class that
- *     silently mis-copies if modeled wrong. (3) single-substitution-then-literal
- *     structure is unusual and needs oracle confirmation. Recover D_1A9758/D_1A9760
- *     + oracle-gate, then model. Bare INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00298730);
+ * The template is GetLocalizedString(blipList[blipIdx].labelTextId)
+ * (g_mapVertexData.blipList, 0x28-byte MapBlipListEntry). A NULL string writes
+ * nothing. The text is copied up to its FIRST '%'; the character after the '%'
+ * selects what is inserted: 'b' formats the bolt price of the item equipped in
+ * slot labelItemSlot (WeaponDef.price of g_weaponTable[g_itemEquippedSlot[slot]])
+ * with "%d" (D_1A9758), anything else formats D_1A9760, the literal "error".
+ * The rest of the template after the two-character sequence is copied
+ * verbatim (a later '%' is not expanded) and `dest` is NUL-terminated. The
+ * scratch buffer is 0x50 bytes on the stack.
+ *
+ * Named at promotion (task #2104, RULING #10083): its sole caller is MapDraw
+ * (jal 0x297818), which passes the blip loop index in $4 and its stack buffer
+ * (sp+0xB8) in $5, then hands that same buffer to DrawFont2TextBox (0x280BB8,
+ * jal 0x297880) as the label it draws. The format words D_1A9758 = "%d" and
+ * D_1A9760 = "error" were read from the image; the old PARK (#70) note called
+ * them unrecovered and the price word a weapon name.
+ *
+ * MATCHED on the s136os arm (task #2104; SN 2.95.3 v1.36 -fopt-stack, unit
+ * S136EXTRA="" per RULING #9070, so gcse is on). Priced on the solo s136
+ * screen by undoing each choice alone (positional words different of 99,
+ * relocated fields masked):
+ *   - the blip list read as the typed MapCache.blipList field, and the price
+ *     as WeaponDef.price: a byte-offset `(u8 *)&g_mapVertexData + 0x20` folds
+ *     the 0x20 into the %lo where the ROM forms the base and loads 0x20($4),
+ *     and `g_weaponTable + n * 0xE0 + 0x80` folds the 0x80 into the table's
+ *     %lo (7 and 2 words);
+ *   - the price record indexed inline from g_mapVertexData.blipList[blipIdx]
+ *     rather than through a record-pointer local: the local swaps the
+ *     $2/$3/$4 allocation of the product, base and sum (6 words).
+ * R5900 SHORT-LOOP PAD (SCHEDULING DEVICE, RULING #8435; the same device and
+ * rationale as R5900_SHORT_LOOP_PAD3 above func_00294970): both copy loops are
+ * 4 instructions and the ROM's assembler padded each with 2 `nop`s before the
+ * backward `bnez` to the R5900 short-loop minimum of 6. "+r"(c) pins the pad
+ * between the load and the branch that tests it; "r"(dest) keeps the dest
+ * step after it, for reorg to move into the delay slot as the ROM has it.
+ * Without the pads the body is 96 words (25 differ); without the "r"(dest)
+ * operand reorg fills a bnel's likely slot with the store instead (28 differ).
+ * Emits only nops; empty on native.
+ * GUARD (task #2104): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C.
+ */
+#ifndef TARGET_NATIVE
+#define R5900_SHORT_LOOP_PAD2(v, next) \
+    __asm__(".set noreorder\n\tnop\n\tnop\n\t.set reorder" : "+r"(v) : "r"(next))
+#else
+#define R5900_SHORT_LOOP_PAD2(v, next) ((void)0)
+#endif
+#if !defined(TARGET_NATIVE) && !defined(S136OS_FormatMapBlipLabel)
+S136OS_SLOT(FormatMapBlipLabel);
+#else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern char *GetLocalizedString(s32 id);
+extern s32 sprintf(char *dst, const char *fmt, ...);
+extern u8 g_itemEquippedSlot[];
+extern u8 g_weaponTable[];
+extern char D_1A9758[];        /* "%d" */
+extern char D_1A9760[];        /* "error" */
+/* (end of this body's declarations) */
+void FormatMapBlipLabel(s32 blipIdx, u8 *dest) {
+    u8 buf[0x50];
+    u8 *src;
+    u8 *ins;
+    u8 c;
+
+    src = (u8 *)GetLocalizedString(g_mapVertexData.blipList[blipIdx].labelTextId);
+    ins = buf;
+    if (src == 0) {
+        return;
+    }
+    while (*src != 0 && *src != '%') {
+        *dest++ = *src++;
+    }
+    if (*src == 0) {
+        *dest = *src;
+        return;
+    }
+    src++;
+    if (*src == 'b') {
+        WeaponDef *item = &((WeaponDef *)g_weaponTable)
+            [g_itemEquippedSlot[g_mapVertexData.blipList[blipIdx].labelItemSlot]];
+        sprintf((char *)buf, D_1A9758, item->price);
+    } else {
+        sprintf((char *)buf, D_1A9760);
+    }
+    src++;
+    c = *ins;
+    while (c != 0) {
+        *dest = c;
+        ins++;
+        c = *ins;
+        R5900_SHORT_LOOP_PAD2(c, dest);
+        dest++;
+    }
+    c = *src;
+    while (c != 0) {
+        *dest = c;
+        src++;
+        c = *src;
+        R5900_SHORT_LOOP_PAD2(c, dest);
+        dest++;
+    }
+    *dest = 0;
+}
+#endif
 
 /* func_002988C8(idx) — UI element slot for `idx`: on level 0x14
  * (g_playerProgress) one of two 0x10-byte slots at D_1A9428, picked by the

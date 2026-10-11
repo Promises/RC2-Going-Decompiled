@@ -119,6 +119,7 @@ func_00291CB8 = 0x00291CB8; // type:func size:0x8
 func_00291CC0 = 0x00291CC0; // type:func
 func_00297F98 = 0x00297F98; // type:func size:0x8
 func_00297FA0 = 0x00297FA0; // type:func
+FormatMapBlipLabel = 0x00298730; // type:func - builds a galactic-map blip label, named at promotion (task 2104) - sole caller MapDraw (jal 0x297818) passes the blip index and a stack buffer, then draws that buffer with DrawFont2TextBox (jal 0x297880). It expands GetLocalizedString(blip +0xA) up to the first percent sign, inserting the equipped item price via sprintf with the format word D_1A9758 (percent-d), or the literal error string D_1A9760
 func_002989F8 = 0x002989F8; // type:func size:0x8
 func_00298A00 = 0x00298A00; // type:func
 func_0029DCB0 = 0x0029DCB0; // type:func size:0x8
