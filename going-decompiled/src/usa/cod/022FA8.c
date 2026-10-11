@@ -2999,9 +2999,13 @@ extern char D_0013B9F8[];   /* "Invalid modion type -- ignored(%d)" */
 #define IPU_CUR_FRAME(dec, i) ((IpuPictureSize *)(dec)->frames[i][2])
 
 /**
- * Finish macroblock `mba` of the current picture: the reconstruction step of
- * mpeg2decode's decode_macroblock loop, run by IpuDecodeSlice for every
- * macroblock it decodes or skips. Returns 1, or 0 for a bad motion type.
+ * mpeg2decode's motion_compensation() on the IPU, for macroblock `mba` of the
+ * current picture: IpuDecodeSlice calls it for every macroblock right after
+ * decoding it (func_0012BB60) or skipping it (func_0012BAA0), where the
+ * reference slice() calls motion_compensation. Returns 1, or 0 for a bad
+ * motion type. Named at promotion (RULING #10083) from that call site, the
+ * reference's bx/by = 16 * (MBA % mb_width), 16 * (MBA / mb_width), and
+ * form_predictions (func_001296A0) run only for a non-intra macroblock.
  *
  * `mba` is split into column bx = mba % mbWidth and row by = mba / mbWidth.
  * An intra macroblock only waits for the toSPR DMA (channel 9, CHCR
@@ -3028,7 +3032,7 @@ extern char D_0013B9F8[];   /* "Invalid modion type -- ignored(%d)" */
  * local in the frame-picture arm, so the record slot is read before the
  * frame pointer, 0.
  */
-s32 func_00129450(IpuDecoder *dec, s32 mba, s32 mbaInc, s32 macroblockType, s32 motionType,
+s32 IpuMotionCompensation(IpuDecoder *dec, s32 mba, s32 mbaInc, s32 macroblockType, s32 motionType,
                   s32 pmv[2][2][2], s32 mvFieldSel[2][2], s32 dmvector[2]) {
     s32 intra = macroblockType & 1;
     s32 bx = mba % dec->mbWidth;
@@ -3100,7 +3104,7 @@ extern char D_0013BA80[];   /* "intra && skip MB" */
  * What it needs is the record as the typed IpuDecoder.mb[slot] member (the
  * ROM keeps dec + 0x6B8/0x6BC/0x6C0 and the two fn-table bases in saved
  * registers or stack slots and adds slot * 0x140 at each use), the shape
- * func_00129450 needed too.
+ * IpuMotionCompensation needed too.
  */
 void func_0012A1C8(IpuDecoder *dec, s32 slot) {
     s32 i;
@@ -3472,7 +3476,7 @@ extern s32 IpuWaitBdec(IpuDecoder *dec);
 extern s32 func_0012BB60(IpuDecoder *dec, s32 *macroblockType, s32 *motionType,
                          s32 *dctType, s32 pmv[2][2][2], s32 mvFieldSel[2][2],
                          s32 dmvector[2]);
-extern s32 func_00129450(IpuDecoder *dec, s32 mba, s32 mbaInc, s32 macroblockType,
+extern s32 IpuMotionCompensation(IpuDecoder *dec, s32 mba, s32 mbaInc, s32 macroblockType,
                          s32 motionType, s32 pmv[2][2][2], s32 mvFieldSel[2][2],
                          s32 dmvector[2]);
 extern void func_0012A1C8(IpuDecoder *dec, s32 slot);
@@ -3489,7 +3493,7 @@ s32 func_0012BAA0(IpuDecoder *dec, s32 pmv[2][2][2], s32 *motionType,
  * next increment (func_0012B568). An address past mbaMax is reported
  * (D_0013BB58) and returns 2. A coded macroblock (increment 1) is decoded by
  * func_0012BB60 (failure: 1), a skipped one by func_0012BAA0 (failure: 2);
- * both are then motion-compensated by func_00129450 (failure: 2). From the
+ * both are then motion-compensated by IpuMotionCompensation (failure: 2). From the
  * second macroblock on, the previous record (mbSlot ^ 1) is flushed through
  * func_0012A1C8. Every failure clears lastDecodeZero.
  *
@@ -3542,7 +3546,7 @@ s32 IpuDecodeSlice(IpuDecoder *dec, s32 mbaMax) {
         } else if (func_0012BAA0(dec, pmv, &motionType, mvFieldSel[0], &macroblockType) == 0) {
             goto fail;
         }
-        if (func_00129450(dec, mba, mbaInc, macroblockType, motionType, pmv,
+        if (IpuMotionCompensation(dec, mba, mbaInc, macroblockType, motionType, pmv,
                           mvFieldSel, dmvector) == 0) {
         fail:
             dec->lastDecodeZero = 0;
