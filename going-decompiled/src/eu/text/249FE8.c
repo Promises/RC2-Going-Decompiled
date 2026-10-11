@@ -1107,8 +1107,10 @@ void func_0034C670(GuiWidget *w, s32 v) {
  * value at +0x3FC and arm the transition timers (+0x3F8, +0x3F4). Matching arm stays
  * INCLUDE_ASM; #else is the structure model.
  * Word-verified vs USA func_0034B1F0: g_bPlayerMode KEEPS its name (EU emits it
- * ABSOLUTE lui %hi/lbu %lo, so the EU matching arm may byte-match where USA hits
- * the gp-vs-absolute wall — a future EU-only attempt).
+ * ABSOLUTE lui %hi/lbu %lo, so the EU matching arm may byte-match where the USA
+ * attempt once recorded a gp-vs-absolute wall — a future EU-only attempt). The
+ * USA twin is byte-exact on the sdk29 arm since task #894, the same cc1 and flags
+ * EU builds with, and this EU twin was NOT re-tried after that.
  * REGION DELTA (FLAGGED, PAL/NTSC timing): EU arms +0x3F8 = 0x96 (150) and
  * +0x3F4 = 0xFA (250) vs USA 0xB4 (180) / 0x12C (300) — 50/60 Hz frame-count
  * scaling of the same 3 s / 5 s transition. Modeled faithfully from EU .s. */

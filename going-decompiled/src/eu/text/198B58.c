@@ -1313,8 +1313,9 @@ void func_0029BFC0(void) {
 
 /* func_0029BFF0(a,b): EU twin of USA func_0029C448 — forward two args to the
  * widget at g_guiInstance+0x36F28 (method func_0033A248). Register-coloring wall
- * ($v0/$v1 residue; EU-only claim now: the USA twin is byte-exact on the sdk29
- * arm since task #888, and this EU twin was NOT re-tried after that); matching
+ * ($v0/$v1 residue; label inherited from the USA attempt, unmeasured on EU: the
+ * USA twin is byte-exact on the sdk29 arm since task #888, the same cc1 and flags
+ * EU builds with, and this EU twin was NOT re-tried after that); matching
  * arm stays INCLUDE_ASM, #else is the model.
  * Word-verified vs USA func_0029C448: method func_00339398->func_0033A248; widget
  * offset 0x36F28 UNCHANGED (widget-embed offsets are NOT +0xB0-shifted in EU). */
@@ -2272,9 +2273,11 @@ typedef struct ObjectiveScan {
 
 /* UpdateLevelObjectiveStates: EU twin. WALLED (later-cc1 register-coloring/frame
  * wall, same class as the unit's GatherActiveObjectives /
- * EvaluateProgressCondition). That is now an EU-only claim: the USA twin is
- * byte-exact on the s136os arm since task #2098, and this EU twin was NOT
- * re-tried after that close. The TARGET_NATIVE arm is the faithful portable
+ * EvaluateProgressCondition). Label inherited from the USA attempt, unmeasured
+ * on EU: the USA twin is byte-exact on the s136os arm since task #2098, which
+ * USA builds unpinned (RULING #9910) while EU inherits -fno-gcse via
+ * unit_flags.sh:66 — so the USA close is not evidence for EU on that arm, and
+ * this EU twin was NOT re-tried. The TARGET_NATIVE arm is the faithful portable
  * body, cmp-oracle'd 69/69 on the USA twin (region-identical logic). See the USA
  * 198FA0.c doc comment for the per-pass behaviour. */
 #ifndef TARGET_NATIVE

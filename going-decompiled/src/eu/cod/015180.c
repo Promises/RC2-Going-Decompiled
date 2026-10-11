@@ -3117,9 +3117,14 @@ s64 func_00122630(FpParts *p) {
  * func_00122760 = decompose the IEEE-754 double *value into FpParts at out
  * (sign, 11-bit exponent field, 52-bit fraction; class 2 zero/subnormal, 4 inf,
  * 1/0 quiet/signalling NaN, 3 normal with mantissa = (frac<<8)|(1<<60) and
- * exponent rebiased by -0x3FF). NEAR-MISS WALL (93.54%) - see the USA twin for
- * the sign/exp register-swap + constant-preload scheduling diffs ee-gcc won't
- * reproduce. Shipped as a cmp-oracle'd portable #else (run_cmp_015180_iso.sh).
+ * exponent rebiased by -0x3FF). NEAR-MISS WALL (93.54%) - the USA twin's comment
+ * records the sign/exp register-swap + constant-preload scheduling diffs ee-gcc
+ * won't reproduce. That USA twin was not promoted: it is libgcc dp-bit.o's
+ * __unpack_d, and since task #1837 the USA EE build links the whole dp-bit.o
+ * member from the vendored Cygnus EE fp-bit.c (the libgcc route, RULING #8206 /
+ * #9735), not a game-C promotion. EU was not re-tried; as an SDK libgcc.a member
+ * this EU twin enters only by that library route or stays INCLUDE_ASM (#9735).
+ * Shipped as a cmp-oracle'd portable #else (run_cmp_015180_iso.sh).
  */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00122760);

@@ -103,8 +103,9 @@ extern void  func_0011B500(void *dst, void *src); /* poll IOP load status into d
 /* snd_ServiceRpcCompletion: poll the cmd-channel RPC result buffer after
  * func_0011AEA0/sceSifCheckStatRpc; returns 1 when the transfer is complete (both
  * terminators consumed), 0 while it is still running. Not matched — branch-layout
- * shape this cc1 won't reproduce (EU-only claim now: the USA twin is byte-exact
- * on the sdk29 arm since task #855; this EU twin was NOT re-tried after that).
+ * shape this cc1 won't reproduce (label inherited from the USA attempt, unmeasured
+ * on EU; the USA twin is byte-exact on the sdk29 arm since task #855, the same
+ * cc1 and flags EU builds with, and this EU twin was NOT re-tried after that).
  * Portable #else body (EU
  * lockstep with USA snd_ServiceRpcCompletion; data globals +0x80). */
 #ifndef TARGET_NATIVE
@@ -264,8 +265,12 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/0321A0", snd_BankLoadFromE
 /* snd_BankLoadFromIOP: request a bank already resident on the IOP (RPC fn 0x59,
  * single 4-byte arg) and block until the IOP posts the result. Returns the load
  * handle, or 0 on early-out / RPC failure. Simplest of the family (no
- * CheckLoadInProgress gate, no branch-likely). Not matched — same frame wall as
- * USA. Portable #else body (EU lockstep with USA snd_BankLoadFromIOP; +0x80). */
+ * CheckLoadInProgress gate, no branch-likely). Not matched — frame wall; label
+ * inherited from the USA attempt, unmeasured on EU: the USA twin is byte-exact
+ * on the s136os arm since task #1914 (this unit's flags, -G8 and no cc1 pins, are
+ * the same for both regions on both arms, but EU has no s136os rows), and this
+ * EU twin was NOT re-tried after that.
+ * Portable #else body (EU lockstep with USA snd_BankLoadFromIOP; +0x80). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/0321A0", snd_BankLoadFromIOP);
 #else

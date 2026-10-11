@@ -32,8 +32,11 @@ extern s32 D_1A8B10;
 extern s32 D_1A8B14;
 
 /* func_002884F0: USA twin func_00288600 (camera-matrix rebuild from an angle
- * pair). Held INCLUDE_ASM in USA by the proven 16-byte callee-save-slot layout
- * wall; same wall applies in EU. */
+ * pair). The USA attempt once recorded a 16-byte callee-save-slot layout wall;
+ * that twin is byte-exact on the s136os arm since task #1805, so it is no longer
+ * held INCLUDE_ASM in USA. Label inherited from the USA attempt, unmeasured on
+ * EU: this unit's flags (-G8, no cc1 pins) are the same for both regions on both
+ * arms, but EU has no s136os rows, and this EU twin was NOT re-tried. */
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188470", func_002884F0);
 
 /* func_00288638: USA twin func_00288748 (arcmin->rad camera roll step). Same

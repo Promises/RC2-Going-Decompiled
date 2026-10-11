@@ -665,8 +665,11 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_00293910);
  * chunk's embedded chunk-relative pointers to absolute addresses: chunk =
  * table[idx] (base-ptr array at +0x48); rebase the +0x14 pointer (if non-zero)
  * and the +0x1C[count] pointer array (count = byte at +0x10) by the chunk base.
- * Region-agnostic body (no global refs). See USA twin for the daddu/move
- * single-instruction version wall; kept as #else.
+ * Region-agnostic body (no global refs). The USA twin's comment once recorded a
+ * daddu/move single-instruction version wall; label inherited from the USA
+ * attempt, unmeasured on EU: the USA twin is byte-exact on the sdk29 arm since
+ * task #496, the same cc1 and flags EU builds with, and this EU twin was NOT
+ * re-tried after that; kept as #else.
  */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_00293B70);
@@ -1196,8 +1199,11 @@ void func_002949D0(void) {
  * record: when enabled and the slot index rec[1] is non-negative, store the class
  * id rec[0] into the per-slot in-flight table (D_0014B5C0+0x7790, field +0x34,
  * stride 4 by slot). If the slot index equals the armed-slot latch D_1A93FC, that
- * latch is toggled to rec[1]^1. rec[0] is ALWAYS stamped -1 on return. See USA
- * twin for the daddu/move version wall (cmp-oracle-verified semantics); #else.
+ * latch is toggled to rec[1]^1. rec[0] is ALWAYS stamped -1 on return. The USA
+ * twin's comment once recorded a daddu/move version wall (cmp-oracle-verified
+ * semantics); label inherited from the USA attempt, unmeasured on EU: the USA
+ * twin is byte-exact on the sdk29 arm since task #804, the same cc1 and flags EU
+ * builds with, and this EU twin was NOT re-tried after that; #else.
  */
 extern u8  D_0014B5C0[];   /* g_discToc (EU); in-flight table at +0x7790 */
 extern s32 D_1A93FC;       /* armed-slot latch (EU) */
@@ -1274,9 +1280,10 @@ void func_00294BB0(s32 level, s32 arg2, void *dest, s32 variant) {
  * Otherwise, unless the per-slot in-flight record (D_0014B5C0+0x7790 + slot, field
  * +0x34) already equals the found index, kick the load via func_00294BB0 with the
  * per-slot dest buffer (slot*0xC800 + table+0x40). The USA twin's comment once
- * recorded a daddu/move version wall; that twin is byte-exact on the sdk29 arm
- * since task #679, and this EU twin was NOT re-tried after that. Kept as the
- * portable #else.
+ * recorded a daddu/move version wall; label inherited from the USA attempt,
+ * unmeasured on EU: the USA twin is byte-exact on the sdk29 arm since task #679,
+ * the same cc1 and flags EU builds with, and this EU twin was NOT re-tried after
+ * that. Kept as the portable #else.
  */
 extern void func_00294BB0(s32 idx, s32 slot, void *dest, s32 a3);
 #ifndef TARGET_NATIVE
@@ -1588,9 +1595,10 @@ s32 MapFindCacheSlot(s32 levelAndFlag) {
  * The 0x100 flag selects the primary map-data TOC when set (+0x14F4 sector count),
  * the secondary (+0x15D4) when clear; low byte is the level (stride 8 into g_discToc).
  * Returns 1 if the sector count > 0. Matching arm stays INCLUDE_ASM; #else is the
- * structure model (register-coloring wall; EU-only claim now: the USA twin is
- * byte-exact on the sdk29 arm since task #895, and this EU twin was NOT
- * re-tried after that).
+ * structure model (register-coloring wall; label inherited from the USA attempt,
+ * unmeasured on EU: the USA twin is byte-exact on the sdk29 arm since task #895,
+ * the same cc1 and flags EU builds with, and this EU twin was NOT re-tried after
+ * that).
  * Word-verified vs USA MapDataExistsForLevel (raw .s): only ref g_discToc ->
  * D_0014B5C0; offsets 0x14F4 / 0x15D4 and stride 8 unchanged (region delta is the
  * base +0x80 only). */
@@ -1834,8 +1842,12 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_00297B78);
  * (func_00297EB0), then for each of 32 column-blocks pack 32 pixels into one
  * 32-bit word (bit set when the pixel nibble is nonzero). Output word (row,col)
  * lands at dest + 4*((row%16) + 512*(row/16)) + col*0x40. Matching arm stays
- * INCLUDE_ASM; #else is the structure model (strength-reduction near-miss, same
- * as USA). Word-verified vs USA MapBuildBitmapFrom4bpp: only callee
+ * INCLUDE_ASM; #else is the structure model (strength-reduction near-miss; label
+ * inherited from the USA attempt, unmeasured on EU: the USA twin is byte-exact
+ * on the s136os arm since task #1915, which USA builds unpinned (RULING #9070)
+ * while EU inherits -fno-gcse via unit_flags.sh:66 — so the USA close is not
+ * evidence for EU on that arm, and this EU twin was NOT re-tried).
+ * Word-verified vs USA MapBuildBitmapFrom4bpp: only callee
  * func_00297E80 -> func_00297EB0; scratchpad 0x70000000 region-invariant. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", MapBuildBitmapFrom4bpp);
