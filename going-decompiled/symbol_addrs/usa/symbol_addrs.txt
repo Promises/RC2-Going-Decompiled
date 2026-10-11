@@ -1276,6 +1276,7 @@ Begin2dDrawBatch = 0x0027CBA0; // CONFIRMED - opens 2D chain segment - resets VR
 End2dDrawBatch = 0x0027CCC0; // CONFIRMED - closes segment - NEXT-tag detour runs texture uploads before the draw packets
 GetUiTextureTex0 = 0x0027CED8; // CONFIRMED mechanism - central UI TEX0 provider - ids -1..-8 = screen-grab/FB/depth as texture
 GetHudIconTex0 = 0x0028EEA8; // CONFIRMED mechanism - HUD icon CLUT+texture VRAM residency + upload queueing - returns TEX0
+DrawHudIconQuadSized = 0x0028F540; // type:func - draws a HUD icon at an explicit pixel size, named at promotion (task 2108) - it appends a textured-sprite GIF packet (PRIM 0x156) to g_frameDmaCursor with the TEX0 that GetHudIconTex0 returns for its first argument, UV (0,0)..(w,h) from its w and h arguments, and XYZ2 from the GS offsets g_gsPixelOffsetX/Y - called by func_0028E640 (the 0x28E680 HUD callback), with Track-B proposal DrawHudIconQuadSized in the 2D draw-primitive list above
 ResetVramSlotTable = 0x002F1DF8; // PARTIAL - invalidates the 0x20-byte VRAM slot table on dropped frames - owner untraced
 FadeOutToBlackBlocking = 0x0027D9B0; // CONFIRMED mechanism - synchronous vsync fade loop using g_fadeQuadPacket
 // === Track-B scene-transition / frame-arena render cluster (COMMENT-ONLY: these are INCLUDE_ASM / fused / mis-split, so NOT emitted as active name=addr to avoid glabel/splat desync at re-split). ===

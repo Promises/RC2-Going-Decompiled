@@ -652,3 +652,4 @@ usa text/1D54C0 TickStreamedImageWidget
 usa text/1D54C0 DrawActiveObjectivesList
 usa text/1CA080 MenuScreenUpdate
 usa text/1CA080 BuildPausePromptPopup
+usa text/188858 DrawHudIconQuadSized

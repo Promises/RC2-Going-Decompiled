@@ -6122,8 +6122,8 @@ extern void Vec4SubVu0(f32 *dst, const f32 *a, const f32 *b); /* 0x2836A0 */
 
 /* func_0028F0D0 = DrawHudIconQuadTiled: draw a HUD icon as a textured-sprite GIF
  * packet (0x60-byte, NLOOP=5) to the frame render-DMA chain. Sibling of
- * func_0028F540/func_0028F700: screen coords are 1/16-pixel subpixel (coord<<4,
- * like func_0028F540), while the UV rectangle spans the icon's full texture
+ * DrawHudIconQuadSized/func_0028F700: screen coords are 1/16-pixel subpixel (coord<<4,
+ * like DrawHudIconQuadSized), while the UV rectangle spans the icon's full texture
  * (2^logW x 2^logH texels, like func_0028F700) rather than the passed size.
  *
  *   iconIndex  index into g_hudIconMap (and GetHudIconTex0)
@@ -6252,56 +6252,72 @@ __asm__(".extern g_gsPixelOffsetY, 16");
 extern s32 g_gsPixelOffsetY;    /* 0x1A7354 - GS window Y offset */
 extern u64 GetHudIconTex0(s32 iconIndex);   /* resolve a HUD icon's GS tex0 register */
 
-/* DLI lever MEASURED (task #1220; unit objdiff report, objdiff_build.sh, this #else body promoted
- * SOLO, sdk29 arm, colima-ee-x86; every other row in the unit unchanged). cc1 emits
- * `dli $10,0x7400000000008001`; the ROM holds Ps2EeAs's expansion of that value at 0x28F570 ($11),
- * but in a different register. No allowlist row applies to the body AS COMPILED: a row must carry
- * the ROM's words for cc1's register. A #8598 pin + row is UNTRIED. Solo score 24.56%. Residual
- * class: REGALLOC at the dli site, plus PACKED-SAVE (ROM saves at stride 8, cc1 2.9 at 16; NOTE
- * #8777).
- * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
- * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
- * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
- * property and was measured false as the reason this member stays unmatched (FACT #9873).
- * Residual: the saved-register set; the rest UNMEASURED. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028F540);
+/* Byte-exact on the s136os arm since task #2108 (188858's unpinned arm, S136EXTRA="", RULING
+ * #9450). The old notes here measured the #else body that cached the cursor, the GS offsets and
+ * the Z word in locals: on sdk29 (task #1220) a 24.56% solo score with the dli in $10, and on
+ * s136os (NOTE #9871) 105/106 words with a different saved-register set. Both were properties of
+ * that body: the ROM re-reads g_frameDmaCursor for each of the four tag stores and re-reads both
+ * GS offsets and the Z word for each corner, and spelled that way cc1 allocates the ROM's six
+ * saves and puts the dli in the ROM's $11. What closes it, each measured alone (solo s136os
+ * harness, aligned diff of 106 words, NOTE filed by task #2108):
+ *   - every global re-read at each use, no locals for them  (as written before: 165 -> 8);
+ *   - the Z word read through g_pActiveTextTableAbs, so gas forms it `lui; lw %lo` as the ROM
+ *     does (the #8036 alias above, RULING #8620) - without it the two reads are one %gp_rel
+ *     word each and every later word shifts;
+ *   - the far UV summed (h << 20) + (w << 4), the ROM's operand order;
+ *   - the dli at 0x28F570 assembled to Ps2EeAs's expansion by its allowlist row in
+ *     tools/ee/ps2eeas_dli_sites.txt (RULING #8549) - GNU as's `lui; dsll32; ori` differs in
+ *     two words.
+ * No pin, no fence, no flag. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_DrawHudIconQuadSized)
+S136OS_SLOT(DrawHudIconQuadSized);
 #else
 /**
- * Draw a 1:1 HUD icon: append a textured-sprite GIF packet (0x60-byte NLOOP=5)
- * to the frame render-DMA chain (g_frameDmaCursor) blitting the icon's texture
- * over screen rect (x,y)..(x+w,y+h). The tex0 register is resolved via
- * GetHudIconTex0(iconIndex); UV spans (0,0)..(w,h) texels (fixed-point <<4 for U,
- * <<20 for V); RGB tint 0x7F7F7F with the given alpha; Z from
- * &g_pActiveTextTable+0x3C. Screen coords are 1/16-pixel subpixel (coord<<4, -8
- * bias, off = g_gsPixelOffset). Advances the cursor by 0x60.
+ * DrawHudIconQuadSized (0x28F540, splat func_0028F540; named at promotion, task #2108): draw a
+ * HUD icon at an explicit size. Appends a textured-sprite GIF packet (0x60 bytes, NLOOP=5) to
+ * the frame render-DMA chain at g_frameDmaCursor, blitting the icon's texture over the screen
+ * rect (x,y)..(x+w,y+h).
+ *
+ *   iconIndex  HUD icon; its GS TEX0 comes from GetHudIconTex0(iconIndex)
+ *   x, y       top-left screen position in pixels (sent as GS 12.4 fixed point: <<4, -8 bias,
+ *              plus g_gsPixelOffsetX/Y)
+ *   w, h       size in pixels; the UV rectangle spans (0,0)..(w,h) texels (U <<4, V <<20)
+ *   alpha      vertex alpha; RGB is fixed at 0x7F7F7F
+ *
+ * The packet is a 16-byte DMA/GIF header (0x10000005, 0, 0, 0x50000005), after which the cursor
+ * is advanced by 0x10, then ten 64-bit words: the A+D tag 0x7400000000008001, register list
+ * 0x5353106, TEX0, PRIM 0x156 (sprite, textured, alpha-blended, UV), RGBAQ, UV0, XYZ2, UV1, XYZ2,
+ * 0. The cursor is then advanced by a further 0x50. Z is the word at g_pActiveTextTable+0x3C
+ * (0x1B17FC), placed in bits 32..63 of both XYZ2 words.
+ *
+ * Non-obvious: the coordinate words are built from SIGNED 32-bit values, as the ROM builds them
+ * (dsll of the sign-extended register, no zero-extension), so a negative X or Y sets the upper
+ * bits of its XYZ2 word over the Y and Z fields. Callers keep coordinates on screen.
  */
-void func_0028F540(s32 iconIndex, s32 x, s32 y, s32 w, s32 h, s32 alpha) {
-    u8 *p = (u8 *)g_frameDmaCursor;
-    s32 offX = g_gsPixelOffsetX;
-    s32 offY = g_gsPixelOffsetY;
-    u64 z = (u64)(u32)*(s32 *)((u8 *)&g_pActiveTextTable + 0x3C) << 32;
+void DrawHudIconQuadSized(s32 iconIndex, s32 x, s32 y, s32 w, s32 h, s32 alpha) {
+    u64 *packet;
 
-    *(u32 *)(p + 0x0) = 0x10000005;
-    *(u32 *)(p + 0x4) = 0;
-    *(u32 *)(p + 0x8) = 0;
-    *(u32 *)(p + 0xC) = 0x50000005;
-    g_frameDmaCursor = (u32 *)(p + 0x10);
+    g_frameDmaCursor[0] = 0x10000005;
+    g_frameDmaCursor[1] = 0;
+    g_frameDmaCursor[2] = 0;
+    g_frameDmaCursor[3] = 0x50000005;
+    packet = (u64 *)(g_frameDmaCursor + 4);
+    g_frameDmaCursor = (u32 *)packet;
 
-    *(u64 *)(p + 0x10) = ((u64)0xE800 << 47) | 0x8001;
-    *(u64 *)(p + 0x18) = 0x5353106;
-    *(u64 *)(p + 0x20) = GetHudIconTex0(iconIndex);
-    *(u64 *)(p + 0x28) = 0x156;
-    *(u64 *)(p + 0x30) = ((u64)(u32)alpha << 24) | 0x7F7F7F;
-    *(u64 *)(p + 0x38) = 0; /* near UV (0,0) */
-    *(u64 *)(p + 0x40) = (u64)(u32)((x << 4) + offX - 8)
-                       | ((u64)(u32)((y << 4) + offY - 8) << 16)
-                       | z;
-    *(u64 *)(p + 0x48) = (u64)(u32)((w << 4) + (h << 20)); /* far UV (w,h) texels */
-    *(u64 *)(p + 0x50) = (u64)(u32)(((x + w) << 4) + offX - 8)
-                       | ((u64)(u32)(((y + h) << 4) + offY - 8) << 16)
-                       | z;
-    *(u64 *)(p + 0x58) = 0;
+    packet[0] = ((u64)0xE800 << 47) | 0x8001;
+    packet[1] = 0x5353106;
+    packet[2] = GetHudIconTex0(iconIndex);
+    packet[3] = 0x156;
+    packet[4] = ((u64)alpha << 24) | 0x7F7F7F;
+    packet[5] = 0;                                  /* UV0 (0,0) */
+    packet[6] = (u64)((x << 4) + g_gsPixelOffsetX - 8)
+              | ((u64)((y << 4) + g_gsPixelOffsetY - 8) << 16)
+              | ((u64)*(s32 *)((u8 *)&g_pActiveTextTableAbs + 0x3C) << 32);
+    packet[7] = (h << 20) + (w << 4);               /* UV1 (w,h) texels */
+    packet[8] = (u64)(((x + w) << 4) + g_gsPixelOffsetX - 8)
+              | ((u64)(((y + h) << 4) + g_gsPixelOffsetY - 8) << 16)
+              | ((u64)*(s32 *)((u8 *)&g_pActiveTextTableAbs + 0x3C) << 32);
+    packet[9] = 0;
 
     g_frameDmaCursor = (u32 *)((u8 *)g_frameDmaCursor + 0x50);
 }
@@ -6332,7 +6348,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028F700);
 /**
  * func_0028F700 = DrawHudIconQuadPixel: draw a HUD icon as a textured-sprite GIF
  * packet (0x60-byte NLOOP=5) at whole-pixel screen coords. Sibling of
- * func_0028F540; the two differences are that screen coordinates are whole
+ * DrawHudIconQuadSized; the two differences are that screen coordinates are whole
  * pixels here (no <<4 subpixel), and the UV rectangle spans the icon's full
  * texture - 2^wLog2 x 2^hLog2 texels, where wLog2/hLog2 are the bytes at +0x6/
  * +0x7 of the icon's g_hudTextureSlots entry (indexed through
@@ -6612,7 +6628,7 @@ void func_0028FC78(f32 cx, f32 cy, f32 halfW, f32 halfH, f32 angle,
 
 /* func_0028FFF0: draw a HUD icon as a textured-sprite GIF packet (0x60-byte,
  * NLOOP=5) with fully explicit corner coordinates AND texture coordinates — the
- * most general of the cluster. Unlike func_0028F540/func_0028F8E0 (which derive
+ * most general of the cluster. Unlike DrawHudIconQuadSized/func_0028F8E0 (which derive
  * the far UV from the texture size), the caller supplies both the near and far
  * UV directly. Whole-pixel screen coords; fixed RGB 0x7F7F7F with alpha.
  *
