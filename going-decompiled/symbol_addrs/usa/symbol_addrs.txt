@@ -2816,11 +2816,11 @@ PlaceCinematicShipCameraPath = 0x002EDEF8; // CONFIRMED mechanism - positions th
 // MEASURED: N, read from this stub's own ROM words. TESTIMONY: the N -> name mapping, taken from the
 // public EE syscall table, ps2sdk ee/kernel/include/syscallnr.h @af212628 (ps2sdk spelling kept).
 // Not named here (splat name kept, reasons in NOTE t2128): numbers absent from that table or marked
-// arbitrary there, the 18 stubs sharing six numbers, 6 ORPHAN_LATENT baseline members, the 2 non-stub
+// arbitrary there, the 18 stubs sharing six numbers, 6 ORPHAN_LATENT baseline members, 6 where an SDK
+// digest cross-check names the number differently (0x4 0x3B 0x50 0x51 0x52 0x54), the 2 non-stub
 // bodies, and the 24 matched stubs (func_0011AA20 CreateThread etc.), which are never renamed.
 ResetEE = 0x0011A810; // type:func - EE kernel syscall 0x1 stub in cod/015180, number measured in the ROM, name from the public EE syscall table (testimony) (task 2128)
 SetGsCrt = 0x0011A820; // type:func - EE kernel syscall 0x2 stub in cod/015180, number measured in the ROM, name from the public EE syscall table (testimony) (task 2128)
-KExit = 0x0011A840; // type:func - EE kernel syscall 0x4 stub in cod/015180, number measured in the ROM, name from the public EE syscall table (testimony) (task 2128)
 _LoadExecPS2 = 0x0011A860; // type:func - EE kernel syscall 0x6 stub in cod/015180, number measured in the ROM, name from the public EE syscall table (testimony) (task 2128)
 _ExecPS2 = 0x0011A870; // type:func - EE kernel syscall 0x7 stub in cod/015180, number measured in the ROM, name from the public EE syscall table (testimony) (task 2128)
 RFU009 = 0x0011A890; // type:func - EE kernel syscall 0x9 stub in cod/015180, number measured in the ROM, name from the public EE syscall table (testimony) (task 2128)
@@ -2860,7 +2860,6 @@ iCancelWakeupThread = 0x0011AB80; // type:func - EE kernel syscall -0x36 stub in
 _iSuspendThread = 0x0011ABA0; // type:func - EE kernel syscall -0x38 stub in cod/015180, number measured in the ROM, name from the public EE syscall table (testimony) (task 2128)
 ResumeThread = 0x0011ABB0; // type:func - EE kernel syscall 0x39 stub in cod/015180, number measured in the ROM, name from the public EE syscall table (testimony) (task 2128)
 iResumeThread = 0x0011ABC0; // type:func - EE kernel syscall -0x3A stub in cod/015180, number measured in the ROM, name from the public EE syscall table (testimony) (task 2128)
-RFU059 = 0x0011ABD0; // type:func - EE kernel syscall 0x3B stub in cod/015180, number measured in the ROM, name from the public EE syscall table (testimony) (task 2128)
 RFU060 = 0x0011ABE0; // type:func - EE kernel syscall 0x3C stub in cod/015180, number measured in the ROM, name from the public EE syscall table (testimony) (task 2128)
 RFU061 = 0x0011ABF0; // type:func - EE kernel syscall 0x3D stub in cod/015180, number measured in the ROM, name from the public EE syscall table (testimony) (task 2128)
 EndOfHeap = 0x0011AC00; // type:func - EE kernel syscall 0x3E stub in cod/015180, number measured in the ROM, name from the public EE syscall table (testimony) (task 2128)
@@ -2873,10 +2872,6 @@ GetGsHParam = 0x0011ACE0; // type:func - EE kernel syscall 0x4C stub in cod/0151
 GetGsVParam = 0x0011ACF0; // type:func - EE kernel syscall 0x4D stub in cod/015180, number measured in the ROM, name from the public EE syscall table (testimony) (task 2128)
 SetGsHParam = 0x0011AD00; // type:func - EE kernel syscall 0x4E stub in cod/015180, number measured in the ROM, name from the public EE syscall table (testimony) (task 2128)
 SetGsVParam = 0x0011AD10; // type:func - EE kernel syscall 0x4F stub in cod/015180, number measured in the ROM, name from the public EE syscall table (testimony) (task 2128)
-CreateEventFlag = 0x0011AD20; // type:func - EE kernel syscall 0x50 stub in cod/015180, number measured in the ROM, name from the public EE syscall table (testimony) (task 2128)
-DeleteEventFlag = 0x0011AD30; // type:func - EE kernel syscall 0x51 stub in cod/015180, number measured in the ROM, name from the public EE syscall table (testimony) (task 2128)
-SetEventFlag = 0x0011AD40; // type:func - EE kernel syscall 0x52 stub in cod/015180, number measured in the ROM, name from the public EE syscall table (testimony) (task 2128)
-xlaunch = 0x0011AD60; // type:func - EE kernel syscall 0x54 stub in cod/015180, number measured in the ROM, name from the public EE syscall table (testimony) (task 2128)
 iPutTLBEntry = 0x0011AD70; // type:func - EE kernel syscall -0x55 stub in cod/015180, number measured in the ROM, name from the public EE syscall table (testimony) (task 2128)
 GetTLBEntry = 0x0011AD90; // type:func - EE kernel syscall 0x57 stub in cod/015180, number measured in the ROM, name from the public EE syscall table (testimony) (task 2128)
 iProbeTLBEntry = 0x0011ADA0; // type:func - EE kernel syscall -0x58 stub in cod/015180, number measured in the ROM, name from the public EE syscall table (testimony) (task 2128)

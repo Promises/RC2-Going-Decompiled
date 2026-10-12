@@ -367,7 +367,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", SetGsCrt);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011A830);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", KExit);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011A840);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011A850);
 
@@ -572,7 +572,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", ResumeThread);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", iResumeThread);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", RFU059);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011ABD0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", RFU060);
 
@@ -680,15 +680,15 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", SetGsHParam);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", SetGsVParam);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", CreateEventFlag);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AD20);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", DeleteEventFlag);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AD30);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", SetEventFlag);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AD40);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AD50);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", xlaunch);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AD60);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", iPutTLBEntry);
 
@@ -3822,18 +3822,18 @@ void func_0011FA18(void) {
     func_0011F130();
 }
 
-extern void KExit(s32 code);
+extern void func_0011A840(s32 code);
 
 /**
  * libc exit(): run the func_0011FA18 shutdown hook (the func_0011F130
- * dispatcher thunk), then hand `code` to the terminator KExit —
- * a void tail call, sibcall-optimised to the original's `j KExit`
+ * dispatcher thunk), then hand `code` to the terminator func_0011A840 —
+ * a void tail call, sibcall-optimised to the original's `j func_0011A840`
  * with the frame restore folded into the delay slot (lever 7, framed form;
  * `code` rides callee-saved $16 across the hook call).
  */
 void exit(s32 code) {
     func_0011FA18();
-    KExit(code);
+    func_0011A840(code);
 }
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011FA48);
