@@ -25,7 +25,9 @@
  * earlier attempt hit. Other units hold such pads as INCLUDE_ASM_FRAGMENT;
  * func_001158F8's one-word pad is now the link's FILL (header comment).
  *
- * Still fused: func_0011F364, func_0011FB8C, func_00130A8C — their real bodies
- * are reached only by `j`/data reference, never by `jal`, so they are the
- * j-target class of task #471, not a carve defect of this class. */
+ * Still fused: func_0011F364, func_0011FB8C — their real bodies are reached
+ * only by `j`/data reference, never by `jal`, so they are the j-target class of
+ * task #471, not a carve defect of this class. (func_00130A8C, listed here
+ * before, was split by task #2143: a size:0x4 pin on the CD word plus a
+ * type:func pin on its real body func_00130A90.) */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015878", func_001158F8);

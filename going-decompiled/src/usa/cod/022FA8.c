@@ -438,7 +438,19 @@ s32 func_001245D0(s32 handler) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00124630);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_001246D0);
+/* func_001246D0: four unreachable orphan words (`sw $0,0x30($18)`, nop,
+ * `addiu $29,$29,0x60`, nop) after func_00124630's return at 0x1246C8. They pop a
+ * 0x60 frame nothing here pushed and no jal, j, branch, pointer word or
+ * %hi/%lo pair reaches them (FACT #10301). Split off its real entry at 0x1246E0
+ * by a symbol_addrs size:0x10 pin (task #2143); kept as layout asm. */
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_001246D0);
+
+/* func_001246E0: sceCdRead's RPC end callback, passed to sceSifCallRpc by
+ * address (the %hi/%lo pair at 0x1254F8), never by jal. Copies the reply's two
+ * byte runs (counts at +0x0/+0x4 of its argument's uncached 0x20000000
+ * alias, data at +0x10/+0x50) to the destinations stored at +0x8/+0xC, then tail-jumps to func_00124630 with D_001363D4. Was the body of
+ * func_001246D0 until the task #2143 split; not yet attempted as C. */
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_001246E0);
 
 /* libcdvd's semaphores and busy flag. Written from the RPC end-callback
  * func_00124630 (interrupt context) as well as from sceCdInit, sceCdRead,
@@ -518,37 +530,42 @@ void func_00124818(void) {
     }
 }
 
-/* func_001248B0: if the callback D_00141844 is installed and the suppression
- * flag D_001363A4 is clear, invoke the callback with the parameter D_00141848.
- * The body compiles byte-exact, but this is a splat mis-split: the per-function
- * .s (and the address-ordered unit listing) start the symbol 8 bytes early on a
- * trailing `addiu $29,$29,0x40; nop` epilogue fragment of the previous function
- * (func_001248F8 even references `func_001248B0 + 0x8` as the real entry). Can't
- * be matched at the unit level without a re-split. Left as INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_001248B0);
+/* func_001248B0: two dead words (`addiu $29,$29,0x40`, nop) after
+ * func_00124818's return; they pop a 0x40 frame nothing here pushed, and no
+ * reference in the ROM reaches 0x1248B0. Split off its real entry at 0x1248B8
+ * by a symbol_addrs size:0x8 pin (task #2143); kept as layout asm. */
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_001248B0);
 
-extern s32 D_001363A4;  /* suppresses func_001248B0's callback while non-zero */
+/* func_001248B8: if the callback D_00141844 is installed and the suppression
+ * flag D_001363A4 is clear, invoke the callback with the parameter D_00141848.
+ * Reached only by address: func_001248F8 installs it as the SIF command
+ * 0x80000012 handler (the %hi/%lo pair at 0x12491C). Until the task #2143
+ * split it was func_001248B0 + 8. Its body was recorded here as compiling
+ * byte-exact; it is now a clean extent, but this boundary-only row writes no
+ * C, so it stays INCLUDE_ASM pending a promotion row. */
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_001248B8);
+
+extern s32 D_001363A4;  /* suppresses func_001248B8's callback while non-zero */
 extern s32 D_001363BC;  /* set once the 0x80000012 handler is installed */
-extern void func_001248B0(void);
+extern void func_001248B8(void);
 extern void func_0011CB90(s32 index, s32 key, s32 value);
 
 /**
  * Install libcdvd's SIF command handler for command 0x80000012: with the
  * callback suppressed (D_001363A4 = 1) and interrupts disabled
- * (func_0011F5E0), store the handler func_001248B0 and a zero argument into
+ * (func_0011F5E0), store the handler func_001248B8 and a zero argument into
  * that command's slot (func_0011CB90), restore interrupts only if they were
  * on, lift the suppression and mark the handler installed (D_001363BC).
  * Returns 1.
  *
- * The handler address is `func_001248B0 + 8`, exactly the ROM's relocation:
- * splat starts func_001248B0 eight bytes early on the previous function's
- * epilogue tail (see func_001248B0's comment), so +8 is its real entry.
+ * The ROM's relocation here read `func_001248B0 + 8` until task #2143 split
+ * the two dead words at 0x1248B0 off the handler's real entry, func_001248B8.
  */
 s32 func_001248F8(void) {
     s32 wasEnabled;
     D_001363A4 = 1;
     wasEnabled = func_0011F5E0();
-    func_0011CB90((s32)0x80000012, (s32)((u8 *)func_001248B0 + 8), 0);
+    func_0011CB90((s32)0x80000012, (s32)func_001248B8, 0);
     if (wasEnabled != 0) {
         func_0011F628();
     }
@@ -717,7 +734,7 @@ extern u8 D_00137480[0x90];
 extern s32 D_00137540;
 extern char D_0013B2E0[];      /* "call cdread cmd\n" */
 extern char D_0013B2F8[];      /* "cdread end\n" */
-extern void func_001246D0(void);
+extern void func_001246E0(void);
 
 /**
  * libcdvd's sceCdRead (its debug messages, D_0013B2E0/D_0013B2F8, read
@@ -729,9 +746,8 @@ extern void func_001246D0(void);
  * sectors, else 2048) and write it back from the cache unless flag bit 1
  * is set, along with the request, the read-info block and the status word;
  * mark the command in flight (D_001363D4, D_001363B0) and issue RPC #1
- * asynchronously with func_001246D0's real entry (+0x10) as the end
- * callback. A failed RPC clears the in-flight marks, releases the lock and
- * returns 0. Returns 1 once the read is queued.
+ * asynchronously with func_001246E0 as the end callback. A failed RPC
+ * clears the in-flight marks, releases the lock and returns 0. Returns 1 once the read is queued.
  *
  * The data-pattern switch carries an explicit `case 0` on the default body:
  * without it cc1 drops the ROM's `slti` split of the decision tree (76 of
@@ -779,7 +795,7 @@ s32 sceCdRead(u32 lbn, u32 sectors, void *buf, CdReadMode *mode) {
     D_001363D4 = 1;
     D_001363B0 = 1;
     if (sceSifCallRpc(D_00137550, 1, 1, req, 0x18, 0, 0,
-                      (s32)((u8 *)func_001246D0 + 0x10), D_00137480) < 0) {
+                      (s32)func_001246E0, D_00137480) < 0) {
         D_001363D4 = 0;
         D_001363B0 = 0;
         SignalSema(D_001363A8);
@@ -2845,7 +2861,14 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_001292C0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00129368);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00129410);
+/* func_00129410: debris, not a function (FACT #10301, task #2143). The complete
+ * function before it, func_00129368, returns at 0x129408; these 16 words are
+ * orphaned `sqc2`/`swc1` stores, a stack teardown (`addiu $29,$29,0xA0`), nop
+ * padding and three 0xCDCDCDCD fill words, with no prologue and no return. No
+ * jal, j, branch, pointer word or %hi/%lo pair in the ROM reaches 0x129410..
+ * 0x12944F; the next prologue (`addiu $29,$29,-0xB0`) is IpuMotionCompensation
+ * at 0x129450. Not a C target: kept as layout asm. */
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00129410);
 
 /* The picture dimensions func_0012D768 checks. */
 typedef struct {
@@ -2893,7 +2916,7 @@ typedef struct {
     s32 _pad10;
     s32 field14;
     s32 _pad18;
-    void *field1C;             /* 0x01C: D_00130A90, the real entry of func_00130A8C */
+    void (*field1C)(void *);   /* 0x01C: func_00130A90, the stop callback */
     s32 _pad20;
     void (*field24)(void *);   /* 0x024: func_00130AA0 */
     s32 _pad28;
@@ -5326,7 +5349,7 @@ extern void func_0012F9C8(s32 *arg0);
 extern s32 func_0012FA18(s32 *arg0);
 extern void func_00130AA0(void *arg0);
 extern char D_0013BD20[];
-extern u8 D_00130A90[];
+extern void func_00130A90(void *arg0);
 
 /**
  * Set up the IPU MPEG decoder for the FMV stream object `obj` in the
@@ -5336,7 +5359,7 @@ extern u8 D_00130A90[];
  * Otherwise give the rest above +0x10C0 to the bump allocator at +0x108
  * (func_0012FB48), reset the stream object's counters and its two pairs of
  * 64-bit timestamps (-1 = none), clear or seed the decoder's state words,
- * hook the stream callbacks D_00130A90 / func_00130AA0, take a 0x600-byte
+ * hook the stream callbacks func_00130A90 / func_00130AA0, take a 0x600-byte
  * block (func_0012FB80), initialise the IPU (func_00130118) and the stream
  * object's tables (func_0012F9C8, func_0012FA18), point the 3x3 used slots
  * of frames[][] at their 0x68-byte buffers, reset the allocator
@@ -5391,7 +5414,7 @@ void *IpuInitDecoder(s32 *obj, u8 *buf, u32 size) {
     dec->field34 = 0;
     dec->field3C = 0;
     dec->fieldF0 = -1;
-    dec->field1C = D_00130A90;
+    dec->field1C = func_00130A90;
     dec->field24 = func_00130AA0;
     dec->field44 = func_0012FB80((s32)dec, (struct AllocRegion *)((u8 *)dec + 0x108), 0x600, 8);
     dec->field48 = 0;
@@ -6053,9 +6076,18 @@ void func_00130A80(s32 arg0) {
     func_00130288(arg0, D_0013BED8);
 }
 
-/* func_00130A8C: starts with a 0xCDCDCDCD fill word (uninitialised-memory
- * pattern) before the real entry at 0x130A90 — not producible from C. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00130A8C);
+/* func_00130A8C: one 0xCDCDCDCD fill word (uninitialised-memory pattern)
+ * after func_00130A80's tail jump; no reference in the ROM reaches it. Split
+ * off its real entry at 0x130A90 by a symbol_addrs size:0x4 pin (task #2143);
+ * kept as layout asm. */
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00130A8C);
+
+/* func_00130A90: the MPEG decoder's stop callback, stored by address at
+ * dec->field1C by IpuInitDecoder (the %hi/%lo pair at 0x12F7C4): tail-calls
+ * sceIpuStopDMA with the env at dec->field40 + 0x4C. Twin of the restart
+ * callback func_00130AA0. Was the inner label D_00130A90 until the task #2143
+ * split; not yet attempted as C. */
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00130A90);
 
 /**
  * Frameless tail-call thunk: forward the sub-object at arg0->field_0x40 + 0x4C
@@ -6132,7 +6164,7 @@ void func_00130B18(s32 chcr) {
  * (0x1000B010/B020/B000), then IPU_BP and IPU_CTRL.
  *
  * Identity (RULING #10083, named at promotion): its only referrer is the tail
- * `j` at 0x130A94 in the decoder's stop callback D_00130A90 (func_00130A8C + 4),
+ * `j` at 0x130A94 in the decoder's stop callback func_00130A90,
  * the twin of the restart callback func_00130AA0 that tail-calls
  * sceIpuRestartDMA with the same `dec->field40 + 0x4C` env; it fills exactly the
  * nine sceIpuDmaEnv fields sceIpuRestartDMA reads, and the vendored
@@ -6175,7 +6207,7 @@ void sceIpuStopDMA(IpuDmaEnv *env) {
  * Identity: CONFIRMED by mechanism on our ROM - its only referrer is the
  * tail `j` at 0x130AA4 in func_00130AA0, the decoder's restart callback.
  * The stop-side counterpart sceIpuStopDMA (reached from the stop callback
- * D_00130A90) does not call it; it saves the env this function restores,
+ * func_00130A90) does not call it; it saves the env this function restores,
  * all nine fields including D4 MADR/TADR/QWC/CHCR at offsets 0x0..0xC. The env layout this
  * body reads is the SDK's sceIpuDmaEnv, and the vendored SDK header
  * include/rtl/ee/libipu.h declares `void sceIpuRestartDMA(sceIpuDmaEnv *env)`
