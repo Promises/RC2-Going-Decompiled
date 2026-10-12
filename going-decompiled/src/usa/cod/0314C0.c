@@ -221,11 +221,95 @@ void func_001317E8(u8 *arg0) {
     arg0[1] = func_00131730(arg0[1]);
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0314C0", func_00131850);
+/* The 12-byte month-length table at D_0013BF90 (31,28,31,30,... one byte per
+ * month); func_00131850/func_00131908 copy it to the stack and stretch
+ * February in the copy. */
+typedef struct MonthLengths {
+    char b[0xC];
+} MonthLengths;
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0314C0", func_00131908);
+extern MonthLengths D_0013BF90;
 
-extern void func_00131850(u8 *arg0);
+/**
+ * Tick the sceCdCLOCK record at s forward by one day (fields are binary here,
+ * i.e. after func_00131780: [5] day, [6] month, [7] year, year 0..99). Works on
+ * a stack copy of the month-length table D_0013BF90 with February stretched to
+ * 29 when year & 3 == 0; when the day passes the month's length it becomes 1
+ * and the month advances, 12 -> 1 carrying into the year (99 -> 0). Callers:
+ * func_001319B0 (hour wrap).
+ *
+ * The leap test reads the year into an int. The ROM loads the year twice (leap
+ * test, and again at the year roll-over); with the byte load in the leap test
+ * cc1's GCSE reuses it for the second one. The int load is a zero-extending
+ * load, a different expression to GCSE, so the later byte load stays. Not a
+ * semantic claim: a codegen lever. Priced removed-alone (year tested as
+ * `s[7] & 3` directly, diff.sh fuzzy, 2026-10-12): 85.29%, so load-bearing.
+ *
+ * Source: OpenRAC/rac2-gc-decomp @974302ba936bb455acd78034b58ad4b98bafcc6b (GPL-3.0, adopted with the authors' permission per RULING #10405), src/core/00131780.c, func_00131850 (v1.01; upstream rac1-decomp src/core/0012CC90.c func_0012D5D0), C body adopted verbatim; byte-exact on our ROM: GATE_EVIDENCE_131850
+ */
+void func_00131850(u8 *s) {
+    MonthLengths days;
+    u8 m;
+    int y = s[7];
+
+    days = D_0013BF90;
+    s[5] = s[5] + 1;
+    if ((y & 3) == 0) {
+        days.b[1] = 0x1D;
+    }
+    if (s[5] > days.b[s[6] - 1]) {
+        s[5] = 1;
+        s[6] = s[6] + 1;
+        m = s[6];
+        if (m == 13) {
+            if (s[7] == 0x63) {
+                s[7] = 0;
+            } else {
+                s[7] = s[7] + 1;
+            }
+            s[6] = 1;
+        }
+    }
+}
+
+/**
+ * Tick the sceCdCLOCK record at s back by one day (same field layout and month
+ * table as func_00131850): the day counts down, at 0 the month steps back
+ * (1 -> 12, carrying 0 -> 99 into the year) and the day is reloaded from the
+ * table's entry for the new month, February stretched to 29 in leap years.
+ * Callers: func_001319E0 (hour wrap).
+ *
+ * Levers, none a semantic claim: the leap test on an int copy of the year, as
+ * in func_00131850 (removed alone: diff.sh fuzzy 85.10%, load-bearing);
+ * `s[5] = s[5] - 1;` before the leap block (the block boundary gives
+ * the ROM's reload of s[5]); the month as `if (--s[6] == 0)` (stores the raw
+ * decrement and tests the masked copy in another register); the year as an
+ * if/else with one store per arm, which cross-jumping merges into the ROM's
+ * single `sb`.
+ *
+ * Source: OpenRAC/rac2-gc-decomp @974302ba936bb455acd78034b58ad4b98bafcc6b (GPL-3.0, adopted with the authors' permission per RULING #10405), src/core/00131780.c, func_00131908 (v1.01; upstream rac1-decomp src/core/0012CC90.c func_0012D688), C body adopted verbatim; byte-exact on our ROM: GATE_EVIDENCE_131908
+ */
+void func_00131908(u8 *s) {
+    MonthLengths days;
+    int y = s[7];
+
+    days = D_0013BF90;
+    s[5] = s[5] - 1;
+    if ((y & 3) == 0) {
+        days.b[1] = 0x1D;
+    }
+    if (s[5] == 0) {
+        if (--s[6] == 0) {
+            if (s[7] == 0) {
+                s[7] = 0x63;
+            } else {
+                s[7] = s[7] - 1;
+            }
+            s[6] = 0xC;
+        }
+        s[5] = days.b[s[6] - 1];
+    }
+}
 
 /**
  * Advance the counter byte at arg0+0x3: increment it, and when it wraps to
@@ -239,8 +323,6 @@ void func_001319B0(u8 *arg0) {
         func_00131850(arg0);
     }
 }
-
-extern void func_00131908(u8 *arg0);
 
 /**
  * Tick down the cooldown byte at arg0+0x3: if non-zero, just decrement it;

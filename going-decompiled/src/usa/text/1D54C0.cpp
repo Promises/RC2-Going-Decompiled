@@ -2915,45 +2915,44 @@ s32 func_002DAE70(MenuWidget *obj) {
 }
 #endif
 
-/* Allocate / initialise the menu background-image double buffers. Clears the
- * pending flag (+0x44), then reserves two map slots (AllocMenuWorkBuffer) passing the
- * "already-preloaded" bit (+0x34 & 0x200). When NOT preloaded, force-allocates a
- * real slot (AllocMenuWorkBuffer(1)) for either buffer that came back empty. Finally
- * resets the stream cursor (+0x5C = 0) and marks both slot-state fields
- * (+0x50/+0x54) as -1 (idle). Returns 0.
- * WALL: multi callee-save frame + buffer arithmetic + leaf alloc calls; matching
- * arm stays INCLUDE_ASM, portable #else below. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", InitMenuBgImageBuffers);
+/**
+ * Allocate / initialise the menu background-image double buffers of the widget
+ * `obj`. Clears the pending flag (+0x44), then reserves two map slots
+ * (AllocMenuWorkBuffer) passing the "already-preloaded" bit (+0x34 & 0x200).
+ * When NOT preloaded, force-allocates a real slot (AllocMenuWorkBuffer(1)) for
+ * either buffer (+0x48, +0x4C) that came back empty. Finally resets the stream
+ * cursor (+0x5C = 0) and marks both slot-state fields (+0x50/+0x54) as -1
+ * (idle). Returns 0. The release half is func_002DB028.
+ *
+ * MATCHED on the s136os arm (SN 2.95.3 v1.36 cc1plus -fopt-stack; row in
+ * tools/ee/s136os_functions.txt), spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. Device-free: no
+ * volatile, no register pin, no inline asm. The object is addressed as an
+ * integer (`self`), as OpenRAC's body has it; spelled with a pointer, the
+ * same arithmetic would be no different to cc1 but the body is kept verbatim.
+ *
+ * Source: OpenRAC/rac2-gc-decomp @974302ba936bb455acd78034b58ad4b98bafcc6b (GPL-3.0, adopted with the authors' permission per RULING #10405), src/game/002D5E98.c, func_002DA238 (v1.01), C body adopted verbatim apart from the callee spelling (their func_002DE550 = AllocMenuWorkBuffer); byte-exact on our ROM: GATE_EVIDENCE_IMBI
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_InitMenuBgImageBuffers)
+S136OS_SLOT(InitMenuBgImageBuffers);
 #else
-/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
- * objdiff): sdk29 76.54% / engine96 56.11%; better arm sdk29; 28 differing
- * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
- * insn: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-48`. Not iterated in t495.
- * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
- * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
- * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
- * property and was measured false as the reason this member stays unmatched (FACT #9873).
- * Residual: the saved-register set; the rest UNMEASURED. */
 s32 InitMenuBgImageBuffers(void *obj) {
-    s32 preloaded = *(s32 *)((u8 *)obj + 0x34) & 0x200;
+    s32 self = (s32)obj;
 
-    *(s32 *)((u8 *)obj + 0x44) = 0;
-    *(s32 *)((u8 *)obj + 0x48) = AllocMenuWorkBuffer(preloaded);
-    *(s32 *)((u8 *)obj + 0x4C) = AllocMenuWorkBuffer(preloaded);
-
-    if (preloaded == 0) {
-        if (*(s32 *)((u8 *)obj + 0x48) == 0) {
-            *(s32 *)((u8 *)obj + 0x48) = AllocMenuWorkBuffer(1);
-        }
-        if (*(s32 *)((u8 *)obj + 0x4C) == 0) {
-            *(s32 *)((u8 *)obj + 0x4C) = AllocMenuWorkBuffer(1);
-        }
-    }
-
-    *(s32 *)((u8 *)obj + 0x5C) = 0;
-    *(s32 *)((u8 *)obj + 0x54) = -1;
-    *(s32 *)((u8 *)obj + 0x50) = -1;
+    *(s32 *) (self + 68) = 0;
+    *(s32 *) (self + 72) = AllocMenuWorkBuffer (*(s32 *) (self + 52) & 0x200);
+    *(s32 *) (self + 76) = AllocMenuWorkBuffer (*(s32 *) (self + 52) & 0x200);
+    if ((*(s32 *) (self + 52) & 0x200) == 0)
+      {
+        if (*(s32 *) (self + 72) == 0)
+          *(s32 *) (self + 72) = AllocMenuWorkBuffer (1);
+        if (*(s32 *) (self + 76) == 0)
+          *(s32 *) (self + 76) = AllocMenuWorkBuffer (1);
+      }
+    *(s32 *) (self + 92) = 0;
+    *(s32 *) (self + 80) = -1;
+    *(s32 *) (self + 84) = -1;
     return 0;
 }
 #endif
@@ -3858,53 +3857,54 @@ s32 func_002DCCC8(MenuWidget *obj) {
 }
 #endif
 
-/* Draw a single nav arrow (left or right depending on obj->0x38): a one-glyph
- * label plus a rotated HUD arrow sprite. Returns 2. Wall: float immediates +
- * store-heavy leaf. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DCDC0);
+/**
+ * Draw a single nav arrow of the widget `obj` (left or right depending on
+ * obj->0x38): a one-glyph (2-byte) label, drawn through func_0027FBA8 with
+ * colour 0x80FFA888, plus a rotated HUD arrow sprite (HUD icon 0xE99D/6). With
+ * +0x38 non-zero the label is D_1ABBF8 at x = 4 and the sprite sits at x = 640
+ * with angle 0; with +0x38 zero the label is D_1ABC00 at x = obj->0x20 - 24 and
+ * the sprite at x = 192 with angle pi. The sprite's y is obj->0x24 * 8. Returns
+ * 2.
+ *
+ * MATCHED on the s136os arm (SN 2.95.3 v1.36 cc1plus -fopt-stack; row in
+ * tools/ee/s136os_functions.txt), spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. Device-free: no
+ * volatile, no register pin, no inline asm.
+ *
+ * Source: OpenRAC/rac2-gc-decomp @974302ba936bb455acd78034b58ad4b98bafcc6b (GPL-3.0, adopted with the authors' permission per RULING #10405), src/game/002D5E98.c, func_002DC090 (v1.01), C body adopted verbatim apart from our spellings (their func_0027C540_1 = Begin2dDrawBatch, func_0027F538 = func_0027FBA8, func_0028E588 = func_0028EDF0, func_0028E640 = GetHudIconTex0, func_0028F410 = func_0028FC78, func_0027C660_1 = End2dDrawBatch, D_L01_001ABE90 = D_1ABBF8, D_L01_001ABE98 = D_1ABC00); byte-exact on our ROM: GATE_EVIDENCE_DCDC0
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002DCDC0)
+S136OS_SLOT(func_002DCDC0);
 #else
-/* Declarations this body needs whose only other declarations sit in other
- * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
-extern void DrawStringFont1(s32 x, s32 y, u32 color, s32 str, s32 wrap);
-extern s32 func_0028EDF0(s32 name, s32 level);
-extern s32 GetHudIconTex0(s32 iconIndex);
-extern void DrawHudSpriteRotated(s32 xBits, f32 y, s32 wBits, s32 hBits, s32 angleBits, s32 a5, s32 a6, s32 tex);
-/* (end of this body's declarations) */
-/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
- * objdiff): sdk29 45.50% / engine96 39.67%; better arm sdk29; 99 differing
- * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
- * insn: ROM `addiu sp,sp,-48` vs `addiu sp,sp,-64`. Not iterated in t495.
- * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
- * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
- * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
- * property and was measured false as the reason this member stays unmatched (FACT #9873).
- * Residual: the saved-register set; the rest UNMEASURED. */
-    /* TODO(match): functional equivalent - not byte-exact. */
-s32 func_002DCDC0(MenuWidget *obj) {
-    extern u8 D_001ABC00, D_001ABC01, D_001ABBF8, D_001ABBF9;
-    u8 *o = (u8 *)obj;
-    u8 label[2];
-    s32 h;
-    s32 tex;
+/* The true ROM signatures this body needs, declared here because the s136os
+ * arm compiles this body alone: func_0028FC78 takes its five draw parameters
+ * as floats ($f12..$f16; angle in $f16) and the extents/texture in $4..$6. */
+extern s32  GetHudIconTex0(s32 iconIndex);
+extern s32  func_0028EDF0(s32 name, s32 level);
+#ifndef TARGET_NATIVE
+extern void func_0027FBA8(s32 x, s32 y, u64 color, s32 str, s32 wrap);   /* 64-bit colour (dli), 32-bit wrap: -1 is one addiu, not a dli */
+#endif
+extern void func_0028FC78(f32 x, f32 y, f32 w, f32 h, f32 angle, s32 uExtent, s32 vExtent, s32 tex);
+typedef struct { signed char a, b; } NavArrowLabel;
+extern signed char D_1ABBF8[];
+extern signed char D_1ABC00[];
+
+s32 func_002DCDC0(char *s0) {
+    signed char local[16];
+    float y;
+
     Begin2dDrawBatch(0);
-    if (*(s32 *)(o + 0x38) == 0) {
-        label[0] = D_001ABC00;
-        label[1] = D_001ABC01;
-        DrawStringFont1(*(s32 *)(o + 0x20) - 0x18, *(s32 *)(o + 0x24) / 2 - 8,
-                        0x80ffa888, (s32)label, -1);
-        h = *(s32 *)(o + 0x24);
-        tex = GetHudIconTex0(func_0028EDF0(0xe99d, 6));
-        DrawHudSpriteRotated(0x43400000, (float)(h << 3), 0x43000000, 0x43800000,
-                             0x40490fdb, 0x20, 0x10, tex);
+    if (*(int *)(s0 + 56) != 0) {
+        *(NavArrowLabel *)local = *(NavArrowLabel *)D_1ABBF8;
+        func_0027FBA8(4, *(int *)(s0 + 36) / 2 - 8, 0x80FFA888, (s32)local, -1);
+        y = (float)(*(int *)(s0 + 36) * 8);
+        func_0028FC78(640.0f, y, 128.0f, 256.0f, 0.0f, 32, 16, GetHudIconTex0(func_0028EDF0(0xE99D, 6)));
     } else {
-        label[0] = D_001ABBF8;
-        label[1] = D_001ABBF9;
-        DrawStringFont1(4, *(s32 *)(o + 0x24) / 2 - 8, 0x80ffa888, (s32)label, -1);
-        h = *(s32 *)(o + 0x24);
-        tex = GetHudIconTex0(func_0028EDF0(0xe99d, 6));
-        DrawHudSpriteRotated(0x44200000, (float)(h << 3), 0x43000000, 0x43800000,
-                             0, 0x20, 0x10, tex);
+        *(NavArrowLabel *)local = *(NavArrowLabel *)D_1ABC00;
+        func_0027FBA8(*(int *)(s0 + 32) - 24, *(int *)(s0 + 36) / 2 - 8, 0x80FFA888, (s32)local, -1);
+        y = (float)(*(int *)(s0 + 36) * 8);
+        func_0028FC78(192.0f, y, 128.0f, 256.0f, 3.1415927f, 32, 16, GetHudIconTex0(func_0028EDF0(0xE99D, 6)));
     }
     End2dDrawBatch();
     return 2;

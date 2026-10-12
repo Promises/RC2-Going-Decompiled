@@ -43,6 +43,27 @@
   OpenRAC repository mixes licences: its top level is GPL-3.0-or-later, and
   `games/rac2/ntsc/src/libgcc` is GPLv2. Nothing from those paths is used here.
 
+- **OpenRAC — `rac2-gc-decomp`** (GPL-3.0)
+  <https://github.com/OpenRAC/rac2-gc-decomp> at commit `974302ba936bb455acd78034b58ad4b98bafcc6b`
+
+  Their decompilation of the RAC2 v1.01 boot. Five C bodies are adopted
+  verbatim, with the authors' permission (held by the operator, RULING #10405),
+  each re-checked byte-exact against our v2.00 ROM and with their v1.01 extern
+  spellings replaced by our symbols (task #2159). Each doc comment carries the
+  `Source:` line.
+
+  Used so far:
+  - **`func_00131850` and `func_00131908`** (`0x00131850`, `0x00131908`) in
+    `going-decompiled/src/usa/cod/0314C0.c`, from `src/core/00131780.c`. These
+    two are rac1-decomp's own C, carried into rac2-gc-decomp (rac1-decomp
+    `src/core/0012CC90.c`: `func_0012D5D0`, `func_0012D688`).
+  - **`MatrixToEulerAngles`** (`0x002AC540`) in
+    `going-decompiled/src/usa/text/1A8180.c`, from `src/game/002AA800.c`
+    (`func_002AB6D8`).
+  - **`InitMenuBgImageBuffers`** (`0x002DAF90`) and **`func_002DCDC0`**
+    (`0x002DCDC0`) in `going-decompiled/src/usa/text/1D54C0.cpp`, from
+    `src/game/002D5E98.c` (`func_002DA238`, `func_002DC090`).
+
 - **Lombyte** (MIT, © 2026 Mateusz Kłysz)
   <https://github.com/mateuszklysz/Lombyte> at commit `2c4452dd03f5f7ebb2868dbe073ccdb1afb27f61`
 

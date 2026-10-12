@@ -660,3 +660,6 @@ usa text/188858 func_0028FFF0
 usa text/1823B8 DrawGlowSprites
 usa text/16E980 func_00271140
 usa text/191238 MapFindNearestAvailableLevel
+usa text/1A8180 MatrixToEulerAngles
+usa text/1D54C0 InitMenuBgImageBuffers
+usa text/1D54C0 func_002DCDC0

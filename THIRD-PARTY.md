@@ -41,6 +41,23 @@ Names and research adopted from other projects are listed, with commit and
 licence, in [credits.md](credits.md). Their code is not copied into this tree,
 with the exception below.
 
+### OpenRAC rac2-gc-decomp (GPL-3.0)
+
+Five C function bodies are taken from OpenRAC's `rac2-gc-decomp`,
+<https://github.com/OpenRAC/rac2-gc-decomp> at commit
+`974302ba936bb455acd78034b58ad4b98bafcc6b` (root `LICENSE`: GNU General Public
+License, version 3), with the authors' permission (RULING #10405):
+
+| Here | Upstream file | Upstream name |
+|---|---|---|
+| `func_00131850`, `func_00131908` in `going-decompiled/src/usa/cod/0314C0.c` | `src/core/00131780.c` (from rac1-decomp `src/core/0012CC90.c`) | same names (v1.01 addresses equal v2.00 here) |
+| `MatrixToEulerAngles` in `going-decompiled/src/usa/text/1A8180.c` | `src/game/002AA800.c` | `func_002AB6D8` |
+| `InitMenuBgImageBuffers`, `func_002DCDC0` in `going-decompiled/src/usa/text/1D54C0.cpp` | `src/game/002D5E98.c` | `func_002DA238`, `func_002DC090` |
+
+This project is `GPL-2.0-or-later`; the GPL-3.0 text of these bodies is
+combined into it under the "or later" grant. Any wider licensing question is
+the operator's (RULING #8304 defers it until the repository goes public).
+
 ### Lombyte (MIT)
 
 The C body of `_sysbitFlush` in `going-decompiled/src/usa/cod/022FA8.c` is

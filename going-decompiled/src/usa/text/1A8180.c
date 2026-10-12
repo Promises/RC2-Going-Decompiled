@@ -4373,48 +4373,80 @@ extern void func_00283DC0(Mat4x4 *dst, Vec4 *in);   /* build a rotation matrix f
 extern void func_00283DE0(Mat4x4 *dst, Vec4 *in);   /* sibling rotation builder (0xD18 variant) */
 extern void MatrixMultiplyVu0(Mat4x4 *dst, Mat4x4 *a, Mat4x4 *b);
 
+#ifdef TARGET_NATIVE
+/* gcc -m32 cannot emulate mode(TI): the native arm copies a 16-byte aligned struct. */
+typedef struct { u64 _q[2]; } __attribute__((aligned(16))) EulerQuad;
+#else
+typedef int EulerQuad __attribute__((mode(TI)));
+#endif
+
 /**
- * Extract ZYX-style euler angles from a rotation matrix `mtx` into out[0..2].
- * Copies the 3x3 into a scratch matrix (translation row zeroed to {0,0,0,1}),
- * then peels the angles with three atan2 (Atan2fPoly) + Givens rotations that
- * successively zero the off-axis terms: a1=atan2(row0.x,row0.y) about -Z, then
- * a2=atan2(row0.x,-row0.z) about -Y, then a3=atan2(row1.y,row1.z) on the residual.
- * Writes out[0]=a3, out[1]=a2, out[2]=a1.
+ * Extract ZYX-style euler angles from a rotation matrix `mtx` (16 floats, row
+ * major) into out[0..2]. Copies the matrix into a scratch (translation row
+ * zeroed via func_00283638 and w set to 1.0), then peels the angles with three
+ * Atan2fPoly + Givens rotations that successively zero the off-axis terms:
+ * a1 = atan2(m[0], m[1]) about -Z, then a2 = atan2(m[0], -m[2]) about -Y, then
+ * a3 = atan2(m[5], m[6]) on the residual. Writes out[0] = a3, out[1] = a2,
+ * out[2] = a1. Each rotation is built by func_00283DC0 / func_00283DE0 and
+ * applied with MatrixMultiplyVu0.
+ *
+ * MATCHED on the s136os arm (SN 2.95.3 v1.36 -fopt-stack, unit S136EXTRA
+ * -fno-strict-aliasing; row in tools/ee/s136os_functions.txt), spliced over
+ * S136OS_SLOT by tools/ee/s136os_splice.sh. There is no asm fallback: a build
+ * that skips the splice drops the function. On native it is plain C. The four
+ * 16-byte matrix-row copies are 128-bit quad moves (lq/sq), spelled with the
+ * EulerQuad type; no device beyond that (no volatile, no register pin, no
+ * inline asm).
+ *
+ * Source: OpenRAC/rac2-gc-decomp @974302ba936bb455acd78034b58ad4b98bafcc6b (GPL-3.0, adopted with the authors' permission per RULING #10405), src/game/002AA800.c, func_002AB6D8 (v1.01), C body adopted verbatim apart from our callee spellings (their func_00282C88_3 = func_00283638, func_00283248_6 = Atan2fPoly, func_00283410_7 = func_00283DC0, func_00283430 = func_00283DE0, func_00283788_4 = MatrixMultiplyVu0) the parameter types of our shared prototype (Mat4x4 *, void * with float * locals, which compile the same: checked standalone on the s136 arm) and the casts to our callee prototypes; byte-exact on our ROM: GATE_EVIDENCE_M2E
  */
-/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 20.34%
-   -> UNKNOWN-@1: ROM `daddu v0,a0,zero` vs `(none)` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", MatrixToEulerAngles);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_MatrixToEulerAngles)
+S136OS_SLOT(MatrixToEulerAngles);
 #else
 void MatrixToEulerAngles(Mat4x4 *mtx, void *out) {
-    Mat4x4 m;
-    Mat4x4 rot;
-    Vec4 axis;
-    f32 *e = (f32 *)out;
-    f32 a1, a2, a3;
+    /* CODEGEN DEVICE, not a semantic claim (RULING #8404's shape): the ROM's
+     * callee func_00283638 returns nothing (a bare sq $0) and this body is
+     * only byte-exact when the call is void. The unit-wide prototype returns
+     * s32 (func_002A9A38 `return`s the call and needs that to keep its
+     * non-tail jal); with it the four matrix-row lq issue 0x30,0x10,0x0,0x20
+     * instead of the ROM's 0x0,0x20,0x30,0x10: 4 of 73 words differ (measured
+     * 2026-10-12 on the s136os arm, vmu DIFFERS 4/74). An asm-label alias to
+     * the same symbol gives this body the void prototype; it emits nothing and
+     * the relocation still names func_00283638. Revoke when the unit-wide
+     * prototype can be void. */
+    extern void ZeroQuadVoid(Moby *moby) __asm__("func_00283638");
+    float *src = (float *)mtx;
+    float *dst = (float *)out;
+    EulerQuad tmp[4];
+    float m[16];
+    float local[4];
+    float a, b, c;
 
-    m = *mtx;
-    func_00283638((Moby *)((u8 *)&m + 0x30));   /* zero the translation row */
-    *(f32 *)((u8 *)&m + 0x3C) = 1.0f;
-
-    a1 = Atan2fPoly(*(f32 *)((u8 *)&m + 0x00), *(f32 *)((u8 *)&m + 0x04));
-    axis.x = 0.0f;
-    axis.y = 0.0f;
-    axis.z = -a1;
-    func_00283DC0(&rot, &axis);
-    MatrixMultiplyVu0(&m, &rot, &m);
-
-    a2 = Atan2fPoly(*(f32 *)((u8 *)&m + 0x00), -*(f32 *)((u8 *)&m + 0x08));
-    axis.x = 0.0f;
-    axis.y = -a2;
-    axis.z = 0.0f;
-    func_00283DE0(&rot, &axis);
-    MatrixMultiplyVu0(&m, &rot, &m);
-
-    a3 = Atan2fPoly(*(f32 *)((u8 *)&m + 0x14), *(f32 *)((u8 *)&m + 0x18));
-    e[2] = a1;
-    e[1] = a2;
-    e[0] = a3;
+    *(EulerQuad *)(m + 0) = *(EulerQuad *)(src + 0);
+    *(EulerQuad *)(m + 4) = *(EulerQuad *)(src + 4);
+    *(EulerQuad *)(m + 8) = *(EulerQuad *)(src + 8);
+    *(EulerQuad *)(m + 12) = *(EulerQuad *)(src + 12);
+    ZeroQuadVoid((Moby *)(m + 12));
+    m[15] = 1.0f;
+    a = Atan2fPoly(m[0], m[1]);
+    local[0] = 0.0f;
+    local[1] = 0.0f;
+    local[2] = -a;
+    func_00283DC0((Mat4x4 *)tmp, (Vec4 *)local);
+    MatrixMultiplyVu0((Mat4x4 *)m, (Mat4x4 *)tmp, (Mat4x4 *)m);
+    b = Atan2fPoly(m[0], -m[2]);
+    local[0] = 0.0f;
+    local[2] = 0.0f;
+    local[1] = -b;
+    func_00283DE0((Mat4x4 *)tmp, (Vec4 *)local);
+    MatrixMultiplyVu0((Mat4x4 *)m, (Mat4x4 *)tmp, (Mat4x4 *)m);
+    c = Atan2fPoly(m[5], m[6]);
+    dst[2] = a;
+    dst[1] = b;
+    dst[0] = c;
+    local[1] = 0.0f;
+    local[0] = -c;
+    local[2] = 0.0f;
 }
 #endif
 
