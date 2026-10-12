@@ -276,7 +276,7 @@ extern s32  sceCdDiskReady(s32 mode);
 extern s32  sceSifRebootIop(const char *img);
 extern s32  func_0011EEA0(void);               /* sceSifSyncIop */
 extern void DebugPrintStub(const char *fmt, ...);
-extern s32  sceSifInitRpc(s32 mode);
+extern void sceSifInitRpc(u32 mode);
 extern void func_0011F5E0(s32 arg);
 extern s32  sceSifInitIopHeap(void);
 extern void func_0011F628(void);
