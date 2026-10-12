@@ -59,7 +59,15 @@ extern s32 D_0013A388;
  * Declaring the real-start symbol truncates the pad correctly but DROPS the body
  * from the nonmatchings tree (a coverage hole), so the boundaries are left at
  * the spimdisasm default (fill attached to the body). Re-evaluate if splat/
- * spimdisasm gains lone-word-pad splitting. */
+ * spimdisasm gains lone-word-pad splitting.
+ *
+ * "UNRECOVERABLE" is a label inherited from before the USA split, unmeasured on
+ * EU: on USA, task #2143 split func_00130A8C (a lone CD word) from its body
+ * func_00130A90 with a type:func pin on the body ALONE plus an INCLUDE_ASM
+ * naming it. A size:0x4 pin on the CD word did balloon the file, as stated
+ * above; the "coverage hole" closes because splat writes a nonmatchings .s only
+ * for names the .c references (USA cod/015878.c). The EU twins were NOT
+ * re-split (RULING #5339). */
 
 /* func_00115C90: clears D_00133E78, calls func_0011B270(arg1); on failure
  * (-1) writes the resulting D_00133E78 error code back through arg0. Logic
@@ -259,7 +267,9 @@ extern s32 D_001418C0;
  * .s (and the address-ordered unit listing) start the symbol 8 bytes early on a
  * trailing `addiu $29,$29,0x40; nop` epilogue fragment of the previous function
  * (func_001248F8 even references `func_001248B0 + 0x8` as the real entry). Can't
- * be matched at the unit level without a re-split. Left as INCLUDE_ASM. */
+ * be matched at the unit level without a re-split. Left as INCLUDE_ASM.
+ * EU only: the USA twin was re-split by task #2143 (the 8-byte head is
+ * func_001248B0, the handler func_001248B8); EU was not (RULING #5339). */
 
 extern s32 D_00137E80;
 
@@ -5179,7 +5189,9 @@ void func_00130A80(s32 arg0) {
 }
 
 /* func_00130A8C: starts with a 0xCDCDCDCD fill word (uninitialised-memory
- * pattern) before the real entry at 0x130A90 — not producible from C. */
+ * pattern) before the real entry at 0x130A90 — not producible from C.
+ * EU only: the USA twin was split by task #2143 (fill word func_00130A8C, body
+ * func_00130A90); EU was not re-split (RULING #5339). */
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00130A8C);
 
 /**
