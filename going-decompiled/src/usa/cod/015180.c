@@ -2000,7 +2000,97 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", sceSifWriteBackD
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011CF74);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", sceSifInitRpc);
+/* A 0x40-byte SIF RPC packet as the packet allocator sees it. */
+typedef struct RpcPacket {
+    s32 header[4];  /* SifCmdHeader */
+    s32 recId;      /* bit 0 set while allocated; slot index in the high half */
+    s32 pktAddr;    /* the packet's own address */
+    s32 rpcId;
+    s32 rest[9];
+} RpcPacket;
+
+/* The SDK's RPC server-side state (D_0013E900): an id counter, the table of
+ * 0x40-byte packets, and the rdata and client tables sceSifInitRpc points at
+ * uncached buffers. */
+typedef struct RpcPacketTable {
+    s32 lastId;
+    RpcPacket *packets;
+    s32 count;
+    s32 field0C;
+    s32 field10;
+    void *rdataTable;
+    s32 rdataCount;
+    void *clientTable;
+    s32 clientCount;
+    s32 rdataIndex;
+} RpcPacketTable;
+
+extern s32 D_001346A0;
+extern u8 D_0013D100[];
+extern u8 D_0013D900[];
+extern u8 D_0013E100[];
+extern RpcPacketTable D_0013E900;
+extern void func_0011D238();
+extern void func_0011D590();
+extern void func_0011D2F0();
+extern void HandleRpcBindRequest();
+extern s32 func_0011F5E0(void);
+extern s32 func_0011F628(void);
+extern void func_0011C8D8(void);
+extern u32 func_0011B020(u32 reg, u32 val);
+extern s32 func_0011B030(s32 arg0);
+
+/**
+ * sceSifInitRpc: bring up the SIF RPC layer; a no-op after the first call
+ * (guarded by D_001346A0, tested with interrupts off). The first call
+ * initialises the SIF command layer (func_0011C8D8), points the packet, rdata
+ * and client tables of D_0013E900 at their uncached (|0x20000000) 32-entry
+ * buffers, and registers the four RPC command handlers (0x80000008 end,
+ * 0x80000009 bind, 0x8000000A call, 0x8000000C rdata). Unless SIF register
+ * 0x80000002 is already set it then sends the IOP the 0x80000002 command, spins
+ * until the reply arrives (func_0011C8B0(0)), and sets that register.
+ *
+ * @param mode  unused
+ *
+ * Source: SOURCE_PLACEHOLDER
+ */
+void sceSifInitRpc(u32 mode) {
+    s32 *packet;
+
+    func_0011F5E0();
+    if (D_001346A0) {
+        func_0011F628();
+        return;
+    }
+    D_001346A0 = 1;
+    func_0011F628();
+    func_0011C8D8();
+    func_0011F5E0();
+    D_0013E900.packets = (RpcPacket *)((u32)D_0013D100 | 0x20000000);
+    D_0013E900.count = 32;
+    D_0013E900.field0C = 0;
+    D_0013E900.field10 = 0;
+    D_0013E900.rdataTable = (void *)((u32)D_0013D900 | 0x20000000);
+    D_0013E900.rdataCount = 32;
+    D_0013E900.clientTable = (void *)((u32)D_0013E100 | 0x20000000);
+    D_0013E900.clientCount = 32;
+    D_0013E900.rdataIndex = 0;
+    D_0013E900.lastId = 1;
+    func_0011CB90(0x80000008, (s32)func_0011D238, (s32)&D_0013E900);
+    func_0011CB90(0x80000009, (s32)HandleRpcBindRequest, (s32)&D_0013E900);
+    func_0011CB90(0x8000000A, (s32)func_0011D590, (s32)&D_0013E900);
+    func_0011CB90(0x8000000C, (s32)func_0011D2F0, (s32)&D_0013E900);
+    func_0011F628();
+    if (func_0011B030(0x80000002)) {
+        return;
+    }
+    packet = (s32 *)(D_0013D100 + 64);
+    packet[3] = 1;
+    func_0011CD20(0x80000002, (s32)packet, 16, 0, 0, 0);
+    while (func_0011C8B0(0) == 0) {
+    }
+    func_0011B020(0x80000002, 1);
+}
 
 extern void func_0011CB58(void);
 extern s32 D_001346A0;
@@ -2013,23 +2103,6 @@ void func_0011D118(void) {
     func_0011CB58();
     D_001346A0 = 0;
 }
-
-/* A 0x40-byte SIF RPC packet as the packet allocator sees it. */
-typedef struct RpcPacket {
-    s32 header[4];  /* SifCmdHeader */
-    s32 recId;      /* bit 0 set while allocated; slot index in the high half */
-    s32 pktAddr;    /* the packet's own address */
-    s32 rpcId;
-    s32 rest[9];
-} RpcPacket;
-
-/* The SDK's RPC packet table: an id counter and a table of 0x40-byte
- * packets. */
-typedef struct RpcPacketTable {
-    s32 lastId;
-    RpcPacket *packets;
-    s32 count;
-} RpcPacketTable;
 
 /**
  * Allocate an RPC packet (the SDK's _rpc_get_packet): with interrupts off
@@ -3406,7 +3479,48 @@ s32 func_0011EEA0(void) {
     return 0;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", sceSifRebootIop);
+extern char D_0013ABA0[];
+extern char D_0013ABB0[];
+extern s32 sceSifResetIop(const char *arg, s32 mode);
+
+/**
+ * sceSifRebootIop: reset the IOP and have it reboot from the image named by
+ * `img`. Builds the reset argument string "rom0:UDNL " + `img` in an 0x50-byte
+ * stack buffer, then (after sceSifInitRpc(0) and func_0011D118, the RPC
+ * reset) calls sceSifResetIop with it. If strlen(img) + 11 would exceed 0x50 it
+ * prints "too long parameter" through Kprintf and returns 0.
+ *
+ * @param img  IOP image name appended to the "rom0:UDNL " prefix
+ * @return     sceSifResetIop's result, or 0 for an over-long name
+ *
+ * Source: SOURCE_PLACEHOLDER
+ */
+s32 sceSifRebootIop(const char *img) {
+    const char *prefix = D_0013ABA0;
+    char param[80];
+    const char *p;
+    char *d;
+
+    p = img;
+    while (*p) {
+        p++;
+    }
+    if ((u32)(p + 11 - img) > 80) {
+        Kprintf(D_0013ABB0, img);
+        return 0;
+    }
+    sceSifInitRpc(0);
+    func_0011D118();
+    d = param;
+    while (*prefix) {
+        *d++ = *prefix++;
+    }
+    while (*img) {
+        *d++ = *img++;
+    }
+    *d = 0;
+    return sceSifResetIop(param, 0);
+}
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011EFE8);
 

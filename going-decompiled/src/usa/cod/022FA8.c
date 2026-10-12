@@ -1597,7 +1597,22 @@ s32 func_00126F38(u32 arg0) {
 }
 
 extern s32 D_0013B708[];   /* per-channel "present" flags, parallel to D_00137E30 */
-extern s32 func_00127040(u8 *buf);  /* returns 0 (ROM: `jr $31; daddu $2,$0,$0`) */
+/* The EE DMAC environment sceDmaPutEnv applies to the global registers
+ * (the SDK's sceDmaEnv). */
+typedef struct {
+    u8 sts;          /* stall source channel, 0..9 */
+    u8 std;          /* stall drain channel, 0..9 */
+    u8 mfd;          /* MFIFO drain channel, 0..9 */
+    u8 rcyc;         /* release cycle, 0 = off, 1..6 */
+    u16 express;     /* D_PCR express-channel mask */
+    u16 notify;      /* D_PCR notify-channel mask */
+    u16 sqwc;        /* D_SQWC skip qword count */
+    u16 tqwc;        /* D_SQWC transfer qword count */
+    void *rbadr;     /* D_RBOR MFIFO ring-buffer address */
+    u32 rbmsk;       /* D_RBSR MFIFO ring-buffer mask */
+} DmaEnv;
+
+extern s32 sceDmaPutEnv(DmaEnv *env);
 
 /* One EE DMA channel's register block (only the words ResetDmacChannels clears). */
 typedef struct {
@@ -1620,10 +1635,10 @@ typedef struct {
  * every channel whose D_0013B708 flag is set (register blocks from the
  * D_00137E30 table), clear the D_STAT interrupt status bits and keep only its
  * mask half, then rebuild the DMAC control state from a zeroed 20-byte
- * descriptor (func_00126F00 = clear, func_00127040 = apply). With mode 1 the
+ * descriptor (func_00126F00 = clear, sceDmaPutEnv = apply). With mode 1 the
  * DMAC enable bit is set again. Returns the enable bit as it was on entry.
  *
- * func_00127040 must be declared value-returning: as `void` cc1 puts the
+ * sceDmaPutEnv must be declared value-returning: as `void` cc1 puts the
  * `mode == 1` constant in $v0 instead of the ROM's $v1 (2/56 words).
  */
 s32 ResetDmacChannels(s32 mode) {
@@ -1645,17 +1660,80 @@ s32 ResetDmacChannels(s32 mode) {
     *(volatile u32 *)0x1000E010 = 0xFF1F;
     *(volatile u32 *)0x1000E010 = *(volatile u32 *)0x1000E010 & 0xFF1F0000;
     func_00126F00(desc, 0x14);
-    func_00127040(desc);
+    sceDmaPutEnv((DmaEnv *)desc);
     if (mode == 1) {
         *(volatile u32 *)0x1000E000 = *(volatile u32 *)0x1000E000 | 1;
     }
     return wasEnabled;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00127040);
+extern u8 D_0013B730[];   /* channel id -> D_CTRL STS code */
+extern u8 D_0013B740[];   /* channel id -> D_CTRL STD code */
+extern u8 D_0013B750[];   /* channel id -> D_CTRL MFD code */
+extern DmaEnv D_00141AD8; /* the last environment applied */
+
+/**
+ * sceDmaPutEnv: apply the DMAC environment `env` (the SDK's sceDmaPutEnv).
+ * Validates the stall-source, stall-drain and MFIFO-drain channels (< 10) and
+ * the release cycle (< 7), returning -1, -2, -3 or -4 for the first that is
+ * out of range. Otherwise rewrites D_CTRL's STS/STD/MFD fields from the
+ * D_0013B730/40/50 channel-code tables and its RELE/RCYC bits from `rcyc`,
+ * loads D_PCR from express:notify, D_SQWC from tqwc:sqwc, D_RBOR and D_RBSR from
+ * the ring buffer, remembers `env` in D_00141AD8 and returns 0. Its one caller
+ * is ResetDmacChannels (sceDmaReset).
+ *
+ * The register reads are `volatile` MMIO semantics, not a codegen device.
+ *
+ * Source: SOURCE_PLACEHOLDER_DMA
+ */
+s32 sceDmaPutEnv(DmaEnv *env) {
+    u32 ctrl;
+    u32 pcr;
+    u32 sqwc;
+    u32 rbor;
+    u32 rbsr;
+
+    ctrl = *(volatile u32 *)0x1000E000;
+    pcr = *(volatile u32 *)0x1000E020;
+    sqwc = *(volatile u32 *)0x1000E030;
+    rbor = *(volatile u32 *)0x1000E050;
+    rbsr = *(volatile u32 *)0x1000E040;
+    if (env->sts >= 10) {
+        return -1;
+    }
+    if (env->std >= 10) {
+        return -2;
+    }
+    if (env->mfd >= 10) {
+        return -3;
+    }
+    if (env->rcyc >= 7) {
+        return -4;
+    }
+    ctrl = (ctrl & ~0x30) | (D_0013B730[env->sts] << 4);
+    ctrl = (ctrl & ~0xC0) | (D_0013B740[env->std] << 6);
+    ctrl = (ctrl & ~0xC) | (D_0013B750[env->mfd] << 2);
+    if (env->rcyc != 0) {
+        ctrl |= 2;
+        ctrl = (ctrl & ~0x300) | ((env->rcyc - 1) << 8);
+    } else {
+        ctrl &= ~2;
+    }
+    pcr = (env->express << 16) | env->notify;
+    sqwc = (env->tqwc << 16) | env->sqwc;
+    rbor = (u32)env->rbadr;
+    rbsr = env->rbmsk;
+    *(volatile u32 *)0x1000E000 = ctrl;
+    *(volatile u32 *)0x1000E020 = pcr;
+    *(volatile u32 *)0x1000E030 = sqwc;
+    *(volatile u32 *)0x1000E050 = rbor;
+    *(volatile u32 *)0x1000E040 = rbsr;
+    D_00141AD8 = *env;
+    return 0;
+}
 
 /* func_00127218: 8 bytes of inter-function padding (a dead `sw $4,0($3); nop`)
- * between func_00127040 and the real func_00127220 — a splat mis-split, pinned
+ * between sceDmaPutEnv and the real func_00127220 — a splat mis-split, pinned
  * to size 0x8 in symbol_addrs so func_00127220 gets a clean .s. */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00127218);
 
@@ -2443,7 +2521,33 @@ s32 McGetEntSpace(s32 port, s32 slot) {
     return r;
 }
 
-extern s32 D_00143108;
+/* A SIF RPC client as sceDbcInit tests it: the server pointer at +0x24 is
+ * set once the IOP's bind reply arrived. */
+typedef struct {
+    u8 pad0[0x24];
+    void *server;
+} DbcRpcClient;
+
+extern DbcRpcClient D_00143108;  /* libdbc command client (RPC server 0x80000900) */
+extern DbcRpcClient D_00143130;  /* second libdbc RPC client (asynchronous sends, RPC server 0x8000091B) */
+
+/* The 0x40-byte port-state block the IOP-side libdbc server DMAs into
+ * D_00143580 (func_0011B3D0 is handed its 0x80-byte span). Declared as bytes:
+ * the ROM copies it with unaligned ldl/ldr+sdl/sdr pairs, i.e. a struct copy
+ * whose alignment cc1 could not assume to be 8. */
+typedef struct DbcPortStates {
+    u8 bytes[0x40];
+} DbcPortStates;
+extern DbcPortStates D_00143580;
+extern s32 D_00143600[];  /* 16 per-port connection states (copy of the above) */
+
+extern char D_0013B7E8[];  /* libdbc bind-failure message */
+extern char D_0013B800[];  /* libdbc version-mismatch banner */
+extern char D_0013B828[];  /* version-mismatch format: wanted major.minor, found major.minor */
+extern char D_0013B850[];  /* "sceDbcInit" success format, takes the work address */
+extern void func_00128898(const char *fmt, ...);
+extern void exit_runAtexitHandlers(s32 status) __attribute__((noreturn));
+extern s32 func_00128440(s32 arg0);
 /* Array-typed: func_00128440 stores arg0 at D_00143180[1] and the ARRAY
  * extern is required for its match — the scalar (&D)[1] idiom anchors the
  * %hi at D+4 and flips the branch to bgezl. func_00128250 shares this decl
@@ -2462,10 +2566,65 @@ s32 func_00128250(void) {
     return D_00143180[0];
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", sceDbcInit);
+/**
+ * sceDbcInit: bring up the libdbc client. Initialises the SIF RPC layer, binds
+ * the command client D_00143108 (server 0x80000900) and the second client
+ * D_00143130 (server 0x8000091B), each retried with a 0x10000-count spin until
+ * the IOP answers and each bind failure fatal (log D_0013B7E8, exit(-1)). Asks
+ * the server for its version (func_00128250); a major other than 2 prints the
+ * D_0013B800 / D_0013B828 mismatch banner and returns 0. Otherwise clears the 16
+ * port-state words D_00143600, logs the work address, hands the port-state
+ * block D_00143580 to the server as its work area (func_00128440) and
+ * returns 1.
+ *
+ * Source: SOURCE_PLACEHOLDER_DBC
+ */
+s32 sceDbcInit(void) {
+    s32 ver;
+    s32 major;
+    s32 i;
+
+    sceSifInitRpc(0);
+    while (1) {
+        if (sceSifBindRpc(&D_00143108, 0x80000900, 0) < 0) {
+            func_00128898(D_0013B7E8);
+            exit_runAtexitHandlers(-1);
+        }
+        if (D_00143108.server != 0) {
+            break;
+        }
+        i = 0x10000;
+        do {
+        } while (--i != -1);
+    }
+    while (1) {
+        if (sceSifBindRpc(&D_00143130, 0x8000091B, 0) < 0) {
+            func_00128898(D_0013B7E8);
+            exit_runAtexitHandlers(-1);
+        }
+        if (D_00143130.server != 0) {
+            break;
+        }
+        i = 0x10000;
+        do {
+        } while (--i != -1);
+    }
+    ver = func_00128250();
+    major = ver >> 8;
+    if (major != 2) {
+        Kprintf(D_0013B800);
+        Kprintf(D_0013B828, 2, 0, major, ver & 0xFF);
+        return 0;
+    }
+    for (i = 15; i >= 0; i--) {
+        D_00143600[i] = 0;
+    }
+    func_00128898(D_0013B850, &D_00143580);
+    func_00128440((s32)&D_00143580);
+    return 1;
+}
 
 extern char D_0013B868[];
-extern void func_00128898(const char *fmt, ...);
 
 /**
  * func_00128440(arg0): open the D_00143180 subsystem in mode 0x80000904 with
@@ -2557,16 +2716,6 @@ s32 func_001284B0(DbcSocketParam *param, struct ResSubObj *buf0,
 extern void func_0011B3D0(void *arg0, void *arg1);
 extern char D_0013B8C8[];  /* "sceDbcGetDepNumber: rpc error\n" */
 
-/* The 0x40-byte port-state block the IOP-side libdbc server DMAs into
- * D_00143580 (func_0011B3D0 is handed its 0x80-byte span). Declared as bytes:
- * the ROM copies it with unaligned ldl/ldr+sdl/sdr pairs, i.e. a struct copy
- * whose alignment cc1 could not assume to be 8. */
-typedef struct DbcPortStates {
-    u8 bytes[0x40];
-} DbcPortStates;
-extern DbcPortStates D_00143580;
-extern s32 D_00143600[];  /* 16 per-port connection states (copy of the above) */
-
 /**
  * libdbc sceDbcGetDepNumber (named by the ROM's own error string, D_0013B8C8):
  * refresh the cached port-state table, then ask the IOP server (RPC 0x80000903
@@ -2597,7 +2746,6 @@ s32 func_00128578(s32 port) {
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_001286C0);
 
-extern s32 D_00143130;      /* second libdbc RPC client (asynchronous sends) */
 extern char D_0013B990[];   /* "sceDbcSendData2: rpc error\n" */
 extern char D_0013B9B0[];   /* "sceDbcReceiveData: rpc error\n" */
 
@@ -2639,7 +2787,7 @@ s32 func_001286C8(port, cmd, size, data)
     for (i = 0; i < *size; i++) {
         req->data[i] = data[i];
     }
-    if (sceSifCheckStatRpc(&D_00143130) == 1) {
+    if (sceSifCheckStatRpc((s32 *)&D_00143130) == 1) {
         return 0;
     }
     if (sceSifCallRpc(&D_00143130, 0x8000091B, 1, D_00143180, 0x400,
@@ -6703,10 +6851,71 @@ s32 func_0012FB80(s32 arg0, struct AllocRegion *region, s32 size, u32 align) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012FBF0);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012FD60);
+/* The libmpeg player object (the sceMpeg the IPU decoder's callbacks field
+ * points back at): field8 is the decoded-picture count relative to the first
+ * picture, decoder the IpuDecoder it drives. */
+typedef struct {
+    u8 pad0[8];
+    s32 field8;
+    u8 padC[0x34];
+    IpuDecoder *decoder;
+} MpegCtx;
 
-extern s32 func_0012FEC0(s32 *obj, s32 arg1, s32 arg2);
-extern s32 func_0012FD60(s32 *obj, s32 arg1, s32 arg2);
+extern s32 func_0012D4B0(IpuDecoder *dec, s32 arg1);
+extern s32 func_00130020(s32 *arg0);
+
+/**
+ * func_0012FD60: decode, or skip, one FRAME picture (the decoder's
+ * pictureStructure is 3; func_0012FE78 picks this over func_0012FEC0, the field
+ * twin). Decodes when `limit` is -1 or `frameNo` is below it: marks the stream
+ * started (streamState and field8) on the first call, brings the reference
+ * images up to date (func_0012D4B0) and decodes the picture (func_0012D350);
+ * its result is 1 if that decode succeeded. Past the limit it only updates the
+ * reference images and runs the no-data callback (func_0012FAE8) instead. Then
+ * hands the frame out (func_0012D420), toggles `pending` when the picture
+ * structure is not 3 and the picture was decoded, records the running picture
+ * number in field8, and advances the picture count and outputPending unless a
+ * field is still pending. Returns the decode result.
+ *
+ * Source: SOURCE_PLACEHOLDER_FD60
+ */
+s32 func_0012FD60(MpegCtx *arg0, s32 frameNo, s32 limit) {
+    s32 ret;
+    s32 flag;
+    s32 t;
+    IpuDecoder *tmp;
+    flag = 0;
+    tmp = arg0->decoder;
+    if ((limit == -1) || (frameNo < limit)) {
+        if (tmp->streamState == 0) {
+            arg0->field8 = 0;
+            tmp->streamState = 1;
+        }
+        if (func_0012D4B0(tmp, 0) == 0) {
+            t = 0;
+        } else {
+            t = 0;
+            t = func_0012D350((s32 *)tmp) != t;
+        }
+        ret = t;
+    } else {
+        flag = 1;
+        ret = func_0012D4B0(tmp, 0);
+        func_0012FAE8((s32 *)arg0);
+    }
+    func_0012D420(tmp, tmp->count, tmp->outputPending);
+    if ((tmp->pictureStructure != 3) && (flag == 0)) {
+        tmp->pending = tmp->pending == 0;
+    }
+    arg0->field8 = tmp->count - tmp->fieldAC;
+    if (tmp->pending == 0) {
+        tmp->count = tmp->count + 1;
+        tmp->outputPending = tmp->outputPending + 1;
+    }
+    return ret;
+}
+
+extern s32 func_0012FEC0(MpegCtx *arg0, s32 frameNo, s32 limit);
 
 /**
  * Dispatch on the state word (offset 0x174) of obj's sub-object
@@ -6721,12 +6930,89 @@ extern s32 func_0012FD60(s32 *obj, s32 arg1, s32 arg2);
  */
 s32 func_0012FE78(s32 *obj, s32 arg1, s32 arg2) {
     if (((s32 *)obj[0x10])[0x5D] != 3) {
-        return func_0012FEC0(obj, arg1, arg2);
+        return func_0012FEC0((MpegCtx *)obj, arg1, arg2);
     }
-    return func_0012FD60(obj, arg1, arg2);
+    return func_0012FD60((MpegCtx *)obj, arg1, arg2);
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012FEC0);
+/**
+ * func_0012FEC0: decode, or skip, one FIELD picture (pictureStructure 1 or 2;
+ * the field twin of func_0012FD60). Clears `pending`, marks the stream started
+ * on the first call and, while `limit` is -1 or `frameNo` is below it, brings
+ * the reference images up to date (func_0012D4B0) and decodes the field
+ * (func_0012D350). Then sets `pending` and looks for the next header
+ * (IpuParseVideoStartCodes): at the end of the stream it flushes
+ * (func_00130020), sets field00 and returns 0. A next picture whose structure is
+ * not the expected opposite field returns -1. Otherwise the second field is
+ * decoded the same way, the frame handed out (func_0012D420), pending cleared,
+ * the running picture number recorded in field8 and the picture count and
+ * outputPending advanced; a skipped picture also runs the no-data callback.
+ * Returns 1 if the second field decoded, else 0.
+ *
+ * Source: SOURCE_PLACEHOLDER_FEC0
+ */
+s32 func_0012FEC0(MpegCtx *arg0, s32 frameNo, s32 limit) {
+    IpuDecoder *p;
+    s32 decode;
+    s32 result;
+    s32 expected;
+    s32 secondOk;
+    s32 ret;
+    s32 gate;
+
+    decode = 0;
+    p = arg0->decoder;
+    p->pending = 0;
+    if ((limit == -1) || (frameNo < limit)) {
+        decode = 1;
+    }
+    if (p->streamState == 0) {
+        arg0->field8 = 0;
+        p->streamState = 1;
+    }
+    result = func_0012D4B0(p, 0);
+    if ((result != 0) && (decode != 0)) {
+        func_0012D350((s32 *)p);
+    }
+    p->pending = 1;
+    result = IpuParseVideoStartCodes((s32 *)p);
+    if (result == 0) {
+        func_00130020((s32 *)arg0);
+        p->field00 = 1;
+        return 0;
+    }
+    expected = 2;
+    if (p->firstPictureStructure != 1) {
+        expected = 1;
+    }
+    if (p->pictureStructure != expected) {
+        return -1;
+    }
+    secondOk = func_0012D4B0(p, 1);
+    gate = 0;
+    if (secondOk != 0) {
+        gate = 1;
+    }
+    ret = 0;
+    if (gate != 0) {
+        if (decode != 0) {
+            result = func_0012D350((s32 *)p);
+            if (result != 0) {
+                ret = 1;
+            }
+        }
+    }
+    func_0012D420(p, p->count, p->outputPending);
+
+    p->pending = 0;
+    arg0->field8 = p->count - p->fieldAC;
+    p->count = p->count + 1;
+    p->outputPending = p->outputPending + 1;
+    if (decode == 0) {
+        func_0012FAE8((s32 *)arg0);
+    }
+    return ret;
+}
 
 extern void func_00130098(s32 *obj);
 
