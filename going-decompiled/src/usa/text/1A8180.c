@@ -4398,7 +4398,7 @@ typedef int EulerQuad __attribute__((mode(TI)));
  * EulerQuad type; no device beyond that (no volatile, no register pin, no
  * inline asm).
  *
- * Source: OpenRAC/rac2-gc-decomp @974302ba936bb455acd78034b58ad4b98bafcc6b (GPL-3.0, adopted with the authors' permission per RULING #10405), src/game/002AA800.c, func_002AB6D8 (v1.01), C body adopted verbatim apart from our callee spellings (their func_00282C88_3 = func_00283638, func_00283248_6 = Atan2fPoly, func_00283410_7 = func_00283DC0, func_00283430 = func_00283DE0, func_00283788_4 = MatrixMultiplyVu0) the parameter types of our shared prototype (Mat4x4 *, void * with float * locals, which compile the same: checked standalone on the s136 arm) and the casts to our callee prototypes; byte-exact on our ROM: GATE_EVIDENCE_M2E
+ * Source: OpenRAC/rac2-gc-decomp @974302ba936bb455acd78034b58ad4b98bafcc6b (GPL-3.0, adopted with the authors' permission per RULING #10405), src/game/002AA800.c, func_002AB6D8 (v1.01), C body adopted verbatim apart from our callee spellings (their func_00282C88_3 = func_00283638, func_00283248_6 = Atan2fPoly, func_00283410_7 = func_00283DC0, func_00283430 = func_00283DE0, func_00283788_4 = MatrixMultiplyVu0) the parameter types of our shared prototype (Mat4x4 *, void * with float * locals, which compile the same: checked standalone on the s136 arm) and the casts to our callee prototypes; byte-exact on our ROM: vmu BYTE IDENTICAL 74/74 words (8 relocs resolved; base-seeded bit flip rc 1 at 0x2ac580), unit objdiff report 100.00% size=292 (objdiff_build.sh + unit_report.sh, clean), whole-image cmp 0 under landing_gate usa and eu --strict (task #2159)
  */
 #if !defined(TARGET_NATIVE) && !defined(S136OS_MatrixToEulerAngles)
 S136OS_SLOT(MatrixToEulerAngles);

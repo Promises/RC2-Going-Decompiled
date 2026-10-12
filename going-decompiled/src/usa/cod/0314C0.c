@@ -245,7 +245,7 @@ extern MonthLengths D_0013BF90;
  * semantic claim: a codegen lever. Priced removed-alone (year tested as
  * `s[7] & 3` directly, diff.sh fuzzy, 2026-10-12): 85.29%, so load-bearing.
  *
- * Source: OpenRAC/rac2-gc-decomp @974302ba936bb455acd78034b58ad4b98bafcc6b (GPL-3.0, adopted with the authors' permission per RULING #10405), src/core/00131780.c, func_00131850 (v1.01; upstream rac1-decomp src/core/0012CC90.c func_0012D5D0), C body adopted verbatim; byte-exact on our ROM: GATE_EVIDENCE_131850
+ * Source: OpenRAC/rac2-gc-decomp @974302ba936bb455acd78034b58ad4b98bafcc6b (GPL-3.0, adopted with the authors' permission per RULING #10405), src/core/00131780.c, func_00131850 (v1.01; upstream rac1-decomp src/core/0012CC90.c func_0012D5D0), C body adopted verbatim; byte-exact on our ROM: vmu BYTE IDENTICAL 46/46 words (2 relocs resolved; base-seeded bit flip rc 1 at 0x131870), unit objdiff report 100.00% size=180 (objdiff_build.sh + unit_report.sh, clean), whole-image cmp 0 under landing_gate usa and eu --strict (task #2159)
  */
 void func_00131850(u8 *s) {
     MonthLengths days;
@@ -287,7 +287,7 @@ void func_00131850(u8 *s) {
  * if/else with one store per arm, which cross-jumping merges into the ROM's
  * single `sb`.
  *
- * Source: OpenRAC/rac2-gc-decomp @974302ba936bb455acd78034b58ad4b98bafcc6b (GPL-3.0, adopted with the authors' permission per RULING #10405), src/core/00131780.c, func_00131908 (v1.01; upstream rac1-decomp src/core/0012CC90.c func_0012D688), C body adopted verbatim; byte-exact on our ROM: GATE_EVIDENCE_131908
+ * Source: OpenRAC/rac2-gc-decomp @974302ba936bb455acd78034b58ad4b98bafcc6b (GPL-3.0, adopted with the authors' permission per RULING #10405), src/core/00131780.c, func_00131908 (v1.01; upstream rac1-decomp src/core/0012CC90.c func_0012D688), C body adopted verbatim; byte-exact on our ROM: vmu BYTE IDENTICAL 42/42 words (2 relocs resolved; base-seeded bit flip rc 1 at 0x131928), unit objdiff report 100.00% size=164 (objdiff_build.sh + unit_report.sh, clean), whole-image cmp 0 under landing_gate usa and eu --strict (task #2159)
  */
 void func_00131908(u8 *s) {
     MonthLengths days;
