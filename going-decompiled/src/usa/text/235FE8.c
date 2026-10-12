@@ -4500,12 +4500,16 @@ S136OS_SLOT(func_0033C100);
    GUARD: on EE this C is the image's body, compiled alone by the s136os arm
    (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
    tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
-   splice drops the function. On native it is plain C. */
+   splice drops the function. On native it is plain C.
+   ORDER: `i = 2;` is written before `element = p + 0xE4;` on purpose. On the
+   pinned (-fno-gcse) arm the two orders give a sha-identical unit object
+   (FACT #9337, re-derived for task #2148); without -fno-gcse only this order
+   keeps the ROM's li $18,2 / addiu $17,$16,0xE4 order (FACT #10233). */
 void *func_0033C100(void *p) {
     u8 *element;
     s32 i;
-    element = (u8 *)p + 0xE4;
     i = 2;
+    element = (u8 *)p + 0xE4;
     GuiElementInitTypeB(p);
     GuiElementInitTypeB((char *)p + 0x4C);
     GuiElementInitTypeB((char *)p + 0x98);
