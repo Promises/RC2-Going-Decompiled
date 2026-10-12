@@ -36,6 +36,13 @@ extern s32 D_00133E74;
  * strncpy is cod/015878. This unit keeps the name
  * cod/015180 for the rest (0x115C90..0x11FC67). */
 
+/* Naming asymmetry, deliberate (task #2128, watcher-2 decision (A)): the
+ * still-INCLUDE_ASM EE syscall stubs carry their SDK names (ResetEE, SetGsCrt,
+ * ...), while the matched stubs below keep their splat func_ names, because a
+ * matched name is never renamed (objdiff pairs by name). Their identity is in
+ * each doc comment instead. Do not "fix" either side. EU keeps func_ names for
+ * the same addresses (RULING #5339). */
+
 /* func_00115C90: clears D_00133E78, calls func_0011B270(arg1); on failure
  * (-1) writes the resulting D_00133E78 error code back through arg0. Logic
  * matches but NOT byte-exact: the original saves $16/$17/$31 with 128-bit `sq`
@@ -354,71 +361,71 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", VfprintfInteger)
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011A7F8);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011A810);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", ResetEE);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011A820);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", SetGsCrt);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011A830);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011A840);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", KExit);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011A850);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011A860);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", _LoadExecPS2);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011A870);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", _ExecPS2);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011A880);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011A890);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", RFU009);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011A8A0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", AddSbusIntcHandler);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011A8B0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", RemoveSbusIntcHandler);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011A8C0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", Interrupt2Iop);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011A8D0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", SetVTLBRefillHandler);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011A8E0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", SetVCommonHandler);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011A8F0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", SetVInterruptHandler);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011A900);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011A910);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011A920);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", RemoveIntcHandler);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011A930);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011A940);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011A950);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", RemoveDmacHandler);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011A960);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", _EnableIntc);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011A970);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", _DisableIntc);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011A980);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", _EnableDmac);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011A990);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", _DisableDmac);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011A9A0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011A9B0);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011A9C0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", _iEnableIntc);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011A9D0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", _iDisableIntc);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011A9E0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", _iEnableDmac);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011A9F0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", _iDisableDmac);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AA00);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AA10);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", iReleaseAlarm);
 
 /**
  * func_0011AA20 = EE kernel syscall 0x20 (CreateThread).
@@ -435,7 +442,7 @@ s32 func_0011AA20(struct ThreadParam *param) {
 #endif
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AA30);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", DeleteThread);
 
 /**
  * func_0011AA40 = EE kernel syscall 0x22 (StartThread).
@@ -450,17 +457,17 @@ s32 func_0011AA40(s32 thid, void *arg) {
 #endif
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AA50);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", ExitThread);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AA60);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", ExitDeleteThread);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AA70);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", TerminateThread);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AA80);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", iTerminateThread);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AA90);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", DisableDispatchThread);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AAA0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", EnableDispatchThread);
 
 /**
  * func_0011AAB0 = EE kernel syscall 0x29 (ChangeThreadPriority).
@@ -484,7 +491,7 @@ s32 func_0011AAB0(s32 thid, s32 priority) {
 #endif
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AAC0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", iChangeThreadPriority);
 
 /**
  * func_0011AAD0 = EE kernel syscall 0x2B (RotateThreadReadyQueue).
@@ -503,11 +510,11 @@ s32 func_0011AAD0(s32 priority) {
 #endif
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AAE0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", _iRotateThreadReadyQueue);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AAF0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", ReleaseWaitThread);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AB00);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", iReleaseWaitThread);
 
 /**
  * func_0011AB10 = EE kernel syscall 0x2F (GetThreadId).
@@ -521,9 +528,9 @@ s32 func_0011AB10(void) {
 #endif
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AB20);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", ReferThreadStatus);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AB30);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", iReferThreadStatus);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AB40);
 
@@ -540,11 +547,11 @@ s32 func_0011AB50(s32 thid) {
 #endif
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AB60);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", _iWakeupThread);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AB70);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", CancelWakeupThread);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AB80);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", iCancelWakeupThread);
 
 /**
  * func_0011AB90 = EE kernel syscall 0x37 (SuspendThread).
@@ -559,19 +566,19 @@ s32 func_0011AB90(s32 thid) {
 #endif
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011ABA0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", _iSuspendThread);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011ABB0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", ResumeThread);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011ABC0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", iResumeThread);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011ABD0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", RFU059);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011ABE0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", RFU060);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011ABF0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", RFU061);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AC00);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", EndOfHeap);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AC10);
 
@@ -603,7 +610,7 @@ s32 func_0011AC30(s32 obj) {
 #endif
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AC40);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", SignalSema);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AC50);
 
@@ -612,7 +619,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AC50);
  * SCE library syscall stub (see func_0011AA20): load the syscall number into
  * $v1 and trap; the kernel blocks the caller until the semaphore can be taken
  * and returns the semaphore id in $v0. Used as the table-lock acquire (see
- * func_0011D868 / func_0011AC40 release) and by the worker loop func_0011B728.
+ * func_0011D868 / SignalSema release) and by the worker loop func_0011B728.
  */
 s32 func_0011AC60(s32 sema) {
 #ifndef TARGET_NATIVE
@@ -621,13 +628,13 @@ s32 func_0011AC60(s32 sema) {
 #endif
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AC70);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", PollSema);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AC80);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", iPollSema);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AC90);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", ReferSemaStatus);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011ACA0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", iReferSemaStatus);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011ACB0);
 
@@ -665,61 +672,61 @@ void func_0011ACD0(s32 *config) {
 #endif
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011ACE0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", GetGsHParam);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011ACF0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", GetGsVParam);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AD00);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", SetGsHParam);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AD10);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", SetGsVParam);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AD20);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", CreateEventFlag);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AD30);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", DeleteEventFlag);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AD40);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", SetEventFlag);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AD50);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AD60);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", xlaunch);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AD70);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", iPutTLBEntry);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AD80);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AD90);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", GetTLBEntry);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011ADA0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", iProbeTLBEntry);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011ADB0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", ExpandScratchPad);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011ADC0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011ADD0);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011ADE0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", EnableIntcHandler);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011ADF0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", iEnableIntcHandler);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AE00);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", DisableIntcHandler);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AE10);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", iDisableIntcHandler);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AE20);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", EnableDmacHandler);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AE30);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", iEnableDmacHandler);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AE40);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", DisableDmacHandler);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AE50);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", iDisableDmacHandler);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AE60);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", KSeg0);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AE70);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", EnableCache);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AE80);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", DisableCache);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AE90);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", GetCop0);
 
 /**
  * func_0011AEA0 = FlushCache: EE kernel syscall 0x64 (100), the name confirmed
@@ -744,63 +751,63 @@ void func_0011AEA0(s32 mode) {
 #endif
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AEB0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", CpuConfig);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AEC0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", iGetCop0);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AED0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", iFlushCache);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AEE0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", iCpuConfig);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AEF0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", sceSifStopDma);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AF00);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", SetCPUTimerHandler);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AF10);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", SetCPUTimer);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AF20);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", SetOsdConfigParam2);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AF30);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", GetOsdConfigParam2);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AF40);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", GsGetIMR);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AF50);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", iGsGetIMR);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AF60);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", GsPutIMR);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AF70);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", iGsPutIMR);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AF80);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", SetPgifHandler);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AF90);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", SetVSyncFlag);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AFA0);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AFB0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", _print);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AFC0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", sceSifDmaStat);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AFD0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", isceSifDmaStat);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AFE0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", sceSifSetDma);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AFF0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", isceSifSetDma);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B000);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", sceSifSetDChain);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B010);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", isceSifSetDChain);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B020);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", sceSifSetReg);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B030);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", sceSifGetReg);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B040);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", _ExecOSD);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B050);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B060);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", PSMode);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B070);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", MachineType);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B080);
 
@@ -1828,13 +1835,13 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011C8D8);
 
 extern s32 DisableDmac(s32 channel);
-extern s32 func_0011A950(s32 channel, s32 handlerId);
+extern s32 RemoveDmacHandler(s32 channel, s32 handlerId);
 extern s32 D_0013CF54;
 extern s32 D_0013469C;
 
 /**
  * Shut down the SIF command layer: disable DMA channel 5 (SIF0), remove the
- * channel-5 handler whose id is held in D_0013CF54 (func_0011A950 is the
+ * channel-5 handler whose id is held in D_0013CF54 (RemoveDmacHandler is the
  * RemoveDmacHandler syscall stub, syscall 0x13), and clear the "initialised"
  * flag D_0013469C. Identity by body: libkernel's sceSifExitCmd.
  *
@@ -1845,7 +1852,7 @@ extern s32 D_0013469C;
  */
 void func_0011CB58(void) {
     DisableDmac(5);
-    func_0011A950(5, D_0013CF54);
+    RemoveDmacHandler(5, D_0013CF54);
     D_0013469C = 0;
 }
 
@@ -1906,8 +1913,8 @@ typedef struct SifDmaDesc {
 
 extern s32 D_0013CF60; /* IOP-side command buffer address */
 extern void sceSifWriteBackDCache(void *ptr, s32 size);
-extern s32 func_0011AFE0(SifDmaDesc *desc, s32 count); /* sceSifSetDma */
-extern s32 func_0011AFF0(SifDmaDesc *desc, s32 count); /* isceSifSetDma */
+extern s32 sceSifSetDma(SifDmaDesc *desc, s32 count); /* sceSifSetDma */
+extern s32 isceSifSetDma(SifDmaDesc *desc, s32 count); /* isceSifSetDma */
 
 /**
  * Send a SIF command to the IOP (the SDK's _sceSifSendCmd): fill in the
@@ -1964,9 +1971,9 @@ s32 func_0011CBE8(s32 command, s32 mode, SifCmdHeader *header, s32 packetSize,
     count++;
     sceSifWriteBackDCache(header, packetSize);
     if (mode & 1) {
-        return func_0011AFF0(dma, count);
+        return isceSifSetDma(dma, count);
     }
-    return func_0011AFE0(dma, count);
+    return sceSifSetDma(dma, count);
 }
 
 /**
@@ -2588,11 +2595,11 @@ void func_0011D868(void) {
 }
 
 extern s32 func_0011AC60(s32 handle);
-extern s32 func_0011AC40(s32 sema);
+extern s32 SignalSema(s32 sema);
 extern u8 D_0013FE80[];
 
 /* func_0011D8C8: allocate a slot from the 0x200-byte pool D_0013FE80 (32 slots
- * of 0x10). Under lock (func_0011D868 + func_0011AC60/func_0011AC40 on the lock
+ * of 0x10). Under lock (func_0011D868 + func_0011AC60/SignalSema on the lock
  * handle D_00134738), scan for the first free slot (word at +0x4 is zero), claim
  * it by storing 0x10000000 there, and return it (or 0 if the pool is full). The
  * claim store is emitted BEFORE the unlock call so the 0x10000000 constant stays
@@ -2606,22 +2613,22 @@ void *func_0011D8C8(void) {
     while (e < D_0013FE80 + 0x200) {
         if (*(s32 *)(e + 4) == 0) {
             *(s32 *)(e + 4) = 0x10000000;
-            func_0011AC40(D_00134738);
+            SignalSema(D_00134738);
             return e;
         }
         e += 0x10;
     }
-    func_0011AC40(D_00134738);
+    SignalSema(D_00134738);
     return 0;
 }
 
-extern s32 func_0011AC40(s32 sema);
+extern s32 SignalSema(s32 sema);
 extern u8 D_0013FE80[];
 
 /**
  * Look up slot `idx` in the fixed 0x20-entry table D_0013FE80 (0x10-byte
  * stride). After the lazy-init (func_0011D868) and acquiring the table lock
- * (func_0011AC60(D_00134738)), release the lock (func_0011AC40) and return the
+ * (func_0011AC60(D_00134738)), release the lock (SignalSema) and return the
  * slot address when idx (unsigned) is in range, else 0. The explicit `goto`
  * makes the in-range block the branch TARGET (lever 10), which is what lets
  * the allocator keep the sltiu range-check in $3 and the table base in $2 —
@@ -2633,11 +2640,11 @@ void *func_0011D950(u32 idx) {
     func_0011D868();
     func_0011AC60(D_00134738);
     if (idx < 0x20) goto hit;
-    func_0011AC40(D_00134738);
+    SignalSema(D_00134738);
     return 0;
 hit:
     slot = &D_0013FE80[idx * 0x10];
-    func_0011AC40(D_00134738);
+    SignalSema(D_00134738);
     return slot;
 }
 
@@ -2675,19 +2682,19 @@ s32 func_0011DD98(s32 mode) {
     return 0;
 }
 
-extern s32 func_0011AC40(s32 sema);
+extern s32 SignalSema(s32 sema);
 
 /**
  * Release the singleton table lock: forward the global semaphore handle
- * D_00134734 to func_0011AC40 (SignalSema). A tail call whose result is
+ * D_00134734 to SignalSema (SignalSema). A tail call whose result is
  * discarded, so ee-gcc sibling-call-optimises it into the original's frameless
- * `j func_0011AC40` (the handle load rides the jump's delay slot). That holds
- * with func_0011AC40 declared value-returning (`int SignalSema(int)`, as the
- * SDK has it): only `return func_0011AC40(...)` keeps $ra and becomes
+ * `j SignalSema` (the handle load rides the jump's delay slot). That holds
+ * with SignalSema declared value-returning (`int SignalSema(int)`, as the
+ * SDK has it): only `return SignalSema(...)` keeps $ra and becomes
  * `jal` + a frame (task #1848, measured both ways).
  */
 void func_0011DDC8(void) {
-    func_0011AC40(D_00134734);
+    SignalSema(D_00134734);
 }
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011DDD8);
@@ -2855,14 +2862,14 @@ s32 func_0011E0D8(const char *path, s32 flags, ...) {
     if (result < 0) {
         func_0011AC60(D_00134738);
         slot->mode = 0;
-        func_0011AC40(D_00134738);
+        SignalSema(D_00134738);
         return result;
     }
     ret = index;
     func_0011AC60(D_00134738);
     slot->handle = result;
     slot->mode |= flags;
-    func_0011AC40(D_00134738);
+    SignalSema(D_00134738);
     return ret;
 }
 
@@ -3002,7 +3009,7 @@ s32 func_0011E4E0(s32 fd, void *buf, s32 size) {
                 break;
             }
         }
-        func_0011AC40(D_0013473C);
+        SignalSema(D_0013473C);
     }
     if (!(mode & 0x20000000)) {
         sceSifWriteBackDCache(buf, size);
@@ -3276,14 +3283,14 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", sceSifResetIop);
 
-extern s32 func_0011B030(s32 arg0);
+extern s32 sceSifGetReg(s32 arg0);
 
 /**
- * Query controller/pad state bit 0x40000 (via func_0011B030(4)); if set, run the
+ * Query controller/pad state bit 0x40000 (via sceSifGetReg(4)); if set, run the
  * func_0011B0A0 handler and return 1, otherwise return 0.
  */
 s32 func_0011EEA0(void) {
-    if (func_0011B030(4) & 0x40000) {
+    if (sceSifGetReg(4) & 0x40000) {
         func_0011B0A0();
         return 1;
     }
@@ -3815,18 +3822,18 @@ void func_0011FA18(void) {
     func_0011F130();
 }
 
-extern void func_0011A840(s32 code);
+extern void KExit(s32 code);
 
 /**
  * libc exit(): run the func_0011FA18 shutdown hook (the func_0011F130
- * dispatcher thunk), then hand `code` to the terminator func_0011A840 —
- * a void tail call, sibcall-optimised to the original's `j func_0011A840`
+ * dispatcher thunk), then hand `code` to the terminator KExit —
+ * a void tail call, sibcall-optimised to the original's `j KExit`
  * with the frame restore folded into the delay slot (lever 7, framed form;
  * `code` rides callee-saved $16 across the hook call).
  */
 void exit(s32 code) {
     func_0011FA18();
-    func_0011A840(code);
+    KExit(code);
 }
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011FA48);

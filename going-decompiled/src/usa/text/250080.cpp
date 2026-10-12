@@ -259,13 +259,13 @@ extern void func_00133890(s32 *obj);   /* commit-path stream lock */
 /* SIF-DMA bounce primitives (func_00350868 #else): queue a SIF DMA, busy-wait
    for the slot, poll for completion, then signal. */
 extern void func_0011AEA0(s32 mode);   /* FlushCache (EE syscall 0x64); returns nothing */
-extern s32 func_0011AFE0(void *desc, s32 count);  /* sceSifSetDma (returns id) */
-extern s32 func_0011AFC0(s32 id);      /* sceSifDmaStat (busy while >= 0) */
+extern s32 sceSifSetDma(void *desc, s32 count);  /* sceSifSetDma (returns id) */
+extern s32 sceSifDmaStat(s32 id);      /* sceSifDmaStat (busy while >= 0) */
 extern void func_00133930(s32 len, s32 dstOfs);  /* post-transfer notify */
 /* Semaphore callees (CreateSema/WaitSema/SignalSema) referenced only by the #else bodies. */
 extern s32 func_0011AC20(void *param); /* CreateSema (returns sema id) */
 extern s32 func_0011AC60(s32 sema);    /* WaitSema (acquire) */
-extern s32 func_0011AC40(s32 sema);    /* SignalSema (release) */
+extern s32 SignalSema(s32 sema);    /* SignalSema (release) */
 s32 FmvStreamStartDma(u8 *stream);         /* ring init, defined below (fwd for FmvBitstreamObjInit) */
 #endif
 
@@ -325,8 +325,8 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", InitFmvPlayback
 
 /* func_003503D8: FMV engine shutdown — flat teardown: quiesce (func_00124B88),
  * stop the IPU/decode helpers (func_003512F0/func_00352B88), kill+delete the FMV
- * thread (func_0011AA70/func_0011AA30 over g_fmvThreadId), disable DMAC ch2, remove
- * its handler (func_0011A950), reinstall the game's vblank-start handler
+ * thread (TerminateThread/DeleteThread over g_fmvThreadId), disable DMAC ch2, remove
+ * its handler (RemoveDmacHandler), reinstall the game's vblank-start handler
  * (func_00126DC0(OnVblankInterrupt), FACT #5907), tear down the
  * DMA queues (func_003525D8/func_003505E0/func_003513F0 over the arena sub-objects),
  * quiesce again, and clear bit 1 of the INTC-mask reg 0x1000E000.
@@ -343,10 +343,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", InitFmvPlayback
  * #1437). func_00126DC0 is declared s32: its ROM body returns the previous handler
  * in $2 (0x00126E44 `daddu $2,$18,$0`), though no ROM caller reads it. */
 #ifdef TARGET_NATIVE
-extern void func_0011AA70(s32 threadId);   /* kill thread */
-extern void func_0011AA30(s32 threadId);   /* delete thread */
+extern void TerminateThread(s32 threadId);   /* kill thread */
+extern void DeleteThread(s32 threadId);   /* delete thread */
 extern void DisableDmac(s32 channel);
-extern void func_0011A950(s32 a, s32 b);
+extern void RemoveDmacHandler(s32 a, s32 b);
 extern s32  func_00126DC0(void *handler);    /* install INTC-2 vblank-start handler; returns the previous one */
 extern s32  g_fmvThreadId;
 extern void OnVblankInterrupt(void);
@@ -372,10 +372,10 @@ S136OS_SLOT(func_003503D8);
 extern s32 func_00124B88(s32 mode);
 extern void func_003512F0(u8 *arena);
 extern void func_00352B88(u8 *frameQueue);
-extern void func_0011AA70(s32 threadId);
-extern void func_0011AA30(s32 threadId);
+extern void TerminateThread(s32 threadId);
+extern void DeleteThread(s32 threadId);
 extern void DisableDmac(s32 channel);
-extern void func_0011A950(s32 a, s32 b);
+extern void RemoveDmacHandler(s32 a, s32 b);
 extern s32 func_00126DC0(void *handler);
 extern s32 func_003525D8(FmvStream *obj);
 extern s32 func_003505E0(u8 *ptsQueue);
@@ -390,10 +390,10 @@ void func_003503D8(void) {
     func_00124B88(0);
     func_003512F0(FMV_ARENA_BASE_GP);
     func_00352B88(g_pFmvArenaBase + FMV_FRAMEQ_OFS);
-    func_0011AA70(g_fmvThreadId);
-    func_0011AA30(g_fmvThreadId);
+    TerminateThread(g_fmvThreadId);
+    DeleteThread(g_fmvThreadId);
     DisableDmac(2);
-    func_0011A950(2, *(s32 *)(g_pFmvArenaBase + 0xD90F8));
+    RemoveDmacHandler(2, *(s32 *)(g_pFmvArenaBase + 0xD90F8));
     func_00126DC0((void *)OnVblankInterrupt);
     func_003525D8((FmvStream *)(g_pFmvArenaBase + 0xD9048));
     func_003505E0(g_pFmvArenaBase + FMV_PTS_OFS);
@@ -754,8 +754,8 @@ S136OS_SLOT(func_00350868);
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern void func_0011AEA0(s32 mode);
-extern s32 func_0011AFE0(void *desc, s32 count);
-extern s32 func_0011AFC0(s32 id);
+extern s32 sceSifSetDma(void *desc, s32 count);
+extern s32 sceSifDmaStat(s32 id);
 extern void func_00133930(s32 len, s32 dstOfs);
 /* (end of this body's declarations) */
 /* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 81.88% / engine96 66.19%. Residual: PACKED-SAVE (5 callee saves) + 12 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
@@ -763,8 +763,8 @@ extern void func_00133930(s32 len, s32 dstOfs);
    -fopt-stack's (FACT #8810), which the s136os arm compiles this body with.
 
    FUNCTIONAL TEST ROUTE: tester-EE-pending (NOT isolated-cmp-oracleable) - the two do/while
-   loops busy-wait on real SIF-DMA hardware (func_0011AFE0 returns 0 until a DMA
-   slot frees; func_0011AFC0 returns >= 0 while the transfer is in flight), so an
+   loops busy-wait on real SIF-DMA hardware (sceSifSetDma returns 0 until a DMA
+   slot frees; sceSifDmaStat returns >= 0 while the transfer is in flight), so an
    isolated EE with mocked SIF stubs would hang or pass vacuously. Verify under
    the live tester-EE FMV-playback scenario instead.
 
@@ -793,12 +793,12 @@ void func_00350868(u8 *obj, u8 *src, s32 len, s32 dstOfs) {
     desc[2] = len;
     desc[3] = 0;
     do {
-        id = func_0011AFE0(desc, 1);
+        id = sceSifSetDma(desc, 1);
         R5900_SHORT_LOOP_PAD1(id, id);
         R5900_SHORT_LOOP_PAD1(id, id);
     } while (id == 0);
     do {
-        stat = func_0011AFC0(id);
+        stat = sceSifDmaStat(id);
         R5900_SHORT_LOOP_PAD1(stat, stat);
         R5900_SHORT_LOOP_PAD1(stat, stat);
         R5900_SHORT_LOOP_PAD1(stat, stat);
@@ -1564,7 +1564,7 @@ S136OS_SLOT(func_003517C0);
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern s32 func_0011AC60(s32 sema);    /* WaitSema (acquire) */
-extern s32 func_0011AC40(s32 sema);    /* SignalSema (release) */
+extern s32 SignalSema(s32 sema);    /* SignalSema (release) */
 /* (end of this body's declarations) */
 s32 func_003517C0(void *stream, s32 *ptr0, s32 *len0, s32 *ptr1, s32 *len1) {
     FmvBitstreamObj *o = (FmvBitstreamObj *)stream;
@@ -1587,7 +1587,7 @@ s32 func_003517C0(void *stream, s32 *ptr0, s32 *len0, s32 *ptr1, s32 *len1) {
         *ptr1 = o->srcBase;
         *len1 = room - (o->ringBytes - wrapped);
     }
-    return func_0011AC40(o->sema);
+    return SignalSema(o->sema);
 }
 #endif
 
@@ -1615,7 +1615,7 @@ S136OS_SLOT(func_003518B8);
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern s32 func_0011AC60(s32 sema);    /* WaitSema (acquire) */
-extern s32 func_0011AC40(s32 sema);    /* SignalSema (release) */
+extern s32 SignalSema(s32 sema);    /* SignalSema (release) */
 /* (end of this body's declarations) */
 s32 func_003518B8(void *stream, s32 n) {
     FmvBitstreamObj *o = (FmvBitstreamObj *)stream;
@@ -1623,7 +1623,7 @@ s32 func_003518B8(void *stream, s32 n) {
     func_0011AC60(o->sema);
     o->pendingBytes += n;
     o->totalBytes += n;
-    return func_0011AC40(o->sema);
+    return SignalSema(o->sema);
 }
 #endif
 
@@ -1683,7 +1683,7 @@ S136OS_SLOT(func_00351910);
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern s32 func_0011AC60(s32 sema);    /* WaitSema (acquire) */
-extern s32 func_0011AC40(s32 sema);    /* SignalSema (release) */
+extern s32 SignalSema(s32 sema);    /* SignalSema (release) */
 /* (end of this body's declarations) */
 s32 func_00351910(void *dmaq) {
     extern char D_1AE800[];   /* FMV "IPU_TO ring not armed" error string */
@@ -1751,7 +1751,7 @@ s32 func_00351910(void *dmaq) {
         func_00351550(chcr | 0x100);           /* STR: restart ch4 */
     }
 
-    func_0011AC40(o->sema);                    /* SignalSema */
+    SignalSema(o->sema);                    /* SignalSema */
     return 1;
 }
 #endif
@@ -1779,7 +1779,7 @@ S136OS_SLOT(func_00351B10);
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern s32 func_0011AC60(s32 sema);
 extern void func_003514E0(u32 chcrCmd);
-extern s32 func_0011AC40(s32 sema);
+extern s32 SignalSema(s32 sema);
 /* (end of this body's declarations) */
 /* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 91.84% / engine96 60.10%. Residual: PACKED-SAVE (2 callee saves) + 18 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
 s32 func_00351B10(void *dmaq) {
@@ -1810,7 +1810,7 @@ s32 func_00351B10(void *dmaq) {
     *(u32 *)(obj + 0x38) = *(volatile u32 *)0x10002020;    /* IPU_BP   */
     *(u32 *)(obj + 0x3C) = *(volatile u32 *)0x10002010;    /* IPU_CTRL */
 
-    func_0011AC40(*(s32 *)(obj + 0x40));                    /* release */
+    SignalSema(*(s32 *)(obj + 0x40));                    /* release */
     return 1;
 }
 #endif
@@ -1874,17 +1874,17 @@ S136OS_SLOT(func_00351FB0);
    Total elementary-stream bytes queued for the IPU, read under the object's
    sema: (retired 2KB blocks << 11) + residual byte cursor. */
 /* The sema calls name the ROM's EE-kernel syscall stubs by address
-   (func_0011AC60 = WaitSema, func_0011AC40 = SignalSema, as func_00351F58 names
+   (func_0011AC60 = WaitSema, SignalSema = SignalSema, as func_00351F58 names
    func_0011AC30 = DeleteSema): the SDK names have no definition in this link. */
 extern s32 func_0011AC60(s32 sema);   /* WaitSema */
-extern s32 func_0011AC40(s32 sema);   /* SignalSema */
+extern s32 SignalSema(s32 sema);   /* SignalSema */
 s32 func_00351FB0(void *stream) {
     u8 *obj = (u8 *)stream;
     s32 total;
 
     func_0011AC60(*(s32 *)(obj + 0x40));
     total = (*(s32 *)(obj + 0x10) << 11) + *(s32 *)(obj + 0x14);
-    func_0011AC40(*(s32 *)(obj + 0x40));
+    SignalSema(*(s32 *)(obj + 0x40));
     return total;
 }
 #endif
@@ -1901,7 +1901,7 @@ S136OS_SLOT(func_00352000);
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern s32 func_0011AC60(s32 sema);    /* WaitSema (acquire) */
-extern s32 func_0011AC40(s32 sema);    /* SignalSema (release) */
+extern s32 SignalSema(s32 sema);    /* SignalSema (release) */
 /* (end of this body's declarations) */
 /* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 75.67% / engine96 58.62%. Residual: PACKED-SAVE (2 callee saves) + 12 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
 /* The 8-byte-packed callee saves (s0/ra) are SN 2.95.3 v1.36
@@ -1925,7 +1925,7 @@ extern s32 func_0011AC40(s32 sema);    /* SignalSema (release) */
    (v + 0x7FF) / 0x800 * 0x800 - cc1 expands it to the ROM's slt/movn
    (the +0xFFE is the division's own negative-input bias), where the
    hand-expanded ?: compiled to a bltzl; and the semaphore calls by their ROM
-   symbols func_0011AC60/func_0011AC40, declared returning s32 as the kernel
+   symbols func_0011AC60/SignalSema, declared returning s32 as the kernel
    calls do (WaitSema/SignalSema have no EE definition; with the old `void
    WaitSema` declaration cc1 colours the cursor $2 and the -1 constant $3). */
 s32 func_00352000(u8 *obj) {
@@ -1934,7 +1934,7 @@ s32 func_00352000(u8 *obj) {
     func_0011AC60(*(s32 *)(obj + 0x40));
     v = *(s32 *)(obj + 0x14);
     *(s32 *)(obj + 0x14) = (v + 0x7FF) / 0x800 * 0x800;
-    return func_0011AC40(*(s32 *)(obj + 0x40));
+    return SignalSema(*(s32 *)(obj + 0x40));
 }
 #endif
 
@@ -2043,7 +2043,7 @@ S136OS_SLOT(func_003521B0);
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern s32 func_0011AC60(s32 sema);
 extern s32 func_00352058(u8 *obj, u8 *req);
-extern s32 func_0011AC40(s32 sema);
+extern s32 SignalSema(s32 sema);
 /* (end of this body's declarations) */
 typedef struct FmvDmaAddCmd {
     /* 0x00 */ s64 tag0;
@@ -2078,7 +2078,7 @@ s32 func_003521B0(void *dmaq, void *cmd) {
         }
         result = 1;
     }
-    func_0011AC40(q->sema);
+    SignalSema(q->sema);
     return result;
 }
 #endif

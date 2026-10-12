@@ -350,6 +350,9 @@ extern s32 func_0012CFA0(s32 *arg0);
  * the start-store into the tail-call delay slot), a codegen shape not
  * expressible in source. Left as INCLUDE_ASM. */
 
+/* EU-only name: the same function is matched in USA as _sysbitFlush
+ * (cod/022FA8, task #2134). EU keeps func_0012E8E8 deliberately (RULING #5339,
+ * EU deferred), so the two regions name it differently. */
 extern void func_0012E8E8(u64 *arg0, s32 arg1);
 
 /* func_0012EB28: 0x8 bytes of inter-function padding split off by symbol_addrs

@@ -63,7 +63,7 @@ extern u8 D_00138152;
 extern s16 D_00138150;
 extern u8 D_00138156;
 extern void func_0011ACD0(s32 *out);
-extern s32 func_0011AF30(void *buf, s32 size, s32 offset);
+extern s32 GetOsdConfigParam2(void *buf, s32 size, s32 offset);
 
 /**
  * Return a 2-bit status code. For the 'T' (0x54) territory variant
@@ -115,7 +115,7 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/0314C0", func_00
  * variant (func_001315E0() true) this is the cached byte D_00138156. Otherwise
  * read the OSD config word (func_0011ACD0, GetOsdConfigParam); if its 3-bit
  * version field (bits 13..15) is 0 there is no extended config and the flag is
- * 0, else fetch byte 1 of the extended config with func_0011AF30 (EE syscall
+ * 0, else fetch byte 1 of the extended config with GetOsdConfigParam2 (EE syscall
  * 0x6F, GetOsdConfigParam2(buf, 1, 1)) and return its bit 4. The caller below
  * scales it by 60 and adds it to func_00131670's offset.
  *
@@ -132,7 +132,7 @@ s32 func_001316C8(void) {
         if (((config[0] >> 13) & 7) == 0) {
             daylight = 0;
         } else {
-            func_0011AF30(&config[1], 1, 1);
+            GetOsdConfigParam2(&config[1], 1, 1);
             daylight = (((u8 *)&config[1])[0] >> 4) & 1;
         }
     }

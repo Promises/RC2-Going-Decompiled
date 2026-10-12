@@ -2850,7 +2850,7 @@ s32 CheckMobyOverWater(void *moby, void *waterVol) {
  * cursor past the header, bumps the scene-frame counter, then appends either the
  * cinematic-queue draw path (func_0027DB38, when g_cinematicQueue is set) or the
  * normal scene path (func_0027DC40), closes the chain with a 0x70000000 end tag,
- * and flushes the data cache (func_0011AED0) so the DMAC sees the finished packet.
+ * and flushes the data cache (iFlushCache) so the DMAC sees the finished packet.
  *
  * Engine region (ee-gcc 2.96) - the original reloads g_frameDmaCursor after every
  * tag store and mixes %lo-absolute with %gp_rel access to the same cursor, which
@@ -2865,7 +2865,7 @@ extern u8 g_cameraSlotActive[];    /* scene-frame counter lives at +0x9C4 */
 extern u8 g_screenBlitPacketB[];   /* framebuffer-setup packet lives at +0x290 */
 extern void func_0027DB38(void);   /* cinematic-queue draw path */
 extern void func_0027DC40(void);   /* normal scene draw path */
-extern void func_0011AED0(s32);    /* data-cache flush */
+extern void iFlushCache(s32);    /* data-cache flush */
 
 void BeginFrameDrawList(u32 *dmaCursor)
 {
@@ -2888,7 +2888,7 @@ void BeginFrameDrawList(u32 *dmaCursor)
     g_frameDmaCursor[0] = 0x70000000;
     g_frameDmaCursor[1] = 0;
     g_frameDmaCursor += 4;
-    func_0011AED0(0);
+    iFlushCache(0);
 }
 #endif
 

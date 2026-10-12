@@ -483,10 +483,10 @@ extern s32 D_00136394;  /* libcdvd initialised (non-zero once set up) */
  * (the RPC end-callback, interrupt context, which re-reads it right after its
  * own store), sceCdRead, func_00125620 and func_00124818 (ROM writer census
  * over asm/usa). `volatile` here is a measured codegen device (RULING #8404):
- * without it cc1 sinks the -1 store into the func_0011AC40 call's delay slot,
+ * without it cc1 sinks the -1 store into the SignalSema call's delay slot,
  * where the ROM stores it before loading the call's argument. */
 extern volatile s32 D_001363D4;
-extern s32 func_0011AC40(s32 sema);  /* syscall 0x42 SignalSema */
+extern s32 SignalSema(s32 sema);  /* syscall 0x42 SignalSema */
 extern void func_0011CBC0(s32 index);
 
 /**
@@ -506,7 +506,7 @@ void func_00124818(void) {
     s32 wasEnabled;
     if (D_00136394 != 0) {
         D_001363D4 = -1;
-        func_0011AC40(D_001363A0);
+        SignalSema(D_001363A0);
     }
     func_0011AC30(D_001363A8);
     func_0011AC30(D_001363AC);
@@ -562,7 +562,7 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00124980);
 
 extern s32 func_00124980(s32 arg);
-extern s32 func_0011AC40(s32 sema);  /* syscall 0x42 SignalSema */
+extern s32 SignalSema(s32 sema);  /* syscall 0x42 SignalSema */
 extern s32 D_00137550[];  /* libcdvd N-command RPC client */
 extern u32 D_00136400[];  /* RPC receive buffer */
 
@@ -579,11 +579,11 @@ u32 func_00124AF0(void) {
         return 0;
     }
     if (sceSifCallRpc(D_00137550, 0xE, 0, 0, 0, D_00136400, 4, 0, 0) < 0) {
-        func_0011AC40(D_001363A8);
+        SignalSema(D_001363A8);
         return 0;
     }
     value = *(u32 *)((u32)D_00136400 | 0x20000000);
-    func_0011AC40(D_001363A8);
+    SignalSema(D_001363A8);
     return value;
 }
 
@@ -673,11 +673,11 @@ s32 sceCdMmode(s32 media) {
     *buf = media;
     sceSifWriteBackDCache(buf, 4);
     if (sceSifCallRpc(D_00137DC8, 0x22, 0, buf, 4, D_00137580, 4, 0, 0) < 0) {
-        func_0011AC40(D_001363AC);
+        SignalSema(D_001363AC);
         return 0;
     }
     value = *(s32 *)((u32)D_00137580 | 0x20000000);
-    func_0011AC40(D_001363AC);
+    SignalSema(D_001363AC);
     return value;
 }
 
@@ -782,7 +782,7 @@ s32 sceCdRead(u32 lbn, u32 sectors, void *buf, CdReadMode *mode) {
                       (s32)((u8 *)func_001246D0 + 0x10), D_00137480) < 0) {
         D_001363D4 = 0;
         D_001363B0 = 0;
-        func_0011AC40(D_001363A8);
+        SignalSema(D_001363A8);
         return 0;
     }
     if (D_00136390 > 0) {
@@ -805,11 +805,11 @@ s32 QueryCdStatusOverRpc(void) {
         return -1;
     }
     if (sceSifCallRpc(D_00137DC8, 4, 0, 0, 0, D_00137580, 4, 0, 0) < 0) {
-        func_0011AC40(D_001363AC);
+        SignalSema(D_001363AC);
         return -1;
     }
     value = *(s32 *)((u32)D_00137580 | 0x20000000);
-    func_0011AC40(D_001363AC);
+    SignalSema(D_001363AC);
     return value;
 }
 
@@ -839,13 +839,13 @@ s32 func_00125620(void) {
     }
     D_001363D4 = 8;
     if (sceSifCallRpc(D_00137DC8, 0x16, 0, 0, 0, D_00137580, 4, 0, 0) < 0) {
-        func_0011AC40(*(volatile s32 *)&D_001363AC);
+        SignalSema(*(volatile s32 *)&D_001363AC);
         D_001363D4 = 0;
         return 0;
     }
     D_001363D4 = 0;
     value = *(s32 *)((u32)D_00137580 | 0x20000000);
-    func_0011AC40(*(volatile s32 *)&D_001363AC);
+    SignalSema(*(volatile s32 *)&D_001363AC);
     return value;
 }
 
@@ -876,7 +876,7 @@ s32 sceCdReadClock(CdClock *clock) {
         Kprintf(D_0013B308);
     }
     if (sceSifCallRpc(D_00137DC8, 1, 0, 0, 0, D_00137580, 0x10, 0, 0) < 0) {
-        func_0011AC40(D_001363AC);
+        SignalSema(D_001363AC);
         return 0;
     }
     *clock = *(CdClock *)((u32)&D_00137580[1] | 0x20000000);
@@ -884,7 +884,7 @@ s32 sceCdReadClock(CdClock *clock) {
         Kprintf(D_0013B328);
     }
     value = *(s32 *)((u32)D_00137580 | 0x20000000);
-    func_0011AC40(D_001363AC);
+    SignalSema(D_001363AC);
     return value;
 }
 
@@ -901,9 +901,9 @@ typedef struct GsGParam {
 
 s32 *func_00125960(void);
 extern s32 func_0011B588(s32 cause);                           /* DisableIntc */
-extern s32 func_0011A920(s32 cause, s32 handlerId);            /* RemoveIntcHandler */
-extern u64 func_0011AF60(u64 imr);                             /* GsPutIMR */
-extern void func_0011A820(s16 interlace, s16 omode, s16 ffmode); /* SetGsCrt */
+extern s32 RemoveIntcHandler(s32 cause, s32 handlerId);            /* RemoveIntcHandler */
+extern u64 GsPutIMR(u64 imr);                             /* GsPutIMR */
+extern void SetGsCrt(s16 interlace, s16 omode, s16 ffmode); /* SetGsCrt */
 
 /**
  * libgraph's sceGsResetGraph: mode 0 resets the GS (CSR = 0x200), records
@@ -924,15 +924,15 @@ void sceGsResetGraph(s16 mode, s16 inter, s16 omode, s16 ffmode) {
         gp->interMode = inter;
         gp->outMode = omode;
         gp->version = (*(volatile u64 *)0x12001000 >> 16) & 0xFF;
-        func_0011AF60(0xFF00);
+        GsPutIMR(0xFF00);
         gp->ffMode = ffmode != 0;
         if (gp->vsyncFunc != 0) {
             func_0011B588(2);
-            func_0011A920(2, gp->vsyncHandlerId);
+            RemoveIntcHandler(2, gp->vsyncHandlerId);
             gp->vsyncFunc = 0;
             gp->vsyncHandlerId = 0;
         }
-        func_0011A820(inter & 1, omode & 0xFF, ffmode & 1);
+        SetGsCrt(inter & 1, omode & 0xFF, ffmode & 1);
         break;
     case 1:
         *(volatile u64 *)0x12001000 = 0x100;
@@ -943,7 +943,7 @@ void sceGsResetGraph(s16 mode, s16 inter, s16 omode, s16 ffmode) {
         gp->outMode = omode;
         gp->ffMode = ffmode != 0;
         gp->version = (*(volatile u64 *)0x12001000 >> 16) & 0xFF;
-        func_0011A820(inter & 1, omode & 0xFF, ffmode & 1);
+        SetGsCrt(inter & 1, omode & 0xFF, ffmode & 1);
         break;
     }
 }
@@ -1182,7 +1182,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00126730);
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00126DBC);
 
 extern s32 func_0011B588(s32 cause);                           /* DisableIntc */
-extern s32 func_0011A920(s32 cause, s32 handlerId);            /* RemoveIntcHandler */
+extern s32 RemoveIntcHandler(s32 cause, s32 handlerId);            /* RemoveIntcHandler */
 extern s32 func_0011A900(s32 cause, void *handler, s32 next);  /* AddIntcHandler */
 extern s32 func_0011B5F0(s32 cause);                           /* EnableIntc */
 
@@ -1201,13 +1201,13 @@ s32 func_00126DC0(void *handler) {
     void *old = gp->vsyncFunc;
     if (handler == 0) {
         func_0011B588(2);
-        func_0011A920(2, gp->vsyncHandlerId);
+        RemoveIntcHandler(2, gp->vsyncHandlerId);
         gp->vsyncHandlerId = 0;
         gp->vsyncFunc = 0;
     } else {
         if (old != 0) {
             func_0011B588(2);
-            func_0011A920(2, gp->vsyncHandlerId);
+            RemoveIntcHandler(2, gp->vsyncHandlerId);
         }
         gp->vsyncFunc = handler;
         gp->vsyncHandlerId = func_0011A900(2, handler, -1);
@@ -1457,7 +1457,7 @@ extern u8   g_mcRpcClient[];   /* libmc RPC client block (init flag @+0x24) */
 extern s32  g_mcMutexSema;     /* libmc mutex/semaphore handle */
 extern u32  g_mcRpcResult;     /* libmc RPC receive-buffer (result code) */
 extern u8   g_mcRpcRequest[];  /* 0x141B80: the shared 48-byte libmc request block */
-extern s32  func_0011AC40(s32 sema);   /* syscall 0x42 SignalSema */
+extern s32  SignalSema(s32 sema);   /* syscall 0x42 SignalSema */
 extern s32  func_0011AC60(s32 sema);   /* syscall 0x44 WaitSema */
 extern void *Kprintf(const char *format, ...);
 extern char D_0013B760[];      /* "bind error libmc \n" */
@@ -1492,7 +1492,7 @@ s32 McInit(void) {
         }
     }
     r = sceSifCallRpc(g_mcRpcClient, 0xFE, 0, g_mcRpcRequest, 0x30, &g_mcRpcResult, 0xC, 0, 0);
-    func_0011AC40(g_mcMutexSema);
+    SignalSema(g_mcMutexSema);
     if (r < 0) {
         MC_CLIENT->serve = 0;
         return r - 100;
@@ -1516,8 +1516,8 @@ extern u8   g_mcRpcClient[];   /* libmc RPC client block (init flag @+0x24) */
 extern s32  g_mcMutexSema;     /* libmc mutex/semaphore handle */
 extern s32  D_00141B80;        /* libmc RPC send-buffer (fd marshalled @+0) */
 extern u32  g_mcRpcResult;     /* libmc RPC receive-buffer (result code) */
-extern s32  func_0011AC70(s32 sema);
-extern s32 func_0011AC40(s32 sema);
+extern s32  PollSema(s32 sema);
+extern s32 SignalSema(s32 sema);
 
 /* libmc's name-carrying RPC request (McOpen, McMkDir = Delete, func_00127E48 = GetDir):
  * 0x414 bytes, the largest send buffer in the family. */
@@ -1551,11 +1551,11 @@ s32 McOpen(s32 port, s32 slot, const char *name, s32 mode) {
     if (*(s32 *)(client + 0x24) == 0) {
         return -0x64;
     }
-    if (func_0011AC70(g_mcMutexSema) < 0) {
+    if (PollSema(g_mcMutexSema) < 0) {
         return -0xC8;
     }
     if (name == NULL || *name == '\0') {
-        func_0011AC40(g_mcMutexSema);
+        SignalSema(g_mcMutexSema);
         return -0xD2;
     }
     strncpy(D_00141BB0.name, name, 0x3FF);
@@ -1567,7 +1567,7 @@ s32 McOpen(s32 port, s32 slot, const char *name, s32 mode) {
     if (r == 0) {
         g_mcPendingCmd = 2;
     } else {
-        func_0011AC40(g_mcMutexSema);
+        SignalSema(g_mcMutexSema);
     }
     return r;
 }
@@ -1600,7 +1600,7 @@ s32 func_00127668(s32 fd) {
     if (*(s32 *)(client + 0x24) == 0) {
         return -0x64;
     }
-    if (func_0011AC70(g_mcMutexSema) < 0) {
+    if (PollSema(g_mcMutexSema) < 0) {
         return -0xC8;
     }
     D_00141B80 = fd;
@@ -1608,7 +1608,7 @@ s32 func_00127668(s32 fd) {
     if (r == 0) {
         D_00137E68 = 3;
     } else {
-        func_0011AC40(g_mcMutexSema);
+        SignalSema(g_mcMutexSema);
     }
     return r;
 }
@@ -1622,7 +1622,7 @@ s32 func_00127720(s32 fd, s32 offset, s32 whence) {
     if (*(s32 *)(client + 0x24) == 0) {
         return -0x64;
     }
-    if (func_0011AC70(g_mcMutexSema) < 0) {
+    if (PollSema(g_mcMutexSema) < 0) {
         return -0xC8;
     }
     D_00141B80 = fd;
@@ -1632,7 +1632,7 @@ s32 func_00127720(s32 fd, s32 offset, s32 whence) {
     if (r == 0) {
         D_00137E68 = 4;
     } else {
-        func_0011AC40(g_mcMutexSema);
+        SignalSema(g_mcMutexSema);
     }
     return r;
 }
@@ -1686,7 +1686,7 @@ s32 func_00127888(s32 fd, void *buf, s32 size) {
     if (*(s32 *)(client + 0x24) == 0) {
         return -0x64;
     }
-    if (func_0011AC70(g_mcMutexSema) < 0) {
+    if (PollSema(g_mcMutexSema) < 0) {
         return -0xC8;
     }
     D_00141B80 = fd;
@@ -1700,7 +1700,7 @@ s32 func_00127888(s32 fd, void *buf, s32 size) {
     if (r == 0) {
         D_00137E68 = 5;
     } else {
-        func_0011AC40(g_mcMutexSema);
+        SignalSema(g_mcMutexSema);
     }
     return r;
 }
@@ -1756,7 +1756,7 @@ s32 McWrite(s32 fd, u8 *buf, s32 size) {
     if (*(s32 *)(client + 0x24) == 0) {
         return -0x64;
     }
-    if (func_0011AC70(g_mcMutexSema) < 0) {
+    if (PollSema(g_mcMutexSema) < 0) {
         return -0xC8;
     }
     MC_RPC_REQUEST->fd = fd;
@@ -1778,7 +1778,7 @@ s32 McWrite(s32 fd, u8 *buf, s32 size) {
     if (r == 0) {
         g_mcPendingCmd = 6;
     } else {
-        func_0011AC40(g_mcMutexSema);
+        SignalSema(g_mcMutexSema);
     }
     return r;
 }
@@ -1806,7 +1806,7 @@ extern s32 sceSifCheckStatRpc(s32 *rpc);
  * flight. Returns -1 if no call is pending, 0 if it is still running, else 1:
  * then the pending command is cleared, the call's result (g_mcRpcResult) is
  * stored through `result` when non-null, and the libmc mutex is released
- * (func_0011AC40 = SignalSema). `cmd`, when non-null, receives the pending
+ * (SignalSema = SignalSema). `cmd`, when non-null, receives the pending
  * command number in both the running and the finished case. Waiting re-checks
  * the RPC status every 60 ms (McDelayMillis).
  *
@@ -1834,7 +1834,7 @@ s32 McSync(s32 mode, s32 *cmd, s32 *result) {
         if (result != 0) {
             *result = g_mcRpcResult;
         }
-        func_0011AC40(g_mcMutexSema);
+        SignalSema(g_mcMutexSema);
     }
     return busy;
 }
@@ -1875,7 +1875,7 @@ s32 McGetInfo(s32 port, s32 slot, s32 *type, s32 *free, s32 *format) {
     if (*(s32 *)(client + 0x24) == 0) {
         return -0x64;
     }
-    if (func_0011AC70(g_mcMutexSema) < 0) {
+    if (PollSema(g_mcMutexSema) < 0) {
         return -0xC8;
     }
     MC_RPC_REQUEST->port = port;
@@ -1905,7 +1905,7 @@ s32 McGetInfo(s32 port, s32 slot, s32 *type, s32 *free, s32 *format) {
     if (r == 0) {
         g_mcPendingCmd = 1;
     } else {
-        func_0011AC40(g_mcMutexSema);
+        SignalSema(g_mcMutexSema);
     }
     return r;
 }
@@ -1949,11 +1949,11 @@ s32 func_00127E48(s32 port, s32 slot, const char *name, s32 mode,
     if (*(s32 *)(client + 0x24) == 0) {
         return -0x64;
     }
-    if (func_0011AC70(g_mcMutexSema) < 0) {
+    if (PollSema(g_mcMutexSema) < 0) {
         return -0xC8;
     }
     if (name == NULL || *name == '\0') {
-        func_0011AC40(g_mcMutexSema);
+        SignalSema(g_mcMutexSema);
         return -0xD2;
     }
 
@@ -1974,7 +1974,7 @@ s32 func_00127E48(s32 port, s32 slot, const char *name, s32 mode,
     if (r == 0) {
         D_00137E68 = 13;
     } else {
-        func_0011AC40(g_mcMutexSema);
+        SignalSema(g_mcMutexSema);
     }
     return r;
 }
@@ -2004,7 +2004,7 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00
  * that treats -200 as fatal rather than "retry later" will drop requests.
  *
  * Naming basis: g_mcRpcClient / g_mcRpcResult / g_mcMutexSema are CONFIRMED in
- * symbol_addrs; func_0011AC70 and func_0011AC40 are pinned by their syscall numbers
+ * symbol_addrs; PollSema and SignalSema are pinned by their syscall numbers
  * (0x45 PollSema, 0x42 SignalSema), calibrated against this unit's own stubs
  * (0x40 CreateSema, 0x41 DeleteSema, 0x44 WaitSema at func_0011AC60).
  *
@@ -2025,7 +2025,7 @@ s32 McChdir(s32 arg0, s32 arg1) {
     if (*(s32 *)(client + 0x24) == 0) {
         return -100;                       /* client never bound */
     }
-    if (func_0011AC70(g_mcMutexSema) < 0) {
+    if (PollSema(g_mcMutexSema) < 0) {
         return -200;                       /* busy - poll, not wait */
     }
 
@@ -2037,7 +2037,7 @@ s32 McChdir(s32 arg0, s32 arg1) {
     if (rc == 0) {
         g_mcPendingCmd = 16;               /* held; the completion path releases */
     } else {
-        func_0011AC40(g_mcMutexSema);      /* no completion is coming - release */
+        SignalSema(g_mcMutexSema);      /* no completion is coming - release */
     }
     return rc;
 }
@@ -2058,11 +2058,11 @@ s32 McMkDir(s32 port, s32 slot, const char *name) {
     if (*(s32 *)(client + 0x24) == 0) {
         return -0x64;
     }
-    if (func_0011AC70(g_mcMutexSema) < 0) {
+    if (PollSema(g_mcMutexSema) < 0) {
         return -0xC8;
     }
     if (name == NULL || *name == '\0') {
-        func_0011AC40(g_mcMutexSema);
+        SignalSema(g_mcMutexSema);
         return -0xD2;
     }
     strncpy(D_00141BB0.name, name, 0x3FF);
@@ -2074,7 +2074,7 @@ s32 McMkDir(s32 port, s32 slot, const char *name) {
     if (r == 0) {
         g_mcPendingCmd = 0xF;
     } else {
-        func_0011AC40(g_mcMutexSema);
+        SignalSema(g_mcMutexSema);
     }
     return r;
 }
@@ -2114,7 +2114,7 @@ s32 McGetEntSpace(s32 port, s32 slot) {
     if (*(s32 *)(client + 0x24) == 0) {
         return -0x64;
     }
-    if (func_0011AC70(g_mcMutexSema) < 0) {
+    if (PollSema(g_mcMutexSema) < 0) {
         return -0xC8;
     }
     req = (McPortSlotRequest *)g_mcRpcRequest;
@@ -2124,7 +2124,7 @@ s32 McGetEntSpace(s32 port, s32 slot) {
     if (r == 0) {
         g_mcPendingCmd = 0x11;
     } else {
-        func_0011AC40(g_mcMutexSema);
+        SignalSema(g_mcMutexSema);
     }
     return r;
 }
@@ -4713,7 +4713,7 @@ typedef struct {
 } IpuToIpuChain;
 
 extern s32 func_0011A940(s32 channel, void *handler, s32 next, void *arg);  /* AddDmacHandler */
-extern s32 func_0011A950(s32 channel, s32 handlerId);  /* RemoveDmacHandler */
+extern s32 RemoveDmacHandler(s32 channel, s32 handlerId);  /* RemoveDmacHandler */
 extern s32 EnableDmac(s32 channel);
 extern s32 DisableDmac(s32 channel);
 extern s32 func_0012E538();  /* D4 chain handler (hand-written) */
@@ -4776,7 +4776,7 @@ void func_0012E608(IpuDecoder *dec, IpuPictureSize *size) {
             func_0012E378(dec, dec->outputAddr, mbCount);
         }
         DisableDmac(4);
-        func_0011A950(4, handlerId);
+        RemoveDmacHandler(4, handlerId);
     } else {
         wasEnabled = func_0011F5E0();
         *(volatile u32 *)0x1000B410 = size->addr & 0x0FFFFFFF;

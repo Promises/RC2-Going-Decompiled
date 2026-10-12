@@ -98,8 +98,8 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/191238", func_0
 /*
  * LoadIrxModuleFromBuffer — copy an IRX image from EE memory to the IOP and load
  * it there. Builds a one-entry SIF DMA descriptor on the stack (src = image,
- * dest = iopAddr, size, attr 0), queues it with sceSifSetDma (func_0011AFE0),
- * busy-waits on sceSifDmaStat (func_0011AFC0) until the transfer has drained
+ * dest = iopAddr, size, attr 0), queues it with sceSifSetDma (sceSifSetDma),
+ * busy-waits on sceSifDmaStat (sceSifDmaStat) until the transfer has drained
  * (status < 0), then loads the module from IOP memory with
  * sceSifLoadModuleBuffer(iopAddr, 0, 0) (func_0011ED08).
  *
@@ -126,8 +126,8 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/191238", func_0
  * ties it to the status the branch tests, so it sits between the call and the
  * `bgez`. Emits only nops; empty on native.
  */
-extern s32 func_0011AFE0(void *desc, s32 count);   /* sceSifSetDma */
-extern s32 func_0011AFC0(s32 id);                  /* sceSifDmaStat */
+extern s32 sceSifSetDma(void *desc, s32 count);   /* sceSifSetDma */
+extern s32 sceSifDmaStat(s32 id);                  /* sceSifDmaStat */
 extern s32 func_0011ED08(void *iopAddr, s32 a1, s32 a2); /* sceSifLoadModuleBuffer */
 #ifndef TARGET_NATIVE
 #define R5900_SHORT_LOOP_PAD3_TIED(v) \
@@ -147,11 +147,11 @@ s32 LoadIrxModuleFromBuffer(void *image, s32 size, void *iopAddr) {
     xfer[1] = (s32)iopAddr;
     xfer[2] = size;
     xfer[3] = 0;
-    id = func_0011AFE0(xfer, 1);
+    id = sceSifSetDma(xfer, 1);
     if (id != 0) {
         s32 status;
         do {
-            status = func_0011AFC0(id);
+            status = sceSifDmaStat(id);
             R5900_SHORT_LOOP_PAD3_TIED(status);
         } while (status >= 0);
         if (func_0011ED08(iopAddr, 0, 0) < 0) {
@@ -264,7 +264,7 @@ extern s32 ResetDmacChannels(s32 mode);  /* returns the old DMAC enable bit (lib
 extern void SetVideoMode(void);
 extern void EnableDmacChannels(void);
 extern void SetupGsDisplayBuffers(s32 mode);
-extern void func_0011AE70(s32 mode);           /* EnableCache */
+extern void EnableCache(s32 mode);           /* EnableCache */
 extern s32  func_00126DC0(void *handler);        /* SetVblankStartHandler; returns the previous handler */
 extern void func_002FCFC8(void);
 extern void ResetFrameArenas(void);
@@ -351,7 +351,7 @@ void BootSystemInit(void) {
     SetVideoMode();
     EnableDmacChannels();
     SetupGsDisplayBuffers(1);
-    func_0011AE70(3);
+    EnableCache(3);
     func_00126DC0((void *)&OnVblankInterrupt);
     func_002FCFC8();
     SetupMemoryArenaTable();
@@ -3693,9 +3693,9 @@ extern void *D_1A9338;
  * (rec[0] = -1). Otherwise it looks up the level's disc-TOC entry and, if the
  * entry has a pre-span (preSectors, g_discToc +0x4B50), sends the just-loaded
  * buffer to the IOP: writes 0xC000 to buffer +0x14/+0x40/+0x44, flushes the
- * cache (func_0011AEA0(0)), queues one EE->IOP transfer via func_0011AFE0
+ * cache (func_0011AEA0(0)), queues one EE->IOP transfer via sceSifSetDma
  * (sceSifSetDma: source rec[2], IOP address = staging base + slot*0xC800, size
- * preSectors*2048) and polls func_0011AFC0 (sceSifDmaStat) until it completes.
+ * preSectors*2048) and polls sceSifDmaStat (sceSifDmaStat) until it completes.
  * Then it starts the main span's read into the same buffer
  * (StartFileLoadWithCallback, LBN = baseLbn + lbn, with func_002949E0 as the
  * callback and rec as its state). Returns nothing. Sibling of func_00294B50
@@ -3756,9 +3756,9 @@ void func_00294A30(s32 *rec, s32 flag) {
         hdr[10] = 0xC000;   /* dest + 0x40 */
         hdr[11] = 0xC000;   /* dest + 0x44 */
         func_0011AEA0(0);
-        handle = func_0011AFE0(block, 1);
+        handle = sceSifSetDma(block, 1);
         do {
-            st = func_0011AFC0(handle);
+            st = sceSifDmaStat(handle);
             R5900_SHORT_LOOP_PAD3_TIED(st);
         } while (st >= 0);
     }
