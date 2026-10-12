@@ -28,6 +28,6 @@
  * Still fused: func_0011F364, func_0011FB8C — their real bodies are reached
  * only by `j`/data reference, never by `jal`, so they are the j-target class of
  * task #471, not a carve defect of this class. (func_00130A8C, listed here
- * before, was split by task #2143: a size:0x4 pin on the CD word plus a
- * type:func pin on its real body func_00130A90.) */
+ * before, was split by task #2143: a type:func pin on its real body
+ * func_00130A90 alone; the CD word carries no size pin.) */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015878", func_001158F8);

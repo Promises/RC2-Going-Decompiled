@@ -558,7 +558,7 @@ extern void func_0011CB90(s32 index, s32 key, s32 value);
  * on, lift the suppression and mark the handler installed (D_001363BC).
  * Returns 1.
  *
- * The ROM's relocation here read `func_001248B0 + 8` until task #2143 split
+ * The project spelled this relocation `func_001248B0 + 8` until task #2143 split
  * the two dead words at 0x1248B0 off the handler's real entry, func_001248B8.
  */
 s32 func_001248F8(void) {
@@ -6078,7 +6078,8 @@ void func_00130A80(s32 arg0) {
 
 /* func_00130A8C: one 0xCDCDCDCD fill word (uninitialised-memory pattern)
  * after func_00130A80's tail jump; no reference in the ROM reaches it. Split
- * off its real entry at 0x130A90 by a symbol_addrs size:0x4 pin (task #2143);
+ * off its real entry at 0x130A90 by a type:func pin on func_00130A90 alone, with no
+ * size on this word (task #2143);
  * kept as layout asm. */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00130A8C);
 
