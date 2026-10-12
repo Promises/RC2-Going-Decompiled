@@ -103,6 +103,24 @@
 #            cc1 cannot emit those at -G0, and GP differs by region, so such a
 #            body can pass one region's cmp by luck. INCLUDE_ASM members with
 #            gp words are listed as LATENT, never a failure.
+#   FRAGLINT (task #2146) tools/ee/fragment_census.py --lint --max-bytes 16,
+#            which until this row no gate ran. By the CONTENT of each site's
+#            .s it FAILS (a) an INCLUDE_ASM_FRAGMENT site that is not debris
+#            (a real function hidden from every count) and (b) a plain
+#            INCLUDE_ASM site <= 16 B that IS debris (unmarked). The cap is
+#            the tool's own validated band, passed explicitly so it cannot
+#            drift: above 16 B NO_RET/EPI_RET also catch live mis-split
+#            bodies whose ENTRY boundary is wrong (func_00282438, 852 B) —
+#            boundary fixes, not debris, so an uncapped lint would demand the
+#            marker on matchable functions. Both arms FAIL on usa. On eu only
+#            (a) fails; (b) is an INFO line listing every member, because EU
+#            is deferred (RULING #5339) and carries 139 unmarked sites at
+#            7f9653c3d — marking them is EU-phase work, not a baseline. Fails
+#            CLOSED: no script, a non-0/1 exit, no summary line, 0 sites
+#            scanned, or FAIL lines that do not sum to the summary. ⚠️ The
+#            tool globs src/<r>/*/*.c, so .cpp units are NOT scanned (USA
+#            7f9653c3d: 493 sites scanned of 742; the row prints its count).
+#            Host-only, no VM, ~1 s.
 #   NATIVE   (task #923) tools/native/check.sh over EVERY TARGET_NATIVE unit
 #            under going-decompiled/src (both regions, whichever region this
 #            run is for), BASE-RELATIVE: the base is `git merge-base HEAD
@@ -575,6 +593,41 @@ check_gmodel() {
     *) fail "gmodel_scan.sh could not run (rc $rc): $(head -c 300 "$scan")" ;;
   esac
   say "     members:"; /usr/bin/grep -vE '^UNIT [^ ]+ -G[^ ]+ 0$' "$scan" | sed 's/^/       /'
+}
+
+# ------------------------------------------------------------- FRAGLINT ----
+# check_fraglint REGION [TREE] [CENSUS] — fragment_census.py --lint, both
+# directions, at the tool's validated 16-byte cap (task #2146). TREE is the
+# working directory the census reads going-decompiled/ from; CENSUS exists for
+# --selftest arm (29)'s fail-closed leg. A real run passes neither.
+FRAGLINT_MAX_BYTES=16
+check_fraglint() {
+  local region=$1 tree=${2:-.} census=${3:-$ROOT/$HERE/fragment_census.py}
+  local scan="$OUT/fraglint_scan.txt" rc sum nf nsites na nb
+  local RA='^FAIL .* is marked INCLUDE_ASM_FRAGMENT but classifies ' RB='^FAIL .* is unmarked debris \('
+  say "== FRAGLINT [$region]: fragment_census.py --lint --max-bytes $FRAGLINT_MAX_BYTES — no INCLUDE_ASM_FRAGMENT site that is not debris, and no plain INCLUDE_ASM site <= $FRAGLINT_MAX_BYTES B that is (cap = the tool's validated band; above it the predicate also catches live mis-split bodies). eu: unmarked debris is INFO, RULING #5339 (scan: $scan)"
+  [ -f "$census" ] || { fail "FRAGLINT [$region]: $census does not exist — the row cannot run"; return; }
+  (cd "$tree" && python3 "$census" --lint --region "$region" --max-bytes "$FRAGLINT_MAX_BYTES") > "$scan" 2>&1; rc=$?
+  sum=$(/usr/bin/grep -E '^lint: [0-9]+ finding\(s\) over [0-9]+ bare sites$' "$scan" | tail -1)
+  nf=$(printf '%s' "$sum" | awk '{print $2}'); nsites=$(printf '%s' "$sum" | awk '{print $5}')
+  na=$(/usr/bin/grep -cE "$RA" "$scan" || true); nb=$(/usr/bin/grep -cE "$RB" "$scan" || true)
+  if [ -z "$sum" ] || [ "${nsites:-0}" -le 0 ] || [ $((na + nb)) != "$nf" ] || { [ "$rc" != 0 ] && [ "$rc" != 1 ]; } \
+     || { [ "$rc" = 0 ] && [ "$nf" != 0 ]; } || { [ "$rc" = 1 ] && [ "$nf" = 0 ]; }; then
+    fail "FRAGLINT [$region]: fragment_census.py could not run, or its output does not close (rc $rc, summary '${sum:-none}', $na marked-not-debris + $nb unmarked-debris FAIL lines): $(head -c 300 "$scan" | tr '\n' ' ')"
+  else
+    if [ "$na" -gt 0 ]; then
+      fail "FRAGLINT [$region]: $na INCLUDE_ASM_FRAGMENT site(s) whose .s is NOT debris — a real function hidden from every count; restore INCLUDE_ASM: $(/usr/bin/grep -E "$RA" "$scan" | sed -E 's/^FAIL ([^ ]+) ([^ ]+) is marked INCLUDE_ASM_FRAGMENT but classifies ([A-Z_]+):.*/\2 (\3, \1)/' | tr '\n' ';' | sed 's/;$//; s/;/ ; /g')"
+    fi
+    if [ "$nb" -gt 0 ] && [ "$region" = usa ]; then
+      fail "FRAGLINT [$region]: $nb plain INCLUDE_ASM site(s) <= $FRAGLINT_MAX_BYTES B whose .s IS debris — mark them INCLUDE_ASM_FRAGMENT (byte-neutral, the macros expand identically): $(/usr/bin/grep -E "$RB" "$scan" | sed -E 's/^FAIL ([^ ]+) ([^ ]+) \(([0-9]+) B\) is unmarked debris \(([A-Z_]+)\):.*/\2 (\3 B \4, \1)/' | tr '\n' ';' | sed 's/;$//; s/;/ ; /g')"
+    elif [ "$nb" -gt 0 ]; then
+      say "     INFO FRAGLINT [$region]: $nb plain INCLUDE_ASM site(s) <= $FRAGLINT_MAX_BYTES B classify as debris and are unmarked — NOT enforced on $region (EU deferred, RULING #5339); listed under members"
+    fi
+    if [ "$na" = 0 ] && { [ "$nb" = 0 ] || [ "$region" != usa ]; }; then
+      ok "FRAGLINT [$region]: 0 INCLUDE_ASM_FRAGMENT site(s) that are not debris$([ "$region" = usa ] && echo ", 0 unmarked debris site(s) <= $FRAGLINT_MAX_BYTES B") over $nsites bare site(s) in src/$region/*/*.c (.cpp units are not scanned by the tool)"
+    fi
+  fi
+  say "     members:"; sed 's/^/       /' "$scan"
 }
 
 # ------------------------------------------------------------- DLISITES ----
@@ -1336,6 +1389,7 @@ run_gate() {  # run_gate REGION [--no-build] [--strict]
   check_orphans "$REGION"
   check_libgcc "$REGION"
   check_gmodel "$REGION"
+  check_fraglint "$REGION"
   check_native
   check_decldef
   check_arena
@@ -1572,6 +1626,7 @@ selftest() {
   selftest_libgcc "$T" || bad=1
 
   selftest_gmodel "$T" || bad=1
+  selftest_fraglint "$T" || bad=1
   selftest_native "$T" || bad=1
   selftest_dirty "$T" || bad=1
   selftest_dirty_gate "$T" || bad=1
@@ -1844,6 +1899,92 @@ selftest_gmodel() {
     if [ "$FAILED" = 1 ] && [ "$(/usr/bin/grep '^       MISMATCH ' "$T/gmodel_seed_promo.txt" | awk '{print $2, $4}')" = "$unit $fn" ]; then ok "fired (b): $fn's INCLUDE_ASM removed from ${cf##*/} -> $(/usr/bin/grep '^FAIL GMODEL' "$T/gmodel_seed_promo.txt" | sed 's/ — move the unit.*: / : /')"; else say "SELFTEST-FAIL (b) removing $fn's INCLUDE_ASM did not fail GMODEL naming only it (FAILED=$FAILED):"; show < "$T/gmodel_seed_promo.txt"; b=1; fi
   fi
   FAILED=0
+  return $b
+}
+
+# selftest_fraglint OUTDIR — arm (29), task #2146, callable on its own after
+# sourcing this file (`. tools/ee/landing_gate.sh; region_vars usa;
+# selftest_fraglint /tmp/x`). Legs:
+#   wired    run_gate, as loaded, calls check_fraglint — the row exists only if
+#            a gate runs it (the defect this arm was written for: --lint
+#            existed and no gate called it), and the cap is 16;
+#   control  the real tree passes;
+#   (a)      the first REAL-class bare site of the real census (derived, not a
+#            literal) re-spelled INCLUDE_ASM_FRAGMENT in a scratch src copy ->
+#            FAIL naming exactly it;
+#   (b)      the first INCLUDE_ASM_FRAGMENT site <= 16 B flipped back to plain
+#            INCLUDE_ASM -> usa: FAIL naming exactly it; eu: no FAIL, and the
+#            INFO count rises by exactly one with it listed;
+#   cap      the uncapped census flags MORE than the capped one on usa (the
+#            cap is load-bearing), printed with the extra members;
+#   closed   an absent fragment_census.py FAILs, never reads as clean.
+selftest_fraglint() {
+  local T="$1" b=0 G real fr cf ln fn n0 n1
+  say "-- (29) FRAGLINT (#2146): run_gate calls check_fraglint at --max-bytes 16; the real tree passes; (a) a REAL site marked INCLUDE_ASM_FRAGMENT in a scratch copy -> FAIL naming it; (b) a <= 16 B FRAGMENT site unmarked -> usa FAIL naming it / eu INFO +1; the uncapped census flags more (usa); an absent census script -> FAIL"
+  if declare -f run_gate | /usr/bin/grep -q 'check_fraglint "\$REGION"' && [ "${FRAGLINT_MAX_BYTES:-}" = 16 ] \
+     && declare -f check_fraglint | /usr/bin/grep -q -- '--max-bytes "\$FRAGLINT_MAX_BYTES"'; then ok "wired (29): run_gate calls check_fraglint, which passes --max-bytes $FRAGLINT_MAX_BYTES"
+  else say "SELFTEST-FAIL (29) the FRAGLINT row is not wired: run_gate does not call check_fraglint, or the cap is not --max-bytes 16 (FRAGLINT_MAX_BYTES='${FRAGLINT_MAX_BYTES:-unset}')"; b=1; fi
+  FAILED=0; WARNED=0; check_fraglint "$REGION" > "$T/fraglint_real.txt" 2>&1
+  if [ "$FAILED" = 0 ] && /usr/bin/grep -q "^OK   FRAGLINT \[$REGION\]: 0 INCLUDE_ASM_FRAGMENT" "$T/fraglint_real.txt"; then ok "control (29): $(/usr/bin/grep '^OK   FRAGLINT' "$T/fraglint_real.txt" | sed 's/^OK   //')"
+  else say "SELFTEST-FAIL (29) the real tree does not pass FRAGLINT (FAILED=$FAILED):"; show < <(/usr/bin/grep -E '^(OK|FAIL)' "$T/fraglint_real.txt" | sed 's/^/  inner| /'); b=1; fi
+  # the scratch tree: a copy of src/$REGION (what the census rewrites) beside
+  # the real asm (what it reads), so the seeds touch nothing in the worktree
+  G="$T/fraglint_tree"; rm -rf "$G"; mkdir -p "$G/going-decompiled/src"
+  cp -R "going-decompiled/src/$REGION" "$G/going-decompiled/src/$REGION" && ln -s "$ROOT/going-decompiled/asm" "$G/going-decompiled/asm" \
+    || { say "SELFTEST-BROKEN: (29) could not build the scratch tree $G"; return 1; }
+  python3 "$HERE/fragment_census.py" --region "$REGION" --all-sizes > "$T/fraglint_census.tsv" 2>&1
+  # (a) — census TSV columns: unit name macro class size bare cfile line body
+  real=$(awk -F'\t' '$3 == "INCLUDE_ASM" && $4 == "REAL" { print $7 "\t" $8 "\t" $2; exit }' "$T/fraglint_census.tsv")
+  if [ -z "$real" ]; then say "SELFTEST-BROKEN: (29) no REAL-class plain site in the real census to seed (a) from"; b=1; else
+    IFS=$'\t' read -r cf ln fn <<< "$real"
+    sed -i.bak "${ln}s/INCLUDE_ASM(/INCLUDE_ASM_FRAGMENT(/" "$G/$cf" && rm -f "$G/$cf.bak"
+    if ! sed -n "${ln}p" "$G/$cf" | /usr/bin/grep -q "INCLUDE_ASM_FRAGMENT(.*$fn"; then say "SELFTEST-BROKEN: (29) the (a) seed did not re-spell $cf:$ln ($fn)"; b=1; else
+      FAILED=0; WARNED=0; check_fraglint "$REGION" "$G" > "$T/fraglint_seed_a.txt" 2>&1
+      if [ "$FAILED" = 1 ] && /usr/bin/grep -q "^FAIL FRAGLINT \[$REGION\]: 1 INCLUDE_ASM_FRAGMENT site(s) whose .s is NOT debris — .*: $fn (REAL, $cf:$ln)\$" "$T/fraglint_seed_a.txt"; then ok "fired (a): $fn marked INCLUDE_ASM_FRAGMENT at $cf:$ln -> $(/usr/bin/grep '^FAIL FRAGLINT' "$T/fraglint_seed_a.txt" | sed 's/ — .*: / : /')"
+      else say "SELFTEST-FAIL (29) (a) marking REAL $fn INCLUDE_ASM_FRAGMENT did not FAIL naming exactly it (FAILED=$FAILED):"; show < <(/usr/bin/grep -E '^(OK|FAIL)' "$T/fraglint_seed_a.txt" | sed 's/^/  inner| /'); b=1; fi
+    fi
+    sed -i.bak "${ln}s/INCLUDE_ASM_FRAGMENT(/INCLUDE_ASM(/" "$G/$cf" && rm -f "$G/$cf.bak"
+  fi
+  # (b) — usa: a FRAGMENT site <= 16 B flipped back to plain must FAIL. eu has
+  # no FRAGMENT site at 7f9653c3d, so the INFO arm is seeded the other way: the
+  # first unmarked debris site marked INCLUDE_ASM_FRAGMENT drops the INFO count
+  # by exactly one, it leaves the list, and nothing FAILs.
+  n0=$(/usr/bin/grep -c 'is unmarked debris (' "$T/fraglint_real.txt" || true)
+  if [ "$REGION" = usa ]; then
+    fr=$(awk -F'\t' '$3 == "INCLUDE_ASM_FRAGMENT" && $5 >= 0 && $5 <= 16 { print $7 "\t" $8 "\t" $2; exit }' "$T/fraglint_census.tsv")
+  else
+    fr=$(awk -F'\t' '$3 == "INCLUDE_ASM" && $5 >= 0 && $5 <= 16 && $4 ~ /^(PAD_ZERO|PAD_CDFILL|SP_TAIL|NO_RET|JR_NO_SLOT|EPI_RET)$/ { print $7 "\t" $8 "\t" $2; exit }' "$T/fraglint_census.tsv")
+  fi
+  if [ -z "$fr" ]; then say "SELFTEST-BROKEN: (29) no site in the real census to seed (b) from ($REGION)"; b=1; else
+    IFS=$'\t' read -r cf ln fn <<< "$fr"
+    if [ "$REGION" = usa ]; then sed -i.bak "${ln}s/INCLUDE_ASM_FRAGMENT(/INCLUDE_ASM(/" "$G/$cf"; else sed -i.bak "${ln}s/INCLUDE_ASM(/INCLUDE_ASM_FRAGMENT(/" "$G/$cf"; fi
+    rm -f "$G/$cf.bak"
+    if cmp -s "going-decompiled/src/${cf#going-decompiled/src/}" "$G/$cf"; then say "SELFTEST-BROKEN: (29) the (b) seed did not change $cf:$ln ($fn)"; b=1; fi
+    FAILED=0; WARNED=0; check_fraglint "$REGION" "$G" > "$T/fraglint_seed_b.txt" 2>&1
+    n1=$(/usr/bin/grep -c 'is unmarked debris (' "$T/fraglint_seed_b.txt" || true)
+    if [ "$REGION" = usa ]; then
+      if [ "$FAILED" = 1 ] && /usr/bin/grep -qE "^FAIL FRAGLINT \[usa\]: 1 plain INCLUDE_ASM site\(s\) <= 16 B whose .s IS debris — .*: $fn \([0-9]+ B [A-Z_]+, $cf:$ln\)\$" "$T/fraglint_seed_b.txt"; then ok "fired (b): $fn unmarked at $cf:$ln -> $(/usr/bin/grep '^FAIL FRAGLINT' "$T/fraglint_seed_b.txt" | sed 's/ — .*: / : /')"
+      else say "SELFTEST-FAIL (29) (b) unmarking $fn did not FAIL naming exactly it (FAILED=$FAILED):"; show < <(/usr/bin/grep -E '^(OK|FAIL)' "$T/fraglint_seed_b.txt" | sed 's/^/  inner| /'); b=1; fi
+    else
+      if [ "$FAILED" = 0 ] && [ "$n0" -ge 1 ] && [ "$n1" = $((n0 - 1)) ] && ! /usr/bin/grep -q " $fn (" "$T/fraglint_seed_b.txt"; then ok "fired (b, $REGION): $fn marked INCLUDE_ASM_FRAGMENT at $cf:$ln -> INFO members $n0 -> $n1, it left the list, no FAIL (RULING #5339)"
+      else say "SELFTEST-FAIL (29) (b, $REGION) marking $fn: FAILED=$FAILED, INFO members $n0 -> $n1 (want -1 with it gone, no FAIL)"; b=1; fi
+    fi
+  fi
+  # cap
+  if [ "$REGION" = usa ]; then
+    local nc nu
+    (python3 "$HERE/fragment_census.py" --lint --region "$REGION" --max-bytes "$FRAGLINT_MAX_BYTES") > "$T/fraglint_capped.txt" 2>&1
+    nc=$(sed -n 's/^lint: \([0-9]*\) finding.*/\1/p' "$T/fraglint_capped.txt" | tail -1)
+    (python3 "$HERE/fragment_census.py" --lint --region "$REGION" --all-sizes) > "$T/fraglint_uncapped.txt" 2>&1
+    nu=$(sed -n 's/^lint: \([0-9]*\) finding.*/\1/p' "$T/fraglint_uncapped.txt" | tail -1)
+    if [ -n "$nc" ] && [ -n "$nu" ] && [ "$nu" -gt "$nc" ]; then ok "cap (29): uncapped --lint flags $nu site(s) against $nc at 16 B; the extra are bodies > 16 B the cap keeps out: $(/usr/bin/grep -E 'is unmarked debris|is marked INCLUDE_ASM_FRAGMENT' "$T/fraglint_uncapped.txt" | sed -E 's/^FAIL [^ ]+ ([^ ]+) \(([0-9]+) B\).*/\1 \2 B/' | awk '$2+0 > 16' | tr '\n' ';' | sed 's/;$//; s/;/ ; /g')"
+    else say "SELFTEST-FAIL (29) the uncapped census does not flag more than the 16-byte cap ($nu vs $nc) — the cap is not load-bearing on this tree, so this leg proves nothing; re-derive it"; b=1; fi
+  fi
+  # closed
+  FAILED=0; WARNED=0; check_fraglint "$REGION" . "$T/t2146_absent_census.py" > "$T/fraglint_absent.txt" 2>&1
+  if [ "$FAILED" = 1 ] && /usr/bin/grep -q '^FAIL FRAGLINT .*t2146_absent_census.py does not exist' "$T/fraglint_absent.txt"; then ok "fired (29): an absent fragment_census.py is a FAIL, not a skip"
+  else say "SELFTEST-FAIL (29) an absent fragment_census.py did not FAIL (FAILED=$FAILED)"; b=1; fi
+  FAILED=0; WARNED=0
   return $b
 }
 

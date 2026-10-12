@@ -38,5 +38,9 @@ s32 func_00131400(s64 *arg0) {
 }
 
 /* 0x131424..0x13142F: CD fill, a stray `addiu $sp,$sp,0x90` word, CD fill —
- * link debris between s_matherr.o and w_sqrt.o, not code (FACT #7418). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/031380", func_00131424);
+ * link debris between s_matherr.o and w_sqrt.o, not code (FACT #7418).
+ * Marked INCLUDE_ASM_FRAGMENT since task #2146: fragment_census.py classifies
+ * it NO_RET (12 B, inside the validated <= 16 B band), and the landing gate's
+ * FRAGLINT row now fails on unmarked debris. Byte-neutral: the two macros
+ * expand identically. */
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/031380", func_00131424);
