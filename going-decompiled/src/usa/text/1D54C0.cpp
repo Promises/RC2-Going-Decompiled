@@ -2932,7 +2932,7 @@ s32 func_002DAE70(MenuWidget *obj) {
  * integer (`self`), as OpenRAC's body has it; spelled with a pointer, the
  * same arithmetic would be no different to cc1 but the body is kept verbatim.
  *
- * Source: OpenRAC/rac2-gc-decomp @974302ba936bb455acd78034b58ad4b98bafcc6b (GPL-3.0, adopted with the authors' permission per RULING #10405), src/game/002D5E98.c, func_002DA238 (v1.01), C body adopted verbatim apart from the callee spelling (their func_002DE550 = AllocMenuWorkBuffer); byte-exact on our ROM: vmu BYTE IDENTICAL 38/38 words (4 relocs resolved; base-seeded bit flip rc 1 at 0x2dafb0), unit objdiff report 100.00% size=148 (objdiff_build.sh + unit_report.sh, clean), whole-image cmp 0 under landing_gate usa and eu --strict (task #2159)
+ * Source: OpenRAC/rac2-gc-decomp @974302ba936bb455acd78034b58ad4b98bafcc6b (GPL-3.0, adopted with the authors' permission per RULING #10405), src/game/002D5E98.c, func_002DA238 (v1.01), C body adopted verbatim apart from the callee spelling (their func_002DE550 = AllocMenuWorkBuffer) and the parameter spelling (`void *obj` + `s32 self = (s32)obj` where theirs takes `s32 self`; bytes unaffected, #2161); byte-exact on our ROM: vmu BYTE IDENTICAL 38/38 words (4 relocs resolved; base-seeded bit flip rc 1 at 0x2dafb0), unit objdiff report 100.00% size=148 (objdiff_build.sh + unit_report.sh, clean), whole-image cmp 0 under landing_gate usa and eu --strict (task #2159)
  */
 #if !defined(TARGET_NATIVE) && !defined(S136OS_InitMenuBgImageBuffers)
 S136OS_SLOT(InitMenuBgImageBuffers);
