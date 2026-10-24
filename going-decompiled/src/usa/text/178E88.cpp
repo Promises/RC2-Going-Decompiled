@@ -2985,7 +2985,7 @@ void func_0027F208(s32 y0, s32 y1, s32 x0, s32 x1, s32 colorHi, s32 colorLo) {
  * Device-free: no volatile, no register pin, no inline asm. Supersedes the
  * t493 #else (sdk29 56.19%, unit objdiff).
  *
- * Source: OpenRAC/rac2-gc-decomp @d43c3b99b984fb63556c844a21ee99e8e31d2deb (GPL-3.0, adopted with the authors' permission per RULING #10405), src/game/0027B948.c, func_0027ECC8 (v1.01; author commit 4a78f7b7, Flavius), C body adopted verbatim apart from the callee spelling (their func_0027DE50 = func_0027E4D0, keeping our u64 fifth parameter, which is their `unsigned long`) and our symbol name; GATE_EVIDENCE (task #2216)
+ * Source: OpenRAC/rac2-gc-decomp @d43c3b99b984fb63556c844a21ee99e8e31d2deb (GPL-3.0, adopted with the authors' permission per RULING #10405), src/game/0027B948.c, func_0027ECC8 (v1.01; author commit 4a78f7b7, Flavius), C body adopted verbatim apart from the callee spelling (their func_0027DE50 = func_0027E4D0, keeping our u64 fifth parameter, which is their `unsigned long`) and our symbol name; byte-exact on our ROM: vmu BYTE IDENTICAL 98/98 words (97 + the trailing pad; 9 relocs, all jal func_0027E4D0; base-seeded flip rc 1 at 0x27f350), unit objdiff report 100.00% size=388 (objdiff_build.sh + unit_report.sh), whole-image cmp 0 under landing_gate usa and eu --strict at 3ffdbbfa7 (task #2216)
  */
 #if !defined(TARGET_NATIVE) && !defined(S136OS_func_0027F348)
 S136OS_SLOT(func_0027F348);

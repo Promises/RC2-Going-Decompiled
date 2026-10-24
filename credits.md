@@ -100,17 +100,22 @@
     (`src/game/loaders.c`: `func_00203808`), carried into rac2-gc-decomp.
     Adapted: every `long` is changed to `s64` (the same type on the EE).
 
-- **OpenRAC — `rac2-gc-decomp`, commit `d43c3b99`, `_exitThunk`** (GPL-3.0)
+- **OpenRAC — `rac2-gc-decomp`, commit `d43c3b99`, `_exitThunk` and `func_0027F348`** (GPL-3.0)
   <https://github.com/OpenRAC/rac2-gc-decomp> at commit `d43c3b99b984fb63556c844a21ee99e8e31d2deb`
 
-  One core C body, adopted with the authors' permission (held by the operator,
-  RULING #10405) and re-checked byte-exact against our v2.00 ROM on the plain
-  sdk29 arm (task #2208). Contributor: Gianni. Its doc comment carries the
+  Two C bodies, adopted with the authors' permission (held by the operator,
+  RULING #10405) and re-checked byte-exact against our v2.00 ROM: one core body
+  on the plain sdk29 arm (task #2208) and one engine body on the s136os arm
+  (task #2216). Contributors: Gianni and Flavius. Each doc comment carries the
   `Source:` line.
 
   Used so far:
   - **`_exitThunk`** (`0x00131CA8`) in `going-decompiled/src/usa/cod/0314C0.c`,
     from `src/core/00131780.c` (`func_00131CA8`, author commit `302ea406`).
+  - **`func_0027F348`** (`0x0027F348`, DrawShadowedBoxOutline) in
+    `going-decompiled/src/usa/text/178E88.cpp`, from `src/game/0027B948.c`
+    (`func_0027ECC8`, author commit `4a78f7b7`, Flavius), compiled on the
+    s136os arm (task #2216).
 
 - **Lombyte** (MIT, © 2026 Mateusz Kłysz)
   <https://github.com/mateuszklysz/Lombyte> at commit `2c4452dd03f5f7ebb2868dbe073ccdb1afb27f61`
