@@ -41,6 +41,23 @@ Names and research adopted from other projects are listed, with commit and
 licence, in [credits.md](credits.md). Their code is not copied into this tree,
 with the exception below.
 
+### OpenRAC rac2-gc-decomp at d43c3b99 (GPL-3.0)
+
+Three C function bodies are taken from OpenRAC's `rac2-gc-decomp`,
+<https://github.com/OpenRAC/rac2-gc-decomp> at commit
+`d43c3b99b984fb63556c844a21ee99e8e31d2deb` (root `LICENSE`: GNU General Public
+License, version 3), with the authors' permission (RULING #10405), task #2206:
+
+| Here | Upstream file | Upstream name |
+|---|---|---|
+| `func_001296A0` in `going-decompiled/src/usa/cod/022FA8.c` | `src/core/00129450.c` (from rac1-decomp `src/core/00125630.c`) | `func_001296A0` (rac1-decomp `func_00125880`) |
+| `func_0012DAC0` in `going-decompiled/src/usa/cod/022FA8.c` | `src/core/0012DA98.c` (from rac1-decomp `src/core/00125630.c`) | `func_0012DAC0` (rac1-decomp `func_00129CA0`) |
+| `func_0012DD60` in `going-decompiled/src/usa/cod/022FA8.c` (adapted) | `src/core/0012DD60.c`, itself adapted from Lombyte (MIT) `src/sdk/library/disprefimagefield.c` | `func_0012DD60` (Lombyte `_dispRefImageField`) |
+
+The Lombyte-derived body is also covered by the MIT notice reproduced under
+"Lombyte (MIT)" below. The GPL-2.0-or-later note in the next section applies to
+these bodies too.
+
 ### OpenRAC rac2-gc-decomp (GPL-3.0)
 
 Five C function bodies are taken from OpenRAC's `rac2-gc-decomp`,

@@ -3013,8 +3013,10 @@ typedef struct {
     s32 *callbacks;            /* 0x858: handed to func_0012FAE8 while waiting */
 } IpuDecoder;
 
-extern void func_001296A0(IpuDecoder *dec, s32 x, s32 y, s32 macroblockType, s32 motionType,
-                          s32 pmv[2][2][2], s32 mvFieldSel[2][2], s32 dmvector[2]);
+/* Unprototyped: the definition below (adopted, task #2206) types its decoder
+ * as MpegDecoderC, and every argument here is a pointer or an int, so the call
+ * is the same either way. */
+extern void func_001296A0();
 extern void func_0012DF18(IpuDecoder *dec);
 extern void func_00130250();
 extern char D_0013B9F8[];   /* "Invalid modion type -- ignored(%d)" */
@@ -3101,7 +3103,220 @@ s32 IpuMotionCompensation(IpuDecoder *dec, s32 mba, s32 mbaInc, s32 macroblockTy
     return 1;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_001296A0);
+/* libmpeg. func_001296A0 is rac1-decomp src/core/00125630.c func_00125880
+   (_getAllRefs) and func_00129DA8 is Lombyte (MIT) src/assembly/sdk/library/
+   _getRef0.c; both keep RAC2's position relative to RAC1 (RAC2 = RAC1 + 0x3E20)
+   at the same sizes. Every field offset below was re-measured against RAC2's
+   own accesses, not inherited:
+     ref_images 0x1B8 (`lw $a1,0x1CC($s1)` = ref_images[5]),
+     mc 0x590, cur 0x810 (`lw $v0,0x810($t8)`), work 0x81C (`lw $a0,0x81C($t8)`),
+     n 0x12C (`sw $zero,0x6BC(...)`, mc + 0x12C),
+     queue y[4] at 0x48 and c[4] at 0xB8 (`addiu $a0,$a0,0x48`, `$a0,0xB8`),
+     frame base 0 (`lw $t1,0x0($fp)`) and width 0x10 (`lw $a1,0x10($fp)`).
+   Fifth to eighth integer arguments arrive in $t0-$t3 (the SDK compiler's EE
+   convention): motion_type, pmv, mvfs, dmvector here; dx, dy, fieldpred, avg
+   read from 0xB0/0xB8/0xC0/0xC8($sp) in func_00129DA8.
+   The error strings are at 0x13BA20/0x13BA40/0x13BA60 and the two MC routine
+   tables at 0x137ED0/0x137EF0. */
+
+typedef struct {
+    u8 *base; /* 0x00 */
+    u8 pad04[0xC];
+    int width; /* 0x10 */
+} MpegRefImageC;
+
+typedef void (*MpegMcFuncC)(void);
+
+typedef struct {
+    u8 *addr;
+    int x;
+    int n0;
+    int n1;
+    int step;
+    u8 *p0;
+    u8 *p1;
+} MpegMcFetchC; /* 0x1C */
+
+typedef struct {
+    u8 *buf; /* 0x00 */
+    int pad04;
+    u8 *yref[4]; /* 0x08 */
+    u8 *cref[4]; /* 0x18 */
+    MpegMcFuncC yfunc[4]; /* 0x28 */
+    MpegMcFuncC cfunc[4]; /* 0x38 */
+    MpegMcFetchC y[4]; /* 0x48 */
+    MpegMcFetchC c[4]; /* 0xB8 */
+    int pad128;
+    int n; /* 0x12C */
+    u8 pad130[0x10];
+} MpegMcQueueC; /* 0x140 */
+
+typedef struct {
+    u8 pad000[0x120];
+    int second_field; /* 0x120 */
+    u8 pad124[0x150 - 0x124];
+    int picture_coding_type; /* 0x150 */
+    u8 pad154[0x174 - 0x154];
+    int picture_structure; /* 0x174 */
+    u8 pad178[0x1B8 - 0x178];
+    MpegRefImageC *ref_images[12]; /* 0x1B8 */
+    u8 pad1E8[0x590 - 0x1E8];
+    MpegMcQueueC mc[2]; /* 0x590 */
+    int cur; /* 0x810 */
+    u8 pad814[0x81C - 0x814];
+    u8 *work; /* 0x81C */
+} MpegDecoderC;
+
+extern void func_00129DA8(MpegDecoderC *d, MpegRefImageC *ref, int sfield, int dfield,
+                          int yofs, int h, int bx, int by, int dx, int dy,
+                          int fieldpred, int avg);
+
+/* Ours (task #2206): unprototyped, because func_0012B3E0 is defined later in
+   this file on our IpuDecoder type; every argument is a pointer or an int. */
+extern void func_0012B3E0();
+
+/* _errMessage (func_00130250) is passed three arguments here although its
+   definition reads one; the unprototyped `extern void func_00130250();` above
+   is our spelling of that call (task #2206 replaced upstream's asm-label alias). */
+
+extern char D_0013BA20[];
+
+extern char D_0013BA40[];
+
+extern char D_0013BA60[];
+
+extern MpegMcFuncC D_00137ED0[];
+
+extern MpegMcFuncC D_00137EF0[];
+
+/**
+ * mpeg2decode's form_predictions() on the IPU: queue the motion-compensation
+ * fetches for macroblock (bx, by) of the current picture. Called from
+ * IpuMotionCompensation for every non-intra macroblock. Clears the current
+ * macroblock record's fetch count (mc[cur].n), then hands each prediction to
+ * func_00129DA8 (one reference-block fetch).
+ *
+ * d: the decoder (IpuDecoder viewed through upstream's MpegDecoderC layout).
+ * bx, by: macroblock column/row. mb_type: macroblock_type (8 = forward motion,
+ * 4 = backward motion). motion_type: frame/field/dual-prime selector.
+ * pmv[r][s][t]: motion vectors (r = first/second, s = forward/backward,
+ * t = horizontal/vertical). mvfs[r][s]: motion_vertical_field_select.
+ * dmvector: dual-prime differential vector, expanded by func_0012B3E0.
+ * Returns nothing.
+ *
+ * Forward prediction runs when mb_type has 8 or the picture is a P picture
+ * (coding type 2), which takes the zero-vector forward prediction of a P
+ * macroblock without forward motion. A frame picture (structure 3) uses
+ * reference image 0 (forward) / 1 (backward): one 16-line fetch for frame
+ * motion, two 8-line field fetches for field motion (vertical vector halved),
+ * four 8-line fetches for dual prime, two of them averaged. A field picture
+ * picks among ref_images 4/8 (forward) and 5/9 (backward) by field parity, and
+ * for the second field of a P picture uses the just-decoded field of the same
+ * frame.
+ * Backward prediction averages with the forward one when both are present.
+ * An unknown motion type is reported through func_00130250 with one of the
+ * three "invalid motion type" strings at 0x13BA20/0x13BA40/0x13BA60 and
+ * predicts nothing.
+ *
+ * Source: OpenRAC/rac2-gc-decomp @d43c3b99b984fb63556c844a21ee99e8e31d2deb (GPL-3.0, adopted with the authors' permission per RULING #10405), src/core/00129450.c, func_001296A0 (author commit 4b02f2de, Louis-Philippe Le Sieur; upstream of that, rac1-decomp src/core/00125630.c func_00125880 `_getAllRefs`), C body adopted verbatim; the surrounding declarations are ours: the asm-label alias `func_00130250_msg` is replaced by our unprototyped func_00130250 (three call sites renamed), and the func_0012B3E0 prototype by an unprototyped declaration; byte-exact on our ROM: GATE_EVIDENCE_1296A0
+ */
+void func_001296A0(MpegDecoderC *d, int bx, int by, int mb_type, int motion_type,
+                   int pmv[2][2][2], int mvfs[2][2], int *dmvector) {
+    int dmv[2][2];
+    MpegRefImageC *refs[2][2];
+    int one = 1;
+    int avg;
+    int currentfield;
+    int same = one;
+
+    avg = 0;
+
+    d->mc[d->cur].n = 0;
+
+    if ((mb_type & 8) || d->picture_coding_type == 2) {
+        if (d->picture_structure == 3) {
+            if (motion_type == 2 || !(mb_type & 8)) {
+                func_00129DA8(d, d->ref_images[0], 0, 0, 0, 16, bx, by, pmv[0][0][0],
+                              pmv[0][0][1], 0, 0);
+            } else if (motion_type == same) {
+                func_00129DA8(d, d->ref_images[0], mvfs[0][0], 0, 0, 8, bx, by,
+                              pmv[0][0][0], pmv[0][0][1] >> 1, same, 0);
+                func_00129DA8(d, d->ref_images[0], mvfs[1][0], 1, 0, 8, bx, by,
+                              pmv[1][0][0], pmv[1][0][1] >> 1, same, 0);
+            } else if (motion_type == 3) {
+                func_0012B3E0(d, dmv, dmvector, pmv[0][0][0], pmv[0][0][1] >> 1);
+                func_00129DA8(d, d->ref_images[0], 0, 0, 0, 8, bx, by, pmv[0][0][0],
+                              pmv[0][0][1] >> 1, same, 0);
+                func_00129DA8(d, d->ref_images[0], 1, 0, 0, 8, bx, by, dmv[0][0],
+                              dmv[0][1], same, one);
+                func_00129DA8(d, d->ref_images[0], 1, 1, 0, 8, bx, by, pmv[0][0][0],
+                              pmv[0][0][1] >> 1, same, 0);
+                func_00129DA8(d, d->ref_images[0], 0, 1, 0, 8, bx, by, dmv[1][0],
+                              dmv[1][1], same, one);
+            } else {
+                func_00130250(d, D_0013BA20, motion_type);
+            }
+        } else {
+            currentfield = d->picture_structure == 2;
+            /* Keep the retail stack order: two field choices per reference set. */
+            refs[0][0] = d->ref_images[4];
+            refs[0][1] = d->ref_images[8];
+            refs[1][0] = d->ref_images[5];
+            refs[1][1] = d->ref_images[9];
+            one = 2;
+            same = 0;
+            if (d->picture_coding_type == one && d->second_field) {
+                same = currentfield != mvfs[0][0];
+            }
+            if (motion_type == 1 || !(mb_type & 8)) {
+                func_00129DA8(d, refs[same][mvfs[0][0]], 0, 0, 0, 16, bx, by,
+                              pmv[0][0][0], pmv[0][0][1], 0, 0);
+            } else if (motion_type == 2) {
+                func_00129DA8(d, refs[same][mvfs[0][0]], 0, 0, 0, 8, bx, by,
+                              pmv[0][0][0], pmv[0][0][1], 0, 0);
+                same = d->picture_coding_type == motion_type && d->second_field &&
+                       currentfield != mvfs[1][0];
+                func_00129DA8(d, refs[same][mvfs[1][0]], 0, 0, 8, 8, bx, by,
+                              pmv[1][0][0], pmv[1][0][1], 0, 0);
+            } else if (motion_type == 3) {
+                same = d->second_field ? motion_type - 2 : 0;
+                func_0012B3E0(d, dmv, dmvector, pmv[0][0][0], pmv[0][0][1]);
+                func_00129DA8(d, refs[0][currentfield], 0, 0, 0, 16, bx, by,
+                              pmv[0][0][0], pmv[0][0][1], 0, 0);
+                func_00129DA8(d, refs[same][!currentfield], 0, 0, 0, 16, bx, by,
+                              dmv[0][0], dmv[0][1], 0, 1);
+            } else {
+                func_00130250(d, D_0013BA40, motion_type);
+            }
+        }
+        avg = 1;
+    }
+
+    if (mb_type & 4) {
+        if (d->picture_structure == 3) {
+            same = 1;
+            if (motion_type == 2) {
+                func_00129DA8(d, d->ref_images[1], 0, 0, 0, 16, bx, by, pmv[0][1][0],
+                              pmv[0][1][1], 0, avg);
+            } else {
+                func_00129DA8(d, d->ref_images[1], mvfs[0][1], 0, 0, 8, bx, by,
+                              pmv[0][1][0], pmv[0][1][1] >> 1, same, avg);
+                func_00129DA8(d, d->ref_images[1], mvfs[1][1], 1, 0, 8, bx, by,
+                              pmv[1][1][0], pmv[1][1][1] >> 1, same, avg);
+            }
+        } else if (motion_type == 1) {
+            func_00129DA8(d, mvfs[0][1] ? d->ref_images[9] : d->ref_images[5], 0, 0, 0,
+                          16, bx, by, pmv[0][1][0], pmv[0][1][1], 0, avg);
+        } else if (motion_type == 2) {
+            func_00129DA8(d, mvfs[0][1] ? d->ref_images[9] : d->ref_images[5], 0, 0, 0,
+                          8, bx, by, pmv[0][1][0], pmv[0][1][1], 0, avg);
+            func_00129DA8(d, mvfs[1][1] ? d->ref_images[9] : d->ref_images[5], 0, 0, 8,
+                          8, bx, by, pmv[1][1][0], pmv[1][1][1], 0, avg);
+        } else {
+            func_00130250(d, D_0013BA60, motion_type);
+        }
+    }
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00129DA8);
 
@@ -4438,7 +4653,10 @@ s32 func_0012D350(s32 *ipu) {
 }
 
 extern void func_0012DC50(IpuDecoder *dec, s32 frame, s32 last);
-extern void func_0012DD60(IpuDecoder *dec, s32 frameA, s32 frameB, s32 last);
+/* Unprototyped: the definition below (adopted, task #2206) types its arguments
+ * with upstream's MpegFieldTransferState/MpegPictureBuffer; all four are a
+ * pointer or an int, so the call is the same either way. */
+extern void func_0012DD60();
 
 /**
  * When `enable` is set, finish a run of `count` items on decoder `dec`: for a
@@ -4599,7 +4817,71 @@ void func_0012DA98(s32 *arg0) {
     arg0[0x208] = 1;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012DAC0);
+/* The MPEG library's picture timestamp and flags: the picture's presentation
+   timestamp, its decoding timestamp and a packed word of the picture's coding
+   fields. Carried from rac1-decomp's func_00129CA0 (src/core/00125630.c), the
+   same library with this image's +0x3E20 core shift; func_00121AB8 is its
+   __muldi3 (our spelling below, task #2206). */
+extern s64 __muldi3(s64 a, s64 b);
+
+/**
+ * libmpeg's _getPtsDtsFlags (Lombyte's name; see func_0012DD60): fetch a
+ * decoded picture's presentation timestamp, decoding timestamp and packed
+ * coding flags for the decoder's owner. Called from func_0012DC50 (frame
+ * picture) and twice from func_0012DD60 (field pair).
+ *
+ * arg0: the decoder (IpuDecoder). arg1: the picture (IpuPictureSize; PTS at
+ * +0x18, DTS at +0x20, coding fields at +0x2C..+0x40). arg2/arg3/arg4: where
+ * the PTS, DTS and flags are stored (64-bit). Returns the flags word.
+ *
+ * With timestamp interpolation on (decoder +0x70) a picture with no PTS
+ * (negative) gets one extrapolated from the last known PTS (+0x80) and the
+ * picture count/step at +0x78/+0x88/+0x90 through __muldi3, bumping +0x90 when
+ * both low bits are set; otherwise the picture's own PTS is used. A pending
+ * override (+0xF8 == 2 with a non-negative +0xF0) replaces it once and is
+ * cleared (+0xF8 = 0, +0xF0 = -1). The flags pack progressive_sequence << 8,
+ * progressive_frame << 7, top_field_first << 6, repeat_first_field << 5,
+ * picture_structure << 3 and picture_coding_type.
+ *
+ * Source: OpenRAC/rac2-gc-decomp @d43c3b99b984fb63556c844a21ee99e8e31d2deb (GPL-3.0, adopted with the authors' permission per RULING #10405), src/core/0012DA98.c, func_0012DAC0 (author commit 3451db40, Gianni; carried from rac1-decomp src/core/00125630.c func_00129CA0), C body adopted verbatim with the extern func_00121AB8 respelled as our __muldi3 (0x121AB8); byte-exact on our ROM: GATE_EVIDENCE_12DAC0
+ */
+s64 func_0012DAC0(void *arg0, void *arg1, void *arg2, void *arg3, void *arg4) {
+    char *s = arg0;
+    char *t = arg1;
+    s64 *o1 = arg2;
+    s64 v;
+    s64 packed;
+
+    if (*(s32 *)(s + 0x70) != 0) {
+        s32 base;
+        v = *(s64 *)(t + 0x18);
+        if (v >= 0 || (base = *(s32 *)(s + 0x80)) < 0) {
+            *o1 = v;
+        } else {
+            s32 n = *(s64 *)(s + 0x88);
+            s64 r = __muldi3(n & 1, *(s64 *)(s + 0x78) & 1);
+            s32 cnt = *(s32 *)(s + 0x90);
+            s32 a = __muldi3(r, cnt & 1);
+            *o1 = base + ((s32)(__muldi3(*(s64 *)(s + 0x78), n) >> 1) + a);
+            if (__muldi3(n & 1, *(s64 *)(s + 0x78) & 1)) {
+                *(s32 *)(s + 0x90) = cnt + 1;
+            }
+        }
+    } else {
+        *o1 = *(s64 *)(t + 0x18);
+    }
+    if (*(s32 *)(s + 0xF8) == 2 && (v = *(s64 *)(s + 0xF0)) >= 0) {
+        *o1 = v;
+        *(s32 *)(s + 0xF8) = 0;
+        *(s64 *)(s + 0xF0) = -1;
+    }
+    *(s64 *)arg3 = *(s64 *)(t + 0x20);
+    packed = ((s64)*(s32 *)(t + 0x34) << 8) | ((s64)*(s32 *)(t + 0x38) << 7)
+           | ((s64)*(s32 *)(t + 0x3C) << 6) | ((s64)*(s32 *)(t + 0x40) << 5)
+           | ((s64)*(s32 *)(t + 0x30) << 3) | *(s32 *)(t + 0x2C);
+    *(s64 *)arg4 = packed;
+    return packed;
+}
 
 /* The words of the decoder's owner (IpuDecoder.callbacks) that func_0012DAC0
  * fills in for func_0012DC50. */
@@ -4612,8 +4894,6 @@ typedef struct {
 } IpuOwnerFields;
 
 extern u32 D_00137F38[];
-extern void func_0012DAC0(IpuDecoder *dec, IpuPictureSize *size, s32 *out10,
-                          u64 *out18, u64 *out20);
 extern void func_0012E608(IpuDecoder *dec, IpuPictureSize *size);
 extern void func_0012D808(IpuDecoder *dec, IpuPictureSize *size);
 
@@ -4659,7 +4939,161 @@ void func_0012DC50(IpuDecoder *dec, s32 frame, s32 last) {
     }
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012DD60);
+/* _dispRefImageField, the field-picture twin of _dispRefImage: adapted from
+   Lombyte (MIT) src/sdk/library/disprefimagefield.c. The unit saves $s0..$s6
+   and $ra in 16-byte slots while the stores stay `sd`, the same profile as the
+   neighbouring func_0012D808, so it is built with `sdk -O2 -g2 -gstabs`.
+   Lombyte's names map to RAC2 as: _getPtsDtsFlags = func_0012DAC0,
+   _isOutSizeOK = func_0012D768, _cpr8 = func_0012D808,
+   _csc_storeRefImage = func_0012E608, FinishMpegReferenceImage = func_0012DA98. */
+
+struct MpegPictureBuffer {
+    u8 pad0[0x10];
+    s32 macroblock_height;
+    u8 pad14[4];
+    s64 presentation_timestamp;
+    s64 decoding_timestamp;
+    s32 status;
+    s32 coding_type;
+    s32 structure;
+    s32 progressive_sequence;
+    s32 progressive_frame;
+    s32 top_field_first;
+    s32 repeat_first_field;
+    s32 horizontal_offset0;
+    s32 horizontal_offset1;
+    s32 horizontal_offset2;
+    s32 vertical_offset0;
+    s32 vertical_offset1;
+    s32 vertical_offset2;
+    s32 display_width;
+    s32 display_height;
+};
+
+union MpegTimestampSlot {
+    s64 value;
+    struct {
+        s32 low;
+        s32 high;
+    } words;
+};
+
+struct MpegPictureTransfer {
+    u8 pad0[0x10];
+    union MpegTimestampSlot first_timestamp;
+    s64 first_decode_timestamp;
+    s64 first_flags;
+    union MpegTimestampSlot second_timestamp;
+    s64 second_decode_timestamp;
+    s64 second_flags;
+};
+
+struct MpegFieldTransferState {
+    u8 pad0[0x80];
+    s32 last_timestamp;
+    u8 pad84[4];
+    s64 timestamp_step;
+    u8 pad90[0x20];
+    s32 decoder_initialized;
+    s32 horizontal_offset0;
+    s32 horizontal_offset1;
+    u8 padbc[4];
+    s32 vertical_offset0;
+    s32 vertical_offset1;
+    u8 padc8[4];
+    s32 display_width;
+    s32 display_height;
+    u8 padd4[0xa0];
+    s32 picture_structure;
+    u8 pad178[0x6e0];
+    struct MpegPictureTransfer *transfer;
+};
+
+/* Upstream's five callee externs (func_0012DAC0, func_0012D768, func_0012D808,
+   func_0012E608, func_0012DA98) are dropped here: each is already declared or
+   defined above on our IpuDecoder/IpuPictureSize types (task #2206), so the
+   calls below cast their pointer arguments to those types. */
+
+/**
+ * libmpeg's _dispRefImageField (Lombyte's name), the field-pair twin of
+ * func_0012DC50: hand a decoded pair of field pictures to the decoder's owner
+ * and, when both are flagged for decoding, copy the combined frame out.
+ * Called from func_0012D420 and func_00130098 for a field picture
+ * (structure != 3), with rows 1 and 2 of the decoder's frame table.
+ *
+ * state: the decoder (IpuDecoder). first, second: the two field pictures
+ * (IpuPictureSize). last: passed by both callers (count - 1) and never read;
+ * see below. Returns nothing.
+ *
+ * The primary field is `first` for a bottom-field picture structure (2, which
+ * also sets flag 0x40 on both fields' flags) and `second` otherwise. Each
+ * field's PTS/DTS/flags go to the owner's transfer record through
+ * func_0012DAC0, each time re-seeding the decoder's last PTS (+0x80) from it
+ * with step 1 (+0x88); the display size and the per-field centre offsets are
+ * copied into the decoder. If the buffers can hold `first` (func_0012D768)
+ * and both fields have status 1, `first` is processed at double height
+ * through func_0012E608 or func_0012D808 (by +0xB0) and the state transition
+ * func_0012DA98 runs.
+ *
+ * Source: OpenRAC/rac2-gc-decomp @d43c3b99b984fb63556c844a21ee99e8e31d2deb (GPL-3.0, adopted with the authors' permission per RULING #10405), src/core/0012DD60.c, func_0012DD60 (author commit 962455ea, Louis-Philippe Le Sieur; their header says adapted from Lombyte (MIT) src/sdk/library/disprefimagefield.c, _dispRefImageField), ADAPTED: body statements verbatim; the fourth parameter `s32 last` is ours (both our matched callers pass four arguments), upstream's five callee externs are dropped in favour of this file's own declarations, and the four calls to func_0012D768/func_0012E608/func_0012D808/func_0012DA98 cast their pointer arguments to those declarations' types (codegen-neutral; removes incompatible-pointer warnings); byte-exact on our ROM: GATE_EVIDENCE_12DD60
+ */
+void func_0012DD60(struct MpegFieldTransferState *state, struct MpegPictureBuffer *first,
+                   struct MpegPictureBuffer *second, s32 last) {
+    s64 first_flags, second_flags;
+    s32 timestamp;
+    s32 second_timestamp;
+    s32 display_height;
+    struct MpegPictureBuffer *primary;
+    struct MpegPictureBuffer *secondary;
+    struct MpegPictureTransfer *transfer;
+    struct MpegPictureTransfer *second_transfer;
+    struct MpegPictureTransfer *final_transfer;
+    s32 flags;
+    flags = 0;
+    if (state->picture_structure == 2) {
+        primary = first;
+        secondary = second;
+        flags = 0x40;
+    } else {
+        primary = second;
+        secondary = first;
+    }
+    transfer = state->transfer;
+    func_0012DAC0(state, primary, &transfer->first_timestamp.value,
+                  &transfer->first_decode_timestamp, &transfer->first_flags);
+    second_transfer = state->transfer;
+    timestamp = second_transfer->first_timestamp.words.low;
+    state->timestamp_step = 1;
+    state->last_timestamp = timestamp;
+    func_0012DAC0(state, secondary, &second_transfer->second_timestamp.value,
+                  &second_transfer->second_decode_timestamp, &second_transfer->second_flags);
+    final_transfer = state->transfer;
+    second_timestamp = final_transfer->second_timestamp.words.low;
+    state->timestamp_step = 1;
+    state->last_timestamp = second_timestamp;
+    first_flags = final_transfer->first_flags | flags;
+    state->display_width = primary->display_width;
+    second_flags = final_transfer->second_flags;
+    final_transfer->first_flags = first_flags;
+    second_flags |= flags;
+    display_height = primary->display_height;
+    final_transfer->second_flags = second_flags;
+    state->display_height = display_height;
+    state->horizontal_offset0 = primary->horizontal_offset0;
+    state->horizontal_offset1 = secondary->horizontal_offset1;
+    state->vertical_offset0 = primary->vertical_offset0;
+    state->vertical_offset1 = secondary->vertical_offset1;
+    if (func_0012D768((IpuDecoder *)state, (IpuPictureSize *)first) && first->status == 1 &&
+        second->status == 1) {
+        first->macroblock_height *= 2;
+        if (state->decoder_initialized)
+            func_0012E608((IpuDecoder *)state, (IpuPictureSize *)first);
+        else
+            func_0012D808((IpuDecoder *)state, (IpuPictureSize *)first);
+        first->macroblock_height >>= 1;
+        func_0012DA98((s32 *)state);
+    }
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012DF18);
 
@@ -5764,7 +6198,7 @@ void func_00130098(s32 *obj) {
     } else if (dec->pictureStructure == 3) {
         func_0012DC50(dec, dec->frames[0][1], count - 1);
     } else {
-        func_0012DD60(dec, dec->frames[1][1], dec->frames[2][1], count - 1);
+        func_0012DD60((void *)dec, (void *)dec->frames[1][1], (void *)dec->frames[2][1], count - 1);
     }
     dec->pending = 0;
 }

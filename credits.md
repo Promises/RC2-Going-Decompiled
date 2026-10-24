@@ -43,6 +43,27 @@
   OpenRAC repository mixes licences: its top level is GPL-3.0-or-later, and
   `games/rac2/ntsc/src/libgcc` is GPLv2. Nothing from those paths is used here.
 
+- **OpenRAC — `rac2-gc-decomp`, later commit** (GPL-3.0)
+  <https://github.com/OpenRAC/rac2-gc-decomp> at commit `d43c3b99b984fb63556c844a21ee99e8e31d2deb`
+
+  Three more libmpeg C bodies from the same repository, adopted with the
+  authors' permission (held by the operator, RULING #10405) and re-checked
+  byte-exact against our v2.00 ROM (task #2206). Contributors: Louis-Philippe
+  Le Sieur (llesieur99) and Gianni. Each doc comment carries the `Source:`
+  line, which names every change beyond extern spellings.
+
+  Used so far:
+  - **`func_001296A0`** (`0x001296A0`) in `going-decompiled/src/usa/cod/022FA8.c`,
+    from `src/core/00129450.c` (author commit `4b02f2de`, Louis-Philippe Le
+    Sieur); upstream of that, rac1-decomp `src/core/00125630.c` `func_00125880`.
+  - **`func_0012DAC0`** (`0x0012DAC0`) in the same file, from
+    `src/core/0012DA98.c` (author commit `3451db40`, Gianni), carried from
+    rac1-decomp `src/core/00125630.c` `func_00129CA0`.
+  - **`func_0012DD60`** (`0x0012DD60`) in the same file, adapted, from
+    `src/core/0012DD60.c` (author commit `962455ea`, Louis-Philippe Le Sieur),
+    which their header says is adapted from **Lombyte** (MIT)
+    `src/sdk/library/disprefimagefield.c`; see the Lombyte entry below.
+
 - **OpenRAC — `rac2-gc-decomp`** (GPL-3.0)
   <https://github.com/OpenRAC/rac2-gc-decomp> at commit `974302ba936bb455acd78034b58ad4b98bafcc6b`
 
