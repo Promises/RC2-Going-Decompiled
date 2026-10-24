@@ -2972,10 +2972,11 @@ void func_0027F208(s32 y0, s32 y1, s32 x0, s32 x1, s32 colorHi, s32 colorLo) {
  * fill primitive func_0027E4D0. Returns nothing.
  *
  * Non-obvious: the colour parameter is an int, sign-extended into
- * func_0027E4D0's 64-bit colour argument; with it spelled u64 (as our earlier
- * #else had it) or the callee's fifth parameter spelled int, s136 emits 96
- * words against the ROM's 97, and with the callee's spelled
- * `unsigned long long` (128-bit on s136) 100 (FACT #11295).
+ * func_0027E4D0's 64-bit colour argument, and both spellings are load-bearing.
+ * With this function's own fifth parameter spelled u64 (as our earlier #else
+ * had it) s136 emits 100 words against the ROM's 97 and the splice refuses it
+ * (task #2216); with the callee's fifth parameter spelled int it emits 96, and
+ * spelled `unsigned long long` (128-bit on s136) 100 (FACT #11295).
  *
  * MATCHED on the s136os arm (SN 2.95.3 v1.36 cc1plus -fopt-stack, the unit's
  * -fno-gcse pin unchanged; row in tools/ee/s136os_functions.txt), spliced over
