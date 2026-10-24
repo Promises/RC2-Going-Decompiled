@@ -4248,8 +4248,9 @@ s32 IpuSkipBits(s32 *ipu, s32 n) {
  * r1_func_00128638 = IpuWaitCmdResult, r1_func_0012BCC8 = func_0012FAE8,
  * r1_D_00132F70 = D_00137F10) and the signature, which takes the unit's shared
  * prototype (s32 *, s32 -> s32 where theirs is void *, int -> int; bytes
- * unaffected), so the three callee arguments keep their spellings and compile
- * with cc1's pointer-conversion warnings; byte-exact on our ROM: vmu BYTE
+ * unaffected), plus (s32 *) casts on the two IpuWaitCmdResult arguments,
+ * which a Linux clang host rejects uncast in the native build (object-neutral,
+ * #2212/FACT #33785); byte-exact on our ROM: vmu BYTE
  * IDENTICAL 84/84 words (6 relocs resolved; base-seeded bit flip rc 1 at
  * 0x12c9c4), unit objdiff report 100.00% size=336 (objdiff_build.sh +
  * unit_report.sh, clean), whole-image cmp 0 under landing_gate usa and eu
@@ -4273,7 +4274,7 @@ s32 IpuGetBits(s32 *arg0, s32 n) {
     if (*(int *)(s + 0x818) != 0 || *(int *)(s + 0x83C) < n) {
         *(volatile int *)0x10002000 = 0x40000000;
         *(int *)(s + 0x818) = D_00137F10[4];
-        *(int *)(s + 0x838) = IpuWaitCmdResult(s);
+        *(int *)(s + 0x838) = IpuWaitCmdResult((s32 *)s);
     }
 
     *(int *)(s + 0x83C) = 0x20;
@@ -4283,7 +4284,7 @@ s32 IpuGetBits(s32 *arg0, s32 n) {
     *(volatile unsigned int *)0x10002000 = cmd;
     result = oldBits >> (0x20 - n);
     *(int *)(s + 0x818) = D_00137F10[idx];
-    *(int *)(s + 0x838) = IpuWaitCmdResult(s);
+    *(int *)(s + 0x838) = IpuWaitCmdResult((s32 *)s);
     return result;
 }
 
