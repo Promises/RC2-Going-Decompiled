@@ -4228,7 +4228,64 @@ s32 IpuSkipBits(s32 *ipu, s32 n) {
     dec->bitsValid = 32;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", IpuGetBits);
+/**
+ * Read `n` bits from the IPU bitstream (mpeg2decode's Get_Bits; libmpeg's
+ * _nextBit): wait for the IPU to go idle, refill the 32-bit look-ahead with
+ * FDEC 0 when the last command issued does not leave it valid (lastCmdFlag)
+ * or fewer than `n` bits remain, take the top `n` bits, then issue FDEC `n`
+ * so the IPU consumes them and reload the look-ahead from its result.
+ * Returns the `n` bits read, right-aligned.
+ *
+ * The table index needs its own local, computed before the IPU_CMD store:
+ * written inside the subscript, cc1 swaps $v1 and $a0 across the second
+ * command issue (10/84 words, NOTE #10044). The volatile accesses are the
+ * IPU's MMIO registers (IPU_CTRL 0x10002010, IPU_CMD 0x10002000).
+ *
+ * Source: OpenRAC/rac2-gc-decomp @8b490f56 (GPL-3.0, adopted with the authors'
+ * permission per RULING #10405), src/core/0012C508.c, func_0012C878 (v1.01);
+ * upstream rac1-decomp src/core/00125630.c func_00128A58 @efe37c0; C body
+ * adapted: verbatim apart from our callee and table spellings (their
+ * r1_func_00128638 = IpuWaitCmdResult, r1_func_0012BCC8 = func_0012FAE8,
+ * r1_D_00132F70 = D_00137F10) and the signature, which takes the unit's shared
+ * prototype (s32 *, s32 -> s32 where theirs is void *, int -> int; bytes
+ * unaffected), so the three callee arguments keep their spellings and compile
+ * with cc1's pointer-conversion warnings; byte-exact on our ROM: vmu BYTE
+ * IDENTICAL 84/84 words (6 relocs resolved; base-seeded bit flip rc 1 at
+ * 0x12c9c4), unit objdiff report 100.00% size=336 (objdiff_build.sh +
+ * unit_report.sh, clean), whole-image cmp 0 under landing_gate usa and eu
+ * --strict (task #2163)
+ */
+s32 IpuGetBits(s32 *arg0, s32 n) {
+    char *s = (char *)arg0;
+    int counter = 0;
+    unsigned int cmd;
+    unsigned int idx;
+    unsigned int oldBits;
+    unsigned int result;
+
+    while ((*(volatile int *)0x10002010 & 0x80004000) == 0x80000000) {
+        if (counter++ >= 0x1389) {
+            func_0012FAE8(*(int *)(s + 0x858));
+            counter = 0;
+        }
+    }
+
+    if (*(int *)(s + 0x818) != 0 || *(int *)(s + 0x83C) < n) {
+        *(volatile int *)0x10002000 = 0x40000000;
+        *(int *)(s + 0x818) = D_00137F10[4];
+        *(int *)(s + 0x838) = IpuWaitCmdResult(s);
+    }
+
+    *(int *)(s + 0x83C) = 0x20;
+    oldBits = *(unsigned int *)(s + 0x838);
+    cmd = n | 0x40000000;
+    idx = cmd >> 28;
+    *(volatile unsigned int *)0x10002000 = cmd;
+    result = oldBits >> (0x20 - n);
+    *(int *)(s + 0x818) = D_00137F10[idx];
+    *(int *)(s + 0x838) = IpuWaitCmdResult(s);
+    return result;
+}
 
 extern void IpuWaitReady(s32 *ipu);
 extern s32 IpuSkipBits(s32 *arg0, s32 arg1);

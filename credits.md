@@ -66,12 +66,13 @@
 
 - **OpenRAC — `rac2-gc-decomp`** (GPL-3.0)
   <https://github.com/OpenRAC/rac2-gc-decomp> at commit `974302ba936bb455acd78034b58ad4b98bafcc6b`
+  (and `8b490f56b8e46a1b749b54fd898946a4f09c1cca` where an item says so)
 
-  Their decompilation of the RAC2 v1.01 boot. Five C bodies are adopted
-  verbatim, with the authors' permission (held by the operator, RULING #10405),
-  each re-checked byte-exact against our v2.00 ROM and with their v1.01 extern
-  spellings replaced by our symbols (task #2159). Each doc comment carries the
-  `Source:` line.
+  Their decompilation of the RAC2 v1.01 boot. Six C bodies are adopted
+  with the authors' permission (held by the operator, RULING #10405), each
+  re-checked byte-exact against our v2.00 ROM and with their v1.01 extern
+  spellings replaced by our symbols (tasks #2159, #2163). Each doc comment
+  carries the `Source:` line, which names every change beyond those spellings.
 
   Used so far:
   - **`func_00131850` and `func_00131908`** (`0x00131850`, `0x00131908`) in
@@ -84,6 +85,11 @@
   - **`InitMenuBgImageBuffers`** (`0x002DAF90`) and **`func_002DCDC0`**
     (`0x002DCDC0`) in `going-decompiled/src/usa/text/1D54C0.cpp`, from
     `src/game/002D5E98.c` (`func_002DA238`, `func_002DC090`).
+  - **`IpuGetBits`** (`0x0012C878`) in `going-decompiled/src/usa/cod/022FA8.c`,
+    from `src/core/0012C508.c` (`func_0012C878`) at the later commit
+    `8b490f56b8e46a1b749b54fd898946a4f09c1cca`. This is rac1-decomp's own C
+    (`src/core/00125630.c`: `func_00128A58`), carried into rac2-gc-decomp; the
+    signature takes our shared prototype (task #2163).
 
 - **Lombyte** (MIT, © 2026 Mateusz Kłysz)
   <https://github.com/mateuszklysz/Lombyte> at commit `2c4452dd03f5f7ebb2868dbe073ccdb1afb27f61`

@@ -60,16 +60,18 @@ these bodies too.
 
 ### OpenRAC rac2-gc-decomp (GPL-3.0)
 
-Five C function bodies are taken from OpenRAC's `rac2-gc-decomp`,
+Six C function bodies are taken from OpenRAC's `rac2-gc-decomp`,
 <https://github.com/OpenRAC/rac2-gc-decomp> at commit
-`974302ba936bb455acd78034b58ad4b98bafcc6b` (root `LICENSE`: GNU General Public
-License, version 3), with the authors' permission (RULING #10405):
+`974302ba936bb455acd78034b58ad4b98bafcc6b`, or at the commit the row names
+(root `LICENSE` at both: GNU General Public License, version 3), with the
+authors' permission (RULING #10405):
 
 | Here | Upstream file | Upstream name |
 |---|---|---|
 | `func_00131850`, `func_00131908` in `going-decompiled/src/usa/cod/0314C0.c` | `src/core/00131780.c` (from rac1-decomp `src/core/0012CC90.c`) | same names (v1.01 addresses equal v2.00 here) |
 | `MatrixToEulerAngles` in `going-decompiled/src/usa/text/1A8180.c` | `src/game/002AA800.c` | `func_002AB6D8` |
 | `InitMenuBgImageBuffers`, `func_002DCDC0` in `going-decompiled/src/usa/text/1D54C0.cpp` | `src/game/002D5E98.c` | `func_002DA238`, `func_002DC090` |
+| `IpuGetBits` in `going-decompiled/src/usa/cod/022FA8.c` | `src/core/0012C508.c` at commit `8b490f56b8e46a1b749b54fd898946a4f09c1cca` (from rac1-decomp `src/core/00125630.c`) | `func_0012C878` (rac1-decomp `func_00128A58`) |
 
 This project is `GPL-2.0-or-later`; the GPL-3.0 text of these bodies is
 combined into it under the "or later" grant. Any wider licensing question is
