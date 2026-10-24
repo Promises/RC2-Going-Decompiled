@@ -4939,10 +4939,13 @@ void func_0012DC50(IpuDecoder *dec, s32 frame, s32 last) {
     }
 }
 
-/* _dispRefImageField, the field-picture twin of _dispRefImage: adapted from
+/* Upstream preamble (OpenRAC rac2-gc-decomp @d43c3b99, kept as their testimony):
+   _dispRefImageField, the field-picture twin of _dispRefImage: adapted from
    Lombyte (MIT) src/sdk/library/disprefimagefield.c. The unit saves $s0..$s6
    and $ra in 16-byte slots while the stores stay `sd`, the same profile as the
-   neighbouring func_0012D808, so it is built with `sdk -O2 -g2 -gstabs`.
+   neighbouring func_0012D808 (true per the ROM). Upstream builds it with
+   `sdk -O2 -g2 -gstabs`; here it is built on this unit's plain sdk29 -O2 -G0
+   arm (task #2209).
    Lombyte's names map to RAC2 as: _getPtsDtsFlags = func_0012DAC0,
    _isOutSizeOK = func_0012D768, _cpr8 = func_0012D808,
    _csc_storeRefImage = func_0012E608, FinishMpegReferenceImage = func_0012DA98. */
