@@ -120,9 +120,9 @@
 - **OpenRAC — `rac2-gc-decomp`, commit `d43c3b99`, s136os bodies** (GPL-3.0)
   <https://github.com/OpenRAC/rac2-gc-decomp> at commit `d43c3b99b984fb63556c844a21ee99e8e31d2deb`
 
-  Three engine C bodies, adopted with the authors' permission (held by the
+  Four engine C bodies, adopted with the authors' permission (held by the
   operator, RULING #10405) and re-checked byte-exact against our v2.00 ROM on
-  the s136os arm (tasks #2207 and #2218). Contributors: ThorpenCodes and
+  the s136os arm (tasks #2207, #2217 and #2218). Contributors: ThorpenCodes and
   Flavius. Each doc comment
   carries the `Source:` line, which names every change beyond extern spellings.
 
@@ -140,6 +140,12 @@
     are respelled `long` (128-bit on s136, 64-bit upstream), the upstream
     forward declaration is dropped, and the signature takes our shared
     prototype (task #2218).
+  - **`func_003011C0`** (`0x003011C0`, the turret-registry target ranking) in
+    `going-decompiled/src/usa/text/1FFBA0.cpp`, from `src/game/002FC8D0.c`
+    (`func_00300330`, author commit `f06fefe2`, ThorpenCodes), with its
+    `State00300330` typedef. ADAPTED: the callee and the table-origin spelling
+    are ours (their `D_00190000 - 0x6160` origin is our symbol, so the reloc
+    symbol and addend move; linked bytes identical) (task #2217).
 
 - **Lombyte** (MIT, © 2026 Mateusz Kłysz)
   <https://github.com/mateuszklysz/Lombyte> at commit `2c4452dd03f5f7ebb2868dbe073ccdb1afb27f61`
