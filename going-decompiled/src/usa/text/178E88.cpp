@@ -2962,39 +2962,50 @@ void func_0027F208(s32 y0, s32 y1, s32 x0, s32 x1, s32 colorHi, s32 colorLo) {
 }
 #endif
 
-/* func_0027F348 (DrawShadowedBoxOutline) - draws a drop-shadow-style box frame around
- * the rect y=[y0,y1] x=[x0,x1]: first a solid fill of the rect itself (color's alpha
- * byte preserved, low bits forced to 4), then eight thin offset bars (each a 2-px-wide
- * edge/corner segment nudged by +/-1..5) forming the outlined + shadowed border. All
- * nine draws go through the screen-rect-fill primitive func_0027E4D0.
+/**
+ * func_0027F348 (DrawShadowedBoxOutline) — draw a drop-shadow-style box frame
+ * around the rect y=[x,y] x=[z,w] (upstream's parameter names; func_0027E4D0
+ * takes (y0, y1, x0, x1, color)). First a solid fill of the rect itself with v's
+ * alpha byte kept and the low bits forced to 4, then eight thin offset bars
+ * (2-px edge/corner segments nudged by +/-1..5) in the full colour v, forming
+ * the outlined and shadowed border. All nine draws go through the screen-rect
+ * fill primitive func_0027E4D0. Returns nothing.
  *
- * UN-PARK of a premature #70: the park cited "vertex/packet build + func_0027E4D0 sig
- * unconfident", but there is NO vertex build here (that lives inside func_0027E4D0,
- * declared line 1363 as (y0,y1,x0,x1,color)) - this body is just nine calls with plain
- * int offsets. Ghidra dropped the first (fill) call's args; recovered from the .s:
- * func_0027E4D0(y0,y1,x0,x1,(color & 0xFF000000) | 4). Engine region - faithful #else. */
-/* TODO(match) t493: sdk29 56.19% / engine96 38.44% (unit objdiff, objdiff_build.sh +
- * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
- * every other remaining arm). Residual on the better arm (sdk29): SIBCALL (first differing insn:
- * ROM `addiu sp,sp,-96` vs built `addiu sp,sp,-176`). Levers: sibcall guard RUN: sdk29 58.12% /
- * engine96 45.98%; engine96 with sched1 MEASURED (flag not landed): 42.05%. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027F348);
+ * Non-obvious: the colour parameter is an int, sign-extended into
+ * func_0027E4D0's 64-bit colour argument; with it spelled u64 (as our earlier
+ * #else had it) or the callee's fifth parameter spelled int, s136 emits 96
+ * words against the ROM's 97, and with the callee's spelled
+ * `unsigned long long` (128-bit on s136) 100 (FACT #11295).
+ *
+ * MATCHED on the s136os arm (SN 2.95.3 v1.36 cc1plus -fopt-stack, the unit's
+ * -fno-gcse pin unchanged; row in tools/ee/s136os_functions.txt), spliced over
+ * S136OS_SLOT by tools/ee/s136os_splice.sh. There is no asm fallback: a build
+ * that skips the splice drops the function. On native it is plain C.
+ * Device-free: no volatile, no register pin, no inline asm. Supersedes the
+ * t493 #else (sdk29 56.19%, unit objdiff).
+ *
+ * Source: OpenRAC/rac2-gc-decomp @d43c3b99b984fb63556c844a21ee99e8e31d2deb (GPL-3.0, adopted with the authors' permission per RULING #10405), src/game/0027B948.c, func_0027ECC8 (v1.01; author commit 4a78f7b7, Flavius), C body adopted verbatim apart from the callee spelling (their func_0027DE50 = func_0027E4D0, keeping our u64 fifth parameter, which is their `unsigned long`) and our symbol name; GATE_EVIDENCE (task #2216)
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0027F348)
+S136OS_SLOT(func_0027F348);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern void func_0027E4D0(s32 y0, s32 y1, s32 x0, s32 x1, u64 color);
 /* (end of this body's declarations) */
-void func_0027F348(s32 y0, s32 y1, s32 x0, s32 x1, u64 color) {
-    func_0027E4D0(y0, y1, x0, x1, (color & 0xFF000000) | 4);
-    func_0027E4D0(y0 - 1, y0 + 1, x0 + 3, x1 + 5, color);
-    func_0027E4D0(y0 - 3, y0 - 5, x0 - 1, x1 - 3, color);
-    func_0027E4D0(y0 - 5, y1 - 3, x0 - 1, x0 + 1, color);
-    func_0027E4D0(y0 + 3, y1 + 1, x0 - 3, x0 - 5, color);
-    func_0027E4D0(y1 - 1, y1 + 1, x0 - 3, x1 - 3, color);
-    func_0027E4D0(y1 + 3, y1 + 5, x0 + 3, x1 + 1, color);
-    func_0027E4D0(y0 + 3, y1 + 3, x1 - 1, x1 + 1, color);
-    func_0027E4D0(y0 + 1, y1 - 3, x1 + 3, x1 + 5, color);
+void func_0027F348(int x, int y, int z, int w, int v)
+{
+    int c = (v & 0xFF000000) | 4;
+
+    func_0027E4D0(x, y, z, w, c);
+    func_0027E4D0(x - 1, x + 1, z + 3, w + 5, v);
+    func_0027E4D0(x - 3, x - 5, z - 1, w - 3, v);
+    func_0027E4D0(x - 5, y - 3, z - 1, z + 1, v);
+    func_0027E4D0(x + 3, y + 1, z - 3, z - 5, v);
+    func_0027E4D0(y - 1, y + 1, z - 3, w - 3, v);
+    func_0027E4D0(y + 3, y + 5, z + 3, w + 1, v);
+    func_0027E4D0(x + 3, y + 3, w - 1, w + 1, v);
+    func_0027E4D0(x + 1, y - 3, w + 3, w + 5, v);
 }
 #endif
 
