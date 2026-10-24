@@ -198,7 +198,7 @@ case "$REGION/$UNIT" in
   usa/text/1EFFC0) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # TILE B tfrag/tie draw + vendor shop + GS/VIF
   usa/text/1FCF48) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # frame-arena/render-task-list sub-TU: the ROM stores g_sceneArenaCursor, g_frameArenaFlip and g_renderTaskWorkBuf %gp_rel, which cc1 cannot emit at -G0 (task #889)
   usa/text/183558) GFLAG="-G8";; # math C-helper band: -G8 so the ROM's %gp_rel store of g_bProgressiveScan is reachable; measured harmless to the unit's existing C (task #889)
-  usa/text/1FFBA0) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # TILE B bolt economy + turret weapon
+  usa/text/1FFBA0) GFLAG="-G8"; CC1EXTRA="-fno-gcse"; S136EXTRA="";; # TILE B bolt economy + turret weapon. S136EXTRA: the s136os arm compiles at the -O2 default (RULING #9491 shape, task #2217, FACT #11295); the 2.9 compile keeps -fno-gcse
   usa/text/24D728) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # TILE D GUI/camera helpers
   # EU TEXT RE-TILE (Phase A, 2026-06-14): EU twins of the 11 USA text c-units.
   # Each EU unit is named text/<eu-fileoff> and mirrors its USA sibling's GFLAG.

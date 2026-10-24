@@ -7,7 +7,8 @@
  * the water-pool / hero-ground-moby / moby-spawn clusters that head the unit.
  *
  * Built at -O2 -G8 -fno-gcse (per-unit GFLAG/CC1EXTRA in objdiff_build.sh /
- * diff.sh) — the later-SN-cc1 TU model. Extern sizing rules (as in the sibling
+ * diff.sh) — the later-SN-cc1 TU model. The s136os rows compile at -O2 -G8
+ * with gcse ON (S136EXTRA="", task #2217). Extern sizing rules (as in the sibling
  * carve units): size <= 8 -> %gp_rel small-data; size >= 16 -> lui/%lo absolute.
  *
  * The unit's c-range stops at 0x301338. The tail (0x301338..0x30808F) is the
@@ -134,7 +135,6 @@ extern void UpdateMobyBSphereAndGrid(void *moby);
 extern void *SetMobyAnimSequence(void *moby, s32 seq, s32 flags);
 extern void func_002AE198(void *a, void *b, void *c, void *d);
 extern void Vec4AddVu0(void *out, void *a, void *b);
-extern f32 Vec3DistSqVu0(void *a, void *b);
 
 /* Reference world point (camera/hero position) the turret targeting sorts by. */
 __asm__(".extern g_heroPos, 16");
@@ -982,51 +982,104 @@ void func_00301190(s32 *state, s32 slot) {
     }
 }
 
-/* Re-rank the turret's active tracer targets: for each occupied slot (entry !=
- * 0, +0x100 flag cleared) compute its squared distance to g_heroPos, then pick
- * the up-to maxTargets (+0x228) nearest still-unclaimed slots into the priority
- * list at +0x200, marking each chosen slot's +0x100 flag. No-op unless the "any
- * active" flag (+0x224) is set.
- * TODO(match): six callee-saves (0x140 frame) + c.lt.s/branch-likely selection
- * loop cc1 schedules differently; the C is functionally faithful. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1FFBA0", func_003011C0);
+/**
+ * func_003011C0 — re-rank the turret registry's tracked targets by distance to
+ * the hero (the sole callee of FlushTurretTracerPool 0x306210, FACT #5891).
+ * `a0` is a 64-slot registry (State00300330): row0[] holds an object pointer
+ * per slot (0 = empty), row1[] a per-slot "claimed" flag, row2[] the output
+ * list, then count (+0x220, occupied slots), flag (+0x224, "any active") and
+ * limit (+0x228, how many to pick). Returns nothing.
+ *
+ * No-op unless flag is set. Pass 1 clears row1[] for every occupied slot and
+ * records the squared distance from g_heroPos to the object's position (+0x10)
+ * via func_00283860, stopping once `count` occupied slots have been seen (the
+ * test runs on every slot, occupied or not). Pass 2 picks, up to min(limit,
+ * count) times, the nearest slot that is occupied and not yet claimed
+ * (9999.0f start bound), copies its pointer into row2[i] and claims it. If no
+ * slot qualifies, best stays -1 and row0[-1]/row1[-1] are read and written,
+ * as in the ROM.
+ *
+ * MATCHED on the s136os arm (SN 2.95.3 v1.36 cc1plus -fopt-stack, gcse ON:
+ * the unit's s136os compile is unpinned, S136EXTRA="" in tools/ee's four flag
+ * tables, while its 2.9 compile keeps -fno-gcse; with -fno-gcse s136 emits 94
+ * words against the ROM's 93, FACT #11295). Row in tools/ee/s136os_functions.txt,
+ * spliced over S136OS_SLOT by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice drops the function. On native it is
+ * plain C. Device-free: no volatile, no register pin, no inline asm. Retires
+ * the earlier #else, whose selection predicate tested the slot word for zero
+ * (inverted against the ROM's row0[k] != 0) and checked count only inside the
+ * occupied branch.
+ *
+ * Source: OpenRAC/rac2-gc-decomp @d43c3b99b984fb63556c844a21ee99e8e31d2deb (GPL-3.0, adopted with the authors' permission per RULING #10405), src/game/002FC8D0.c, func_00300330 (v1.01; author commit f06fefe2, ThorpenCodes), C body and State00300330 typedef adopted verbatim apart from the callee and origin spelling (their func_00282EB0((char *)D_00190000 - 0x6160, ...) = func_00283860((char *)g_heroPos, ...), the same lui 0x19 / addiu -0x6160 = 0x189EA0) and our symbol name; GATE_EVIDENCE (task #2217)
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_003011C0)
+S136OS_SLOT(func_003011C0);
 #else
-void func_003011C0(s32 *state) {
-    f32 distSq[0x40];
-    s32 active;
-    s32 i;
+/* The 64-entry table of the family above: two rows of 64 words, eight more words, and
+   three counters.  (The same table is indexed as words by func_00300280: 0x88 -> 0x220,
+   0x89 -> 0x224.) */
+/* (Upstream comment; their func_00300280 is v1.01, our func_00301110.) */
+typedef struct {
+    int row0[64];
+    int row1[64];
+    int row2[8];
+    int count;
+    int flag;
+    int limit;
+} State00300330;
 
-    if (state[0x89] == 0) {  /* +0x224 "any active" */
+/* Squared 3D distance |origin - point|^2 (VU0), def 183558.c. */
+extern float func_00283860(char *origin, char *point);
+
+void func_003011C0(void *a0) {
+    State00300330 *state = (State00300330 *)a0;
+    float distances[64];
+    int i;
+    int k;
+    int calls;
+    int score;
+    int best;
+    float bestdistance;
+
+    if (state->flag == 0) {
         return;
     }
-    active = 0;
-    for (i = 0; i < 0x40; i++) {
-        if (state[i] != 0) {
-            state[i + 0x40] = 0;  /* clear +0x100 claim flag */
-            active++;
-            distSq[i] = Vec3DistSqVu0(g_heroPos, (u8 *)(s32)state[i] + 0x10);
-            if (active == state[0x88]) {  /* +0x220 count */
-                break;
-            }
+    calls = 0;
+    for (i = 0; i < 64; i++) {
+        if (state->row0[i] != 0) {
+            state->row1[i] = 0;
+            distances[i] = func_00283860((char *)g_heroPos, (char *)(state->row0[i] + 0x10));
+            calls++;
+        }
+        if (calls == state->count) {
+            break;
         }
     }
-    if (state[0x8a] > 0 && state[0x88] > 0) {  /* +0x228 maxTargets */
-        s32 pick = 0;
-        do {
-            s32 best = -1;
-            f32 bestDist = 9999.0f;
-            s32 j;
-            for (j = 0; j < 0x40; j++) {
-                if (distSq[j] < bestDist && state[j + 0x40] == 0 && state[j] == 0) {
-                    bestDist = distSq[j];
-                    best = j;
+    i = 0;
+    if (state->limit <= 0) {
+        return;
+    }
+    if (state->count <= 0) {
+        return;
+    }
+    for (; i < state->limit && i < state->count; i++) {
+        bestdistance = 9999.0f;      /* the retail's 0x461C3C00 */
+        best = -1;
+        score = 0;
+        for (k = 0; score < 64; k++) {
+            float d = distances[k];
+            if (d < bestdistance) {
+                if (state->row1[k] == 0) {
+                    if (state->row0[k] != 0) {
+                        bestdistance = d;
+                        best = score;
+                    }
                 }
             }
-            state[pick + 0x80] = state[best];  /* +0x200 priority list */
-            state[best + 0x40] = 1;            /* mark +0x100 claimed */
-            pick++;
-        } while (pick < state[0x8a] && pick < state[0x88]);
+            score++;
+        }
+        state->row2[i] = state->row0[best];
+        state->row1[best] = 1;
     }
 }
 #endif
