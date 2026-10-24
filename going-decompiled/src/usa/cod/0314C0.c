@@ -423,8 +423,9 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0314C0", _start);
 extern void exit(s32 code);
 
 /**
- * _exitThunk (0x131CA8): the exit thunk abort (0x115E28) and
- * exit_runAtexitHandlers (0x115E90) tail-call. It jumps to exit with status 0,
+ * _exitThunk (0x131CA8): the exit thunk that abort (0x115E28) and
+ * exit_runAtexitHandlers (0x115E90) call with `jal` (a call to a function that
+ * never returns, not a tail call). It jumps to exit with status 0,
  * so the caller's status in $4 is discarded and the program always exits with
  * 0. Two words: cc1 emits the call as a tail jump (`j exit`) with the zero
  * argument in its delay slot, and no frame. Never returns.
@@ -433,7 +434,7 @@ extern void exit(s32 code);
  * `jal _exitThunk`. The old spelling func_00131CA8 (FACT #7337) is no longer
  * referenced by any USA build input.
  *
- * Source: OpenRAC/rac2-gc-decomp @d43c3b99b984fb63556c844a21ee99e8e31d2deb (GPL-3.0, adopted with the authors' permission per RULING #10405), src/core/00131780.c, func_00131CA8 (0x00131CA8; author commit 302ea406, Gianni), C body adopted verbatim with our symbol spellings (func_00131CA8 -> _exitThunk, func_0011FA20 -> exit); byte-exact on our ROM: vmu BYTE IDENTICAL 2/2 words = st_size 8 (1 reloc resolved; base-seeded bit flip rc 1 at 0x131cac), unit objdiff report 100.00% size=8 (objdiff_build.sh + unit_report.sh, clean; base 0.00% with the .NON_MATCHING marker), whole-image cmp 0 under landing_gate usa and eu --strict (task #2208)
+ * Source: OpenRAC/rac2-gc-decomp @d43c3b99b984fb63556c844a21ee99e8e31d2deb (GPL-3.0, adopted with the authors' permission per RULING #10405), src/core/00131780.c, func_00131CA8 (0x00131CA8; author commit 302ea406, Gianni), C body adopted verbatim with our symbol spellings (func_00131CA8 -> _exitThunk, func_0011FA20 -> exit), and the callee prototype respelled to ours (`void func_0011FA20(int)` -> `void exit(s32 code)`: int -> s32 plus a parameter name, byte-neutral; task #2211); byte-exact on our ROM: vmu BYTE IDENTICAL 2/2 words = st_size 8 (1 reloc resolved; base-seeded bit flip rc 1 at 0x131cac), unit objdiff report 100.00% size=8 (objdiff_build.sh + unit_report.sh, clean; base 0.00% with the .NON_MATCHING marker), whole-image cmp 0 under landing_gate usa and eu --strict (task #2208)
  */
 void _exitThunk(void) {
     exit(0);
