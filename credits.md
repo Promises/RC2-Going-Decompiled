@@ -117,6 +117,22 @@
     (`func_0027ECC8`, author commit `4a78f7b7`, Flavius), compiled on the
     s136os arm (task #2216).
 
+- **OpenRAC — `rac2-gc-decomp`, commit `d43c3b99`, s136os bodies** (GPL-3.0)
+  <https://github.com/OpenRAC/rac2-gc-decomp> at commit `d43c3b99b984fb63556c844a21ee99e8e31d2deb`
+
+  Two engine C bodies, adopted with the authors' permission (held by the
+  operator, RULING #10405) and re-checked byte-exact against our v2.00 ROM on
+  the s136os arm (task #2207). Contributor: ThorpenCodes. Each doc comment
+  carries the `Source:` line, which names every change beyond extern spellings.
+
+  Used so far:
+  - **`BuildAttractReelPlaylist`** (`0x0026EC58`) in
+    `going-decompiled/src/usa/text/16E980.c`, from `src/game/0026EA00.c`
+    (`func_0026EC58`, author commit `8850b66a`).
+  - **`ApplyMobyLocalTransformDelta`** (`0x002B4FA8`) in
+    `going-decompiled/src/usa/text/1B4218.cpp`, adapted, from
+    `src/game/002B3868.c` (`func_002B4090`, author commit `019bc7a7`).
+
 - **Lombyte** (MIT, © 2026 Mateusz Kłysz)
   <https://github.com/mateuszklysz/Lombyte> at commit `2c4452dd03f5f7ebb2868dbe073ccdb1afb27f61`
 

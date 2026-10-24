@@ -57,7 +57,8 @@
  * #2049 (its residual was R5900 short-loop nop pads and one store order, not
  * the save stride). For the other 20 (UpdateMobyThreatFlashAndBurst
  * ClassifyTargetProximity BindMobyToParent CalcMobyTargetThreatDist
- * FindTargetInGroup ApplyMobyLocalTransformDelta InitMobySpringFollowState
+ * FindTargetInGroup ApplyMobyLocalTransformDelta [since matched on the s136os
+ * arm from OpenRAC's C, task #2207] InitMobySpringFollowState
  * StepMobySpringFollow RequestGameStateChange UpdateGameState StepMobyMotion
  * UpdateMobyMotionVelocity ResolveMobyMotionCollision ApplyMobyGroundAndEvents
  * ProbeMobyGroundLine ResolveMobySphereCollision UpdateMobyLeanFromTurn
@@ -1090,16 +1091,33 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_0
  * header; kept INCLUDE_ASM permanently. */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B4F80);
 
-/* Apply a moby's local-transform delta (spring-follow position step).
- * WALL: save-layout — 6 callee-saves + $ra at 8-byte spacing, with fp temps
- * and sq/lq 128-bit matrix moves; matching arm stays INCLUDE_ASM, portable #else below.
- *
- * Applies a local rotation delta (rotX/rotY/rotZ) to the moby's orientation (euler at
- * +0xF0) and shifts its position (+0x10) so the local offset `posDelta` stays fixed in
- * world space across the rotation: transforms the offset by the pre- and post-delta
- * orientation matrices and adds the difference to the position (a pivot correction). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", ApplyMobyLocalTransformDelta);
+/* Apply a local rotation delta to a moby about a fixed local pivot.
+ *   self:  the moby (euler orientation at +0xF0, position at +0x10).
+ *   point: the local-space pivot offset that stays fixed in world space.
+ *   x, y, z: the rotation delta, as euler angles.
+ * Builds the orientation matrix from the moby's euler angles and transforms
+ * `point` by it; composes that matrix with the delta's matrix and transforms
+ * `point` again; adds (before - after) to the position, so the pivot does not
+ * move; and writes the composed matrix back as the moby's euler angles.
+ * MATCHED on the s136os arm (task #2207), not by cc1 2.9 (save-layout: 6
+ * callee-saves + $ra at 8-byte spacing). No device. GUARD: compiled alone by
+ * SN 2.95.3 v1.36 -fopt-stack (cc1plus, this unit's S136EXTRA="") and spliced
+ * over the S136OS_SLOT line (tools/ee/s136os_splice.sh); plain C on native.
+ * Source: OpenRAC/rac2-gc-decomp @d43c3b99b984fb63556c844a21ee99e8e31d2deb
+ * (GPL-3.0, adopted with the authors' permission per RULING #10405),
+ * src/game/002B3868.c, func_002B4090 (v1.01 address; author commit 019bc7a7,
+ * ThorpenCodes). ADAPTED: the body's statements and the PoseWorkspace layout
+ * are theirs, with our callee spellings (their func_00283410 = func_00283DC0,
+ * func_002830C0 = func_00283A70, func_00283788 = MatrixMultiplyVu0,
+ * func_00282CF0 = Vec4SubVu0, func_00282CC0 = Vec4AddVu0, func_002AB6D8 =
+ * MatrixToEulerAngles); changed from theirs: (a) each call argument is cast to
+ * our Vec4 * prototypes, which this C++ unit declares once with C linkage and
+ * cannot redeclare with their void * / float * types; (b) PoseVector128 has a
+ * TARGET_NATIVE stand-in (a 16-byte aligned struct; gcc -m32 has no
+ * mode(TI)), the 16E980.c u_long128 precedent; the EE arms keep their
+ * `int __attribute__((mode(TI)))`. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_ApplyMobyLocalTransformDelta)
+S136OS_SLOT(ApplyMobyLocalTransformDelta);
 #else
 extern void func_00283DC0(Vec4 *destMat, Vec4 *euler);       /* 0x283DC0 build a matrix from euler angles */
 extern void func_00283A70(Vec4 *dst, Vec4 *vec, Vec4 *mat);  /* 0x283A70 transform a vector by a matrix */
@@ -1107,28 +1125,33 @@ extern void MatrixMultiplyVu0(Vec4 *dst, Vec4 *a, Vec4 *b);  /* dst = a * b */
 extern void MatrixToEulerAngles(Vec4 *mat, Vec4 *dstEuler);
 extern void Vec4SubVu0(Vec4 *dst, Vec4 *a, Vec4 *b);         /* dst = a - b */
 extern void Vec4AddVu0(Vec4 *dst, Vec4 *a, Vec4 *b);         /* dst = a + b */
-void ApplyMobyLocalTransformDelta(Moby *moby, Vec4 *posDelta, f32 rotX, f32 rotY, f32 rotZ) {
-    Vec4 delta = *posDelta;
-    Vec4 mat[4];         /* current orientation matrix, then combined with the delta */
-    Vec4 deltaMat[4];    /* rotation matrix built from (rotX,rotY,rotZ) */
-    Vec4 euler;          /* {rotX,rotY,rotZ} */
-    Vec4 offsetBefore;   /* posDelta transformed by the pre-delta orientation */
-    Vec4 offsetAfter;    /* posDelta transformed by the post-delta orientation */
-    Vec4 pivotShift;     /* offsetBefore - offsetAfter */
+#ifdef TARGET_NATIVE
+typedef struct { unsigned long long _q[2]; } __attribute__((aligned(16))) PoseVector128;
+#else
+typedef int PoseVector128 __attribute__((mode(TI)));
+#endif
+typedef struct {
+    PoseVector128 initial, previous, current, delta;
+    PoseVector128 matrix[4];
+    float angles[4];
+    PoseVector128 change[4];
+} PoseWorkspace;
 
-    func_00283DC0(mat, (Vec4 *)((u8 *)moby + 0xF0));
-    func_00283A70(&offsetBefore, &delta, mat);
-
-    ((f32 *)&euler)[0] = rotX;
-    ((f32 *)&euler)[1] = rotY;
-    ((f32 *)&euler)[2] = rotZ;
-    func_00283DC0(deltaMat, &euler);
-    MatrixMultiplyVu0(mat, mat, deltaMat);
-    func_00283A70(&offsetAfter, &delta, mat);
-
-    Vec4SubVu0(&pivotShift, &offsetBefore, &offsetAfter);
-    Vec4AddVu0((Vec4 *)((u8 *)moby + 0x10), (Vec4 *)((u8 *)moby + 0x10), &pivotShift);
-    MatrixToEulerAngles(mat, (Vec4 *)((u8 *)moby + 0xF0));
+void ApplyMobyLocalTransformDelta(char *self, PoseVector128 *point, float x, float y, float z)
+{
+    PoseWorkspace work;
+    work.initial = *point;
+    func_00283DC0((Vec4 *)work.matrix, (Vec4 *)(self + 0xF0));
+    func_00283A70((Vec4 *)&work.previous, (Vec4 *)&work.initial, (Vec4 *)work.matrix);
+    work.angles[0] = x;
+    work.angles[1] = y;
+    work.angles[2] = z;
+    func_00283DC0((Vec4 *)work.change, (Vec4 *)work.angles);
+    MatrixMultiplyVu0((Vec4 *)work.matrix, (Vec4 *)work.matrix, (Vec4 *)work.change);
+    func_00283A70((Vec4 *)&work.current, (Vec4 *)&work.initial, (Vec4 *)work.matrix);
+    Vec4SubVu0((Vec4 *)&work.delta, (Vec4 *)&work.previous, (Vec4 *)&work.current);
+    Vec4AddVu0((Vec4 *)(self + 0x10), (Vec4 *)(self + 0x10), (Vec4 *)&work.delta);
+    MatrixToEulerAngles((Vec4 *)(float *)work.matrix, (Vec4 *)(self + 0xF0));
 }
 #endif
 

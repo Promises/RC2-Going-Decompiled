@@ -37,10 +37,11 @@
  * 05_all29_report.txt, 07_all96_report.txt, classes 08/09_classify*.txt). None
  * reached 100 on either arm; sdk29 >= engine96 on 31 of 40, but 32 of those are
  * PACKED-SAVE-walled there. The wall is a property of the 2.9 arm only: the
- * s136os arm (SN 1.36 -fopt-stack) has the ROM's 8-byte slots, and twenty-two of
+ * s136os arm (SN 1.36 -fopt-stack) has the ROM's 8-byte slots, and twenty-three of
  * these arms are matched there (FACTs #8830, #9658, #9707, #9856, #10000,
  * #10023, UpdateScreenFadeBlack from its former MATCH_ guard (task #2092),
- * func_00273D20 (task #2101) and func_00271140 (task #2116); the s136os
+ * func_00273D20 (task #2101), func_00271140 (task #2116) and
+ * BuildAttractReelPlaylist (OpenRAC's C, task #2207); the s136os
  * re-screen of the remaining arms is NOTE #9857, with func_00270D60 and
  * func_00270B68 taken further in NOTEs #9994 and #10024, func_00273D20's NOTE
  * #9998 ladder closed by task #2101 and func_00271140's NOTE #10031 ladder by
@@ -50,7 +51,7 @@
  *   ShowSplashImage             88.84  86.76  3g/0f   PACKED-SAVE,GPREL
  *   func_0026EAC8               91.96  88.10  2g/0f   PACKED-SAVE,SIBCALL,GPREL
  *   func_0026EB98               67.51  56.13  4g/0f   PACKED-SAVE,LIKELY-
- *   BuildAttractReelPlaylist    70.34  68.39  7g/0f   PACKED-SAVE,MULT
+ *   BuildAttractReelPlaylist    70.34  68.39  7g/0f   PACKED-SAVE,MULT (s136os: matched, task #2207)
  *   func_0026FC88               64.78  29.62  6g/0f   PACKED-SAVE,MULT
  *   func_0026FE58                5.19   5.19  2g/0f   PACKED-SAVE,-
  *   DebugPrintStub              64.29  62.29  0g/0f   -
@@ -449,82 +450,81 @@ void func_0026EB98(s32 *a, s32 *b, s32 *c) {
 }
 #endif
 
-/* BuildAttractReelPlaylist: seed the RNG from the RTC (sceCdReadClock) and build
- * a randomized attract-reel playlist. The ROM saves six callee-saves at 8-byte
- * slot spacing (the 0x20-vs-0x10 packed-save frame on the cc1 2.9 arm) and
- * carries the multi-field RNG-seed mult chain. Unmatched; the save layout is a
- * cc1 2.9 property and not the reason on the s136os arm, whose 8-byte stride
- * is the ROM's (FACT #9873 / NOTE #9871). The s136os arm was screened only as
- * written (NOTE #9857 at 75e6b6c1: 110 built vs 100 ROM words, a ranking
- * screen) and not retried. The TARGET_NATIVE #else is faithful coverage:
- * it seeds srand from (sec+1)(hour+1)(min+1)(day+1)(month+1) of the RTC clock,
- * then fills the reel-playlist struct with three randomized slot orderings
- * (func_0026EB98) offset by 0xB9 / and a coin-flipped 0xB3<->0xB6 pair. */
-#ifdef TARGET_NATIVE
-extern s32  sceCdReadClock(void *clock);
-extern void srand(u32 seed);
-void BuildAttractReelPlaylist(void *reelState) {
-    u8 *out = (u8 *)reelState;
-    u8  clk[8];
-    s32 vals[3];
-    u16 r0, r1, r2;
-    s32 base2, base3;
-
-    sceCdReadClock(clk);
-    srand((clk[1] + 1) * (clk[3] + 1) * (clk[2] + 1) * (clk[5] + 1) * (clk[6] + 1));
-
-    /* group 1: base 0xB9 (each value written to two slots) */
-    func_0026EB98(&vals[0], &vals[1], &vals[2]);
-    r0 = (u16)vals[0] + 0xB9;
-    r1 = (u16)vals[1] + 0xB9;
-    r2 = (u16)vals[2] + 0xB9;
-    *(u16 *)(out + 0x20) = r0;
-    *(u16 *)(out + 0x28) = r1;
-    *(u16 *)(out + 0x30) = r2;
-    *(u16 *)(out + 0x08) = r0;
-    *(u16 *)(out + 0x10) = r1;
-    *(u16 *)(out + 0x18) = r2;
-
-    if (GetRandomInt(2) == 0) {
-        base2 = 0xB6;
-        base3 = 0xB3;
-    } else {
-        base2 = 0xB3;
-        base3 = 0xB6;
-    }
-
-    /* group 2: base base2 (each value written to three slots) */
-    func_0026EB98(&vals[0], &vals[1], &vals[2]);
-    r0 = (u16)vals[0] + base2;
-    r1 = (u16)vals[1] + base2;
-    r2 = (u16)vals[2] + base2;
-    *(u16 *)(out + 0x22) = r0;
-    *(u16 *)(out + 0x26) = r1;
-    *(u16 *)(out + 0x2C) = r2;
-    *(u16 *)(out + 0x02) = r0;
-    *(u16 *)(out + 0x06) = r1;
-    *(u16 *)(out + 0x0C) = r2;
-    *(u16 *)(out + 0x12) = r0;
-    *(u16 *)(out + 0x16) = r1;
-    *(u16 *)(out + 0x1C) = r2;
-
-    /* group 3: base base3 */
-    func_0026EB98(&vals[0], &vals[1], &vals[2]);
-    r0 = (u16)vals[0] + base3;
-    r1 = (u16)vals[1] + base3;
-    r2 = (u16)vals[2] + base3;
-    *(u16 *)(out + 0x24) = r0;
-    *(u16 *)(out + 0x2A) = r1;
-    *(u16 *)(out + 0x2E) = r2;
-    *(u16 *)(out + 0x04) = r0;
-    *(u16 *)(out + 0x0A) = r1;
-    *(u16 *)(out + 0x0E) = r2;
-    *(u16 *)(out + 0x14) = r0;
-    *(u16 *)(out + 0x1A) = r1;
-    *(u16 *)(out + 0x1E) = r2;
-}
+/* BuildAttractReelPlaylist: seed the RNG from the RTC and fill the 24-entry
+ * attract-reel playlist (shorts out[1..24]; out[0] is never written).
+ *   out: playlist array; the frontend idle path enqueues out[1].
+ * Seed = (sec+1)(hour+1)(min+1)(day+1)(month+1) of sceCdReadClock's sceCdCLOCK
+ * bytes 1,3,2,5,6. Then three func_0026EB98 permutations of {0,1,2}: the first,
+ * +0xB9, fills every 4th slot (out[4,8,12] and again out[16,20,24]); the other
+ * two, offset by a coin-flipped 0xB3/0xB6 pair (GetRandomInt(2) nonzero puts
+ * 0xB3 first), each fill nine slots, read back from the first three stored.
+ * MATCHED on the s136os arm (task #2207), not by cc1 2.9 (packed-save frame).
+ * No device. GUARD: compiled alone by SN 2.95.3 v1.36 -fopt-stack and spliced
+ * over the S136OS_SLOT line (tools/ee/s136os_splice.sh); plain C on native.
+ * Source: OpenRAC/rac2-gc-decomp @d43c3b99b984fb63556c844a21ee99e8e31d2deb
+ * (GPL-3.0, adopted with the authors' permission per RULING #10405),
+ * src/game/0026EA00.c, func_0026EC58 (author commit 8850b66a, ThorpenCodes;
+ * same address on their us2 = v2.00 build), C body verbatim apart from our
+ * callee spellings (their func_001256D8 = sceCdReadClock, func_001163A0 =
+ * srand, func_002A77E0 = GetRandomInt). Their file defines func_0026EB98
+ * above it; here its prototype and GetRandomInt's are declared beside the body,
+ * since the slot guards hide the unit's own: with implicit declarations the
+ * s136 compile reorders four stores (26 lines of difference, task #2207). The
+ * `__attribute__((sda))` in their file sits only on other functions' externs
+ * and is not carried. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_BuildAttractReelPlaylist)
+S136OS_SLOT(BuildAttractReelPlaylist);
 #else
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", BuildAttractReelPlaylist);
+typedef struct { char b[8]; } CdClock;
+extern int sceCdReadClock(CdClock *);
+extern void srand(unsigned int);
+extern int GetRandomInt(int);
+extern void func_0026EB98(int *first, int *second, int *third);
+void BuildAttractReelPlaylist(unsigned short *out)
+{
+    CdClock clock;
+    int first, second, third;
+    int low, high;
+    int seed;
+    sceCdReadClock(&clock);
+    seed = (unsigned char)clock.b[1] + 1;
+    seed *= (unsigned char)clock.b[3] + 1;
+    seed *= (unsigned char)clock.b[2] + 1;
+    seed *= (unsigned char)clock.b[5] + 1;
+    seed *= (unsigned char)clock.b[6] + 1;
+    srand(seed);
+    func_0026EB98(&first, &second, &third);
+    out[0x20/2] = out[0x08/2] = (unsigned short)first + 0xb9;
+    out[0x28/2] = out[0x10/2] = (unsigned short)second + 0xb9;
+    out[0x30/2] = out[0x18/2] = (unsigned short)third + 0xb9;
+    if (GetRandomInt(2)) {
+        low = 0xb3;
+        high = 0xb6;
+    } else {
+        low = 0xb6;
+        high = 0xb3;
+    }
+    func_0026EB98(&first, &second, &third);
+    out[0x02/2] = (unsigned short)first + low;
+    out[0x06/2] = (unsigned short)second + low;
+    out[0x0c/2] = (unsigned short)third + low;
+    out[0x12/2] = out[0x02/2];
+    out[0x16/2] = out[0x06/2];
+    out[0x1c/2] = out[0x0c/2];
+    out[0x22/2] = out[0x02/2];
+    out[0x26/2] = out[0x06/2];
+    out[0x2c/2] = out[0x0c/2];
+    func_0026EB98(&first, &second, &third);
+    out[0x04/2] = (unsigned short)first + high;
+    out[0x0a/2] = (unsigned short)second + high;
+    out[0x0e/2] = (unsigned short)third + high;
+    out[0x14/2] = out[0x04/2];
+    out[0x1a/2] = out[0x0a/2];
+    out[0x1e/2] = out[0x0e/2];
+    out[0x24/2] = out[0x04/2];
+    out[0x2a/2] = out[0x0a/2];
+    out[0x2e/2] = out[0x0e/2];
+}
 #endif
 
 /* LoadLevelAndInitHealth: large level-load + health/stat init driver. The ROM
