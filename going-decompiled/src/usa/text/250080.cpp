@@ -11,7 +11,8 @@
  *
  * The matcher builds THIS unit at -O2 -G8 -fno-gcse (per-unit GFLAG/CC1EXTRA
  * override in tools/ee/objdiff_build.sh / diff.sh / build.sh) — same
- * later-SN-cc1 TU model as the other gameplay-text units.
+ * later-SN-cc1 TU model as the other gameplay-text units. The s136os rows
+ * compile at -O2 -G8 with gcse ON (S136EXTRA="", task #2218).
  *
  * -G8 extern-sizing rules (same as text/1907F0 / text/198FA0):
  *   - a complete extern object of size <= 8 bytes is placed in small data
@@ -1938,83 +1939,82 @@ s32 func_00352000(u8 *obj) {
 }
 #endif
 
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00352058);
+/**
+ * func_00352058 — retire the part of a DMA-add command that the bitstream
+ * sub-object's slot ring has already consumed (the first callee of
+ * func_003521B0, under the queue sema). `owner` is the embedded bitstream/
+ * IPU-DMA sub-object (FmvStream+0x48: slot-ring base +0x50, ring length +0x54,
+ * live-slot count +0x58, write cursor +0x5C, sector count +0x08); `req` is the
+ * command, the same {first, second, offset, count} 0x18-byte shape as a ring
+ * slot (Transfer_3518F0). Always returns 0.
+ *
+ * Starts at the oldest live slot ((write - live + len) % len) and, while a slot
+ * has bytes left and the command still has a count, checks whether the
+ * command's window overlaps the slot modulo the ring unit (sectors << 11). On
+ * overlap it trims the slot by the overlapping byte count, advances its offset
+ * modulo the unit, and when the slot empties it resets it to the {-1, -1, 0, 0}
+ * sentinel (only if its first tag was not already negative) and drops the live
+ * count, clamped at 0. The walk stops at the first non-overlapping slot. Each
+ * `%` carries cc1's divide-by-zero trap; ring_mod is upstream's helper, whose
+ * inlined trap tests against $0 as the ROM's does.
+ *
+ * MATCHED on the s136os arm (SN 2.95.3 v1.36 cc1plus -fopt-stack, gcse ON:
+ * the unit's s136os compile is unpinned, S136EXTRA="" in tools/ee's four flag
+ * tables, while its 2.9 compile keeps -fno-gcse; with -fno-gcse s136 emits 86
+ * words against the ROM's 85, FACT #11295). Row in tools/ee/s136os_functions.txt,
+ * spliced over S136OS_SLOT by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice drops the function. On native it is
+ * plain C. Device-free: no volatile, no register pin, no inline asm. Retires
+ * the earlier #else (sdk29 83.40%, task #513; 61/85 and 64/85 on s136, NOTEs
+ * #9958/#9836).
+ *
+ * Source: OpenRAC/rac2-gc-decomp @d43c3b99b984fb63556c844a21ee99e8e31d2deb (GPL-3.0, adopted with the authors' permission per RULING #10405), src/game/003512B8.c, func_00351310 (v1.01; author commit 455cde53, Flavius), C body, Transfer_3518F0 typedef and ring_mod helper ADAPTED: two `long long` respelled `long` (the typedef's `unsigned long long first, second` -> `unsigned long`, and the cast `(long long)slot->first` -> `(long)`), because `long long` is 128-bit on s136 and 64-bit on upstream's compiler (FACT #11295); the prototype takes our shared declaration (u8 *, u8 *), the command pointer converted once into `message`; and our symbol name; GATE_EVIDENCE (task #2218)
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00352058)
+S136OS_SLOT(func_00352058);
 #else
-/* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 83.40% / engine96 59.19%. Residual: REGALLOC+BRANCH-SHAPE on sdk29 (a2/a3 colouring, `beqz t6`/`bnez` inversion, div-guard placement); not iterated (99 insns). */
-/* TODO(match): functional equivalent - not byte-exact; multiple div ops each
-   guarded by a branch-likely beql/break div-by-zero check (the div-expansion-
-   scheduling + branch-likely wall, same family as func_00351328). Revisit with
-   the gameplay-TU compiler.
+typedef struct { unsigned long first, second; int offset, count; } Transfer_3518F0;
 
-   NOTE(type): `obj` here is NOT a FmvStream — it is the *embedded bitstream/
-   IPU-DMA sub-object* (the one a FmvStream holds at +0x48, constructed by
-   FmvBitstreamObjInit and reached by the func_00352590/B0/680 forwarders via
-   obj+0x48). Its own field layout (slot-ring base +0x50, ring length +0x54,
-   read/write cursors +0x58/+0x5C, sector size +0x08) starts at offset 0, so it
-   does not fit FmvStream (0xB8) — left u8* until that sibling type is recovered.
+/* a % b as a helper: once inlined, its zero-divisor check is tested against $0 */
+static inline int ring_mod(int a, int b) { return a % b; }
 
-   ACK consumed DMA-tag ranges against the IPU frame-slot ring: walks the slot
-   array (slots are 0x18 bytes, base at obj+0x50, ring length obj+0x54, read
-   cursor obj+0x58, write cursor obj+0x5C, sector size obj+0x08*0x800) from the
-   current tail, clamping each slot's remaining length (+0x14) by how much of
-   the request descriptor (req+0x10 base, req+0x14 length) overlaps it modulo
-   the sector size, retiring fully-consumed slots and advancing the tail. */
-s32 func_00352058(u8 *obj, u8 *req) {
-    s32 ringLen = *(s32 *)(obj + 0x54);
-    s32 idx = (*(s32 *)(obj + 0x5C) - *(s32 *)(obj + 0x58) + ringLen) % ringLen;
-    s32 sectorSize = *(s32 *)(obj + 8) * 0x800;
-    s32 ok = 1;
+s32 func_00352058(u8 *owner, u8 *req)
+{
+    Transfer_3518F0 *message = (Transfer_3518F0 *)req;
+    char *self = (char *)owner;
+    Transfer_3518F0 *slot;
+    int index = (*(int *)(self + 0x5C) - *(int *)(self + 0x58) + *(int *)(self + 0x54)) %
+                *(int *)(self + 0x54);
+    int unit = *(int *)(self + 0x8) << 11;
+    int go = 1;
 
-    if (*(s32 *)(obj + 0x58) > 0) {
-        u8 *slot = *(u8 **)(obj + 0x50) + idx * 0x18;
-
-        if (*(s32 *)(slot + 0x14) != 0) {
-            s32 reqLen = *(s32 *)(req + 0x14);
-
-            while (reqLen != 0) {
-                s32 slotPos = *(s32 *)(slot + 0x10);
-
-                if ((slotPos + sectorSize - *(s32 *)(req + 0x10)) % sectorSize < reqLen) {
-                    s32 remain = *(s32 *)(slot + 0x14);
-                    s32 take = *(s32 *)(req + 0x10) + reqLen - slotPos;
-
-                    if (remain < take) {
-                        take = remain;
+    if (*(int *)(self + 0x58) > 0) {
+        while (go && (slot = *(Transfer_3518F0 **)(self + 0x50) + index)->count != 0 &&
+                     message->count != 0) {
+            if (ring_mod(slot->offset + unit - message->offset, unit) < message->count) {
+                int take = message->offset + message->count - slot->offset;
+                if (slot->count < take) {
+                    take = slot->count;
+                }
+                slot->offset = (slot->offset + take) % unit;
+                slot->count = slot->count - take;
+                if (slot->count == 0) {
+                    if ((long)slot->first >= 0) {
+                        slot->first = -1;
+                        slot->second = -1;
+                        slot->offset = 0;
+                        slot->count = 0;
                     }
-                    *(s32 *)(slot + 0x14) = remain - take;
-                    *(s32 *)(slot + 0x10) = (slotPos + take) % sectorSize;
-
-                    if (remain - take == 0) {
-                        s32 tail;   /* C89: declare at block top (ee-gcc) */
-                        if (*(s64 *)slot >= 0) {
-                            *(s32 *)(slot + 0x14) = 0;
-                            *(s64 *)slot = -1;
-                            *(s64 *)(slot + 8) = -1;
-                            *(s32 *)(slot + 0x10) = 0;
-                        }
-                        tail = *(s32 *)(obj + 0x58) - 1;
-                        if (tail < 0) {
-                            tail = 0;
-                        }
-                        *(s32 *)(obj + 0x58) = tail;
-                    }
-                } else {
-                    ok = 0;
+                    *(int *)(self + 0x58) = (*(int *)(self + 0x58) - 1 < 0) ?
+                                             0 : *(int *)(self + 0x58) - 1;
                 }
-
-                idx = (idx + 1) % *(s32 *)(obj + 0x54);
-                if (!ok) {
-                    return 0;
-                }
-                slot = *(u8 **)(obj + 0x50) + idx * 0x18;
-                if (*(s32 *)(slot + 0x14) == 0) {
-                    return 0;
-                }
-                reqLen = *(s32 *)(req + 0x14);
+            } else {
+                go = 0;
             }
+            index = (index + 1) % *(int *)(self + 0x54);
         }
     }
+
     return 0;
 }
 #endif

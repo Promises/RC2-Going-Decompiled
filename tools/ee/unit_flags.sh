@@ -33,7 +33,7 @@ unit_flags() {
     */usa/text/198FA0.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse"; S136EXTRA="";; # S136EXTRA: the s136os arm compiles at the -O2 default (RULING #9910, FACT #9896); the 2.9 compile keeps -fno-gcse.
     */usa/text/1A00F0.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
     */usa/text/1A8180.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse -fno-strict-aliasing"; S136EXTRA="-fno-strict-aliasing";; # RULING #9336 (FACTs #9333/#9334): s136os arm drops -fno-gcse only, 2.9 arm keeps both
-    */usa/text/250080.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
+    */usa/text/250080.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse"; S136EXTRA="";; # RULING #9491 shape (task #2218, FACT #11295): s136os arm unpinned, 2.9 arm keeps -fno-gcse
     */usa/text/16E980.c) GFLAG="-G8";;
     */usa/text/248B50.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
     */usa/text/235FE8.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse -fno-strict-aliasing";; # -fsa restores per-store pointer-member reload in GuiElementSetPos/Scale (#75)

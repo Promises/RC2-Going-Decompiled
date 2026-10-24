@@ -666,3 +666,4 @@ usa text/1D54C0 func_002DCDC0
 usa text/178E88 func_0027F348
 usa text/16E980 BuildAttractReelPlaylist
 usa text/1B4218 ApplyMobyLocalTransformDelta
+usa text/250080 func_00352058
