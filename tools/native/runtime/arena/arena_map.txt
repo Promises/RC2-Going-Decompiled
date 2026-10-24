@@ -2,7 +2,7 @@
 # storage symbol: g_dataArena  ==  __gamedata_start (linker)
 # seed: memcpy snapshot[rom_addr] -> g_dataArena[rom_addr - base]
 #       for rom_addr in [base, base+span).
-# base 0x133E70  span 0x14AA90  placed 1670  (const 11)
+# base 0x133E70  span 0x14AA90  placed 1673  (const 11)
 # columns: <symbol> <rom_addr> <arena_offset> [const]
 #   'const' tag = static rodata/string literal (see data_const.txt);
 #   NOT mutable state - the tester's effect-diff must EXCLUDE these.
@@ -1303,6 +1303,8 @@ D_1B1878 0x1B1878 0x7DA08
 D_1B187C 0x1B187C 0x7DA0C
 g_nBoltCounterDisplayed 0x1B18C8 0x7DA58
 g_pSkyShellSpinRates 0x1B1910 0x7DAA0
+g_altTexRegs2 0x1B1930 0x7DAC0
+g_altTexRegs3 0x1B1948 0x7DAD8
 g_rainHeightmapOrigin 0x1B1960 0x7DAF0
 g_rainHeightmapBaseHeight 0x1B1968 0x7DAF8
 g_rainHeightmapCellW 0x1B1990 0x7DB20
@@ -1445,6 +1447,7 @@ g_collHitEventRing 0x1BF180 0x8B310
 g_collTriBuffer 0x1C0180 0x8C310
 g_dirLightMatrices 0x1C26C0 0x8E850
 g_pointLights 0x1C2AC0 0x8EC50
+g_modelTexRegs 0x1C4D40 0x90ED0
 D_001C4EC0 0x1C4EC0 0x91050
 D_1C4EC0 0x1C4EC0 0x91050
 g_mapCache 0x1C4F20 0x910B0

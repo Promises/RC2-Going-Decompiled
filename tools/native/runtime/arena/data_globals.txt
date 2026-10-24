@@ -1221,6 +1221,8 @@ g_activeVu1Program
 g_altGravityEnabled
 g_altGravityPlanar
 g_altGravityPlanarCenter
+g_altTexRegs2
+g_altTexRegs3
 g_anAvailableLevelOrder
 g_areaTable
 g_armorTierMessageTextId
@@ -1451,6 +1453,7 @@ g_mobyTargetGroupDescs
 g_mobyTargetGroupLists
 g_mobyTexVramTable
 g_mobyVuChainCursor
+g_modelTexRegs
 g_museumMenuCursor
 g_musicVolume
 g_nActiveTextTableCount
