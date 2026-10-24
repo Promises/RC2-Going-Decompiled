@@ -80,10 +80,10 @@ the operator's (RULING #8304 defers it until the repository goes public).
 
 ### OpenRAC rac2-gc-decomp at d43c3b99, further bodies (GPL-3.0)
 
-Four C function bodies are taken from OpenRAC's `rac2-gc-decomp`,
+Five C function bodies are taken from OpenRAC's `rac2-gc-decomp`,
 <https://github.com/OpenRAC/rac2-gc-decomp> at commit
 `d43c3b99b984fb63556c844a21ee99e8e31d2deb` (root `LICENSE`: GNU General Public
-License, version 3), with the authors' permission (RULING #10405), tasks #2207, #2208 and #2216:
+License, version 3), with the authors' permission (RULING #10405), tasks #2207, #2208, #2216 and #2218:
 
 | Here | Upstream file | Upstream name |
 |---|---|---|
@@ -91,6 +91,7 @@ License, version 3), with the authors' permission (RULING #10405), tasks #2207, 
 | `func_0027F348` in `going-decompiled/src/usa/text/178E88.cpp` | `src/game/0027B948.c` | `func_0027ECC8` |
 | `BuildAttractReelPlaylist` in `going-decompiled/src/usa/text/16E980.c` | `src/game/0026EA00.c` | `func_0026EC58` |
 | `ApplyMobyLocalTransformDelta` in `going-decompiled/src/usa/text/1B4218.cpp` (adapted) | `src/game/002B3868.c` | `func_002B4090` (v1.01 address) |
+| `func_00352058` in `going-decompiled/src/usa/text/250080.cpp` (adapted: two `long long` respelled `long`, upstream forward declaration dropped, signature takes our shared prototype) | `src/game/003512B8.c` | `func_00351310` |
 
 The GPL-2.0-or-later note in the section above applies to these bodies too.
 

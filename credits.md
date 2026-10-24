@@ -120,9 +120,10 @@
 - **OpenRAC — `rac2-gc-decomp`, commit `d43c3b99`, s136os bodies** (GPL-3.0)
   <https://github.com/OpenRAC/rac2-gc-decomp> at commit `d43c3b99b984fb63556c844a21ee99e8e31d2deb`
 
-  Two engine C bodies, adopted with the authors' permission (held by the
+  Three engine C bodies, adopted with the authors' permission (held by the
   operator, RULING #10405) and re-checked byte-exact against our v2.00 ROM on
-  the s136os arm (task #2207). Contributor: ThorpenCodes. Each doc comment
+  the s136os arm (tasks #2207 and #2218). Contributors: ThorpenCodes and
+  Flavius. Each doc comment
   carries the `Source:` line, which names every change beyond extern spellings.
 
   Used so far:
@@ -132,6 +133,13 @@
   - **`ApplyMobyLocalTransformDelta`** (`0x002B4FA8`) in
     `going-decompiled/src/usa/text/1B4218.cpp`, adapted, from
     `src/game/002B3868.c` (`func_002B4090`, author commit `019bc7a7`).
+  - **`func_00352058`** (`0x00352058`, the FMV DMA-add slot-ring trim) in
+    `going-decompiled/src/usa/text/250080.cpp`, from `src/game/003512B8.c`
+    (`func_00351310`, author commit `455cde53`, Flavius), with its
+    `Transfer_3518F0` typedef and `ring_mod` helper. ADAPTED: two `long long`
+    are respelled `long` (128-bit on s136, 64-bit upstream), the upstream
+    forward declaration is dropped, and the signature takes our shared
+    prototype (task #2218).
 
 - **Lombyte** (MIT, © 2026 Mateusz Kłysz)
   <https://github.com/mateuszklysz/Lombyte> at commit `2c4452dd03f5f7ebb2868dbe073ccdb1afb27f61`
