@@ -153,3 +153,11 @@ usa      func_0028F0D0  0x0028F118  $15,0x7400000000008001  340fe800 000f7bfc 35
 usa      func_0028FFF0  0x00290020  $13,0x7400000000008001  340de800 000d6bfc 35ad8001
 usa      DrawGlowSprites  0x00282E74  $5,0x8000000048          34058000 00052e38 34a50048
 usa      DrawGlowSprites  0x002831A8  $5,0x8000000044          34058000 00052e38 34a50044
+#
+# func_00293760 (text/191238) is compiled from C on the 2.9 arm (-O2 -G8
+# -fno-gcse, task #2164). Its site is the matId == -1 constant
+# 0x80000004CC007FFB, in reorder mode and followed by an `sd`. GNU as gives a
+# 6-word `lui; ori; dsll; ori; dsll; ori` chain; the ROM has Ps2EeAs's 5-word
+# form below at 0x29387C..0x29388C.
+#
+usa      func_00293760  0x0029387C  $4,0x80000004cc007ffb   34048000 00042778 34849980 000424f8 34847ffb
