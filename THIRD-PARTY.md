@@ -78,6 +78,19 @@ This project is `GPL-2.0-or-later`; the GPL-3.0 text of these bodies is
 combined into it under the "or later" grant. Any wider licensing question is
 the operator's (RULING #8304 defers it until the repository goes public).
 
+### OpenRAC rac2-gc-decomp at d43c3b99, `_exitThunk` (GPL-3.0)
+
+One C function body is taken from OpenRAC's `rac2-gc-decomp`,
+<https://github.com/OpenRAC/rac2-gc-decomp> at commit
+`d43c3b99b984fb63556c844a21ee99e8e31d2deb` (root `LICENSE`: GNU General Public
+License, version 3), with the authors' permission (RULING #10405), task #2208:
+
+| Here | Upstream file | Upstream name |
+|---|---|---|
+| `_exitThunk` in `going-decompiled/src/usa/cod/0314C0.c` | `src/core/00131780.c` | `func_00131CA8` |
+
+The GPL-2.0-or-later note in the section above applies to this body too.
+
 ### Lombyte (MIT)
 
 The C body of `_sysbitFlush` in `going-decompiled/src/usa/cod/022FA8.c` is
