@@ -66,13 +66,17 @@
 
 - **OpenRAC — `rac2-gc-decomp`** (GPL-3.0)
   <https://github.com/OpenRAC/rac2-gc-decomp> at commit `974302ba936bb455acd78034b58ad4b98bafcc6b`
-  (and `8b490f56b8e46a1b749b54fd898946a4f09c1cca` where an item says so)
+  (five bodies, task #2159) and at commit `8b490f56b8e46a1b749b54fd898946a4f09c1cca`
+  (two bodies, tasks #2163 and #2164)
 
-  Their decompilation of the RAC2 v1.01 boot. Six C bodies are adopted
-  with the authors' permission (held by the operator, RULING #10405), each
+  Their decompilation of the RAC2 v1.01 boot. Seven C bodies are adopted, with
+  the authors' permission (held by the operator, RULING #10405), each
   re-checked byte-exact against our v2.00 ROM and with their v1.01 extern
-  spellings replaced by our symbols (tasks #2159, #2163). Each doc comment
-  carries the `Source:` line, which names every change beyond those spellings.
+  spellings replaced by our symbols. Five are verbatim apart from spellings
+  (task #2159); `IpuGetBits` takes our shared prototype (task #2163) and
+  `func_00293760` is adapted (`long` changed to `s64`, task #2164). Each doc
+  comment carries the `Source:` line, which names the commit that body came
+  from and what was changed.
 
   Used so far:
   - **`func_00131850` and `func_00131908`** (`0x00131850`, `0x00131908`) in
@@ -90,6 +94,11 @@
     `8b490f56b8e46a1b749b54fd898946a4f09c1cca`. This is rac1-decomp's own C
     (`src/core/00125630.c`: `func_00128A58`), carried into rac2-gc-decomp; the
     signature takes our shared prototype (task #2163).
+  - **`func_00293760`** (`0x00293760`) in
+    `going-decompiled/src/usa/text/191238.cpp`, from `src/game/00291758.c`
+    (`func_00292EB0`) at `8b490f56`. This is rac1-decomp's C
+    (`src/game/loaders.c`: `func_00203808`), carried into rac2-gc-decomp.
+    Adapted: every `long` is changed to `s64` (the same type on the EE).
 
 - **Lombyte** (MIT, © 2026 Mateusz Kłysz)
   <https://github.com/mateuszklysz/Lombyte> at commit `2c4452dd03f5f7ebb2868dbe073ccdb1afb27f61`

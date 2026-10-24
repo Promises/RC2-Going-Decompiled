@@ -2252,13 +2252,83 @@ void DecompressHudBankWad(s32 slot, u8 *dest) {
  * class. Bare INCLUDE_ASM (byte-neutral). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00293438);
 
-/* TODO(match): functional equivalent - not byte-exact (48.12%); strength-reduce/
- * register-color wall - the original's later cc1 addresses the 0x18-stride entry
- * three ways (mult idx*0x18 for ev0, shift-add idx*3 for ev1/ev2) where the
- * pinned 2.9-ee-991111 cc1 CSEs them to one base+mult with immediate ld offsets,
- * shuffling the whole GIF-tag-pack register coloring. Body (3-way idx>=0 / idx<-1
- * / idx==-1 GIF-tag emit) is semantically equivalent. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00293760);
+/* Per-texture GS register rows, 3 doublewords each (stride 0x18): the TEX0
+ * descriptor, then the two words BindPlayerDisplayModel and LoadShipDisplayModel
+ * write as their fixed GS registers A and B (InitLoadingSceneSystem, text/1E6ED0,
+ * writes it too). 16 rows (0x180 bytes) up to
+ * 0x1C4EC0, the next address the ROM reads. g_altTexRegs2/3 are two rows of the
+ * same shape that func_00293760 and func_00293438 use for material ids -2 and -3;
+ * nothing in the split writes them. */
+extern s64 g_modelTexRegs[];
+extern s64 g_altTexRegs2[];
+extern s64 g_altTexRegs3[];
+
+/* func_00293760(out, arg1, arg2, arg3, arg4, matId): write four A+D GIF
+ * qwords (the low doubleword of each, out += 2 doublewords each) describing one
+ * material's texture registers. Callers: func_00293B68 (instMode == 0).
+ *  - matId >= 0: a TEX1-style word (MXL from row word 1 & 0x1C, MMAG 1,
+ *    MMIN arg2 << 6, K arg1 << 32), then arg3 | arg4 << 2 | matId << 24, then
+ *    the row's words 0 and 2 (row = g_modelTexRegs + matId * 3).
+ *  - matId == -2 / -3: the same TEX1-style word without MXL, then 5, then
+ *    words 0 and 2 of g_altTexRegs2 / g_altTexRegs3.
+ *  - matId == -1: as -2/-3, but the constant 0x80000004CC007FFB and 0.
+ * The row is read before the sign test, as in the ROM, so a negative matId
+ * reads (and discards) the words in front of g_modelTexRegs.
+ *
+ * The -1 constant is a 64-bit `dli` that SN Ps2EeAs expands to 5 words
+ * (`ori; dsll 29; ori; dsll 19; ori`) where GNU as gives 6: its row in
+ * tools/ee/ps2eeas_dli_sites.txt is what makes the image match (RULING #8549).
+ *
+ * MATCHED on the 2.9 arm (-O2 -G8 -fno-gcse, the unit's flags); no selector
+ * row, no device. An earlier body scored 48.12% here (the old "strength-reduce
+ * wall": cc1 CSE'd the three row reads to one base). Which difference between
+ * that body and this one closes it was not measured.
+ *
+ * Source: OpenRAC/rac2-gc-decomp @8b490f56b8e46a1b749b54fd898946a4f09c1cca (GPL-3.0, adopted with the authors' permission per RULING #10405), src/game/00291758.c, func_00292EB0 (v1.01; upstream rac1-decomp src/game/loaders.c func_00203808), C body adapted: their extern names r1_D_0019E640 / r1_D_0019E7C0 / r1_D_0019E7D8 are spelled g_modelTexRegs / g_altTexRegs2 / g_altTexRegs3, func_00292EB0 is spelled func_00293760, and every `long` is changed to `s64` (the same type on EE, `long`; it keeps the 64-bit width on the -m32 native build); no other token of the body differs from theirs; byte-exact on our ROM: vmu BYTE IDENTICAL 84/84 words (83 in the 0x14C extent plus the zero padding word at 0x2938AC; 6 relocs resolved; base-seeded bit flip rc 1 at 0x293880), unit objdiff report 100.00% size=332 (objdiff_build.sh + unit_report.sh, clean), whole-image cmp 0 under landing_gate usa and eu --strict; without the ps2eeas_dli_sites.txt row GNU as builds it 84 words (task #2164)
+ */
+void func_00293760(s64 *out, int arg1, int arg2, int arg3, int arg4, int arg5) {
+    s64 f0 = g_modelTexRegs[arg5 * 3];
+    s64 f1 = g_modelTexRegs[arg5 * 3 + 1];
+    s64 f2 = g_modelTexRegs[arg5 * 3 + 2];
+
+    if (arg5 >= 0) {
+        s64 t = ((s64)arg2 << 6) | 0x20;
+
+        *out = (f1 & 0x1C) | t | ((s64)arg1 << 32);
+        out += 2;
+        *out = arg3 | ((s64)arg4 << 2) | ((s64)arg5 << 24);
+        out += 2;
+        *out = f0;
+        out[2] = f2;
+    } else if (arg5 < -1) {
+        s64 *tpl = g_altTexRegs2;
+
+        if (arg5 == -3) {
+            tpl = g_altTexRegs3;
+        }
+        {
+            s64 v = (s64)arg2 << 6;
+            s64 u = ((s64)arg1 << 32) | 0x20;
+            *out = v | u;
+        }
+        out += 2;
+        *out = 5;
+        out += 2;
+        *out = tpl[0];
+        out[2] = tpl[2];
+    } else {
+        {
+            s64 v = (s64)arg2 << 6;
+            s64 u = ((s64)arg1 << 32) | 0x20;
+            *out = v | u;
+        }
+        out += 2;
+        *out = 5;
+        out += 2;
+        *out = 0x80000004CC007FFBL;
+        out[2] = 0;
+    }
+}
 
 /* Upload two texture-descriptor lists to VRAM. Seeds the dynamic/alloc VRAM
  * cursors from g_vramTextureBase[0x10], then for each of `count1` list entries
@@ -2464,7 +2534,7 @@ void func_00293B10(s32 *table, s32 idx) {
  *    the next index $21, as in the ROM: stepped at the loop bottom, 4/69. */
 #ifdef TARGET_NATIVE
 extern void func_00293438(void *inst, s32 matBlock, s32 a2, s32 a3, s32 a4, s32 a5, s32 matId);
-extern void func_00293760(void *inst, s32 a1, s32 a2, s32 a3, s32 a4, s32 matId);
+extern void func_00293760(s64 *out, s32 a1, s32 a2, s32 a3, s32 a4, s32 matId);
 #endif
 
 /* t496 probe (unit objdiff on the all-promoted probe files): sdk29 83.45% PACKED-SAVE
@@ -2480,7 +2550,7 @@ S136OS_SLOT(func_00293B68);
 /* Prototypes this body needs whose declarations sit in other guarded arms:
  * the s136os arm compiles this arm alone, so it must see them here. */
 extern void func_00293438(void *inst, s32 matBlock, s32 a2, s32 a3, s32 a4, s32 a5, s32 matId);
-extern void func_00293760(void *inst, s32 a1, s32 a2, s32 a3, s32 a4, s32 matId);
+extern void func_00293760(s64 *out, s32 a1, s32 a2, s32 a3, s32 a4, s32 matId);
 void func_00293B68(u8 *groupTable, s32 instMode, u8 *idMap, s32 groupCount) {
     s32 g;
     u8 *groups = groupTable;
@@ -2502,7 +2572,7 @@ void func_00293B68(u8 *groupTable, s32 instMode, u8 *idMap, s32 groupCount) {
                               *(s32 *)(inst + 0), *(s32 *)(inst + 4),
                               *(s32 *)(inst + 0x10), *(s32 *)(inst + 0x14), matId);
             } else {
-                func_00293760(inst, *(s32 *)(inst + 0), *(s32 *)(inst + 4),
+                func_00293760((s64 *)inst, *(s32 *)(inst + 0), *(s32 *)(inst + 4),
                               *(s32 *)(inst + 0x10), *(s32 *)(inst + 0x14), matId);
             }
             inst += 0x40;
