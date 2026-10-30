@@ -2755,7 +2755,13 @@ extern void func_0011DDD8();
  * pointers), which this unit declares `u8[]` where theirs are `char[]`.
  * The spin bound 0xFFFFF is built as lui 0x10 / addiu -1, which splat's
  * target asm spells %hi/%lo(D_FFFFF) (FACT #9733), so the unit objdiff report
- * reads 99.92% on these byte-exact words.
+ * reads 99.92% on these byte-exact words. Byte-exact on our ROM:
+ * verify_match_unit BYTE IDENTICAL on the 123 compared words (44 relocs
+ * resolved; the 6 uncompared zero words are the short-loop nops) and
+ * symtab_extent_compare MATCH over all 129, a base-seeded bit flip firing
+ * rc 1 at 0x11de0c; unit objdiff report 99.92% size=516 (objdiff_build.sh +
+ * unit_report.sh); whole-image cmp 0 under landing_gate usa and eu --strict
+ * (task #2230).
  */
 s32 func_0011DE08(void) {
     s32 r, i;
