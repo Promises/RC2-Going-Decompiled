@@ -2699,7 +2699,109 @@ void func_0011DDC8(void) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011DDD8);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011DE08);
+/* The handler/argument pair func_0011DDD8 is registered with. */
+struct RpcCb { void (*cb)(void *); void *data; };
+struct W4 { char b[4]; };
+extern struct RpcCb D_00140100;
+extern char D_001400C0[];
+extern u8 D_00140080[];
+extern u8 D_0013F5C0[];
+extern char *D_0013E940[];
+extern u8 D_001400A8[];
+extern s32 D_0013472C;
+extern s32 D_00134730[];
+extern u8 D_0013F600[];
+extern s32 func_0011F5E0(void);
+extern s32 func_0011F628(void);
+extern void func_0011D9C0(s32 *arg);
+extern void sceSifInitRpc(s32 mode);
+extern void func_0011DDD8();
+
+/**
+ * func_0011DE08 = initialise the file-I/O RPC library: start SIF RPC
+ * (sceSifInitRpc), clear the handler pair D_00140100, then with interrupts
+ * disabled (func_0011F5E0, restored by func_0011F628 only if they were on)
+ * register func_0011D9C0 as SIF command 0x80000011's handler (data
+ * D_001400C0) and func_0011DDD8 for 0x80000013 (data D_00140100). Binds the
+ * client D_00140080 to IOP server 0x80000001, retrying after a ~1M-iteration
+ * spin until the server answers, clears the in-use word of every slot of the
+ * file table D_0013FE80 under its lock, points the two receive buffers
+ * (D_0013F600 and +0x440) into D_0013E940, and makes the server's first call
+ * (0xFF) with them. Its 8-byte reply, read uncached, gives the server's 4-byte
+ * version tag (copied to D_001400A8, checked by func_0011E010) and whether it
+ * double-buffers (word 2 == 2, into D_00134730). D_0013472C marks the library
+ * initialised.
+ *
+ * @return 0; -1 when the bind fails; 0xFFFEFFFF when the first call fails
+ *
+ * Source: OpenRAC/rac2-gc-decomp @96927f872c709e13aaa0f32265bb81a5531bf7ed
+ * (GPL-3.0, adopted with the authors' permission per RULING #10405),
+ * src/core/0011DDC8.c, func_0011DE08 (same address on their us2 = v2.00
+ * build; author commit c8887184, Flavius; upstream of that, rac1-decomp
+ * src/core/00119D88.c), C body ADAPTED: statements verbatim apart from our
+ * extern spellings (r1_D_00158100 -> D_00140100, r1_func_0011AE20 ->
+ * sceSifInitRpc, r1_func_0011D960 -> func_0011F5E0, r1_func_0011B868 ->
+ * func_0011D9C0, r1_D_001580C0 -> D_001400C0, r1_func_0011AA38 ->
+ * func_0011CB90, r1_func_0011BC80 -> func_0011DDD8, r1_func_0011D9A8 ->
+ * func_0011F628, r1_func_0011B2F8 -> sceSifBindRpc, r1_func_0011B710 ->
+ * func_0011D868, r1_func_00118CB0 -> func_0011AC60, r1_D_00157E80 ->
+ * D_0013FE80, r1_D_0012FDA0 -> D_00134738, r1_func_00118C90 -> SignalSema,
+ * r1_D_001575C0 -> D_0013F5C0, r1_D_00156940 -> D_0013E940, r1_D_00158080 ->
+ * D_00140080, r1_func_0011B4C8 -> sceSifCallRpc, r1_D_001580A8 -> D_001400A8,
+ * r1_D_0012FD98 -> D_00134730, r1_D_0012FD94 -> D_0013472C). Their extern
+ * prototypes are dropped for the unit's own, which adds casts where the types
+ * differ: `(SifRpcClient *)` on the client D_00140080 passed to sceSifBindRpc,
+ * and `(char *)` on D_0013FE80 (the slot loop) and D_0013F600 (the two buffer
+ * pointers), which this unit declares `u8[]` where theirs are `char[]`.
+ * The spin bound 0xFFFFF is built as lui 0x10 / addiu -1, which splat's
+ * target asm spells %hi/%lo(D_FFFFF) (FACT #9733), so the unit objdiff report
+ * reads 99.92% on these byte-exact words.
+ */
+s32 func_0011DE08(void) {
+    s32 r, i;
+    char *p;
+    struct W4 w;
+    s32 *q;
+
+    struct RpcCb *rq = &D_00140100;
+    sceSifInitRpc(0);
+    D_00140100.cb = 0;
+    rq->data = 0;
+    r = func_0011F5E0();
+    func_0011CB90(0x80000011, (int)func_0011D9C0, (int)D_001400C0);
+    func_0011CB90(0x80000013, (int)func_0011DDD8, (int)rq);
+    if (r != 0) {
+        func_0011F628();
+    }
+    for (;;) {
+        r = sceSifBindRpc((SifRpcClient *)D_00140080, 0x80000001, 0);
+        if (r < 0) {
+            return -1;
+        }
+        if (*(s32 *)(D_00140080 + 0x24) != 0) {
+            break;
+        }
+        for (i = 0x100000; i != -1; i--) {
+        }
+    }
+    func_0011D868();
+    func_0011AC60(D_00134738);
+    for (p = (char *)D_0013FE80; p < (char *)D_0013FE80 + 0x200; p += 0x10) {
+        *(s32 *)(p + 4) = 0;
+    }
+    SignalSema(D_00134738);
+    D_0013E940[0] = (char *)D_0013F600;
+    D_0013E940[1] = (char *)D_0013F600 + 0x440;
+    r = sceSifCallRpc(D_00140080, 0xFF, 0, D_0013E940, 8, D_0013F5C0, 8, 0, 0);
+    if (r < 0) {
+        return (s32)0xFFFEFFFF;
+    }
+    *(struct W4 *)D_001400A8 = *(struct W4 *)((u32)D_0013F5C0 | 0x20000000);
+    w = *(struct W4 *)((u32)(D_0013F5C0 + 4) | 0x20000000);
+    D_00134730[0] = (*(s32 *)&w == 2);
+    D_0013472C = 1;
+    return 0;
+}
 
 extern s32 D_0013472C;
 extern u8 D_001400A8[4];

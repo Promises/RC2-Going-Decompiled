@@ -174,6 +174,23 @@
     our `g_blobShadowCount` and `g_collTriBuffer`, with our signature and
     callee spellings.
 
+- **OpenRAC — `rac2-gc-decomp`, commit `96927f87`, core bodies** (GPL-3.0)
+  <https://github.com/OpenRAC/rac2-gc-decomp> at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`
+
+  One core C body, adopted with the authors' permission (held by the
+  operator, RULING #10405) and re-checked byte-exact against our v2.00 ROM on
+  the plain sdk29 arm (task #2230). Contributor: Flavius. The doc comment
+  carries the `Source:` line, which names every change beyond extern spellings.
+
+  Used so far:
+  - **`func_0011DE08`** (`0x0011DE08`, the file-I/O RPC library init) in
+    `going-decompiled/src/usa/cod/015180.c`, from `src/core/0011DDC8.c`
+    (`func_0011DE08`, author commit `c8887184`, Flavius). This is rac1-decomp's
+    C (`src/core/00119D88.c`), carried into rac2-gc-decomp. ADAPTED: their
+    extern prototypes are dropped for this unit's own, which adds a
+    `(SifRpcClient *)` cast on the bind client and `(char *)` casts on two
+    `u8[]` buffers.
+
 - **Lombyte** (MIT, © 2026 Mateusz Kłysz)
   <https://github.com/mateuszklysz/Lombyte> at commit `2c4452dd03f5f7ebb2868dbe073ccdb1afb27f61`
 
