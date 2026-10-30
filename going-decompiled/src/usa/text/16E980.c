@@ -2175,6 +2175,8 @@ void ApplyCameraShakeAxis(void *channel, s32 mode)
         case 2: {
             float value;
             cube = ratio * ratio * ratio;
+            /* DO NOT CORRECT 0.017453294f TO pi/180: the ROM immediate at 0x271ABC
+               is 0x3C8EFA36 = f32(0.017453294), one ulp above f32(pi/180) = 0x3C8EFA35. */
             frequency = D_1A85B8 * 0.017453294f;
             elapsed = IntToFloat(s->longest - s->frames) * (1.0f / 60.0f);
             ramp = elapsed * 6.0f;
