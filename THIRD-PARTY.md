@@ -96,6 +96,20 @@ License, version 3), with the authors' permission (RULING #10405), tasks #2207, 
 
 The GPL-2.0-or-later note in the section above applies to these bodies too.
 
+### OpenRAC rac2-gc-decomp at 96927f87 (GPL-3.0)
+
+Two C function bodies are taken from OpenRAC's `rac2-gc-decomp`,
+<https://github.com/OpenRAC/rac2-gc-decomp> at commit
+`96927f872c709e13aaa0f32265bb81a5531bf7ed` (root `LICENSE`: GNU General Public
+License, version 3), with the authors' permission (RULING #10405), task #2232:
+
+| Here | Upstream file | Upstream name |
+|---|---|---|
+| `ApplyCameraShakeAxis` in `going-decompiled/src/usa/text/16E980.c` (adapted: camera block, signature and callee prototypes are ours) | `src/game/00271958-g8.c` | `func_00271958` (v1.01 address) |
+| `SampleCameraFogZone` in `going-decompiled/src/usa/text/16E980.c` (adapted: fog block and region array reached through our symbols; signature and callees ours) | `src/game/0026EA00.c` | `func_002735A0` (v1.01 address) |
+
+The GPL-2.0-or-later note in the section "OpenRAC rac2-gc-decomp (GPL-3.0)" above applies to these bodies too.
+
 ### Lombyte (MIT)
 
 The C body of `_sysbitFlush` in `going-decompiled/src/usa/cod/022FA8.c` is

@@ -668,3 +668,5 @@ usa text/16E980 BuildAttractReelPlaylist
 usa text/1B4218 ApplyMobyLocalTransformDelta
 usa text/250080 func_00352058
 usa text/1FFBA0 func_003011C0
+usa text/16E980 ApplyCameraShakeAxis
+usa text/16E980 SampleCameraFogZone

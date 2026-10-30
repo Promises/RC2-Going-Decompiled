@@ -37,11 +37,12 @@
  * 05_all29_report.txt, 07_all96_report.txt, classes 08/09_classify*.txt). None
  * reached 100 on either arm; sdk29 >= engine96 on 31 of 40, but 32 of those are
  * PACKED-SAVE-walled there. The wall is a property of the 2.9 arm only: the
- * s136os arm (SN 1.36 -fopt-stack) has the ROM's 8-byte slots, and twenty-three of
+ * s136os arm (SN 1.36 -fopt-stack) has the ROM's 8-byte slots, and twenty-five of
  * these arms are matched there (FACTs #8830, #9658, #9707, #9856, #10000,
  * #10023, UpdateScreenFadeBlack from its former MATCH_ guard (task #2092),
  * func_00273D20 (task #2101), func_00271140 (task #2116) and
- * BuildAttractReelPlaylist (OpenRAC's C, task #2207); the s136os
+ * BuildAttractReelPlaylist (OpenRAC's C, task #2207), ApplyCameraShakeAxis and
+ * SampleCameraFogZone (OpenRAC's C, task #2232); the s136os
  * re-screen of the remaining arms is NOTE #9857, with func_00270D60 and
  * func_00270B68 taken further in NOTEs #9994 and #10024, func_00273D20's NOTE
  * #9998 ladder closed by task #2101 and func_00271140's NOTE #10031 ladder by
@@ -71,14 +72,14 @@
  *   func_00271140               85.11  69.03  5g/3f   PACKED-SAVE,-
  *   func_002712E8               59.27  53.15  10g/6f  PACKED-SAVE,GPREL
  *   ApplyCameraTransition       52.30  54.60  3g/0f   PACKED-SAVE,-
- *   ApplyCameraShakeAxis        77.87  60.29  3g/3f   PACKED-SAVE,GPREL
+ *   ApplyCameraShakeAxis        77.87  60.29  3g/3f   PACKED-SAVE,GPREL (s136os: matched, task #2232)
  *   TrackHeroMotionForCamera    55.33  42.81  9g/4f   PACKED-SAVE,LIKELY-,GPREL
  *   func_00271FE8               75.86  60.38  0g/0f   GPREL
  *   UpdateCamera                 1.19   1.19  4g/1f   PACKED-SAVE,-
  *   DrawScreenSpriteFxEntry      4.74   7.33  4g/5f   PACKED-SAVE,SIBCALL,LIKELY-
  *   AddScreenSpriteFx           57.48  48.89  0g/0f   MULT,GPREL
  *   DrawScreenSpriteFxQueue     46.64  44.15  8g/1f   PACKED-SAVE,GPREL
- *   SampleCameraFogZone         75.16  14.12  2g/1f   PACKED-SAVE,MULT,LIKELY-,GPREL
+ *   SampleCameraFogZone         75.16  14.12  2g/1f   PACKED-SAVE,MULT,LIKELY-,GPREL (s136os: matched, task #2232)
  *   func_00273740               65.50  70.46  10g/2f  PACKED-SAVE,-
  *   func_00273988               15.17  16.16  4g/1f   PACKED-SAVE,LIKELY-
  *   func_00273B80               72.83  72.35  4g/0f   PACKED-SAVE,GPREL
@@ -209,7 +210,9 @@ typedef struct CameraSysState {
     /* 0x278 */ f32 fadeWhiteOutRate; /* alternate step clamp used while fadeWhiteTarget==0 (fade-out) */
     /* 0x27C */ f32 fadeWhiteTarget;  /* white flash-to level */
     /* 0x280 */ u8 fadeWhiteTimer[4]; /* TickCountdownTimer re-arm timer */
-    /* 0x284 */ u8 pad284[0x14C];
+    /* 0x284 */ u8 pad284[0xEC];
+    /* 0x370 */ Vec4 matrix[3];       /* camera rotation rows (g_cameraMatrix, 0x1B54F0) */
+    /* 0x3A0 */ u8 pad3A0[0x30];
     /* 0x3D0 */ f32 fovSpringVel;     /* spring-ease state (func_002703C0) */
     /* 0x3D4 */ f32 fovTarget;
     /* 0x3D8 */ f32 fovLive;          /* current FOV fed to the projection */
@@ -2089,97 +2092,103 @@ void ApplyCameraTransition(Vec4 *out) {
 }
 #endif
 
-/* One camera-shake channel (three instances driven per frame). +0x0 base
- * amplitude, +0x4 this frame's applied value, +0x8 countdown timer,
- * +0xC peak (timer high-water mark used to normalise the decay). */
-typedef struct CamShakeChannel {
-    /* 0x00 */ f32 amplitude;
-    /* 0x04 */ f32 current;
-    /* 0x08 */ s32 timer;
-    /* 0x0C */ s32 peak;
-} CamShakeChannel;
-
-/* ApplyCameraShakeAxis: apply one shake channel to the camera. Modes 0/1
- * offset g_cameraPos along a g_cameraMatrix row (0 = row 2, 1 = row 0) by
- * amplitude * cos(wrap(2*timer)) * t^2 where t = timer/peak; mode 2 rolls
- * g_cameraMatrix by amplitude * sin(wrap(elapsed/60*step - step*10)) * t^3 *
- * min(1, elapsed/10) (step = D_1A85B8 * pi/180). Camera type 6 clears the
- * channel; timer==0 clears the peak. */
-#ifdef TARGET_NATIVE
-extern Camera *g_activeCamera;      /* aliases g_cameraState+0x190 */
-extern f32 D_1A85B8;                /* shake roll speed (degrees/tick) */
-extern s32 TickCountdownTimer(void *timer);
-extern f32 func_002845D8(f32 x);    /* wrap angle */
-extern void func_002ADCE0(void *dst, f32 ang, void *src); /* build roll rotation about src */
-extern void QuatToMatrix3(void *rot, void *mtx); /* rotation -> 3-row matrix */
-extern void func_002840E8(void *dst, void *a, void *b); /* mtx multiply */
-void ApplyCameraShakeAxis(void *channel, s32 axis) {
-    CamShakeChannel *sh = channel;
-    Camera *cam = g_activeCamera;
-    Vec4 ofs;
-    u8 mtx[0x30];
-    f32 t;
-
-    if (cam != 0 && cam->type == 6) {
-        sh->peak = 0;
-        sh->timer = 0;
-        return;
-    }
-    if (sh->timer == 0) {
-        sh->peak = 0;
-        return;
-    }
-    if (sh->peak < sh->timer) {
-        sh->peak = sh->timer;
-    }
-    TickCountdownTimer(&sh->timer);
-    t = IntToFloat(sh->timer) / IntToFloat(sh->peak);
-    switch (axis) {
-    case 0:
-    case 1: {
-        f32 c = func_00283B30(func_002845D8(IntToFloat(sh->timer) * 2.0f));
-        Vec4 *row = (axis == 0) ? &(&g_cameraMatrix)[2] : &g_cameraMatrix;
-        f32 amp = sh->amplitude * c * t * t;
-
-        sh->current = amp;
-        Vec3RescaleToLenVu0(&ofs, amp, row);
-        Vec4AddVu0(&g_cameraPos, &g_cameraPos, &ofs);
-        break;
-    }
-    case 2: {
-        f32 t3 = t * t * t;
-        /* 0.017453294f = 0x3C8EFA36, read from this body's own .s.
-         * ⚠️ DO NOT "CORRECT" THIS TO A DERIVED pi/180. Deriving the constant
-         * ACCURATELY reproduces the defect: pi/180 rounded to f32, at any
-         * precision you care to write it, encodes 0x3C8EFA35 -- one ULP BELOW
-         * what the ROM holds. The value below looks wrong to anyone who knows
-         * deg->rad, and is the only correct spelling here. (The defective
-         * spelling is named by its BITS above and deliberately not written as
-         * a literal: a screen that does not strip comments would read it as
-         * live code -- see f8b02259.) */
-        f32 step = D_1A85B8 * 0.017453294f;              /* deg -> rad */
-        f32 e60 = IntToFloat(sh->peak - sh->timer) * 0.016666668f;
-        f32 ramp = e60 * 6.0f;
-        f32 ang;
-
-        if (ramp > 1.0f) {
-            ramp = 1.0f;
-        }
-        ang = sh->amplitude *
-              func_00283B48(func_002845D8(e60 * step - step * 10.0f)) *
-              t3 * ramp;
-        sh->current = ang;
-        func_002ADCE0(&ofs, ang, &g_cameraMatrix);
-        QuatToMatrix3(&ofs, mtx);
-        func_002840E8(&g_cameraMatrix, mtx, &g_cameraMatrix);
-        break;
-    }
-    default:
-        break;
-    }
-}
+/* ApplyCameraShakeAxis: apply one camera-shake channel for this frame.
+ *   channel: CameraShake (+0x0 amplitude, +0x4 offset = this frame's applied
+ *            value, +0x8 frames = countdown, +0xC longest = its high-water
+ *            mark, which normalises the decay).
+ *   mode:    0 = push g_cameraPos along camera matrix row 2, 1 = along row 0,
+ *            by amplitude * cos(wrap(2*frames)) * ratio^2 (ratio =
+ *            frames/longest); 2 = roll the camera matrix by amplitude *
+ *            sin(wrap(elapsed*f - 10f)) * ratio^3 * min(1, 6*elapsed), where
+ *            elapsed = (longest - frames)/60 and f = D_1A85B8 deg -> rad.
+ * An active camera of type 6 clears the channel; frames == 0 clears longest.
+ * No return. UpdateCamera and ApplyCinematicPlaybackCameraKey each call it
+ * for modes 0, 1 and 2.
+ * MATCHED on the s136os arm (task #2232). No device. The camera position,
+ * matrix and active-camera pointer are reached as members of g_cameraState,
+ * the one block that holds them (+0x140, +0x370, +0x190); spelled as the
+ * separate symbols g_cameraPos / g_cameraMatrix, the row and position
+ * addresses go straight into the argument registers instead of $16 and the
+ * body builds 2 words SHORT (140/142, task #2232).
+ * GUARD: compiled alone by SN 2.95.3 v1.36 -fopt-stack and spliced over the
+ * S136OS_SLOT line (tools/ee/s136os_splice.sh); plain C on native.
+ * Source: OpenRAC/rac2-gc-decomp @96927f872c709e13aaa0f32265bb81a5531bf7ed
+ * (GPL-3.0, adopted with the authors' permission per RULING #10405),
+ * src/game/00271958-g8.c, func_00271958 (v1.01 address; author commit
+ * d4ac4036, bigbeno37), ADAPTED: (1) their CameraSystem view of D_001B5200 is
+ * our g_cameraState (0x1B5180 here): .pos, .rows and .current are spelled
+ * .camPos, .matrix (a field added to CameraSysState at +0x370, inside its old
+ * padding) and .activeCamera.p, so `*(short *)(current + 0x86)` reads ->type;
+ * (2) our signature (void *channel, s32 mode), with `CameraShake *s = channel`
+ * as the first local; (3) our callee spellings and prototypes:
+ * func_00282948 = TickCountdownTimer, func_00283CE0 = IntToFloat,
+ * func_00283C28 = func_002845D8, func_00283180 = func_00283B30,
+ * func_00283198 = func_00283B48, func_00282CC0 = Vec4AddVu0, func_00283958 =
+ * QuatToMatrix3, func_00283738 = func_002840E8, and func_00282F20 =
+ * Vec3RescaleToLenVu0 / func_002ACE78 = func_002ADCE0, whose float argument
+ * moves to second place in our (dst, f32, src) prototypes (asm identical
+ * apart from the callee names, measured); `(Vec4 *)` casts on buf; their `-g8`
+ * file-name flag is the unit's own -G8. The `__attribute__((sda))` on their D_001A85B8 (our D_1A85B8) is
+ * not carried. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_ApplyCameraShakeAxis)
+S136OS_SLOT(ApplyCameraShakeAxis);
 #else
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", ApplyCameraShakeAxis);
+typedef struct {float amplitude, offset; int frames, longest;} CameraShake;
+extern f32 D_1A85B8;            /* roll speed, degrees */
+extern s32 TickCountdownTimer(void *timer);
+extern f32 IntToFloat(s32 x);
+extern f32 func_002845D8(f32 x); /* wrap angle */
+extern f32 func_00283B30(f32 x); /* cos */
+extern f32 func_00283B48(f32 x); /* sin */
+extern void Vec3RescaleToLenVu0(Vec4 *dst, f32 len, const Vec4 *src);
+extern void Vec4AddVu0(Vec4 *dst, const Vec4 *a, const Vec4 *b);
+extern void func_002ADCE0(void *dst, f32 ang, void *src); /* roll rotation about src */
+extern void QuatToMatrix3(void *rot, void *mtx);
+extern void func_002840E8(void *dst, void *a, void *b);   /* matrix multiply */
+void ApplyCameraShakeAxis(void *channel, s32 mode)
+{
+    CameraShake *s = channel;
+    float buf[4], matrix[12];
+    float ratio, cube, frequency, elapsed, ramp;
+    if (g_cameraState.activeCamera.p != 0 && g_cameraState.activeCamera.p->type == 6) {
+        s->frames = 0;
+        s->longest = 0;
+    } else if (s->frames != 0) {
+        if (s->longest < s->frames) s->longest = s->frames;
+        TickCountdownTimer(&s->frames);
+        ratio = IntToFloat(s->frames) / IntToFloat(s->longest);
+        switch (mode) {
+        case 0: {
+            float value = s->amplitude * func_00283B30(func_002845D8(IntToFloat(s->frames) * 2.0f)) * ratio * ratio;
+            s->offset = value;
+            Vec3RescaleToLenVu0((Vec4 *)buf, value, &g_cameraState.matrix[2]);
+            Vec4AddVu0(&g_cameraState.camPos, &g_cameraState.camPos, (Vec4 *)buf);
+            break;
+        }
+        case 1: {
+            float value = s->amplitude * func_00283B30(func_002845D8(IntToFloat(s->frames) * 2.0f)) * ratio * ratio;
+            s->offset = value;
+            Vec3RescaleToLenVu0((Vec4 *)buf, value, g_cameraState.matrix);
+            Vec4AddVu0(&g_cameraState.camPos, &g_cameraState.camPos, (Vec4 *)buf);
+            break;
+        }
+        case 2: {
+            float value;
+            cube = ratio * ratio * ratio;
+            frequency = D_1A85B8 * 0.017453294f;
+            elapsed = IntToFloat(s->longest - s->frames) * (1.0f / 60.0f);
+            ramp = elapsed * 6.0f;
+            if (ramp > 1.0f) ramp = 1.0f;
+            value = s->amplitude * func_00283B48(func_002845D8(elapsed * frequency - frequency * 10.0f)) * cube * ramp;
+            s->offset = value;
+            func_002ADCE0(buf, value, g_cameraState.matrix);
+            QuatToMatrix3(buf, matrix);
+            func_002840E8(g_cameraState.matrix, matrix, g_cameraState.matrix);
+            break;
+        }
+        }
+    } else s->longest = 0;
+}
 #endif
 
 /* Per-frame hero-motion tracking block, a sub-region of g_cameraState at
@@ -2900,64 +2909,118 @@ void DrawScreenSpriteFxQueue(void) {
  * compiler output. Kept permanently INCLUDE_ASM. */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/16E980", func_002735A8);
 
-/* Fog zone record: 0x80-stride entries at g_collTriBuffer+0x1540, indexed by
- * the zone id func_002A7490 returns. Two packed-RGB endpoint colours (+0x54 A,
- * +0x58 B) and four f32 param pairs lerped by the blend factor t: near/far
- * fog intensities and two 1024-scaled distances. Flag bit 2 (+0x50) enables
- * the zone. Field semantics UNCONFIRMED beyond widths/offsets. */
-typedef struct FogZone {
-    /* 0x00 */ u8 pad0[0x50];
-    /* 0x50 */ s32 flags;         /* bit 2 = fog active */
-    /* 0x54 */ u32 colorA;        /* packed 00RRGGBB endpoint at t=0 */
-    /* 0x58 */ u32 colorB;        /* packed 00RRGGBB endpoint at t=1 */
-    /* 0x5C */ f32 distA0;        /* 1024-scaled after lerp -> fog+0x8 */
-    /* 0x60 */ f32 intensA0;      /* 255-complement after lerp -> fog+0x10 */
-    /* 0x64 */ f32 distB0;        /* 1024-scaled after lerp -> fog+0xC */
-    /* 0x68 */ f32 intensB0;      /* 255-complement after lerp -> fog+0x14 */
-    /* 0x6C */ f32 distA1;
-    /* 0x70 */ f32 intensA1;
-    /* 0x74 */ f32 distB1;
-    /* 0x78 */ f32 intensB1;
-} FogZone;
-
-/* SampleCameraFogZone: sample the fog volume the camera is inside (func_002A7490
- * locate, then lerp the per-zone fog colour/density into the fog-param block at
- * g_blobShadowCount+0x4.. -- bytes b/g/r at +4/5/6, distances*1024 at +8/+0xC,
- * 255-complemented intensities at +0x10/+0x14; deferred Track-B pin for the
- * block symbol. Old packed-save wall note superseded: engine unit, #else lane. */
-#ifdef TARGET_NATIVE
+/* SampleCameraFogZone: blend the fog preset from the environment region the
+ * camera is in.
+ *   position: the point to locate (UpdateCamera passes the camera position).
+ * func_002A7490 resolves position -> region index + blend factor (0..1); a
+ * zero return, or a region whose flag bit 2 (+0x50) is clear, writes nothing.
+ * Regions are 0x80-byte records at g_collTriBuffer+0x1540. The preset block at
+ * 0x1B15C0 (g_blobShadowCount+4; no symbol of its own here) receives the
+ * region's two packed colours mixed byte by byte with 8-bit weights
+ * (FloatToInt(blend*255) and its 255 complement; colour byte 0 -> +0, 1 -> +1,
+ * 2 -> +2), two 1024-scaled depths and two 255-complemented values, each a
+ * lerp from the region's negative (blend 0) to positive (blend 1) endpoint.
+ * Fog vs ambient: UNCONFIRMED (no consumer traced, NOTE #5516). No return.
+ * MATCHED on the s136os arm (task #2232). One device, priced by removal:
+ * g_blobShadowCount is declared MACRO_ADDR, an ".sdata" section attribute on
+ * the extern DECLARATION (RULING #8620 ADDRESSING-MODEL DEVICE; moves no data,
+ * emits nothing): cc1 prints each store as the one-instruction `sb $r,sym+off`
+ * macro, which the assembler expands with a fresh `lui $1` per store as in the
+ * ROM. Without it cc1 holds the block address in $8 and the body builds 94
+ * words, not 99 (task #2232). Reaching the block through a cast of
+ * &g_blobShadowCount + 4, rather than as a member, also holds the address in
+ * a register (93 words).
+ * GUARD: compiled alone by SN 2.95.3 v1.36 -fopt-stack and spliced over the
+ * S136OS_SLOT line (tools/ee/s136os_splice.sh); plain C on native.
+ * Source: OpenRAC/rac2-gc-decomp @96927f872c709e13aaa0f32265bb81a5531bf7ed
+ * (GPL-3.0, adopted with the authors' permission per RULING #10405),
+ * src/game/0026EA00.c, func_002735A0 (v1.01 address; author commit 69034e31,
+ * Flavius; its comment: "Arithmetic follows RAC1's
+ * update_camera_environment_from_regions, src/game/effects.c (Lombyte/OpenRAC,
+ * GPL-3.0)"), ADAPTED: (1) their D_001B1640 FogPresetView (v1.01) is 0x1B15C0
+ * here, which has no symbol of its own: it is reached as the .fog member of a
+ * BlobShadowFogView view of g_blobShadowCount (0x1B15BC), so every relocation
+ * reads g_blobShadowCount+4..+0x14 as in the ROM; (2) their D_001C1740[]
+ * region array is spelled as a cast of g_collTriBuffer + 0x1540 (0x1C16C0
+ * here); (3) our signature (Vec4 *position) and callee spellings
+ * (func_002A6640 = func_002A7490, func_00283CF0 = FloatToInt);
+ * (4) MACRO_ADDR is defined empty on native. CameraEnvironmentRegion and
+ * FogPresetView are carried verbatim. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_SampleCameraFogZone)
+S136OS_SLOT(SampleCameraFogZone);
+#else
+typedef struct {
+    u8 pad0[0x50];
+    int flags;
+    int negative_color;
+    int positive_color;
+    float negative_depth_start;
+    float negative_value_start;
+    float negative_depth_end;
+    float negative_value_end;
+    float positive_depth_start;
+    float positive_value_start;
+    float positive_depth_end;
+    float positive_value_end;
+    u8 pad7C[4];
+} CameraEnvironmentRegion;
+typedef struct {
+    u8 r, g, b, pad3;
+    float f[4];
+} FogPresetView;
+#ifndef TARGET_NATIVE
+#define MACRO_ADDR __attribute__((section(".sdata")))
+#else
+#define MACRO_ADDR
+#endif
+/* Our view of 0x1B15BC: the blob-shadow count, then the preset block (0x1B15C0). */
+typedef struct {
+    s32 count;
+    FogPresetView fog;
+} BlobShadowFogView;
+extern BlobShadowFogView g_blobShadowCount MACRO_ADDR;
+extern u8 g_collTriBuffer[];
 extern s32 func_002A7490(Vec4 *pos, f32 *tOut, s32 *zoneOut);
 extern s32 FloatToInt(f32 x);
-extern u8 g_collTriBuffer[];
-extern s32 g_blobShadowCount;
-void SampleCameraFogZone(Vec4 *pos) {
-    f32 t;
-    s32 zone;
-    u8 *fog = (u8 *)&g_blobShadowCount; /* param block lives at +0x4.. */
-    FogZone *z;
-    s32 ti, inv;
-    f32 k;
+void SampleCameraFogZone(Vec4 *position)
+{
+    float blend;
+    int region_index;
+    CameraEnvironmentRegion *region;
+    unsigned int positive_weight;
+    unsigned int negative_weight;
+    int negative_color;
+    int positive_color;
+    float inverse_blend;
+    unsigned int red, green;
+    unsigned int positive_red, negative_red, positive_green, negative_green, positive_blue, negative_blue;
 
-    if (func_002A7490(pos, &t, &zone) == 0) {
+    if (func_002A7490(position, &blend, &region_index) == 0)
         return;
-    }
-    z = (FogZone *)(g_collTriBuffer + 0x1540 + (zone << 7));
-    if (!(z->flags & 2)) {
+    region = &((CameraEnvironmentRegion *)(g_collTriBuffer + 0x1540))[region_index];
+    if (!(region->flags & 2))
         return;
-    }
-    ti = FloatToInt(t * 255.0f);
-    inv = 255 - ti;
-    k = 1.0f - t;
-    fog[4] = (u8)(((z->colorB & 0xFF) * ti + (z->colorA & 0xFF) * inv) >> 8);
-    fog[5] = (u8)((((z->colorB >> 8) & 0xFF) * ti + ((z->colorA >> 8) & 0xFF) * inv) >> 8);
-    fog[6] = (u8)((((z->colorB >> 16) & 0xFF) * ti + ((z->colorA >> 16) & 0xFF) * inv) >> 8);
-    *(f32 *)(fog + 0x08) = (z->distA1 * t + z->distA0 * k) * 1024.0f;
-    *(f32 *)(fog + 0x0C) = (z->distB1 * t + z->distB0 * k) * 1024.0f;
-    *(f32 *)(fog + 0x10) = 255.0f - (z->intensA1 * t + z->intensA0 * k) * 255.0f;
-    *(f32 *)(fog + 0x14) = 255.0f - (z->intensB1 * t + z->intensB0 * k) * 255.0f;
+    positive_weight = FloatToInt(blend * 255.0f);
+    negative_weight = 255 - positive_weight;
+    inverse_blend = 1.0f - blend;
+    positive_color = region->positive_color;
+    negative_color = region->negative_color;
+    positive_red = (positive_color & 0xFF) * positive_weight;
+    positive_green = ((positive_color >> 8) & 0xFF) * positive_weight;
+    positive_blue = (positive_color >> 16) & 0xFF;
+    negative_red = (negative_color & 0xFF) * negative_weight;
+    negative_green = ((negative_color >> 8) & 0xFF) * negative_weight;
+    negative_blue = (negative_color >> 16) & 0xFF;
+    red = (int)(positive_red + negative_red) >> 8;
+    green = (int)(positive_green + negative_green) >> 8;
+    g_blobShadowCount.fog.b = (int)(positive_blue * positive_weight + negative_blue * negative_weight) >> 8;
+    g_blobShadowCount.fog.r = red;
+    g_blobShadowCount.fog.g = green;
+    g_blobShadowCount.fog.f[0] = (region->positive_depth_start * blend + region->negative_depth_start * inverse_blend) * 1024.0f;
+    g_blobShadowCount.fog.f[1] = (region->positive_depth_end * blend + region->negative_depth_end * inverse_blend) * 1024.0f;
+    g_blobShadowCount.fog.f[2] = 255.0f - (region->positive_value_start * blend + region->negative_value_start * inverse_blend) * 255.0f;
+    g_blobShadowCount.fog.f[3] = 255.0f - (region->positive_value_end * blend + region->negative_value_end * inverse_blend) * 255.0f;
 }
-#else
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", SampleCameraFogZone);
 #endif
 
 /**

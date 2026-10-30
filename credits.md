@@ -147,6 +147,33 @@
     are ours (their `D_00190000 - 0x6160` origin is our symbol, so the reloc
     symbol and addend move; linked bytes identical) (task #2217).
 
+- **OpenRAC — `rac2-gc-decomp`, commit `96927f87`, s136os bodies** (GPL-3.0)
+  <https://github.com/OpenRAC/rac2-gc-decomp> at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`
+
+  Two engine C bodies in text/16E980, adopted with the authors' permission
+  (held by the operator, RULING #10405) and re-checked byte-exact against our
+  v2.00 ROM on the s136os arm (task #2232, from audit NOTE #12089 row 3).
+  Contributors: bigbeno37 and Flavius. Each doc comment carries the `Source:`
+  line, which names every change beyond extern spellings.
+
+  Used so far:
+  - **`ApplyCameraShakeAxis`** (`0x00271968`) in
+    `going-decompiled/src/usa/text/16E980.c`, from `src/game/00271958-g8.c`
+    (`func_00271958`, v1.01 address, author commit `d4ac4036`, bigbeno37).
+    ADAPTED: their camera block `D_001B5200` is our `g_cameraState`, with our
+    field names (a `matrix` field added to `CameraSysState` in its padding),
+    our signature and our callee prototypes.
+  - **`SampleCameraFogZone`** (`0x002735B0`) in
+    `going-decompiled/src/usa/text/16E980.c`, from `src/game/0026EA00.c`
+    (`func_002735A0`, v1.01 address, author commit `69034e31`, Flavius), with
+    its `CameraEnvironmentRegion` and `FogPresetView` typedefs and its
+    `MACRO_ADDR` ".sdata" declaration device. Its upstream comment says the
+    arithmetic follows RAC1's `update_camera_environment_from_regions`
+    (`src/game/effects.c`, Lombyte/OpenRAC, GPL-3.0); no file of that project
+    is carried. ADAPTED: the fog block and region array are reached through
+    our `g_blobShadowCount` and `g_collTriBuffer`, with our signature and
+    callee spellings.
+
 - **Lombyte** (MIT, © 2026 Mateusz Kłysz)
   <https://github.com/mateuszklysz/Lombyte> at commit `2c4452dd03f5f7ebb2868dbe073ccdb1afb27f61`
 
