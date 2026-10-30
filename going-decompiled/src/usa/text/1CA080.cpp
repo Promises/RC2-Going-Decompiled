@@ -127,6 +127,11 @@ __asm__(".extern g_nLevelExitRequested, 12");
 /* LevelSelectListHandleInput: the ROM forms &g_abLevelAvailableFlags as a one-insn
  * `la` macro (`lui $20; addiu $20,$20`), task #1739. */
 __asm__(".extern g_abLevelAvailableFlags, 16");
+/* The skill-point completion flags: all five ROM readers (UpdateSkillPointsMenu,
+ * DrawSkillPointsMenu, func_002CD670, UpdateCheatMenuInput, DrawCheatMenu) form the
+ * address with the one-insn macro (`lui $r; addiu|lbu $r,%lo($r)`, same register), not
+ * a compiler split, so it takes this model rather than ROM_SPLIT (task #2236). */
+__asm__(".extern g_skillPointFlags, 16");
 
 /* ROM-split externs (task #468, tools/ee/.t468/05_symbol_shapes.txt): in the ROM
  * every reference to these is a compiler-split lui/%lo pair — the high half in
@@ -149,7 +154,7 @@ __asm__(".extern g_abLevelAvailableFlags, 16");
 extern s32 g_padButtonsPressed ROM_SPLIT;
 extern s32 g_padButtonsHeld ROM_SPLIT;
 extern s16 g_fileLoadState ROM_SPLIT;
-extern u8 g_skillPointFlags ROM_SPLIT;
+extern u8 g_skillPointFlags;
 extern u8 *g_pNextMenuScreen ROM_SPLIT;
 extern u8 *g_pCurrentMenuScreen ROM_SPLIT;
 extern s32 g_nLevelSelectListCount ROM_SPLIT;
@@ -2978,115 +2983,158 @@ s32 func_002CEA38(void) {
 }
 #endif
 
-/* UpdateBestiaryMenuInput: per-frame input for the bestiary browser (g_bestiaryCursor
- * over the catalog, 1..0x3F). Back (0x10) pops the menu-screen block (returns the
- * popped value). Exit (0x900) returns 1. Left (0x8000)/right (0x2000) move the cursor
- * to the precomputed previous/next entry (clamped to 1 / 0x3F), with the move sound
- * (or the edge-deny sound when already at that entry). It then recomputes the nearest
- * defeated neighbours by scanning g_bestiaryKillCounts (u16[2] per entry) down for the
- * previous entry with kills (floor 1) and up for the next (ceil = cursor), and updates
- * the panel display (D_0025ABA0+0x58 / D_0025AC08+0x34) from whether the current entry
- * has been seen, poking D_0025AC08+0x3C when the cursor moved. Returns 1 on exit, the
- * popped value on back, else 0.
- * (matching arm left INCLUDE_ASM: cc1 2.9 8-byte-packed-save wall.)
- * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
- * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
- * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
- * property and was measured false as the reason this member stays unmatched (FACT #9873).
- * Residual: the saved-register set; the rest UNMEASURED. */
-/* s136os arm, measured by task #2117 (SN 1.36 -O2 -G8 -fstrict-aliasing -fopt-stack, gcse on):
- * this #else body builds 131 words against the ROM's 150 (SHORTER), so the splice refuses it on
- * LENGTH. Residual class: length/structure, not yet attributed. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", UpdateBestiaryMenuInput);
+/* The menu-screen manager block as the four menu-input handlers adopted from
+ * OpenRAC (UpdateBestiaryMenuInput, UpdateSkillPointsMenu, UpdateHelpTopicMenuInput,
+ * func_002D2FC8; task #2236) see it: `source` (+0x14) is the active screen, whose word
+ * +0xE0 is its pending sub-result; `value` (+0x18) receives that result; `fallback`
+ * (+0x134) picks -1 or 0 when there is none. Upstream declares the block as an object of
+ * this type; here it stays g_menuScreenBlock's byte array and the handlers read it
+ * through the g_menuSelection view (as g_menuUpd does). A typedef and a macro emit
+ * nothing. */
+typedef struct {
+    char prefix[0x14];
+    char *source;
+    int value;
+    char gap[0x118];
+    int fallback;
+} SelectionCallback;
+#define g_menuSelection (*(SelectionCallback *)g_menuScreenBlock)
+
+/* Row types of two tables the adopted handlers index and the native draw bodies share
+ * (upstream's TableRow and TextEntry). At file scope so every arm that reads a table
+ * can declare it. */
+/* g_bestiaryEntryTable: 0x18-byte rows; the halfword at +0xA is shown for the selected row. */
+typedef struct {
+    char reserved00[0xA];
+    short value;
+    char reserved0c[0xC];
+} TableRow;
+/* g_skillPointMetaTable: 6-byte rows; `text` is the description id, f0 the name, f4 the detail label. */
+typedef struct { short f0; short text; short f4; } TextEntry;
+
+/**
+ * UpdateBestiaryMenuInput — per-frame input for the bestiary browser. Takes no
+ * arguments; returns 1 on exit (pad 0x900), the back result on back (0x10), else 0.
+ *
+ * Back (0x10) hands the active screen's pending sub-result (source+0xE0) to the block
+ * and returns 0, or returns -1 when there is none and `fallback` is 0. Left (0x8000) /
+ * right (0x2000) move g_bestiaryCursor to the precomputed previous / next entry
+ * (clamped to 1 / 63), with sound 3, or sound 5 when the cursor is already on it.
+ * Every non-back path then recomputes the neighbours: g_bestiaryPrevEntry scans down
+ * from cursor-1 for an entry with either kill count non-zero (floor 1),
+ * g_bestiaryNextEntry scans up from cursor+1 (back to the cursor at 64). The panel
+ * shows row cursor-1 and the entry's caption (row +0xA) when the current entry has
+ * kills, else row 63 and caption 0; a cursor move resets the panel's motion to -576.
+ *
+ * MATCHED on the s136os arm (SN 2.95.3 v1.36 cc1plus -fopt-stack, the unit's
+ * S136EXTRA -fstrict-aliasing, gcse on). Row in tools/ee/s136os_functions.txt,
+ * spliced over S136OS_SLOT by tools/ee/s136os_splice.sh. There is no asm fallback:
+ * a build that skips the splice drops the function. On native it is plain C.
+ * Device-free: no volatile, no register pin, no inline asm. The earlier #else
+ * (131 words against the ROM's 150 on this arm, task #2117) is retired; its control
+ * flow agreed with this body.
+ *
+ * Source: OpenRAC/rac2-gc-decomp @96927f872c709e13aaa0f32265bb81a5531bf7ed (GPL-3.0, adopted with the authors' permission per RULING #10405), src/game/002CDB30-g8.c, func_002CDB30 (v1.01; author commit 14fd82f2, bigbeno37; its back-button block and block typedef carry over from upstream's src/pal/game/002D3DE8.c, 20d9186d, Flavius), C body and MenuCounter/MenuSelection typedefs (TableRow at file scope) ADAPTED: statements identical apart from symbol spelling, our names per the ROM's relocations (D_00138344 = g_padButtonsPressed, D_001AB9B0/B4/B8 = g_bestiaryCursor/g_bestiaryPrevEntry/g_bestiaryNextEntry, D_001F2840 = g_menuScreenBlock read through g_menuSelection (upstream's CallbackState is the shared SelectionCallback above), D_00188510 = g_bestiaryKillCounts read through g_bestiaryKills, D_00264630 = g_bestiaryEntryTable, declared with upstream's TableRow (a cast view of a byte array allocates differently: 4/150 words), D_0025ABC0 = D_0025ABA0, D_0025AC28 = D_0025AC08, func_002E5E58 = PlayGlobalSound with our prototype), upstream's `sda` attribute dropped (our cc1 ignores it; -G8 sizing gives the same $gp class) and our symbol name; GATE_EVIDENCE (task #2236)
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_UpdateBestiaryMenuInput)
+S136OS_SLOT(UpdateBestiaryMenuInput);
 #else
-/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 48.75% -> STRUCTURAL,
- * first differing row @3: ROM `(none)` vs `sd s1,8(sp)`;
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 45.98% -> PACKED-SAVE, first differing row @1: ROM `addiu sp,sp,-32` vs `addiu sp,sp,-64`. */
+typedef struct {
+    char reserved00[0x58];
+    int value;
+} MenuCounter;
+
+typedef struct {
+    char reserved00[0x34];
+    int value;
+    int reserved38;
+    int motion;
+} MenuSelection;
+
 extern s32 g_bestiaryPrevEntry;
 extern s32 g_bestiaryNextEntry;
 extern u8 g_bestiaryKillCounts[];
-extern u8 g_bestiaryEntryTable[];
-extern u8 D_0025ABA0[];
-extern u8 D_0025AC08[];
+extern TableRow g_bestiaryEntryTable[];
+extern MenuCounter D_0025ABA0;
+extern MenuSelection D_0025AC08;
 extern s32 PlayGlobalSound(s32 id, s32 a, s32 b);
-s32 UpdateBestiaryMenuInput(void) {
-    s32 buttons = g_padButtonsPressed;
-    s32 cursor0 = g_bestiaryCursor;
-    s32 ret = 0;
-    s32 cursor, i;
 
-    if (buttons & 0x10) {           /* back */
-        s32 e0 = *(s32 *)(*(u8 **)(g_menuScreenBlock + 0x14) + 0xE0);
-        if (e0 != 0) {
-            *(s32 *)(g_menuScreenBlock + 0x18) = e0;
-            return 0;
+/* Two halfword kill counts per entry: a view of the byte declaration
+ * DrawBestiaryEntry's native body shares. */
+#define g_bestiaryKills ((unsigned short (*)[2])g_bestiaryKillCounts)
+
+int UpdateBestiaryMenuInput(void)
+{
+    int flags = g_padButtonsPressed;
+    int old = g_bestiaryCursor;
+    int result = 0;
+
+    if (flags & 0x10) {
+        int value = *(int *)(g_menuSelection.source + 0xE0);
+        if (value != 0)
+            g_menuSelection.value = value;
+        else if (g_menuSelection.fallback == 0) {
+            value = -1;
+            goto return_value;
         }
-        return (*(s32 *)(g_menuScreenBlock + 0x134) == 0) ? -1 : 0;
+        value = 0;
+return_value:
+        return value;
+    }
+    if (flags & 0x900) {
+        result = 1;
+    } else if (flags & 0x8000) {
+        if (old != g_bestiaryPrevEntry)
+            PlayGlobalSound(3, 0, 0);
+        else
+            PlayGlobalSound(5, 0, 0);
+        g_bestiaryCursor = g_bestiaryPrevEntry;
+        if (g_bestiaryCursor <= 0)
+            g_bestiaryCursor = 1;
+    } else if (flags & 0x2000) {
+        if (old != g_bestiaryNextEntry)
+            PlayGlobalSound(3, 0, 0);
+        else
+            PlayGlobalSound(5, 0, 0);
+        g_bestiaryCursor = g_bestiaryNextEntry;
+        if (g_bestiaryCursor >= 64)
+            g_bestiaryCursor = 63;
     }
 
-    if (buttons & 0x900) {          /* exit */
-        ret = 1;
-    } else if (buttons & 0x8000) {  /* left: move to the previous entry */
-        s32 prev = g_bestiaryPrevEntry;
-        PlayGlobalSound((cursor0 == prev) ? 5 : 3, 0, 0);
-        g_bestiaryCursor = (prev > 0) ? prev : 1;
-    } else if (buttons & 0x2000) {  /* right: move to the next entry */
-        s32 next = g_bestiaryNextEntry;
-        PlayGlobalSound((cursor0 == next) ? 5 : 3, 0, 0);
-        g_bestiaryCursor = (next < 0x40) ? next : 0x3F;
-    }
-
-    /* recompute the nearest defeated entries around the cursor */
-    cursor = g_bestiaryCursor;
-    g_bestiaryPrevEntry = cursor - 1;
-    g_bestiaryNextEntry = cursor + 1;
-
-    /* scan down for the previous entry with any kills (floor at 1) */
-    i = cursor - 1;
+    /* The nearest rows below and above the current one with a nonzero count;
+       row 1 and the current row when there is none. */
+    g_bestiaryNextEntry = g_bestiaryCursor + 1;
+    g_bestiaryPrevEntry = g_bestiaryCursor - 1;
     for (;;) {
-        if (*(u16 *)(g_bestiaryKillCounts + i * 4) != 0 ||
-            *(u16 *)(g_bestiaryKillCounts + i * 4 + 2) != 0) {
+        if (g_bestiaryKills[g_bestiaryPrevEntry][0] != 0 || g_bestiaryKills[g_bestiaryPrevEntry][1] != 0)
             break;
-        }
-        i--;
-        if (i <= 0) {
-            i = 1;
+        if (--g_bestiaryPrevEntry <= 0) {
+            g_bestiaryPrevEntry = 1;
             break;
         }
     }
-    g_bestiaryPrevEntry = i;
-
-    /* scan up for the next entry with any kills (back to cursor if none) */
-    i = cursor + 1;
-    for (;;) {
-        if (*(u16 *)(g_bestiaryKillCounts + i * 4) != 0 ||
-            *(u16 *)(g_bestiaryKillCounts + i * 4 + 2) != 0) {
-            break;
-        }
-        i++;
-        if (i >= 0x40) {
-            i = cursor;
-            break;
+    {
+        int current = g_bestiaryCursor;
+        for (;;) {
+            if (g_bestiaryKills[g_bestiaryNextEntry][0] != 0 || g_bestiaryKills[g_bestiaryNextEntry][1] != 0)
+                break;
+            if (++g_bestiaryNextEntry >= 64) {
+                g_bestiaryNextEntry = current;
+                break;
+            }
         }
     }
-    g_bestiaryNextEntry = i;
 
-    /* update the panel display state for the current entry */
-    if (*(u16 *)(g_bestiaryKillCounts + cursor * 4) != 0 ||
-        *(u16 *)(g_bestiaryKillCounts + cursor * 4 + 2) != 0) {
-        *(s32 *)(D_0025ABA0 + 0x58) = cursor - 1;
-        *(s32 *)(D_0025AC08 + 0x34) =
-            *(s16 *)(g_bestiaryEntryTable + cursor * 0x18 + 0xA);
+    if (g_bestiaryKills[g_bestiaryCursor][0] == 0 && g_bestiaryKills[g_bestiaryCursor][1] == 0) {
+        D_0025ABA0.value = 63;
+        D_0025AC08.value = 0;
     } else {
-        *(s32 *)(D_0025ABA0 + 0x58) = 0x3F;
-        *(s32 *)(D_0025AC08 + 0x34) = 0;
+        D_0025ABA0.value = g_bestiaryCursor - 1;
+        D_0025AC08.value = g_bestiaryEntryTable[g_bestiaryCursor].value;
     }
-    if (g_bestiaryCursor != cursor0) {
-        *(s32 *)(D_0025AC08 + 0x3C) = -0x240;
-    }
-    return ret;
+    if (g_bestiaryCursor != old)
+        D_0025AC08.motion = -576;
+    return result;
 }
 #endif
 
@@ -3122,7 +3170,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawBestiaryEnt
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern void func_00115DA8(char *dst, const char *fmt, ...);
 extern u8 g_bestiaryKillCounts[];
-extern u8 g_bestiaryEntryTable[];
+extern TableRow g_bestiaryEntryTable[];
 extern s32 g_bestiaryNextEntry;
 /* (end of this body's declarations) */
 /* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
@@ -3183,7 +3231,7 @@ s32 DrawBestiaryEntry(void) {
 
     /* enemy encountered? (either half of the kill-count entry set) */
     if (kills[0] != 0 || kills[1] != 0) {
-        u8 *entry = g_bestiaryEntryTable + cursor * 0x18;
+        u8 *entry = (u8 *)&g_bestiaryEntryTable[cursor];
         const s16 statOff[4] = { 0x10, 0x12, 0x14, 0x16 };
         const s16 barY0[4]   = { 0x4E, 0x6C, 0x8B, 0xA9 };
         const s16 barY1[4]   = { 0x58, 0x76, 0x96, 0xB4 };
@@ -3711,94 +3759,99 @@ s32 func_002D0B40(void) {
     return 0;
 }
 
-/* UpdateSkillPointsMenu: per-frame input for the skill-points menu (cursor
- * g_nSkillPointsMenuCursor over the 30 skill points). Back (0x10) resets the cursor
- * and pops the menu-screen block. Exit (0x900) resets the cursor and returns 1. Up
- * (0x1000)/down (0x4000) move the cursor (wrapping 0..0x1D) with the move sound. It
- * then updates the info panel for the current entry (D_0025C098+0x58 = cursor): when
- * the skill point is completed (g_skillPointFlags[cursor]) it records its meta id
- * (g_skillPointMetaTable[cursor*6 + 2] -> D_25C074) and, if the cursor did not move
- * and no file load is pending and the panel is showing this same entry
- * (D_0025C098+0x50/+0x54 == cursor with mode +0x44 == 2/4), clears bit 0x4 of the
- * render object (*D_25C004 + 0x10); when not completed it sets that bit and zeroes
- * D_25C074. Returns 1 on exit, the popped value on back, else 0.
- * (matching arm left INCLUDE_ASM: cc1 2.9 8-byte-packed-save wall.)
- * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): this member's prologue - the
- * ROM's save set at its 8-byte stride, and its frame - is reproduced exactly (NOTE #9871), so
- * the save-slot wall named above is a cc1 2.9 property and was measured false as the reason
- * this member stays unmatched (FACT #9873). Residual: UNMEASURED. */
-/* s136os arm, measured by task #2117 (SN 1.36 -O2 -G8 -fstrict-aliasing -fopt-stack, gcse on):
- * this #else body builds 110 words against the ROM's 111 (SHORTER), so the splice refuses it on
- * LENGTH. Residual class: length/structure, not yet attributed. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", UpdateSkillPointsMenu);
+/**
+ * UpdateSkillPointsMenu — per-frame input for the skill-points menu (cursor
+ * g_nSkillPointsMenuCursor over the 30 skill points). Takes no arguments; returns 1 on
+ * exit (pad 0x900), the back result on back (0x10), else 0.
+ *
+ * Back resets the cursor and hands the active screen's pending sub-result to the
+ * menu-screen block (0, or -1 when there is none and `fallback` is 0). Exit resets the
+ * cursor. Up (0x1000) / down (0x4000) move it, wrapping 0..29, with sound 3. Every
+ * non-back path then stores the cursor in the info panel (D_0025C098 +0x58). For a
+ * completed skill point (g_skillPointFlags[cursor]) it publishes the entry's text id
+ * (g_skillPointMetaTable row +2) in D_25C074 and, when the cursor did not move, no file
+ * load is pending and the panel is showing this entry (+0x50 in mode 2, or +0x54 in
+ * mode 4), clears bit 0x4 of the render object *D_25C004 (+0x10). Otherwise it sets
+ * that bit and zeroes D_25C074.
+ *
+ * MATCHED on the s136os arm (SN 2.95.3 v1.36 cc1plus -fopt-stack, the unit's
+ * S136EXTRA -fstrict-aliasing, gcse on). Row in tools/ee/s136os_functions.txt,
+ * spliced over S136OS_SLOT by tools/ee/s136os_splice.sh. There is no asm fallback:
+ * a build that skips the splice drops the function. On native it is plain C.
+ * Device-free in the body; g_skillPointFlags is declared in the unit's assembler-macro
+ * model (`.extern g_skillPointFlags, 16`, see the header) because the ROM forms its
+ * address with the one-insn `la` macro at all five readers. The earlier #else (110
+ * words against the ROM's 111 on this arm, task #2117) is retired; its control flow
+ * agreed with this body.
+ *
+ * Source: OpenRAC/rac2-gc-decomp @96927f872c709e13aaa0f32265bb81a5531bf7ed (GPL-3.0, adopted with the authors' permission per RULING #10405), src/game/002CFBE8-g32.c, func_002CFBE8 (v1.01; author commit 0eb05a7c, Flavius), C body and FlagTarget/MenuFields typedefs (TextEntry at file scope) ADAPTED: statements identical apart from symbol spelling, our names per the ROM's relocations (D_00138180.flags = g_padButtonsPressed, so upstream's CallbackMenuState is dropped; D_001AB9FC = g_nSkillPointsMenuCursor; D_001F2840 = g_menuScreenBlock read through g_menuSelection; D_001A63AC[0] = g_fileLoadState; D_001A7A60 = g_skillPointFlags, indexed from its address because our declaration is the scalar the unit's other readers use, and with the unit's `.extern` model in place of upstream's MACRO_ADDR; D_0025C0B8 = D_0025C098; D_0025C024[0] = D_25C004; D_0025C094[0] = D_25C074; D_0026CF18 = g_skillPointMetaTable, declared with upstream's TextEntry (a cast view of a byte array allocates differently: 2/111 words); func_002E5E58 = PlayGlobalSound with our prototype), upstream's `sda` attribute dropped and our symbol name; GATE_EVIDENCE (task #2236)
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_UpdateSkillPointsMenu)
+S136OS_SLOT(UpdateSkillPointsMenu);
 #else
-/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 14.20% -> GPREL-vs-ABS,
- * first differing row @1: ROM `(none)` vs `lw a1,0(gp)  [GPREL16 0x001ABA3C]`;
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 42.36% -> PACKED-SAVE, first differing row @1: ROM `addiu sp,sp,-32` vs `addiu sp,sp,-48`. */
+typedef struct { char reserved00[0x10]; int flags; } FlagTarget;
+typedef struct { char reserved00[0x44]; int f44; int f48; int f4c; int f50; int f54; int f58; } MenuFields;
+
 extern s32 g_nSkillPointsMenuCursor;
-extern u8 g_skillPointMetaTable[];
-extern u8 D_0025C098[];
+extern TextEntry g_skillPointMetaTable[];
+extern MenuFields D_0025C098;
 extern u8 *D_25C004;
 extern s32 D_25C074;
 extern s32 PlayGlobalSound(s32 id, s32 a, s32 b);
-s32 UpdateSkillPointsMenu(void) {
-    s32 buttons = g_padButtonsPressed;
-    s32 cursor0 = g_nSkillPointsMenuCursor;
-    s32 ret = 0;
-    s32 cursor;
 
-    if (buttons & 0x10) {           /* back */
-        s32 e0 = *(s32 *)(*(u8 **)(g_menuScreenBlock + 0x14) + 0xE0);
+int UpdateSkillPointsMenu(void)
+{
+    int result = 0;
+    int flags = g_padButtonsPressed;
+    int old = g_nSkillPointsMenuCursor;
+
+    if (flags & 0x10) {
+        int value;
+        int status;
         g_nSkillPointsMenuCursor = 0;
-        if (e0 != 0) {
-            *(s32 *)(g_menuScreenBlock + 0x18) = e0;
-            return 0;
+        value = *(int *)(g_menuSelection.source + 0xE0);
+        if (value != 0)
+            g_menuSelection.value = value;
+        else if (g_menuSelection.fallback == 0) {
+            status = -1;
+            goto finish;
         }
-        return (*(s32 *)(g_menuScreenBlock + 0x134) == 0) ? -1 : 0;
+        status = 0;
+finish:
+        return status;
     }
-
-    if (buttons & 0x900) {          /* exit */
+    if (flags & 0x900) {
         g_nSkillPointsMenuCursor = 0;
-        ret = 1;
-    } else if (buttons & 0x1000) {  /* up */
-        s32 v;
+        result = 1;
+    } else if (flags & 0x1000) {
         PlayGlobalSound(3, 0, 0);
-        v = g_nSkillPointsMenuCursor - 1;
-        g_nSkillPointsMenuCursor = (v >= 0) ? v : 0x1D;
-    } else if (buttons & 0x4000) {  /* down */
-        s32 v;
+        if (--g_nSkillPointsMenuCursor < 0)
+            g_nSkillPointsMenuCursor = 29;
+    } else if (flags & 0x4000) {
         PlayGlobalSound(3, 0, 0);
-        v = g_nSkillPointsMenuCursor + 1;
-        g_nSkillPointsMenuCursor = (v < 0x1E) ? v : 0;
+        if (++g_nSkillPointsMenuCursor >= 30)
+            g_nSkillPointsMenuCursor = 0;
     }
-
-    /* refresh the info panel for the current cursor */
-    cursor = g_nSkillPointsMenuCursor;
-    *(s32 *)(D_0025C098 + 0x58) = cursor;
-
-    if ((&g_skillPointFlags)[cursor] != 0) {
-        /* completed skill point */
-        s32 clear = 0;
-        if (cursor0 == cursor && g_fileLoadState == 0) {
-            s32 mode = *(s32 *)(D_0025C098 + 0x44);
-            if (*(s32 *)(D_0025C098 + 0x50) == cursor0 && mode == 2) {
-                clear = 1;
-            } else if (*(s32 *)(D_0025C098 + 0x54) == cursor0 && mode == 4) {
-                clear = 1;
+    {
+        MenuFields *menu = &D_0025C098;
+        menu->f58 = g_nSkillPointsMenuCursor;
+        if ((&g_skillPointFlags)[g_nSkillPointsMenuCursor] != 0) {
+            if (old == g_nSkillPointsMenuCursor) {
+                if (g_fileLoadState == 0) {
+                    if (menu->f50 == old && menu->f44 == 2) {
+                        ((FlagTarget *)D_25C004)->flags &= -5;
+                    } else if (menu->f54 == old && menu->f44 == 4) {
+                        ((FlagTarget *)D_25C004)->flags &= -5;
+                    }
+                }
             }
+            D_25C074 = g_skillPointMetaTable[g_nSkillPointsMenuCursor].text;
+        } else {
+            ((FlagTarget *)D_25C004)->flags |= 4;
+            D_25C074 = 0;
         }
-        if (clear) {
-            *(s32 *)(D_25C004 + 0x10) &= ~0x4;
-        }
-        D_25C074 = *(s16 *)(g_skillPointMetaTable + cursor * 6 + 2);
-    } else {
-        /* not yet completed */
-        *(s32 *)(D_25C004 + 0x10) |= 0x4;
-        D_25C074 = 0;
     }
-    return ret;
+    return result;
 }
 #endif
 
@@ -3838,7 +3891,7 @@ extern void func_002904B0(s32 x0, s32 y0, s32 x1, s32 y1, s32 color, s32 flag);
 extern void DrawMenuItemSelectionBox(s32 width, s32 color);
 extern s32 g_screenWidth;
 extern s32 g_nSkillPointsMenuCursor;
-extern u8 g_skillPointMetaTable[];
+extern TextEntry g_skillPointMetaTable[];
 /* (end of this body's declarations) */
 /* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 35.61% -> STRUCTURAL,
@@ -3892,10 +3945,10 @@ s32 DrawSkillPointsMenu(void) {
     func_002904B0(0x15E, 0xDA, 0x1E6, 0xDC, 0x55F0C070, 0);
 
     /* selected entry's detail label, if present */
-    if (*(s16 *)(g_skillPointMetaTable + cursor * 6 + 4) != -1) {
+    if (g_skillPointMetaTable[cursor].f4 != -1) {
         func_0027F7A0();
         func_002801B8(0x1A0, 0xE0, 0x80F0F0F0,
-                      GetLocalizedString(*(s16 *)(g_skillPointMetaTable + cursor * 6 + 4)), -1);
+                      GetLocalizedString(g_skillPointMetaTable[cursor].f4), -1);
         func_0027F790();
     }
 
@@ -3914,7 +3967,7 @@ s32 DrawSkillPointsMenu(void) {
         if (idx >= 0x1E) {
             idx -= 0x1E;
         }
-        label = GetLocalizedString(*(s16 *)(g_skillPointMetaTable + idx * 6));
+        label = GetLocalizedString(g_skillPointMetaTable[idx].f0);
         color = (flags[idx] ? 0x7029A1FF : 0x80F0F0F0) & 0xFFFFFF;
         if (i == 0 || i == 4) {
             color |= 0x10000000;                     /* edge slots, dim */
@@ -4983,77 +5036,87 @@ s32 func_002D2C60(void) {
     return 0;
 }
 
-/* UpdateHelpTopicMenuInput: per-frame input for the help-topics screen, an
- * 18-entry page list (g_helpTopicCursor in [0,0x11]). Back (0x10) resets the
- * cursor and latches the active screen's pending sub-result (block[0x14]->0xE0
- * into block[0x18], else -1/0). Cancel (0x900) resets the cursor and returns 1.
- * 0x8000 steps to the previous topic (cursor-1, floored at 0); 0x2000 steps to the
- * next (cursor+1, capped at 0x11) — each plays UI sound 3 when the move stays in
- * range, sound 5 at the edge. Every non-back path then stamps the active topic:
- * D_25C940 = cursor and D_25C8C4 = the topic's string id D_1ABDC0[cursor].
- * Wall (cc1 2.9 arm): 8-byte-packed-save (2 GPRs) — later cc1 save-slot packing not reproduced.
- * Preserved as portable C.
- * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): this member's prologue - the
- * ROM's save set at its 8-byte stride, and its frame - is reproduced exactly (NOTE #9871), so
- * the save-slot wall named above is a cc1 2.9 property and was measured false as the reason
- * this member stays unmatched (FACT #9873). Residual: UNMEASURED. */
-/* s136os arm, measured by task #2117 (SN 1.36 -O2 -G8 -fstrict-aliasing -fopt-stack, gcse on):
- * this #else body builds 83 words against the ROM's 84 (SHORTER), so the splice refuses it on
- * LENGTH. Residual class: length/structure, not yet attributed. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", UpdateHelpTopicMenuInput);
+/**
+ * UpdateHelpTopicMenuInput — per-frame input for the help-topics screen, an 18-entry
+ * page list (g_helpTopicCursor in 0..17). Takes no arguments; returns 1 on cancel
+ * (pad 0x900), the back result on back (0x10), else 0.
+ *
+ * Back resets the cursor and hands the active screen's pending sub-result to the
+ * menu-screen block (0, or -1 when there is none and `fallback` is 0). Cancel resets
+ * the cursor. 0x8000 steps to the previous topic (floor 0), 0x2000 to the next (cap
+ * 17); each plays sound 3 when the cursor can move and sound 5 at the edge. Every
+ * non-back path then stamps the active topic: D_25C940 = cursor and D_25C8C4 = the
+ * topic's string id D_1ABDC0[cursor].
+ *
+ * MATCHED on the s136os arm (SN 2.95.3 v1.36 cc1plus -fopt-stack, the unit's
+ * S136EXTRA -fstrict-aliasing, gcse on). Row in tools/ee/s136os_functions.txt,
+ * spliced over S136OS_SLOT by tools/ee/s136os_splice.sh. There is no asm fallback:
+ * a build that skips the splice drops the function. On native it is plain C. One
+ * device, on a declaration: D_1ABDC0's `.sdata` attribute below (RULING #8620). The
+ * earlier #else (83 words against the ROM's 84 on this arm, task #2117) is retired;
+ * its control flow agreed with this body.
+ *
+ * Source: OpenRAC/rac2-gc-decomp @96927f872c709e13aaa0f32265bb81a5531bf7ed (GPL-3.0, adopted with the authors' permission per RULING #10405), src/game/002D1D20-g32.c, func_002D1D20 (v1.01; author commit 0eb05a7c, Flavius), C body ADAPTED: statements identical apart from symbol spelling, our names per the ROM's relocations (D_00138180.flags = g_padButtonsPressed, so upstream's CallbackMenuState is dropped; D_001ABA58 = g_helpTopicCursor; D_001F2840 = g_menuScreenBlock read through g_menuSelection; D_0025C960[0] = D_25C940; D_0025C8E4[0] = D_25C8C4; D_001ABD40 = D_1ABDC0, upstream's MACRO_ADDR spelled as the EE-only `.sdata` attribute; func_002E5E58 = PlayGlobalSound with our prototype), upstream's `sda` attribute dropped and our symbol name; GATE_EVIDENCE (task #2236)
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_UpdateHelpTopicMenuInput)
+S136OS_SLOT(UpdateHelpTopicMenuInput);
 #else
-/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 62.81% -> SPLIT-HIREG,
- * first differing row @0: ROM `lui v1,0x0  [HI16 0x00138344]` vs `lui v0,0x0  [HI16 0x00138344]`;
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 73.12% -> PACKED-SAVE, first differing row @1: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. */
 extern s32 PlayGlobalSound(s32 id, s32 a, s32 b);
 extern s32 g_helpTopicCursor;    /* 0x1ABA98 - help topic page index 0..0x11 */
 extern s32 D_25C940;             /* active topic index mirror */
-extern s16 D_1ABDC0[];           /* per-topic string-id table (halfwords) */
 extern s32 D_25C8C4;             /* active topic's string id */
-s32 UpdateHelpTopicMenuInput(void) {
-    s32 buttons = g_padButtonsPressed;
-    s32 result = 0;
-    s32 cursor;
+/* Per-topic string-id table (halfwords). ADDRESSING-MODEL DEVICE (RULING #8620): on
+ * EE the `.sdata` attribute on this EXTERN DECLARATION makes cc1 treat the table as
+ * small data and print its address as the one-insn `la` macro; the assembler, which
+ * has no size for the symbol, expands it absolute into the ROM's adjacent
+ * `lui $5; addiu $5,$5,%lo` (0x2D2DEC). It moves no data and emits nothing; the
+ * relocation names D_1ABDC0. Upstream spells it MACRO_ADDR. */
+#ifndef TARGET_NATIVE
+extern s16 D_1ABDC0[] __attribute__((section(".sdata")));
+#else
+extern s16 D_1ABDC0[];
+#endif
 
-    if (buttons & 0x10) {               /* back */
-        s32 e0 = *(s32 *)(*(u8 **)(g_menuScreenBlock + 0x14) + 0xE0);
+int UpdateHelpTopicMenuInput(void)
+{
+    int result = 0;
+    int flags = g_padButtonsPressed;
+
+    if (flags & 0x10) {
+        int value;
+        int status;
         g_helpTopicCursor = 0;
-        if (e0 != 0) {
-            *(s32 *)(g_menuScreenBlock + 0x18) = e0;
-            return 0;
+        value = *(int *)(g_menuSelection.source + 0xE0);
+        if (value != 0)
+            g_menuSelection.value = value;
+        else if (g_menuSelection.fallback == 0) {
+            status = -1;
+            goto finish;
         }
-        return (*(s32 *)(g_menuScreenBlock + 0x134) == 0) ? -1 : 0;
+        status = 0;
+finish:
+        return status;
     }
-
-    if (buttons & 0x900) {              /* cancel */
+    if (flags & 0x900) {
         g_helpTopicCursor = 0;
         result = 1;
-    } else if (buttons & 0x8000) {      /* previous topic */
-        s32 v;
-        if (g_helpTopicCursor > 0) {
+    } else if (flags & 0x8000) {
+        if (g_helpTopicCursor > 0)
             PlayGlobalSound(3, 0, 0);
-        } else {
+        else
             PlayGlobalSound(5, 0, 0);
-        }
-        v = g_helpTopicCursor - 1;
-        g_helpTopicCursor = (v >= 0) ? v : 0;
-    } else if (buttons & 0x2000) {      /* next topic */
-        s32 v;
-        if (g_helpTopicCursor < 0x11) {
+        if (--g_helpTopicCursor < 0)
+            g_helpTopicCursor = 0;
+    } else if (flags & 0x2000) {
+        if (g_helpTopicCursor < 17)
             PlayGlobalSound(3, 0, 0);
-        } else {
+        else
             PlayGlobalSound(5, 0, 0);
-        }
-        v = g_helpTopicCursor + 1;
-        g_helpTopicCursor = (v < 0x12) ? v : 0x11;
+        if (++g_helpTopicCursor > 17)
+            g_helpTopicCursor = 17;
     }
-
-    /* stamp the active topic + its string id */
-    cursor = g_helpTopicCursor;
-    D_25C940 = cursor;
-    D_25C8C4 = D_1ABDC0[cursor];
+    D_25C940 = g_helpTopicCursor;
+    D_25C8C4 = D_1ABDC0[g_helpTopicCursor];
     return result;
 }
 #endif
@@ -5127,87 +5190,97 @@ s32 func_002D2FC0(void) {
     return 0;
 }
 
-/* Options sub-screen input handler. Confirm (0x10) latches the screen result
- * (resets g_optionsSubCursor) like the other polls. Cancel (0x900) resets the
- * cursor and returns 1. Up (0x8000) decrements the 6-entry cursor (clamp at 0);
- * Down (0x2000) increments (clamp at 5). Each move plays sound 3 (moved) or 5
- * (blocked at an edge). After a move, if the cursor changed it latches an error
- * code (-0x12C) into D_0025CA80[0x3C]; then mirrors the cursor into D_25CB30 and
- * stores the s16 entry from the D_1ABDEA table into D_0025CA80[0x34]. Returns the
- * confirm/cancel tri-state.
+/**
+ * func_002D2FC8 — options sub-screen input handler: a 6-entry list (g_optionsSubCursor
+ * in 0..5). Takes no arguments; returns 1 on cancel (pad 0x900), the back result on
+ * back (0x10), else 0.
+ *
+ * Back resets the cursor and hands the active screen's pending sub-result to the
+ * menu-screen block (0, or -1 when there is none and `fallback` is 0). Cancel resets
+ * the cursor. 0x8000 moves up (floor 0), 0x2000 down (cap 5); each plays sound 3 when
+ * the cursor can move and sound 5 at the edge. Every non-back path then restarts the
+ * panel's timer (-300) if the cursor changed, mirrors the cursor into D_25CB30 and
+ * shows the entry's text id from D_1ABDEA (one s16 per 4-byte entry) in the panel.
  * D_0025CA80 is the options screen's record (its first word is func_002CD450, the
- * screen's query handler). The 8-digit spelling is the one splat gives the
- * defining dlabel in data/138B80.data.s and the one the ROM's relocations name;
- * the 6-digit D_25CA80 was only an address alias (task #1739).
- * Wall (cc1 2.9 arm): 8-byte-packed-save (saves $16 + $17 + $31). Preserved as portable C.
- * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): this member's prologue - the
- * ROM's save set at its 8-byte stride, and its frame - is reproduced exactly (NOTE #9871), so
- * the save-slot wall named above is a cc1 2.9 property and was measured false as the reason
- * this member stays unmatched (FACT #9873). Residual: UNMEASURED. */
-extern s32 g_optionsSubCursor;
-extern u8 D_0025CA80[];
-extern s32 D_25CB30;
-extern u8 D_1ABDEA[]; /* s16 entries on a 4-byte stride */
-extern s32 PlayGlobalSound(s32 id, s32 a, s32 b);
-/* s136os arm, measured by task #2117 (SN 1.36 -O2 -G8 -fstrict-aliasing -fopt-stack, gcse on):
- * this #else body builds 81 words against the ROM's 91 (SHORTER), so the splice refuses it on
- * LENGTH. Residual class: length/structure, not yet attributed. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D2FC8);
+ * screen's query handler); the 8-digit spelling is the one splat gives the defining
+ * dlabel in data/138B80.data.s and the one the ROM's relocations name (task #1739).
+ *
+ * MATCHED on the s136os arm (SN 2.95.3 v1.36 cc1plus -fopt-stack, the unit's
+ * S136EXTRA -fstrict-aliasing, gcse on: the ROM's shared %hi(D_0025CA80) in $6 is
+ * gcse's, FACT #9480). Row in tools/ee/s136os_functions.txt, spliced over
+ * S136OS_SLOT by tools/ee/s136os_splice.sh. There is no asm fallback: a build that
+ * skips the splice drops the function. On native it is plain C. One device, on a
+ * declaration: D_1ABDEA's `.sdata` attribute below (RULING #8620). The earlier #else
+ * (81 words against the ROM's 91 on this arm, task #2117) is retired; its control
+ * flow agreed with this body.
+ *
+ * Source: OpenRAC/rac2-gc-decomp @96927f872c709e13aaa0f32265bb81a5531bf7ed (GPL-3.0, adopted with the authors' permission per RULING #10405), src/game/002D2018-g32.c, func_002D2018 (v1.01; author commits 0eb05a7c and 0f3403f8, Flavius), C body and MenuPanel/MenuText typedefs ADAPTED: statements identical apart from symbol spelling, our names per the ROM's relocations (((CallbackMenuState *)&D_00138180)->flags = g_padButtonsPressed, so upstream's CallbackMenuState is dropped; D_001ABA60 = g_optionsSubCursor; D_001F2840 = g_menuScreenBlock read through g_menuSelection; D_0025CAA0 = D_0025CA80; D_0025CB50[0] = D_25CB30; D_001ABD6A = D_1ABDEA, upstream's MACRO_ADDR spelled as the EE-only `.sdata` attribute; func_002E5E58 = PlayGlobalSound with our prototype), upstream's `sda` attribute dropped and our symbol name; GATE_EVIDENCE (task #2236)
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002D2FC8)
+S136OS_SLOT(func_002D2FC8);
 #else
-/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 51.74% -> GPREL-vs-ABS,
- * first differing row @1: ROM `(none)` vs `lw a1,0(gp)  [GPREL16 0x001ABAA0]`;
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 61.23% -> PACKED-SAVE, first differing row @1: ROM `addiu sp,sp,-32` vs `addiu sp,sp,-48`. */
-/* TODO(match): functional equivalent - not byte-exact; 3-GPR packed-save frame +
- * branch-likely / reload scheduling not reproduced by cc1. */
-s32 func_002D2FC8(void) {
-    s32 flags = g_padButtonsPressed;
-    s32 old = g_optionsSubCursor;
-    s32 result = 0;
-    s32 cur;
+typedef struct { char reserved00[0x34]; int text; int f38; int timer; } MenuPanel;
+typedef struct { short text; short pad; } MenuText;
+
+extern s32 g_optionsSubCursor;
+extern MenuPanel D_0025CA80[];
+extern s32 D_25CB30;
+extern s32 PlayGlobalSound(s32 id, s32 a, s32 b);
+/* ADDRESSING-MODEL DEVICE (RULING #8620): on EE the `.sdata` attribute on this
+ * EXTERN DECLARATION makes cc1 treat the table as small data and print its address
+ * as the one-insn `la` macro; the assembler, which has no size for the symbol,
+ * expands it absolute into the ROM's adjacent `lui $5; addiu $5,$5,%lo` (0x2D30FC).
+ * It moves no data and emits nothing; the relocation names D_1ABDEA. Upstream
+ * spells it MACRO_ADDR. */
+#ifndef TARGET_NATIVE
+extern MenuText D_1ABDEA[] __attribute__((section(".sdata")));
+#else
+extern MenuText D_1ABDEA[];
+#endif
+
+int func_002D2FC8(void)
+{
+    int result = 0;
+    int flags = g_padButtonsPressed;
+    int old = g_optionsSubCursor;
 
     if (flags & 0x10) {
-        s32 *block;
-        s32 v;
+        int value;
+        int status;
         g_optionsSubCursor = 0;
-        block = (s32 *)g_menuScreenBlock;
-        v = *(s32 *)(*(u8 **)((u8 *)block + 0x14) + 0xE0);
-        if (v != 0) {
-            block[0x18 / 4] = v;
-            return 0;
+        value = *(int *)(g_menuSelection.source + 0xE0);
+        if (value != 0)
+            g_menuSelection.value = value;
+        else if (g_menuSelection.fallback == 0) {
+            status = -1;
+            goto finish;
         }
-        if (block[0x134 / 4] == 0) {
-            return -1;
-        }
-        return 0;
+        status = 0;
+finish:
+        return status;
     }
-
     if (flags & 0x900) {
         g_optionsSubCursor = 0;
         result = 1;
     } else if (flags & 0x8000) {
-        PlayGlobalSound(old <= 0 ? 5 : 3, 0, 0);
-        cur = g_optionsSubCursor - 1;
-        g_optionsSubCursor = cur;
-        if (cur < 0) {
+        if (old > 0)
+            PlayGlobalSound(3, 0, 0);
+        else
+            PlayGlobalSound(5, 0, 0);
+        if (--g_optionsSubCursor < 0)
             g_optionsSubCursor = 0;
-        }
     } else if (flags & 0x2000) {
-        PlayGlobalSound(old < 5 ? 3 : 5, 0, 0);
-        cur = g_optionsSubCursor + 1;
-        g_optionsSubCursor = cur;
-        if (cur >= 6) {
+        if (old < 5)
+            PlayGlobalSound(3, 0, 0);
+        else
+            PlayGlobalSound(5, 0, 0);
+        if (++g_optionsSubCursor > 5)
             g_optionsSubCursor = 5;
-        }
     }
-
-    if (old != g_optionsSubCursor) {
-        *(s32 *)(D_0025CA80 + 0x3C) = -0x12C;
-    }
-    cur = g_optionsSubCursor;
-    D_25CB30 = cur;
-    *(s32 *)(D_0025CA80 + 0x34) = *(s16 *)(D_1ABDEA + cur * 4);
+    if (old != g_optionsSubCursor)
+        D_0025CA80[0].timer = -300;
+    D_25CB30 = g_optionsSubCursor;
+    D_0025CA80[0].text = D_1ABDEA[g_optionsSubCursor].text;
     return result;
 }
 #endif
