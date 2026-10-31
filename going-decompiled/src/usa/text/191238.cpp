@@ -1460,78 +1460,102 @@ void BuildUiTextureDescriptors(s32 *descTable, s32 count) {
 }
 #endif
 
-/* BindSkyData(skyData): bind + relocate a loaded sky-data blob. Fixes up the
- * header's file-relative offsets (+0x10/+0x14/+0x18, and +0x1C when non-zero) to
- * absolute pointers (+ blob base), marks it bound (+0x4 = 1), and publishes it to
- * g_pSkyData. Then two passes:
- *  (1) for each of the skyData[0xC] entries — a 0x10-byte array at the relocated
- *      skyData[0x10], repacked IN PLACE — read the four raw dimension words and
- *      write width1/width0 >> 4 into +0x8/+0xA and Log2Floor(dim) into +0xC/+0xE
- *      (the GS TEX0 log2 size fields), zeroing +0x0..0x7. (The prior #70 park
- *      flagged the source-word-stream vs 0x10-stride-array aliasing as unpinned:
- *      the two views are the SAME region — $18 starts at skyData[0x10] and steps
- *      0x10/entry = &entry[i] — and all four reads precede all writes, so the
- *      in-place repack is exact.)
- *  (2) relocate the nested pointer table at skyData[0x20] (skyData[0x6] slots):
- *      each slot points to a record whose own +0x20-stride sub-pointer array
- *      (length = record[0x0]) is relocated too.
- *
- * TODO(match): functional equivalent - not byte-exact. Preserved as portable C;
- * the matching arm stays INCLUDE_ASM, #else is byte-neutral. */
-#ifndef TARGET_NATIVE
-/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
- * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 49.32% PACKED-SAVE /
- * engine96 30.14% GPREL-DECL; best arm sdk29, first differing insn there: 'addiu sp, sp,
- * -0x30' vs 'addiu sp, sp, -0x50'
- * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
- * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
- * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
- * property and was measured false as the reason this member stays unmatched (FACT #9873).
- * Residual: the saved-register set; the rest UNMEASURED. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", BindSkyData);
+/* GUARD (task #2293): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack; row in tools/ee/s136os_functions.txt)
+ * and spliced over S136OS_SLOT by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice drops the function. On native it is
+ * plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_BindSkyData)
+S136OS_SLOT(BindSkyData);
 #else
 extern s32 Log2Floor(s32 x);
-extern u8 *g_pSkyData;
-void BindSkyData(u8 *skyData) {
-    s32 count, count2, i, j, k;
-    u8 *entries;
+/* One 0x10-byte sky texture entry. On disk it holds four raw words (two
+ * widths, two log2 sources); BindSkyData repacks it in place. */
+typedef struct SkyTexEntry {
+    s64 raw;          /* +0x0  zeroed once repacked */
+    s16 width1;       /* +0x8  raw word 1 >> 4 */
+    s16 width0;       /* +0xA  raw word 0 >> 4 */
+    s16 log2W;        /* +0xC  Log2Floor(raw word 2) */
+    s16 log2H;        /* +0xE  Log2Floor(raw word 3) */
+} SkyTexEntry;
+/* A sky shell record is an array of 0x20-byte rows: row 0's first word is the
+ * part count, rows 1..count each start with a file-relative offset. */
+typedef struct SkyShellRow {
+    s32 value;
+    u8  _pad04[0x1C];
+} SkyShellRow;
+typedef struct SkyData {
+    u8  _pad00[0x4];
+    s16 bound;              /* +0x4  set to 1 once relocated */
+    s16 shellCount;         /* +0x6  entries in shells[] */
+    u8  _pad08[0x4];
+    s16 texCount;           /* +0xC  entries in tex[] */
+    u8  _pad0E[0x2];
+    SkyTexEntry *tex;       /* +0x10 */
+    s32 offset14;           /* +0x14 file-relative, relocated */
+    s32 offset18;           /* +0x18 file-relative, relocated */
+    s32 offset1C;           /* +0x1C file-relative when non-zero, relocated */
+    SkyShellRow *shells[1]; /* +0x20 shellCount pointers */
+} SkyData;
+#ifndef TARGET_NATIVE
+extern SkyData *g_skyData __asm__("g_pSkyDataAbs");
+#else
+extern SkyData *g_skyData __asm__("g_pSkyData");
+#endif
+/*
+ * BindSkyData(sky) — bind a loaded sky-data blob in place and publish it to
+ * g_pSkyData (only in-core caller: InitLoadingSceneSystem, chunk 0x12).
+ *  - marks it bound (+0x4 = 1) and turns the file-relative offsets at +0x10,
+ *    +0x14, +0x18 (and +0x1C when non-zero) into pointers;
+ *  - repacks each of the texCount 0x10-byte texture entries in place: the four
+ *    raw words are read first (one walking pointer), then width0/width1 >> 4
+ *    and Log2Floor of the other two are written and the first 8 bytes zeroed;
+ *  - relocates every shell pointer at +0x20 and, inside each shell, the
+ *    count rows that follow its header row.
+ * No return value. The texture pass reads the blob back through g_pSkyData
+ * (re-loaded after each Log2Floor call, as the ROM does); the shell pass holds
+ * one copy of it across the inner loop.
+ *
+ * MATCHED on the s136os arm (task #2293), plain C, no device. Spellings that
+ * carry the match (private solo screen, ee_cc1.sh s136 -O2 -G8 -fopt-stack,
+ * words differing of 110): the typed records, so 2.95's type-based aliasing
+ * keeps g_pSkyData in a register across the s16/s64 stores (raw u8* offsets:
+ * 52 aligned); the shell rows indexed from the record itself as row k + 1
+ * (an s32 view at rec + 0x20 + k * 0x20 reloads g_pSkyData after the inner
+ * loop, 8; a parts[] member based at +0x20 walks the wrong base, 3).
+ */
+void BindSkyData(SkyData *sky) {
+    s32 i, j, k;
+    s32 *raw;
 
-    g_pSkyData = skyData;
-    *(s16 *)(skyData + 0x4) = 1;
-    *(s32 *)(skyData + 0x10) += (s32)skyData;
-    *(s32 *)(skyData + 0x14) += (s32)skyData;
-    *(s32 *)(skyData + 0x18) += (s32)skyData;
-    if (*(s32 *)(skyData + 0x1C) != 0) {
-        *(s32 *)(skyData + 0x1C) += (s32)skyData;
+    g_skyData = sky;
+    sky->bound = 1;
+    sky->tex = (SkyTexEntry *)((u8 *)sky->tex + (s32)sky);
+    sky->offset14 += (s32)sky;
+    sky->offset18 += (s32)sky;
+    if (sky->offset1C != 0) {
+        sky->offset1C += (s32)sky;
     }
 
-    /* pass 1: repack each 0x10-byte sky entry in place */
-    count = *(s16 *)(skyData + 0xC);
-    entries = *(u8 **)(skyData + 0x10);
-    for (i = 0; i < count; i++) {
-        u8 *e = entries + i * 0x10;
-        s32 w0 = *(s32 *)(e + 0x0);
-        s32 w1 = *(s32 *)(e + 0x4);
-        s32 w2 = *(s32 *)(e + 0x8);
-        s32 w3 = *(s32 *)(e + 0xC);
-        *(s16 *)(e + 0x8) = w1 >> 4;
-        *(s16 *)(e + 0xA) = w0 >> 4;
-        *(s16 *)(e + 0xC) = Log2Floor(w2);
-        *(s16 *)(e + 0xE) = Log2Floor(w3);
-        *(s64 *)(e + 0x0) = 0;
+    raw = (s32 *)g_skyData->tex;
+    for (i = 0; i < g_skyData->texCount; i++) {
+        s32 w0 = *raw++;
+        s32 w1 = *raw++;
+        s32 w2 = *raw++;
+        s32 w3 = *raw++;
+        g_skyData->tex[i].width0 = w0 >> 4;
+        g_skyData->tex[i].width1 = w1 >> 4;
+        g_skyData->tex[i].log2W = Log2Floor(w2);
+        g_skyData->tex[i].log2H = Log2Floor(w3);
+        g_skyData->tex[i].raw = 0;
     }
 
-    /* pass 2: relocate the nested pointer table at +0x20 */
-    count2 = *(s16 *)(skyData + 0x6);
-    for (j = 0; j < count2; j++) {
-        s32 *slot = (s32 *)(skyData + 0x20 + j * 4);
-        u8 *rec;
-        s32 n;
-        *slot += (s32)skyData;
-        rec = (u8 *)*slot;
-        n = *(s32 *)rec;
-        for (k = 0; k < n; k++) {
-            *(s32 *)(rec + 0x20 + k * 0x20) += (s32)skyData;
+    for (j = 0; j < g_skyData->shellCount; j++) {
+        SkyShellRow *shell;
+        g_skyData->shells[j] = (SkyShellRow *)((u8 *)g_skyData->shells[j] + (s32)sky);
+        shell = g_skyData->shells[j];
+        for (k = 0; k < shell[0].value; k++) {
+            shell[k + 1].value += (s32)sky;
         }
     }
 }

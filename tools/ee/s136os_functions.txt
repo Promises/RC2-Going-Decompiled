@@ -708,3 +708,4 @@ usa text/250080 func_003526A8
 usa text/250080 OnFmvVblankFlip
 usa text/250080 OnFmvGifDmaInterrupt
 usa text/191238 func_00297FA0
+usa text/191238 BindSkyData
