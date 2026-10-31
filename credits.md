@@ -183,6 +183,25 @@
     argument order except SpawnShockwaveRingMoby, whose f32 is first in
     ours and last upstream (EABI-neutral), with the native arm keeping ours.
 
+- **RC2 decomp contributions — `src/game/002E4528-rc2.c` in OpenRAC `rac2-gc-decomp`, commit `96927f87`** (MIT, © 2026 RC2 decomp contributions)
+  <https://github.com/OpenRAC/rac2-gc-decomp> at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`
+
+  One engine C body, adopted with permission (held by the operator, RULING
+  #10405) and re-checked byte-exact against our v2.00 ROM on the s136os arm
+  (task #2239, from audit NOTE #11286 §(b) row 3). The file was carried into
+  rac2-gc-decomp by atlasbez-dot (commit `ebf90a4c`, from
+  atlasbez-dot/rac2-gc-decomp at `921a4dee`) under its own MIT notice, which
+  is kept in the doc comment and in `THIRD-PARTY.md`. The doc comment carries
+  the `Source:` line, which names every change beyond extern spellings.
+
+  Used so far:
+  - **`CastEmitterOcclusionRay`** (`0x002E5340`) in
+    `going-decompiled/src/usa/text/1DFF80.cpp`, from `func_002E4528` (v1.01
+    address). ADAPTED: our callee and data spellings and prototypes, our
+    signature with the `SoundEmitterSlot` fields for its +0x20/+0x18, and a
+    `Vec4` probe for their 4-byte `s32 sp[1]` (written 16 bytes by every
+    callee). Returning `CollLine`'s result, as upstream does, is load-bearing.
+
 - **OpenRAC — `rac2-gc-decomp`, commit `96927f87`, core bodies** (GPL-3.0)
   <https://github.com/OpenRAC/rac2-gc-decomp> at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`
 

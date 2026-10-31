@@ -672,3 +672,4 @@ usa text/1FFBA0 func_003011C0
 usa text/16E980 ApplyCameraShakeAxis
 usa text/16E980 SampleCameraFogZone
 usa text/1A8180 func_002AD590
+usa text/1DFF80 CastEmitterOcclusionRay

@@ -159,6 +159,42 @@ a URL for it. The notice, which the doc comment also carries verbatim:
     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
     SOFTWARE.
 
+
+### RC2 decomp contributions, via OpenRAC rac2-gc-decomp (MIT)
+
+The C body of `CastEmitterOcclusionRay` in
+`going-decompiled/src/usa/text/1DFF80.cpp` is adapted from OpenRAC's
+`rac2-gc-decomp`, <https://github.com/OpenRAC/rac2-gc-decomp> at commit
+`96927f872c709e13aaa0f32265bb81a5531bf7ed` (the file is identical at
+`d43c3b99b984fb63556c844a21ee99e8e31d2deb`), `src/game/002E4528-rc2.c`,
+`func_002E4528` (v1.01 address). That file was carried over from
+atlasbez-dot/rac2-gc-decomp at `921a4dee` (upstream commit `ebf90a4c`) and
+carries its own MIT notice, not the repository's GPL-3.0, reproduced verbatim
+here and in the function's doc comment (task #2239, RULING #10405):
+
+    SPDX-License-Identifier: MIT
+    MIT License
+
+    Copyright (c) 2026 RC2 decomp contributions
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
+
 ### Lombyte (MIT)
 
 The C body of `_sysbitFlush` in `going-decompiled/src/usa/cod/022FA8.c` is

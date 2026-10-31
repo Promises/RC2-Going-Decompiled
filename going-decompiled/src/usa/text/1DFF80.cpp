@@ -1367,31 +1367,74 @@ void ComputeListenerOcclusionProbe(Vec4 *out) {
 }
 #endif
 
-/* Cast an occlusion ray from emitter `emitter` toward listener `outHit`: build a
- * probe point a short distance (0.75 * +64) along the emitter->camera direction,
- * offset from the camera, then collision-trace a line from there into the world
- * (mask 0x82, owner *(emitter+0x18)).  Used to test whether a sound source is
- * occluded from the listener.
- * TODO(match): functional equivalent - not byte-exact; every body instruction
- * matches on cc1 2.9; the only delta there is frame layout - it packs the callee saves
- * (s0,s1,s2,ra) at a 16-byte stride (0x50 frame) where the original uses an
- * 8-byte stride (0x30 frame) (the 8-byte-packed save wall, same as
- * func_002E6D98 on cc1 2.9; func_002E6D98 is byte-exact on the s136os arm since
- * task #2030).
- * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): this member's prologue - the
- * ROM's save set at its 8-byte stride, and its frame - is reproduced exactly (NOTE #9871), so
- * the save-slot wall named above is a cc1 2.9 property and was measured false as the reason
- * this member stays unmatched (FACT #9873). Residual: SCHED (NOTE #9729; 3/39 words). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", CastEmitterOcclusionRay);
+/* The C body of CastEmitterOcclusionRay below is adapted from a file that
+ * carries this notice, reproduced verbatim:
+ *
+ * SPDX-License-Identifier: MIT
+ * MIT License
+ *
+ * Copyright (c) 2026 RC2 decomp contributions
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+/* CastEmitterOcclusionRay: trace the occlusion ray between the listener and one
+ * sound emitter.
+ *   emitter: the slot; its world position (+0x20) and owner moby (+0x18, the
+ *            moby the trace ignores) are read.
+ *   origin:  the ray's FROM point (an input; nothing is stored through it,
+ *            FACT #5476) - the caller passes a listener probe point.
+ * The TO point is g_cameraPos + clamp(0.75 * (emitter pos - g_cameraPos), 64):
+ * three quarters of the way from the camera to the emitter, the offset clamped
+ * to a length of 64 by func_00283968. Returns CollLine's hit flag (mask 0x82,
+ * flags 0); UpdateSoundEmitters feeds it into the slot's occlusion history.
+ * MATCHED on the s136os arm (task #2239). No device. Returning CollLine's
+ * result is load-bearing: the same body as `void` with the call as a statement
+ * builds 39 words of which 3 differ (the a0/a1/a2 setup before Vec4AddVu0 is
+ * scheduled a2-first, NOTE #9729's residual), in this unit and alone.
+ * GUARD: compiled alone by SN 2.95.3 v1.36 -fopt-stack and spliced over the
+ * S136OS_SLOT line (tools/ee/s136os_splice.sh, row in
+ * tools/ee/s136os_functions.txt); plain C on native.
+ * Source: OpenRAC/rac2-gc-decomp @96927f872c709e13aaa0f32265bb81a5531bf7ed
+ * (the file is blob-identical at d43c3b99b984fb63556c844a21ee99e8e31d2deb),
+ * src/game/002E4528-rc2.c, func_002E4528 (v1.01 address; author commit
+ * ebf90a4c, atlasbez-dot, "carry over func_002E4528", carried from
+ * atlasbez-dot/rac2-gc-decomp at 921a4dee), under the MIT notice above and
+ * adopted with permission per RULING #10405. ADAPTED: (1) our callee and data
+ * spellings and prototypes: func_00282CF0 = Vec4SubVu0, func_00282D30 =
+ * Vec4ScaleVu0 and func_00282FB8 = func_00283968 (float argument second in our
+ * (dst, f32, src) prototypes; same registers), func_00282CC0 = Vec4AddVu0,
+ * func_002761F8 = CollLine, D_001B5340 = g_cameraPos; (2) our signature
+ * (SoundEmitterSlot *emitter, void *origin) for their (s32 arg0, s32 arg1),
+ * with the slot's pos and pOwnerMoby fields for their +0x20 and +0x18; (3)
+ * their `s32 sp[1]` probe is a Vec4 here - the four callees write 16 bytes
+ * through it, so a 4-byte buffer overflows on native; s32[1], f32[4] and Vec4
+ * all build the ROM's 39 words alone (measured, task #2239). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_CastEmitterOcclusionRay)
+S136OS_SLOT(CastEmitterOcclusionRay);
 #else
-void CastEmitterOcclusionRay(SoundEmitterSlot *emitter, void *outHit) {
-    f32 probe[4];
-    Vec4SubVu0(probe, (u8 *)emitter + 0x20, g_cameraPos);
-    Vec4ScaleVu0(probe, 0.75f, probe);   /* (dst, scale, src) - was arg-swapped */
-    func_00283968(probe, 64.0f, probe);
-    Vec4AddVu0(probe, probe, g_cameraPos);
-    CollLine(outHit, probe, 0x82, *(s32 *)((u8 *)emitter + 0x18), 0);
+s32 CastEmitterOcclusionRay(SoundEmitterSlot *emitter, void *origin) {
+    Vec4 probe;
+    Vec4SubVu0(&probe, emitter->pos, g_cameraPos);
+    Vec4ScaleVu0(&probe, 0.75f, &probe);
+    func_00283968(&probe, 64.0f, &probe);
+    Vec4AddVu0(&probe, &probe, g_cameraPos);
+    return CollLine(origin, &probe, 0x82, (s32)emitter->pOwnerMoby, 0);
 }
 #endif
 
