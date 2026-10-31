@@ -5183,7 +5183,11 @@ extern s32 GuiFontAtlasLookupGlyph(void *atlas, s32 codepoint);
 extern void func_002904B0(s32 x0, s32 y0, s32 x1, s32 y1, s32 color, s32 flag);
 extern s32 g_museumMenuCursor;
 extern s32 D_1ABA94;
+#ifndef TARGET_NATIVE
 extern s32 D_1ABDA8[2];          /* item label string ids; cc1-small (see above) */
+#else
+extern s32 D_1ABDA8[5];          /* true size: five item label string ids (RULING #12316 Q3) */
+#endif
 extern s32 g_swapGadgetItemIndex;
 /* One framing line in colour 0x55F0C070. EE: the colour goes as a u64 (see above). */
 #ifndef TARGET_NATIVE

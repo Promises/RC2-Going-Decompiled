@@ -681,11 +681,7 @@ void func_003007F8(Moby *moby) {
     GadgetVec4 step;
     s32 isLarge = 0;
     s32 isTurret;
-    /* REGISTER-PIN DEVICE (RULING #8598): pos in $17 and the first
-     * Vec4AddVu0 destination in $4 give the ROM's `addiu $4,$18,0x10` in both
-     * branch slots and `move $17,$4` before the call (0x3008A0..0x3008C0);
-     * unpinned, cc1 forms pos in $17 and copies it into $4. */
-    register f32 *pos EE_REG("$17");
+    f32 *pos;
 
     if (m->classId == 0xC5A || m->classId == 0xA65)
         isLarge = 1;

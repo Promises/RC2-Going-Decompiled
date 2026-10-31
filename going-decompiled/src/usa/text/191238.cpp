@@ -6474,7 +6474,7 @@ extern void func_002984E0(u8 *out);
 #ifndef TARGET_NATIVE
 extern s32  g_mapBitmapSizeMax[2] __asm__("D_1399B8Abs");
 #else
-extern s32  g_mapBitmapSizeMax[2] __asm__("D_1399B8");
+extern s32  g_mapBitmapSizeMax[28] __asm__("D_1399B8"); /* true size: 28 per-level words (RULING #12316 Q3) */
 #endif
 /*
  * func_00297FA0(out) — build the 2 KB galactic-map discovered-area bitmap for
