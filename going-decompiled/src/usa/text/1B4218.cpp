@@ -3682,8 +3682,8 @@ void ChainSecondaryVoice(s32 idx, s32 flags, s32 pan) {
  * 10, sample rate 48000) and plays via snd_PlaySample with func_002B8E28 as the
  * start callback; returns 1 on a started voice, 0 otherwise.
  * a1 is the sample-table index (stride-8 g_dialogSampleTable); a0/a2/a3 are
- * stashed to the tertiary state block (+0x90/+0x94/+0x92) with volume 10 and rate
- * 48000 (track +0x90, volume +0x92, mode +0x94, state +0x96, crossfade +0x9C,
+ * stashed to the tertiary state block (+0x90/+0x94/+0x92), with 10 stored at +0xA0
+ * (the view's poll interval, not the volume) and rate 48000 (track +0x90, volume +0x92, mode +0x94, state +0x96, crossfade +0x9C,
  * poll interval +0xA0, sample rate +0xA4 in the StreamChannel view below).
  * Tertiary passes sampleEnd=0, pan=(s16)a3, 0x20 as the 10th argument,
  * func_002B8E28 as the start callback, and &tertiaryState as the context.
@@ -3709,7 +3709,9 @@ void ChainSecondaryVoice(s32 idx, s32 flags, s32 pan) {
  * (common.h has it); (c) their file asks for their patched compiler's
  * -frac2-keep-block-order; our s136os arm closes without it; (d) the sample
  * start is passed as `(s32)first`: their prototype's first parameter is `int`,
- * ours (snd_PlaySample, cod/0321A0) is `s64`, and without the narrowing the
+ * ours (this unit's extern declaration of snd_PlaySample) is `s64` (the definition
+ * in cod/0321A0.c takes `s32`: a pre-existing declaration/definition width mismatch
+ * that DECLDEF does not flag; task #2253), and without the narrowing the
  * body builds 54 words, not the ROM's 57 (the dropped SI->DI sign-extend of
  * FACT #9588; StartAmbientVoice above spells it the same way). */
 #if !defined(TARGET_NATIVE) && !defined(S136OS_StartTertiaryVoice)
