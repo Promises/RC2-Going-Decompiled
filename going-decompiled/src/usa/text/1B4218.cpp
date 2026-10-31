@@ -1999,7 +1999,10 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_0
  * `volatile` so cc1 keeps the ROM's two separate loads of +0x90 (the compare,
  * and the reload for the func_002ABAE8 call). It is a CODEGEN DEVICE, not a
  * claim that the ground height changes asynchronously: in this function nothing
- * between the two loads writes +0x90.
+ * between the two loads writes +0x90 (ROM: lwc1 0x90($17) at 0x2B6434 and
+ * 0x2B6544, only +0xA8 stored between them), and the only writer in the tree is
+ * ProbeMobyGroundLine (0x2B6AE0), an earlier stage StepMobyMotion runs, not a
+ * concurrent one (writer census, task #2235).
  * Source: OpenRAC/rac2-gc-decomp @96927f872c709e13aaa0f32265bb81a5531bf7ed
  * (GPL-3.0, adopted with the authors' permission per RULING #10405),
  * src/game/002B52A0-g8.c, func_002B52A0 (v1.01 address; author commit
