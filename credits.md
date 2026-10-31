@@ -150,12 +150,12 @@
 - **OpenRAC — `rac2-gc-decomp`, commit `96927f87`, s136os bodies** (GPL-3.0)
   <https://github.com/OpenRAC/rac2-gc-decomp> at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`
 
-  Four engine C bodies, two in text/16E980, one in text/1A8180 and one in
-  text/1D54C0, adopted with the authors' permission (held by the operator,
-  RULING #10405) and re-checked byte-exact against our v2.00 ROM on the
-  s136os arm (tasks #2232, #2234 and #2252, from audit NOTE #12089 rows 3, 5
-  and 9).
-  Contributors: bigbeno37 and Flavius. Each doc comment carries the `Source:`
+  Six engine C bodies, two in text/16E980, one in text/1A8180, two in
+  text/1B4218 and one in text/1D54C0, adopted with the authors' permission
+  (held by the operator, RULING #10405) and re-checked byte-exact against our
+  v2.00 ROM on the s136os arm (tasks #2232, #2234, #2235 and #2252, from audit
+  NOTE #12089 rows 3, 5, 6 and 9).
+  Contributors: bigbeno37, Flavius and Louis-Philippe Le Sieur. Each doc comment carries the `Source:`
   line, which names every change beyond extern spellings.
 
   Used so far:
@@ -193,6 +193,17 @@
     `g_itemEquippedSlot`, `g_weaponTable` and `func_002DFFA0`; one `!(...)`
     test goes through a local so the C++ front end keeps the ROM's `xori`.
     The unit's s136os compile is unpinned for it (`S136EXTRA=""`).
+  - **`UpdateMobyMotionVelocity`** (`0x002B61C0`) in
+    `going-decompiled/src/usa/text/1B4218.cpp`, from `src/game/002B52A0-g8.c`
+    (`func_002B52A0`, author commit `e2e1a29f`, Louis-Philippe Le Sieur), with
+    its `Self_002B52A0`/`Ctl_002B52A0` layouts. ADAPTED: callee spellings and
+    the signature are ours (task #2235).
+  - **`StartTertiaryVoice`** (`0x002B7FA8`) in
+    `going-decompiled/src/usa/text/1B4218.cpp`, from
+    `src/game/002B6120-keep-block-order.c` (`func_002B7088`, author commit
+    `8f3538bb`, bigbeno37), whose comment names RAC1's `music_Transition` as
+    the shape. ADAPTED: symbol spellings are ours and the sample start is
+    narrowed to `s32` at the call (task #2235).
 
 - **RC2 decomp contributions — `src/game/002E4528-rc2.c` in OpenRAC `rac2-gc-decomp`, commit `96927f87`** (MIT, © 2026 RC2 decomp contributions)
   <https://github.com/OpenRAC/rac2-gc-decomp> at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`

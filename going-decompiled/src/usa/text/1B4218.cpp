@@ -60,9 +60,12 @@
  * FindTargetInGroup ApplyMobyLocalTransformDelta [since matched on the s136os
  * arm from OpenRAC's C, task #2207] InitMobySpringFollowState
  * StepMobySpringFollow RequestGameStateChange UpdateGameState StepMobyMotion
- * UpdateMobyMotionVelocity ResolveMobyMotionCollision ApplyMobyGroundAndEvents
+ * UpdateMobyMotionVelocity [since matched on the s136os arm from OpenRAC's C,
+ * task #2235] ResolveMobyMotionCollision ApplyMobyGroundAndEvents
  * ProbeMobyGroundLine ResolveMobySphereCollision UpdateMobyLeanFromTurn
- * UpdateActiveMobys StepDialogVoiceChannel UpdateDialogVoiceManager) the save
+ * UpdateActiveMobys StepDialogVoiceChannel UpdateDialogVoiceManager [OpenRAC's
+ * switch body for it is refused by s136os_splice on SHAPE, its jump table being
+ * an .rdata block: task #2235, the FACT #12092 wall]) the save
  * stride is NOT re-measured on the s136os arm and the residual is UNMEASURED:
  * tree-wide, 0 of the 111 labeled members that were run reproduce the 16-byte
  * stride there (FACT #9873). A per-member
@@ -1988,139 +1991,185 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_0
  * (EU 0x41C80000 @0x2b5ef8); the func_002ABAE8 ease rate is 0x3C360B61 (USA) /
  * 0x3C83126F (EU) — the EU twin unit carries its own value when carved.
  *
- * Matching arm stays INCLUDE_ASM (engine region — no byte-match). Faithful
- * transcription; helper semantics (func_002AB868/00284630/002AD860/002ABAE8/
- * 00283B30/00283B48) recovered from their prologues by prototype, marked below.
- * ORACLE-BLOCKED: the VU0 vec/trig helpers aren't loaded in the headless cmp
- * harness, so this #else is not runtime-verifiable here. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", UpdateMobyMotionVelocity);
+ * MATCHED on the s136os arm (task #2235), not by cc1 2.9 (save-layout: callee-
+ * saves at 8-byte spacing). GUARD: compiled alone by SN 2.95.3 v1.36
+ * -fopt-stack (cc1plus, this unit's S136EXTRA="") and spliced over the
+ * S136OS_SLOT line (tools/ee/s136os_splice.sh); plain C on native.
+ * DEVICE (RULING #8404 class): Ctl_002B52A0.f90 (ctrl->groundHeight) is
+ * `volatile` so cc1 keeps the ROM's two separate loads of +0x90 (the compare,
+ * and the reload for the func_002ABAE8 call). It is a CODEGEN DEVICE, not a
+ * claim that the ground height changes asynchronously: in this function nothing
+ * between the two loads writes +0x90.
+ * Source: OpenRAC/rac2-gc-decomp @96927f872c709e13aaa0f32265bb81a5531bf7ed
+ * (GPL-3.0, adopted with the authors' permission per RULING #10405),
+ * src/game/002B52A0-g8.c, func_002B52A0 (v1.01 address; author commit
+ * e2e1a29f, Louis-Philippe Le Sieur). ADAPTED: the statements and the
+ * Self_002B52A0/Ctl_002B52A0 layouts are theirs (Ctl's fields are
+ * MobyMotionController's: f14..f1C = the yaw-steer rates, f20/f24 =
+ * accel/accelArrive, f28 = maxSpeed, f2C = decel, f30 = arriveAngle, f34 =
+ * arriveRadius, flags38 = modeFlags, v50 = groundNormal, f60/f64 = wallContact,
+ * w80 = wallContactCount, f90 = groundHeight, flags94 = eventFlags, flags9C =
+ * stateFlags, vel = velAccum, speed, fB4 = turnDelta, hC0/hC2 = grounded/
+ * airborne frame counts, fCC = distToTarget). Changed from theirs: (a) our
+ * callee spellings (their func_002AAA00 = func_002AB868, func_00283C80 =
+ * AngleAbsDiffPi, func_00282C88 = func_00283638, func_00282E80 = DistXYVu0,
+ * func_00282C10 = func_002835C0, func_00283248 = Atan2fPoly, func_00283B98 =
+ * WrapAnglePiSum, func_00283BE0 = WrapAnglePiDiff, D_001AA108 =
+ * g_mobyMaxTurnRate, func_00283180 = func_00283B30, func_00283198 =
+ * func_00283B48, func_00282CF0 = Vec4SubVu0, func_00282DB0 = Vec3DotVu0,
+ * func_002AC9F8 = func_002AD860, func_00282CC0 = Vec4AddVu0, func_00282E20 =
+ * Vec2LengthXyVu0, func_002AAC80 = func_002ABAE8), with each Vec4 argument cast
+ * to the prototypes this C++ unit already declares with C linkage;
+ * (b) the signature is ours (Moby *, MobyMotionController *, Vec4 *, f32, and
+ * the two pointers the caller passes and this function ignores), with self/ctl
+ * locals cast to their layouts; (c) their `__attribute__((sda))` on D_001AA108
+ * is dropped (our cc1 ignores it); (d) func_002ABAE8 is declared and called in
+ * text/1A8180's definition order (dist, velRate, accel, maxSpeed, pVel), which
+ * builds the same image; (e) func_002AB868 keeps their EE argument-bank order
+ * on the EE arm (the definition's order builds a different image, measured)
+ * and takes the definition's order on native, where arguments are positional. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_UpdateMobyMotionVelocity)
+S136OS_SLOT(UpdateMobyMotionVelocity);
 #else
+typedef struct {
+    char pad0[0x10];
+    float pos[4];                       /* 0x10 */
+    char pad1[0xF8 - 0x20];
+    float heading;                      /* 0xF8 */
+} Self_002B52A0;
+
+typedef struct {
+    char pad0[0x14];
+    float f14, f18, f1C, f20, f24, f28, f2C, f30, f34;      /* 0x14 .. 0x34 */
+    unsigned flags38;                   /* 0x38 */
+    char pad1[0x50 - 0x3C];
+    float v50[4];                       /* 0x50 */
+    float f60, f64;                     /* 0x60 */
+    char pad3[0x80 - 0x68];
+    int w80;                            /* 0x80 */
+    char pad4[0x90 - 0x84];
+    volatile float f90; /* Retail reads this field for the comparison and reloads it for the final damping call. */
+    unsigned flags94;                   /* 0x94 */
+    char pad5[0x9C - 0x98];
+    int flags9C;                        /* 0x9C */
+    float vel[4];                       /* 0xA0 */
+    float speed;                        /* 0xB0 */
+    float fB4;                          /* 0xB4 */
+    char pad7[0xC0 - 0xB8];
+    short hC0, hC2;                     /* 0xC0 */
+    char pad8[0xCC - 0xC4];
+    float fCC;                          /* 0xCC */
+} Ctl_002B52A0;
+
 extern f32  g_mobyMaxTurnRate;                                 /* 0x1AA108 per-step yaw clamp (rad) */
-extern void func_002AB868(f32 *mobyYaw, f32 *turnDeltaOut, f32 speed,
-                          f32 velX, f32 velY, f32 velZ);        /* 0x2AB868 steer yaw toward velocity */
-extern f32  AngleAbsDiffPi(f32 mobyYaw, f32 speed);             /* 0x284630 drive-heading angle helper */
+#ifndef TARGET_NATIVE
+/* The float argument is the second declared parameter: that order fixes the
+ * instruction order of the call setup. On the EE EABI the GPR and FPR argument
+ * banks are separate, so this is the same call as text/1A8180's definition
+ * (f32 target, f32 maxStep, f32 accel, f32 maxSpeed, f32 *pAngle, f32 *pVel,
+ * s32 mode); declared in that order, the s136os arm builds a different image. */
+extern f32  func_002AB868(void *, float, void *, int, float, float, float);  /* 0x2AB868 steer yaw toward velocity */
+#else
+extern f32  func_002AB868(f32 target, f32 maxStep, f32 accel, f32 maxSpeed,
+                          f32 *pAngle, f32 *pVel, s32 mode);  /* stack-argument ABI: the definition's order */
+#endif
+extern f32  AngleAbsDiffPi(f32 a, f32 b);                      /* 0x284630 */
+extern void func_00283638(Vec4 *vec);                          /* 0x283638 */
+extern f32  DistXYVu0(Vec4 *a, Vec4 *b);                       /* 0x283830 */
 extern f32  func_002835C0(f32 x);                              /* 0x2835C0 sqrtf */
-extern void func_002AD860(Vec4 *v, f32 maxLen);                /* 0x2AD860 clamp v planar length to maxLen */
-extern void func_002ABAE8(f32 *value, f32 delta, f32 rate1,
-                          f32 rate2, f32 clamp);                /* 0x2ABAE8 rate-limited ease of *value by delta */
-extern f32  func_00283B30(f32 angle);                          /* 0x283B30 cos-like trig leaf (VU0) */
-extern f32  func_00283B48(f32 angle);                          /* 0x283B48 sin-like trig leaf (VU0) */
-extern f32  Vec3DotVu0(Vec4 *a, Vec4 *b);                      /* 0x283760 3-component dot (VU0) */
-extern f32  Vec2LengthXyVu0(Vec4 *v);                            /* 0x2837D0 planar/vector magnitude */
-extern f32  WrapAnglePiDiff(f32 a, f32 b);                     /* 0x284590 wrap a-b into [-pi,pi] */
+extern f32  Atan2fPoly(f32 y, f32 x);                          /* 0x283BF8 */
+extern f32  WrapAnglePiSum(f32 a, f32 b);                      /* 0x284548 */
+extern f32  WrapAnglePiDiff(f32 a, f32 b);                     /* 0x284590 */
+extern f32  func_00283B30(f32 angle);                          /* 0x283B30 cos-like leaf (VU0) */
+extern f32  func_00283B48(f32 angle);                          /* 0x283B48 sin-like leaf (VU0) */
+extern void Vec4SubVu0(Vec4 *dst, Vec4 *a, Vec4 *b);           /* 0x2836A0 */
+extern f32  Vec3DotVu0(Vec4 *a, Vec4 *b);                      /* 0x283760 */
+extern void func_002AD860(Vec4 *v, f32 maxLen);                /* 0x2AD860 clamp planar length */
+extern void Vec4AddVu0(Vec4 *dst, Vec4 *a, Vec4 *b);           /* 0x283670 */
+extern f32  Vec2LengthXyVu0(Vec4 *v);                          /* 0x2837D0 */
+extern void func_002ABAE8(f32 dist, f32 velRate, f32 accel, f32 maxSpeed,
+                          f32 *pVel);           /* 0x2ABAE8 (text/1A8180) rate-limited ease */
 
 void UpdateMobyMotionVelocity(Moby *moby, MobyMotionController *ctrl, Vec4 *target,
-                              f32 speed, Vec4 *stepOut, Vec4 *velOut) {
-    f32 *mobyYaw  = (f32 *)((u8 *)moby + 0xF8);
-    Vec4 *mobyPos = (Vec4 *)((u8 *)moby + 0x10);
-    Vec4 stepVec;   /* commanded drive velocity (frame scratch) */
-    Vec4 velCmd;    /* per-frame velocity delta applied to the accumulator */
-    f32 steerAngle;
-    f32 arriveSpeed;
-    f32 dist;
+                              f32 x, Vec4 *stepOut, Vec4 *velOut)
+{
+    Self_002B52A0 *self = (Self_002B52A0 *)moby;
+    Ctl_002B52A0 *ctl = (Ctl_002B52A0 *)ctrl;
+    float local[4] __attribute__((aligned(16)));
+    float local2[4] __attribute__((aligned(16)));
+    float h, scale, dist, dot, len, len2, diff, g90;
 
     (void)stepOut;
     (void)velOut;
-
-    /* 1. Steer yaw toward the commanded velocity (skipped when free-yaw). */
-    if ((ctrl->modeFlags & MOBY_MOTION_MODE_FREE_YAW) == 0) {
-        func_002AB868(mobyYaw, &ctrl->turnDelta, speed, ctrl->velX, ctrl->velY, ctrl->velZ);
-    }
-
-    steerAngle = AngleAbsDiffPi(*mobyYaw, speed);
-
-    /* Inside the heading dead-band: drive a zero command (and flag steer-blocked
-     * when the residual heading error outruns the max turn). */
-    if ((ctrl->modeFlags & MOBY_MOTION_MODE_FREE_YAW) == 0 && ctrl->arriveAngle < steerAngle) {
-        func_00283638(&stepVec);
-        if ((ctrl->turnDelta * 30.0f) < (steerAngle - ctrl->arriveAngle)) {   /* EU: 25.0f */
-            ctrl->stateFlags |= 0x2;
-        }
-        goto resolve;
-    }
-
-    ctrl->stateFlags &= ~0x2;
-    dist = DistXYVu0(mobyPos, target);
-    ctrl->distToTarget = dist;
-    if (dist <= ctrl->arriveRadius) {   /* arrived: zero command */
-        func_00283638(&stepVec);
-        goto resolve;
-    }
-
-    /* Arrive-profile speed, clamped to the controller max. */
-    arriveSpeed = func_002835C0(2.0f * (dist - ctrl->arriveRadius) * ctrl->accelArrive);
-    if (ctrl->maxSpeed < arriveSpeed) {
-        arriveSpeed = ctrl->maxSpeed;
-    }
-
-    {
-        f32 angle;
-        if (ctrl->wallContactCount == 0) {
-            angle = speed;
-        } else {
-            /* Face away from the last wall contact, but limit the deflection to
-             * +/- the max turn rate off the caller heading. */
-            f32 baseAngle = WrapAnglePiSum(Atan2fPoly(ctrl->wallContact[0] - mobyPos->x,
-                                                      ctrl->wallContact[1] - mobyPos->y),
-                                           3.14159f);
-            f32 turnErr = WrapAnglePiDiff(speed, baseAngle);
-            if (g_mobyMaxTurnRate < turnErr) {
-                turnErr = g_mobyMaxTurnRate;
-            } else if (turnErr < -g_mobyMaxTurnRate) {
-                turnErr = -g_mobyMaxTurnRate;
-            }
-            angle = WrapAnglePiSum(turnErr, baseAngle);
-        }
-        stepVec.x = func_00283B30(angle) * arriveSpeed;
-        stepVec.y = func_00283B48(angle) * arriveSpeed;
-        stepVec.z = 0.0f;
-    }
-
-resolve:
-    /* 4. Fold the command into the velocity accumulator (which aliases +0xA0:
-     * xy = planar accum, z = verticalVel). */
-    Vec4SubVu0(&velCmd, &stepVec, (Vec4 *)&ctrl->velAccum);
-    velCmd.z = 0.0f;
-    if (0.0f < Vec3DotVu0(&stepVec, (Vec4 *)&ctrl->velAccum)) {
-        func_002AD860(&velCmd, ctrl->accel);
+    if (!(ctl->flags38 & 0x10))
+#ifndef TARGET_NATIVE
+        func_002AB868(&self->heading, x, &ctl->fB4, 0, ctl->f14, ctl->f18, ctl->f1C);
+#else
+        func_002AB868(x, ctl->f14, ctl->f18, ctl->f1C, &self->heading, &ctl->fB4, 0);
+#endif
+    h = AngleAbsDiffPi(self->heading, x);
+    if (!(ctl->flags38 & 0x10) && ctl->f30 < h) {
+        func_00283638((Vec4 *)local);
+        if (h - ctl->f30 > ctl->fB4 * 30.0f)   /* EU: 25.0f */
+            ctl->flags9C |= 2;
     } else {
-        func_002AD860(&velCmd, ctrl->accelArrive);
+        ctl->flags9C &= ~2;
+        dist = DistXYVu0((Vec4 *)self->pos, target);
+        ctl->fCC = dist;
+        if (dist <= ctl->f34) {
+            func_00283638((Vec4 *)local);
+        } else {
+            scale = func_002835C0(2.0f * (dist - ctl->f34) * ctl->f24);
+            if (ctl->f28 < scale)
+                scale = ctl->f28;
+            h = x;
+            if (ctl->w80 != 0) {
+                x = WrapAnglePiSum(Atan2fPoly(ctl->f60 - self->pos[0], ctl->f64 - self->pos[1]), 3.14159f);
+                h = WrapAnglePiDiff(h, x);
+                if (g_mobyMaxTurnRate < h)
+                    h = g_mobyMaxTurnRate;
+                else if (h < -g_mobyMaxTurnRate)
+                    h = -g_mobyMaxTurnRate;
+                h = WrapAnglePiSum(h, x);
+            }
+            local[0] = func_00283B30(h) * scale;
+            local[1] = func_00283B48(h) * scale;
+            local[2] = 0;
+        }
     }
-    Vec4AddVu0((Vec4 *)&ctrl->velAccum, (Vec4 *)&ctrl->velAccum, &velCmd);
-    ctrl->speed = Vec2LengthXyVu0((Vec4 *)&ctrl->velAccum);
-
-    /* 5. Vertical / ground step. */
-    if ((ctrl->modeFlags & MOBY_MOTION_MODE_NO_VERTICAL) == 0) {
-        f32 posZ = *(f32 *)((u8 *)moby + 0x18);
-        if (ctrl->groundHeight < posZ) {
-            /* Above ground. */
-            if (ctrl->airborneFrames < 2 && (posZ - ctrl->groundHeight) < 0.15f) {
-                /* Just left a steep-enough slope: cancel the into-slope velocity. */
-                f32 normalLen = Vec2LengthXyVu0((Vec4 *)ctrl->groundNormal);
-                if (0.087266475f < Atan2fPoly(ctrl->groundNormal[2], normalLen)) {
-                    f32 intoSlope = -Vec3DotVu0((Vec4 *)&ctrl->velAccum, (Vec4 *)ctrl->groundNormal);
-                    if (intoSlope < ctrl->verticalVel) {
-                        ctrl->verticalVel = -Vec3DotVu0((Vec4 *)&ctrl->velAccum, (Vec4 *)ctrl->groundNormal);
-                    }
+    Vec4SubVu0((Vec4 *)local2, (Vec4 *)local, (Vec4 *)ctl->vel);
+    local2[2] = 0;
+    dot = Vec3DotVu0((Vec4 *)local, (Vec4 *)ctl->vel);
+    if (0.0f < dot)
+        func_002AD860((Vec4 *)local2, ctl->f20);
+    else
+        func_002AD860((Vec4 *)local2, ctl->f24);
+    Vec4AddVu0((Vec4 *)ctl->vel, (Vec4 *)ctl->vel, (Vec4 *)local2);
+    len = Vec2LengthXyVu0((Vec4 *)ctl->vel);
+    ctl->speed = len;
+    if (ctl->flags38 & 4)
+        return;
+    g90 = ctl->f90;
+    if (g90 < self->pos[2]) {
+        if (ctl->hC2 < 2) {
+            if (self->pos[2] - g90 < 0.15f) {
+                len2 = Vec2LengthXyVu0((Vec4 *)ctl->v50);
+                if (0.087266475f < Atan2fPoly(ctl->v50[2], len2)) {
+                    if (-Vec3DotVu0((Vec4 *)ctl->vel, (Vec4 *)ctl->v50) < ctl->vel[2])
+                        ctl->vel[2] = -Vec3DotVu0((Vec4 *)ctl->vel, (Vec4 *)ctl->v50);
                 }
             }
-            ctrl->verticalVel -= ctrl->decel;
-            if (ctrl->groundedFrames == 0) {
-                ctrl->eventFlags |= MOBY_MOTION_EVENT_FELL_STUCK;
-            }
-        } else {
-            /* At or below ground: clamp the step, ease toward the surface. */
-            f32 penetration = ctrl->groundHeight - posZ;
-            if (penetration < ctrl->verticalVel) {
-                ctrl->verticalVel = penetration;
-            } else if (ctrl->verticalVel < 0.0f) {
-                ctrl->verticalVel = 0.0f;
-            }
-            func_002ABAE8(&ctrl->verticalVel,
-                          ctrl->groundHeight - *(f32 *)((u8 *)moby + 0x18),
-                          0.011111111f, 0.011111111f, 1.0f);   /* 0x3C360B61; EU 0x3C83126F */
         }
+        ctl->vel[2] = ctl->vel[2] - ctl->f2C;
+        if (ctl->hC0 == 0)
+            ctl->flags94 |= 0x20;
+    } else {
+        diff = g90 - self->pos[2];
+        if (diff < ctl->vel[2])
+            ctl->vel[2] = diff;
+        else if (ctl->vel[2] < 0.0f)
+            ctl->vel[2] = 0.0f;
+        func_002ABAE8(ctl->f90 - self->pos[2], 0.011111111f, 0.011111111f, 1.0f, &ctl->vel[2]);   /* EU: 0x3C83126F */
     }
 }
 #endif
@@ -3629,42 +3678,90 @@ void ChainSecondaryVoice(s32 idx, s32 flags, s32 pan) {
  * `idx` if its TOC bank exists. Arms the tertiary state block (state 1, volume
  * 10, sample rate 48000) and plays via snd_PlaySample with func_002B8E28 as the
  * start callback; returns 1 on a started voice, 0 otherwise.
- * Same shape and residual as StartAmbientVoice (SCHED-TIEBREAK); the nested
- * ifs reproduce the ROM's shared return-0 block at the end. sdk29 72.81% /
- * engine96 29.30% (unit objdiff report, task #510).
- *
  * a1 is the sample-table index (stride-8 g_dialogSampleTable); a0/a2/a3 are
  * stashed to the tertiary state block (+0x90/+0x94/+0x92) with volume 10 and rate
- * 48000. Uses raw offsets for the unnamed tertiary fields (+0x90/+0x92/+0x9C/
- * +0xA0/+0xA4) and struct names for tertiaryState/tertiaryArg1/tertiaryFlag.
+ * 48000 (track +0x90, volume +0x92, mode +0x94, state +0x96, crossfade +0x9C,
+ * poll interval +0xA0, sample rate +0xA4 in the StreamChannel view below).
  * Tertiary passes sampleEnd=0, pan=(s16)a3, 0x20 as the 10th argument,
- * func_002B8E28 as the start callback, and &tertiaryState as the context. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", StartTertiaryVoice);
+ * func_002B8E28 as the start callback, and &tertiaryState as the context.
+ *
+ * MATCHED on the s136os arm (task #2235). The `long first` local is what makes
+ * SN 1.36 emit the ROM's explicit SI->DI sign-extend of the sample start
+ * (FACT #9588); the nested if/else with the `return 1` after the join keeps
+ * the call at the end of its block (the residual NOTE #9589 measured). No
+ * device. GUARD: compiled alone by SN 2.95.3 v1.36 -fopt-stack (cc1plus, this
+ * unit's S136EXTRA="") and spliced over the S136OS_SLOT line
+ * (tools/ee/s136os_splice.sh); plain C on native.
+ * Source: OpenRAC/rac2-gc-decomp @96927f872c709e13aaa0f32265bb81a5531bf7ed
+ * (GPL-3.0, adopted with the authors' permission per RULING #10405),
+ * src/game/002B6120-keep-block-order.c, func_002B7088 (v1.01 address; author
+ * commit 8f3538bb, bigbeno37; their comment names RAC1's music_Transition as
+ * the shape). ADAPTED: the statements and the SoundEntry/SoundTable/
+ * StreamChannel/StreamState layouts are theirs (StreamState.channel[2] is our
+ * FileLoadVoiceState's tertiary block at +0x8C). Changed from theirs: (a) our
+ * symbol spellings (their D_001A63A8 = &g_fileLoadVoiceState, D_0014B540 =
+ * g_discToc, func_00133350 = snd_PlaySample, func_002B7F08 = func_002B8E28), cast
+ * to the declarations this C++ unit already has with C linkage (the callback
+ * argument as void *); (b) their `typedef unsigned char u8` is dropped
+ * (common.h has it); (c) their file asks for their patched compiler's
+ * -frac2-keep-block-order; our s136os arm closes without it; (d) the sample
+ * start is passed as `(s32)first`: their prototype's first parameter is `int`,
+ * ours (snd_PlaySample, cod/0321A0) is `s64`, and without the narrowing the
+ * body builds 54 words, not the ROM's 57 (the dropped SI->DI sign-extend of
+ * FACT #9588; StartAmbientVoice above spells it the same way). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_StartTertiaryVoice)
+S136OS_SLOT(StartTertiaryVoice);
 #else
-/* TODO(match): functional equivalent - not byte-exact; SCHED-TIEBREAK, sdk29 72.81% / engine96 29.30%. */
+typedef struct { int offset, size; } SoundEntry;
+
+typedef struct { char pad[0x52fc]; int base; SoundEntry entries[1]; } SoundTable;
+
+typedef struct {
+    unsigned int handle;
+    short track, volume, flags, state, fade, unknown, crossfade, unknown2;
+    int poll_interval, sample_rate;
+    char tail[8];
+} StreamChannel;
+
+typedef struct { u8 pad[0x44]; StreamChannel channel[3]; } StreamState;
+
 extern void func_002B8E28(s32 voiceId, long handle);   /* 0x2B8E28 tertiary voice-start callback (defined below) */
-s32 StartTertiaryVoice(s32 a0, s32 a1, s32 a2, s32 a3) {
-    u8 *m = (u8 *)&g_fileLoadVoiceState;
-    u8 *toc;
-    if (g_fileLoadVoiceState.tertiaryState == 0) {  /* channel free */
-        toc = g_discToc;
-        if (*(s32 *)(toc + a1 * 8 + 0x5300) != 0) {  /* sample bank exists for this id */
-    g_fileLoadVoiceState.tertiaryArg1 = (s16)a2;
-    *(s32 *)(m + 0xA0) = 10;                /* volume */
-    *(s32 *)(m + 0xA4) = 48000;            /* sample rate (0xBB80) */
-    g_fileLoadVoiceState.tertiaryState = 0xFFFFFFFF;
-    *(s16 *)(m + 0x90) = (s16)a0;
-    *(s16 *)(m + 0x9C) = 1;
-    g_fileLoadVoiceState.tertiaryFlag = 1;
-    *(s16 *)(m + 0x92) = (s16)a3;
-    snd_PlaySample(*(s32 *)(toc + 0x52FC) + *(s32 *)(toc + a1 * 8 + 0x5300),
-                   0, 0, 0, (s16)a3, 0, 1, 0, 0, 0x20, (void *)func_002B8E28,
-                   (long)(u32)&g_fileLoadVoiceState.tertiaryState);
-            return 1;
+
+/* If the third stream channel is idle (handle 0) and table entry index is present, claim
+   it (handle -1, state 1, crossfade 1, track, mode, 10 / 48000, volume) and start the
+   entry (offset plus the table base) on it with flag 0x20; return 1 if it was started.
+   The nested if/else with `return 1` after the join is RAC1's music_Transition: the
+   success path ends in the call, so the call stays at the end of its block and the
+   scheduler keeps retail's order. */
+s32 StartTertiaryVoice(s32 track, s32 index, s32 mode, s32 volume)
+{
+    StreamState *s = (StreamState *)&g_fileLoadVoiceState;
+    SoundTable *d;
+    long first;
+    int offset;
+
+    if (s->channel[2].handle == 0) {
+        d = (SoundTable *)g_discToc;
+        offset = d->entries[index].offset;
+        if (offset) {
+            s->channel[2].flags = mode;
+            s->channel[2].handle = 0xffffffffU;
+            s->channel[2].track = track;
+            s->channel[2].poll_interval = 10;
+            s->channel[2].sample_rate = 48000;
+            s->channel[2].state = 1;
+            s->channel[2].crossfade = 1;
+            s->channel[2].volume = volume;
+            first = offset + d->base;
+            snd_PlaySample((s32)first, 0, 0, 0, (short)volume, 0, 1, 0, 0, 32,
+                           (void *)func_002B8E28, (unsigned int)&s->channel[2]);
+        } else {
+            return 0;
         }
+    } else {
+        return 0;
     }
-    return 0;
+    return 1;
 }
 #endif
 
@@ -3981,12 +4078,19 @@ finalize:
  * -fopt-stack): NOTE #9871's census vocabulary did not match this label, so
  * FACT #9873's re-screen never ran it. Of the 111 labeled members that were
  * run, 0 reproduce the 16-byte save stride there, so the stride is not
- * evidence that this member is walled. Residual: UNMEASURED. */
+ * evidence that this member is walled. Residual: UNMEASURED.
+ * MEASURED (task #2235): OpenRAC rac2-gc-decomp @96927f87's C for it
+ * (src/game/002B7578.c, func_002B7578; masked 0/341 in a standalone TU, FACT
+ * #12087) dispatches its crossfade state through a `switch`, and SN 1.36 emits
+ * that table as an .rdata section switch inside .ent..end, which
+ * tools/ee/s136os_splice.sh refuses on SHAPE ("outside the s136os arm's
+ * domain"). The ROM's table is jtbl_0026CBF0_text in the data segment. Not
+ * adopted; the jtbl wall of FACT #12092. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", UpdateDialogVoiceManager);
 #else
 /* TODO(match): functional equivalent - not byte-exact; switch-dispatch + save-layout wall on cc1 2.9 (s136os unmeasured, see above). */
-extern s32  StartTertiaryVoice(s32 a0, s32 a1, s32 a2, s32 a3);        /* 0x2B7FA8 (INCLUDE_ASM above) */
+extern s32  StartTertiaryVoice(s32 a0, s32 a1, s32 a2, s32 a3);        /* 0x2B7FA8 (s136os arm above) */
 extern void func_00132BC0(s32 handle, s32 cmd, s32 sampleCount, s32 a3,
                           s32 a4, s32 a5, void *startCb, void *ctx);   /* 0x132BC0 989snd play command */
 extern s32  snd_CheckLoadInProgress(s32 flag);                        /* 0x133580 tests/waits bank-load-in-progress */
