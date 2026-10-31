@@ -2146,11 +2146,29 @@ s32 SoundOptionsMenuInput(MenuWidget *obj) {
  * (chosen by g_audioStereoMode) instead of a bar. Row Y steps by screen[0x24]>>2
  * (ry, 2*ry, 3*ry); label/value X derive from screen[0x20]>>1 (lx). Returns 2.
  *
- * Portable #else (functional-equiv, NEEDS-ORACLE): op-for-op faithful to the 18
- * calls; draw-primitive signatures per include/gui.h (#67). The matching arm
- * stays INCLUDE_ASM (engine-2.96 unit). */
+ * MATCHED on the s136os arm (SN 2.95.3 v1.36 -fopt-stack, the unit's gcse-on
+ * S136EXTRA, task #2383). What closed task #1395's last 12 words: one row-Y
+ * local that walks the rows, formed as `ry + ry` for row 2 and advanced with
+ * `y += ry` for row 3. The ROM then holds 2*ry, 3*ry and 3*ry-8 in one
+ * register ($s0), and fills row 2's last jal slot with the `addu` that forms
+ * 3*ry. Spelled `2 * ry`, or as a fresh row-3 expression, cc1 fills that slot
+ * with the icon call's `sll` argument instead (12 words). A row-3 local set
+ * before the row-2 icon call costs 55..148 words. */
+/* ADDRESSING-MODEL DEVICE (RULING #8620 class; directive-only, emits nothing):
+ * the ROM reads all three volumes absolutely (%hi/%lo), never gp-relative. At
+ * FILE SCOPE, outside the guard, so the unit's 2.9 TU declares them before the
+ * spliced block too (s136os_splice refuses ADDRESSING otherwise). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D8A68);
+__asm__(".extern g_musicVolume, 16");
+__asm__(".extern g_sfxVolume, 16");
+__asm__(".extern g_audioStereoMode, 16");
+#endif
+/* GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+ * (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; tools/ee/s136os_functions.txt) and
+ * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002D8A68)
+S136OS_SLOT(func_002D8A68);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
@@ -2168,17 +2186,8 @@ extern s32 GetLocalizedString(s32 id);
  * temporaries (stack slot 0x1C); the fill end spelled `lx + 8 + fill`; `ry`
  * before `lx`; the volume reads absolute (`.extern ,16`); the colours 64-bit
  * (the ROM's dli); the stereo-string pick as `!= 0`; the fills as `/ 0x400`.
- * The remaining 12 words (169..180) are one delay-slot choice: the ROM fills row
- * 2's last jal slot with row 3's `2*ry + ry`, cc1 here with the `sll` argument.
- * Tried, no effect: `ry * 3`, `2 * ry + ry`, a row-3 local before/after the
- * call; worse: `ry + 2 * ry` (79), `lx + (fill + 8)` (187). */
-#ifndef TARGET_NATIVE
-/* ADDRESSING-MODEL DEVICE (RULING #8620 class): the ROM reads all three as
- * absolute %hi/%lo, never gp-relative. */
-__asm__(".extern g_musicVolume, 16");
-__asm__(".extern g_sfxVolume, 16");
-__asm__(".extern g_audioStereoMode, 16");
-#endif
+ * The remaining 12 words (169..180) were one delay-slot choice, closed in task
+ * #2383 by the walking row-Y local `y` (see the doc comment above). */
 extern s32 g_musicVolume;
 extern s32 g_sfxVolume;
 extern s32 g_audioStereoMode;
@@ -2204,7 +2213,7 @@ void func_00280090(s32 a, s32 b, s32 c, s32 d, s32 e);
 s32 func_002D8A68(u8 *screen) {
     s32 ry = *(s32 *)(screen + 0x24) >> 2;   /* per-row Y step */
     s32 lx = *(s32 *)(screen + 0x20) >> 1;   /* label / value-text X base */
-    s32 fill, icon;
+    s32 fill, icon, y;
 
     Begin2dDrawBatch(0);
 
@@ -2222,20 +2231,22 @@ s32 func_002D8A68(u8 *screen) {
         func_0028FFF0(icon, (lx + 9) << 4, (ry - 6) << 4, (lx + 8 + fill) << 4,
                       (ry + 5) << 4, 0, 0xA0, 0x1F0, 0x150, 0x80);
 
+        y = ry + ry;
         /* row 2 - SFX volume (y = 2*ry) */
-        func_00280090(lx - 8, 2 * ry - 8, (MENU_SEL(screen) == 1) ? 0x8020FFFF : 0x80FFA888,
+        func_00280090(lx - 8, y - 8, (MENU_SEL(screen) == 1) ? 0x8020FFFF : 0x80FFA888,
                       GetLocalizedString(0x2DA6), -1);
-        func_002904B0(lx + 7, 2 * ry - 8, MENU_W(screen) - 0x3F, 2 * ry + 8, 0x80696969, 0);
-        func_002904B0(lx + 9, 2 * ry - 6, MENU_W(screen) - 0x41, 2 * ry + 6, 0x80383838, 0);
+        func_002904B0(lx + 7, y - 8, MENU_W(screen) - 0x3F, y + 8, 0x80696969, 0);
+        func_002904B0(lx + 9, y - 6, MENU_W(screen) - 0x41, y + 6, 0x80383838, 0);
         fill = (MENU_W(screen) - barX) * g_sfxVolume / 0x400;
         icon = func_0028EDF0(0xE99D, 9);
-        func_0028FFF0(icon, (lx + 9) << 4, (2 * ry - 6) << 4, (lx + 8 + fill) << 4,
-                      (2 * ry + 5) << 4, 0, 0xA0, 0x1F0, 0x150, 0x80);
+        func_0028FFF0(icon, (lx + 9) << 4, (y - 6) << 4, (lx + 8 + fill) << 4,
+                      (y + 5) << 4, 0, 0xA0, 0x1F0, 0x150, 0x80);
 
+        y += ry;
         /* row 3 - stereo / mono mode (y = 3*ry) */
-        func_00280090(lx - 8, 3 * ry - 8, (MENU_SEL(screen) == 2) ? 0x8020FFFF : 0x80FFA888,
+        func_00280090(lx - 8, y - 8, (MENU_SEL(screen) == 2) ? 0x8020FFFF : 0x80FFA888,
                       GetLocalizedString(0x2DA7), -1);
-        func_0027FBA8(lx + 8, 3 * ry - 8, 0x80FFA888,
+        func_0027FBA8(lx + 8, y - 8, 0x80FFA888,
                       GetLocalizedString((g_audioStereoMode != 0) ? 0x2DA9 : 0x2DA8), -1);
     }
     End2dDrawBatch();
