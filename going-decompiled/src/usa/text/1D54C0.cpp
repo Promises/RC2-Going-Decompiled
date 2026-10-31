@@ -2602,8 +2602,9 @@ s32 func_002DA330(MenuWidget *obj) {
  * `long long` 128-bit and refuses the wide mask ("unsupported wide integer
  * operation"; FACT #11295's respelling); (2) our symbols: D_00261920 =
  * D_261900, func_002DF158 = func_002DFF68 under this unit's (s32, s32)
- * prototype, so the entry is passed as `(s32)`. Statements and control flow
- * are theirs. */
+ * prototype, so the entry is passed as `(s32)`; (3) their struct type
+ * EffectSlots_2D9600 named LevelEntrySlots. Statements and control flow are
+ * theirs. */
 #if !defined(TARGET_NATIVE) && !defined(S136OS_func_002DA358)
 S136OS_SLOT(func_002DA358);
 #else
