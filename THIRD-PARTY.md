@@ -98,10 +98,10 @@ The GPL-2.0-or-later note in the section above applies to these bodies too.
 
 ### OpenRAC rac2-gc-decomp at 96927f87 (GPL-3.0)
 
-Thirty-six C function bodies are taken from OpenRAC's `rac2-gc-decomp`,
+Thirty-seven C function bodies are taken from OpenRAC's `rac2-gc-decomp`,
 <https://github.com/OpenRAC/rac2-gc-decomp> at commit
 `96927f872c709e13aaa0f32265bb81a5531bf7ed` (root `LICENSE`: GNU General Public
-License, version 3), with the authors' permission (RULING #10405), tasks #2230, #2232, #2234, #2235, #2236, #2248, #2251, #2252, #2261, #2262, #2272, #2294, #2295, #2304, #2306, #2308, #2311 and #2320. Each is adapted, with every respelling named in the
+License, version 3), with the authors' permission (RULING #10405), tasks #2230, #2232, #2234, #2235, #2236, #2248, #2251, #2252, #2261, #2262, #2272, #2294, #2295, #2304, #2305, #2306, #2308, #2311 and #2320. Each is adapted, with every respelling named in the
 function's `Source:` line.
 
 | Here | Upstream file | Upstream name |
@@ -142,6 +142,7 @@ function's `Source:` line.
 | `func_0034BA50` in `going-decompiled/src/usa/text/248B50.cpp` (adapted: our callee and data names and prototypes, widget arguments cast to `GuiWidget *`; their `section(".sdata")` on the GUI instance pointer dropped for the unit's `.extern g_guiInstance, 16`), task #2306 | `src/game/00345358.c` | `func_0034AD10` (v1.01 address) |
 | `func_00350910` in `going-decompiled/src/usa/text/250080.cpp` (adapted: our callee names and prototypes, their `.sdata` decode-buffer word read as our `u8 *D_001B2354`, one `(s32 *)` cast for the C++ front end), task #2320 | `src/game/0034CEA0.c` | `func_0034FBC8` (v1.01 address) |
 | `func_003526A8` in `going-decompiled/src/usa/text/250080.cpp` (adapted: our callee names and prototypes, two called through void-returning casts; their `D_001AE860` as our `D_1AE818` with a `section(".data")` addressing device; their `sda` arena word as the unit's `g_pFmvArenaBase`), task #2320 | `src/game/003512B8.c` | `func_00351960` (v1.01 address) |
+| `func_002E07F8` in `going-decompiled/src/usa/text/1DFF80.cpp` (adapted: data spellings ours through an `__asm__`-label struct view and an `.sdata` cursor alias, `MACRO_ADDR` dropped, `int`/`long` spelled `s32`/`s64`, local names ours), task #2305 | `src/game/002DF1B8-clear.c` | `func_002DF9E0` (v1.01 address) |
 
 The GPL-2.0-or-later note in the section "OpenRAC rac2-gc-decomp (GPL-3.0)" above applies to these bodies too.
 

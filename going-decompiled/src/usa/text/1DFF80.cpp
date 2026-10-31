@@ -592,82 +592,136 @@ void func_002E0650(void) {
 #endif
 
 /* Build the GIF/DMA packet that fills the framebuffer in horizontal strips (one
- * screen-wide sprite quad per 32 scanlines) — the screen-clear path. Emits an
- * opening DMAtag (qwc = 5 register-writes + nRows quad rows), a GIFtag(A+D) with
- * its GS register setup list, then one sprite quad per strip (XY packed 16.16,
- * origin 0x8000, Y band stepped 0x200 per row), and a closing DMAtag. Screen
- * dims come from g_gsScreenContext (+0x150 h, +0x152 v). GS AD register-data
- * words are kept as documented hex (not guessed register names). Handwritten-
- * style packet build; portable-only #else. */
-/* DLI lever MEASURED (task #1220; unit objdiff report, objdiff_build.sh, this #else body promoted
- * SOLO, sdk29 arm, colima-ee-x86; every other row in the unit unchanged). cc1 emits
- * `dli $5,0x1000000000000001` and `dli $11,0x2400000000000001`; the ROM holds SN Ps2EeAs's
- * expansion at 0x2E0858 (in $14, not $5) and 0x2E087C ($11). A RULING #8549 allowlist row for the
- * $11 site moves this body 7.61% -> 8.17%. The dli is NOT the only residual: the first site is in
- * another register, so no row was landed and this stays INCLUDE_ASM. Residual class:
- * REGALLOC/structure (7.61% solo), plus PACKED-SAVE (ROM saves at stride 8, cc1 2.9 at 16; NOTE
- * #8777).
- * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): this C compiles to a frame
- * that saves no registers where the ROM saves 2 (NOTE #9871), so the stride cannot be observed
- * and the gap is structural. The save-slot wall is a cc1 2.9 property, measured false as a wall
- * on every labeled member that compiles on s136os (FACT #9873). Residual: structural; the rest
- * UNMEASURED. */
+ * screen-wide sprite quad per 32 scanlines): the screen-clear path.
+ *   fillColour  the 64-bit GS register value written as the fifth A+D entry
+ *               (register 0x146's data slot), so the caller picks the colour.
+ * No return. Emits an opening DMAtag (qwc = 5 register writes + nRows quad
+ * rows), a GIFtag(A+D) with its GS register setup list, then one sprite quad per
+ * strip (XY packed 16.16, origin 0x8000, Y band stepped 0x200 per row), and a
+ * closing DMAtag. Screen dims come from g_gsScreenContext (+0x150 h, +0x152 v);
+ * nRows = h/32. Sibling of func_002E0650, which uses a fixed colour and leaves
+ * the chain open.
+ *
+ * MATCHED on the s136os arm (task #2305; FACT #12175 measured it in-unit, 0/115
+ * words, relocations verified). GUARD: compiled alone by SN 2.95.3 v1.36
+ * -fopt-stack at the unit's S136EXTRA (-fno-gcse) and spliced over the
+ * S136OS_SLOT line (tools/ee/s136os_splice.sh, row in
+ * tools/ee/s136os_functions.txt); plain C on native. What it takes:
+ *   - two RULING #8549 sites in tools/ee/ps2eeas_dli_sites.txt for this
+ *     function, `dli $14,0x1000000000000001` (0x2E0858) and
+ *     `dli $11,0x2400000000000001` (0x2E087C): 4/115 words without the rows;
+ *   - DEVICE (RULING #8620): g_frameDmaCursorWords, below;
+ *   - the cursor declared volatile, as upstream does: the ROM re-loads
+ *     g_frameDmaCursor before every header store and after every advance. A
+ *     CODEGEN DEVICE in RULING #8404's sense (it forces those re-loads), not a
+ *     claim that the cursor changes asynchronously;
+ *   - upstream's statement shapes: the `zero` local indexing the GIFtag store
+ *     and seeding i, `step` set inside the loop, the corner pointer formed from
+ *     the header pointer `tag` rather than from the advanced cursor.
+ * Source: OpenRAC/rac2-gc-decomp @96927f872c709e13aaa0f32265bb81a5531bf7ed
+ * (GPL-3.0, adopted with the authors' permission per RULING #10405),
+ * src/game/002DF1B8-clear.c, func_002DF9E0 (v1.01 address; author commit
+ * 5ae008de, bigbeno37). Upstream builds that file with -fno-strength-reduce;
+ * ours does not need it. ADAPTED: (1) our data spellings: D_001A6480 =
+ * g_gsScreenContext, read through its own struct view GsScreenDims (upstream's
+ * Screen2DF9E0, fields renamed h/v); D_001B22A8 = g_frameDmaCursor, read as
+ * g_frameDmaCursorWords; (2) MACRO_ADDR dropped for the .sdata device below;
+ * (3) int/long spelled s32/s64 (the same types on EE); (4) local names ours
+ * (x, y, n, q, p, c, d, u, v, corners -> screenH, screenV, nRows, ad, tag,
+ * xLeft, xRight, yTop, yBot, quad) and the leading comments dropped. */
+typedef struct GsScreenDims {
+    u8  pad[0x150];
+    s16 h;   /* +0x150 screen width in pixels (h/32 strips) */
+    s16 v;   /* +0x152 screen height */
+} GsScreenDims;
+
+/* g_gsScreenDims: g_gsScreenContext seen as GsScreenDims (same assembler
+ * symbol via the asm label; no section attribute, so cc1 splits %hi/%lo as the
+ * ROM does). g_frameDmaCursorWords: g_frameDmaCursor as a volatile s32 *, with
+ * section(".sdata") so cc1 -G8 prints the one-insn `lw` macro the ROM schedules;
+ * the unit's `.extern g_frameDmaCursor, 16` above still makes gas expand it
+ * absolute (lui; lw) with HI16/LO16 relocations against g_frameDmaCursor. With
+ * section(".data") instead, cc1 splits %hi/%lo itself and reschedules (LEN 106/115,
+ * NOTE #12173). An ADDRESSING-MODEL DEVICE (RULING #8620): it moves no data
+ * and emits nothing of its own. On native both are views of our declarations. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E07F8);
+extern GsScreenDims g_gsScreenDims __asm__("g_gsScreenContext");
+extern s32 *volatile g_frameDmaCursorWords __asm__("g_frameDmaCursor") __attribute__((section(".sdata")));
 #else
-void func_002E07F8(u64 arg0) {
-    u8  *ctx     = g_gsScreenContext;
-    s32  screenH = *(s16 *)(ctx + 0x150);
-    s32  screenV = *(s16 *)(ctx + 0x152);
-    s32  nRows   = screenH / 32;           /* one filled sprite strip per 32 scanlines */
-    u32 *dmatag  = (u32 *)g_frameDmaCursor;
-    u64 *ad;
+#define g_gsScreenDims (*(GsScreenDims *)g_gsScreenContext)
+#define g_frameDmaCursorWords (*(s32 *volatile *)&g_frameDmaCursor)
+#endif
+
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002E07F8)
+S136OS_SLOT(func_002E07F8);
+#else
+void func_002E07F8(s64 fillColour) {
+    s32  screenH, screenV, nRows;
+    s64 *ad;
+    s32 *tag;
     s32  i;
+    s32  yTop;
+    s32  yBot;
+    s32  zero;
+    s32  step;
+    s64 *quad;
+
+    screenH = g_gsScreenDims.h;
+    screenV = g_gsScreenDims.v;
+    nRows = screenH / 32;
 
     /* opening DMAtag: id=CNT (0x10000000), qwc = 5 reg-writes + nRows quads */
-    dmatag[0] = (nRows + 5) | 0x10000000;
-    dmatag[1] = 0;
-    dmatag[2] = 0;
-    dmatag[3] = (nRows + 5) | 0x50000000;
-    g_frameDmaCursor = (u8 *)dmatag + 0x10;
+    *(s32 *)g_frameDmaCursorWords = (nRows + 5) | 0x10000000;
+    *(s32 *)((char *)g_frameDmaCursorWords + 4) = 0;
+    *(s32 *)((char *)g_frameDmaCursorWords + 8) = 0;
+    *(s32 *)((char *)g_frameDmaCursorWords + 12) = (nRows + 5) | 0x50000000;
+    tag = g_frameDmaCursorWords;
+    g_frameDmaCursorWords = tag + 4;
 
     /* GIFtag(A+D) + AD register-write list; each AD entry = {data @+0, GS reg @+8} */
-    ad = (u64 *)g_frameDmaCursor;
-    ad[0] = ((u64)0x8000 << 45) | 1;                        /* GIFtag: NLOOP=1, NREG=1 */
-    ad[1] = 0xE;                                            /*   descriptor: A+D */
-    ad[2] = 0x3D801;              ad[3] = 0x47;             /* AD: data -> GS reg */
-    ad[4] = ((u64)0x9000 << 46) | 1; ad[5] = 0x10;         /* AD: data -> GS reg */
-    ad[6] = 0x146;               ad[7] = arg0;             /* AD: data -> GS reg (caller) */
-    ad[8] = (u64)(nRows | 0x8000) | ((u64)0x9000 << 46);
-    ad[9] = 0x44;                                           /* AD: data -> GS reg */
+    ad = (s64 *)(tag + 4);
+    zero = 0;
+    ad[zero] = 0x1000000000000001L;   /* GIFtag: NLOOP=1, NREG=1 */
+
+    ad[1] = 0xE;                      /*   descriptor: A+D */
+    ad[2] = 0x3D801;
+    ad[3] = 0x47;
+    ad[4] = 0x2400000000000001L;
+    ad[5] = 0x10;
+    ad[6] = 0x146;
+    ad[7] = fillColour;
+    ad[8] = (s64)(nRows | 0x8000) | 0x2400000000000000L;
+    ad[9] = 0x44;
 
     /* one screen-spanning sprite quad per strip; XY packed 16.16, Y band += 0x200 */
-    if (nRows > 0) {
-        s32  vEdge    = screenV << 3;
-        s32  hEdge    = screenH << 3;
-        u64  xLeftHi  = (u64)(u32)(0x8000 - vEdge)          << 16;
-        u64  xRightHi = (u64)(u32)((screenV << 3) + 0x7FF0) << 16;
-        s32  yTop     = 0x8000 - hEdge;
-        s32  yBot     = 0x8200 - hEdge;
-        u64 *quad     = (u64 *)((u8 *)dmatag + 0x60);
+    i = zero;
+    if (nRows > zero) {
+        s64 xLeft  = (s64)(0x8000 - screenV * 8) << 16;
+        s64 xRight = (s64)(screenV * 8 + 0x7FF0) << 16;
 
-        for (i = 0; i < nRows; i++) {
-            quad[0] = (u32)yTop | xLeftHi;
-            quad[1] = (u32)yBot | xRightHi;
-            quad += 2;
-            yTop += 0x200;
-            yBot += 0x200;
-        }
+        yTop = 0x8000 + -(screenH * 8);
+        yBot = 0x8200 + -(screenH * 8);
+        quad = (s64 *)((char *)tag + 0x60);
+        do {
+            step = 0x200;
+            *quad++ = yTop | xLeft;
+            *quad++ = yBot | xRight;
+            yBot += step;
+            yTop += step;
+            i++;
+        } while (i < nRows);
     }
 
-    /* closing DMAtag */
-    dmatag = (u32 *)((u8 *)g_frameDmaCursor + (nRows << 4) + 0x50);
-    g_frameDmaCursor = (u8 *)dmatag;
-    dmatag[0] = 0x10000000;
-    dmatag[1] = 0;
-    dmatag[2] = 0x13000000;
-    dmatag[3] = 0;
-    g_frameDmaCursor = (u8 *)dmatag + 0x10;
+    /* closing DMAtag (0x10000000) with VIF word 0x13000000; the cursor moves past it */
+    {
+        s32 *end = (s32 *)((char *)g_frameDmaCursorWords + (nRows * 16 + 0x50));
+        g_frameDmaCursorWords = end;
+        *end = 0x10000000;
+    }
+    *(s32 *)((char *)g_frameDmaCursorWords + 4) = 0;
+    *(s32 *)((char *)g_frameDmaCursorWords + 8) = 0x13000000;
+    *(s32 *)((char *)g_frameDmaCursorWords + 12) = 0;
+    g_frameDmaCursorWords = g_frameDmaCursorWords + 4;
 }
 #endif
 
@@ -689,7 +743,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", EmitMobyGlowPac
 extern void func_002E0650(void);
 extern void func_002E0458(void *src, f32 scale);
 extern void *func_002E0568(void *rec);
-extern void func_002E07F8(u64 arg0);
+extern void func_002E07F8(s64 fillColour);
 extern u8 D_001B1E90[];
 /* (end of this body's declarations) */
 extern u8  *g_frameDmaCursor;

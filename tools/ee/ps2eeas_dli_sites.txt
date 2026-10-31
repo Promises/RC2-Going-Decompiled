@@ -166,9 +166,9 @@ usa      func_00293760  0x0029387C  $4,0x80000004cc007ffb   34048000 00042778 34
 # neither followed by a branch: the GIFtag 0x1000000000000001 in $14 (followed
 # by an `addiu`) and the A+D data 0x2400000000000001 in $11 (followed by an
 # `sw`). GNU as gives `lui; dsll32; ori` for each; the ROM has Ps2EeAs's
-# `ori; dsll32; ori` at 0x2E0858..0x2E0860 and 0x2E087C..0x2E0884. Still
-# INCLUDE_ASM when these rows land, so they change no byte of the build until
-# the OpenRAC body is adopted on the s136os arm (task #2305, FACT #12175).
+# `ori; dsll32; ori` at 0x2E0858..0x2E0860 and 0x2E087C..0x2E0884. Compiled
+# from C on the s136os arm (OpenRAC body, task #2305, FACT #12175); the rows
+# landed alone one commit before the body.
 #
 usa      func_002E07F8  0x002E0858  $14,0x1000000000000001   340e8000 000e737c 35ce0001
 usa      func_002E07F8  0x002E087C  $11,0x2400000000000001   340b9000 000b5bbc 356b0001

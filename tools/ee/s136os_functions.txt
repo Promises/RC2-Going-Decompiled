@@ -724,3 +724,4 @@ usa text/1B4218 ClassifyTargetProximity
 usa text/1CA080 TickFrontEndScreenMachine
 usa text/1CA080 func_002D34E8
 usa text/1CA080 func_002D38C8
+usa text/1DFF80 func_002E07F8

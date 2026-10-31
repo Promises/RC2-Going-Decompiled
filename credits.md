@@ -150,14 +150,14 @@
 - **OpenRAC — `rac2-gc-decomp`, commit `96927f87`, s136os bodies** (GPL-3.0)
   <https://github.com/OpenRAC/rac2-gc-decomp> at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`
 
-  Seventeen engine C bodies, two in text/16E980, one in text/1A00F0, one in
-  text/1A8180, three in text/1B4218, one in text/1D54C0, one in text/1DFF80,
+  Eighteen engine C bodies, two in text/16E980, one in text/1A00F0, one in
+  text/1A8180, three in text/1B4218, one in text/1D54C0, two in text/1DFF80,
   two in text/188858, two in cod/0321A0, one in text/235FE8, one in
   text/248B50 and two in text/250080, adopted with the authors' permission
   (held by the operator, RULING #10405) and re-checked byte-exact against our
   v2.00 ROM on the s136os arm (tasks #2232, #2234, #2235, #2248, #2251, #2252,
-  #2262, #2294, #2304, #2306 and #2320, from audit NOTE #12089 rows 3, 4, 5,
-  6, 8 and 9, NOTE #12161, NOTE #12173 and NOTE #12202).
+  #2262, #2294, #2304, #2305, #2306 and #2320, from audit NOTE #12089 rows 3,
+  4, 5, 6, 8 and 9, NOTE #12161, NOTE #12173 and NOTE #12202).
   Contributors: bigbeno37, Flavius, Louis-Philippe Le Sieur, ThorpenCodes and Lynder063. Each doc comment carries the `Source:`
   line, which names every change beyond extern spellings.
 
@@ -299,6 +299,16 @@
     void-returning casts as upstream declares them, their `D_001AE860` as our
     `D_1AE818` with a `section(".data")` addressing device, and their `sda`
     arena word as the unit's `g_pFmvArenaBase`.
+  - **`func_002E07F8`** (`0x002E07F8`) in
+    `going-decompiled/src/usa/text/1DFF80.cpp`, from
+    `src/game/002DF1B8-clear.c` (`func_002DF9E0`, v1.01 address, author
+    commit `5ae008de`, bigbeno37), task #2305 (re-audit NOTE #12173, FACT
+    #12175). Its two `dli` sites are RULING #8549 rows in
+    `tools/ee/ps2eeas_dli_sites.txt`. ADAPTED: their `D_001A6480` is our
+    `g_gsScreenContext` read through the `GsScreenDims` view, their
+    `D_001B22A8` our `g_frameDmaCursor` through the `.sdata` alias
+    `g_frameDmaCursorWords` (`MACRO_ADDR` dropped), `int`/`long` spelled
+    `s32`/`s64`, and our local names.
 
 - **RC2 decomp contributions — `src/game/002E4528-rc2.c`, `src/game/002B7380-rc2.c` and `src/game/00297BB0-rc2.c` in OpenRAC `rac2-gc-decomp`, commit `96927f87`** (MIT, © 2026 RC2 decomp contributions)
   <https://github.com/OpenRAC/rac2-gc-decomp> at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`
