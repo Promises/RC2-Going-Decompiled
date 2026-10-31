@@ -600,19 +600,128 @@ void func_003002E0(void) {
 }
 #endif
 
-/* Position + orient the turret/gadget moby `moby` for the current frame:
- * scales a base offset (3.0/2.5/2.0 depending on the moby class id at +0xAA),
- * adds it to the world anchor, advances the spin angle (WrapAnglePiSum), applies
- * the micro-VU0 transform, nudges the position by per-mode offsets, then
- * re-registers the moby (UpdateMobyBSphereAndGrid) and emits its trail
- * (func_00300ED8).
- * TODO(hle): dominated by VU0 vector intrinsics (Vec4ScaleVu0/Vec4AddVu0/
- * TransformVectorMicroVu0) — tier-3 hardware math, no byte-exact path. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1FFBA0", func_003007F8);
+/**
+ * func_003007F8 - place the in-world gadget/turret moby for this frame.
+ *
+ * moby: the active gadget moby (also the argument UpdateMobyBSphereAndGrid
+ *       and func_00300ED8 get). No return value.
+ *
+ * Puts the moby `scale` units along the camera's first matrix row from the
+ * camera position (2.5 for classes 0xC5A/0xA65, 2.0 for the other turret
+ * classes 0x879/0xAF6/0x907/0xE7A, 3.0 otherwise), spins it by 0.0349 rad
+ * (2 degrees) per frame (about facing[0] while the swap-variant flag at
+ * g_swapGadgetItemIndex+0x2B is set, else about facing[2]), builds its rotation
+ * rows with func_00283DA0, nudges the position along those rows by the
+ * per-mode tuning floats D_1AD7E8..D_1AD7F8, then re-registers the moby in the
+ * world grid and emits its trail (func_00300ED8).
+ *
+ * Not VU0 code: every vector step is a call (Vec4ScaleVu0/Vec4AddVu0).
+ * 0x3D0EFA36 is one ulp above the correctly rounded 2 degrees, hence the
+ * 0.03490659f spelling.
+ */
+/* GUARD (task #2321): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_003007F8)
+S136OS_SLOT(func_003007F8);
 #else
+#ifndef EE_REG
+/* EE_REG: pin a live local to a register on the EE arm only (RULING #8598,
+ * REGISTER-PIN DEVICE); empty on native. */
+#ifndef TARGET_NATIVE
+#define EE_REG(r) __asm__(r)
+#else
+#define EE_REG(r)
+#endif
+#endif
+/* ADDRESSING-MODEL DEVICE (RULING #8620), as for func_00300E70: the +0x2B
+ * reads stay the one-insn `lbu $2,sym+0x2B` macro, expanded absolute by the
+ * unit's `.extern g_swapGadgetItemIndex,16` into `lui $2; lbu $2,%lo($2)` as
+ * at 0x3008C4 and 0x300924. A plain read lets cc1 keep the %hi base in an
+ * extra saved register. */
+#ifndef TARGET_NATIVE
+extern u8 g_swapGadgetItemIndexSmall[] __asm__("g_swapGadgetItemIndex") __attribute__((section(".sdata")));
+#else
+#define g_swapGadgetItemIndexSmall g_swapGadgetItemIndex
+#endif
+typedef f32 GadgetVec4[4] __attribute__((aligned(16)));
+/* The moby fields this function touches (layout as include/moby.h). */
+typedef struct GadgetMobyView {
+    u8 _pad00[0x10];
+    GadgetVec4 position; /* +0x10 world position */
+    u8 _pad20[0x8A];
+    s16 classId;         /* +0xAA moby class id */
+    u8 _padAC[0x44];
+    GadgetVec4 facing;   /* +0xF0 rotation angles x/y/z */
+} GadgetMobyView;
+__asm__(".extern g_cameraMatrix, 16");
+extern u8 g_cameraMatrix[];  /* 0x1B54F0 camera rotation matrix, row 0 first */
+__asm__(".extern g_cameraPos, 16");
+extern u8 g_cameraPos[];     /* 0x1B52C0 camera world position */
+extern void Vec4ScaleVu0(GadgetVec4 dst, f32 s, const GadgetVec4 src);
+extern void func_00283DA0(GadgetVec4 *rows, const GadgetVec4 angles);
+extern f32 WrapAnglePiSum(f32 a, f32 b);
+extern void func_00300ED8(Moby *moby);
+extern f32 D_1AD7E8;          /* row-0 offset: swap flag set, not a turret class */
+extern f32 D_1AD7EC;          /* row-1 offset: swap flag set, not a turret class */
+extern f32 D_1AD7F0;          /* row-2 offset: swap flag clear */
+extern f32 D_1AD7F4;          /* row-0 offset: swap flag set, turret class */
+extern f32 D_1AD7F8;          /* row-1 offset: swap flag set, turret class */
 void func_003007F8(Moby *moby) {
-    (void)moby; /* TODO(hle): VU0 turret transform + trail */
+    GadgetMobyView *m = (GadgetMobyView *)moby;
+    GadgetVec4 offset;
+    GadgetVec4 rot[3];
+    GadgetVec4 step;
+    s32 isLarge = 0;
+    s32 isTurret;
+    /* REGISTER-PIN DEVICE (RULING #8598): pos in $17 and the first
+     * Vec4AddVu0 destination in $4 give the ROM's `addiu $4,$18,0x10` in both
+     * branch slots and `move $17,$4` before the call (0x3008A0..0x3008C0);
+     * unpinned, cc1 forms pos in $17 and copies it into $4. */
+    register f32 *pos EE_REG("$17");
+
+    if (m->classId == 0xC5A || m->classId == 0xA65)
+        isLarge = 1;
+    isTurret = 0;
+    if (m->classId == 0x879 || m->classId == 0xAF6 ||
+        m->classId == 0x907 || m->classId == 0xE7A || isLarge)
+        isTurret = 1;
+    if (isLarge)
+        Vec4ScaleVu0(offset, 2.5f, *(GadgetVec4 *)g_cameraMatrix);
+    else if (isTurret)
+        Vec4ScaleVu0(offset, 2.0f, *(GadgetVec4 *)g_cameraMatrix);
+    else
+        Vec4ScaleVu0(offset, 3.0f, *(GadgetVec4 *)g_cameraMatrix);
+    {
+        register f32 *dst EE_REG("$4") = m->position;
+        pos = dst;
+        Vec4AddVu0(dst, g_cameraPos, offset);
+    }
+    if (g_swapGadgetItemIndexSmall[0x2B])
+        m->facing[0] = WrapAnglePiSum(m->facing[0], 0.03490659f);
+    else
+        m->facing[2] = WrapAnglePiSum(m->facing[2], 0.03490659f);
+    func_00283DA0(rot, m->facing);
+    if (g_swapGadgetItemIndexSmall[0x2B]) {
+        if (isTurret) {
+            Vec4ScaleVu0(step, D_1AD7F8, rot[1]);
+            Vec4AddVu0(pos, pos, step);
+            Vec4ScaleVu0(step, D_1AD7F4, rot[0]);
+            Vec4AddVu0(pos, pos, step);
+        } else {
+            Vec4ScaleVu0(step, D_1AD7EC, rot[1]);
+            Vec4AddVu0(pos, pos, step);
+            Vec4ScaleVu0(step, D_1AD7E8, rot[0]);
+            Vec4AddVu0(pos, pos, step);
+        }
+    } else {
+        Vec4ScaleVu0(step, D_1AD7F0, rot[2]);
+        Vec4AddVu0(pos, pos, step);
+    }
+    UpdateMobyBSphereAndGrid(moby);
+    func_00300ED8(moby);
 }
 #endif
 
@@ -773,7 +882,8 @@ void func_00300E70(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1FFBA0", func_00300ED8);
 #else
-void func_00300ED8(void) {
+void func_00300ED8(Moby *moby) {
+    (void)moby;
     /* TODO(hle): VU0 smoke-trail particle emit (func_0032F3A8). */
 }
 #endif
