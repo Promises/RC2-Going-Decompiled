@@ -1698,10 +1698,14 @@ s32 PlayFmvMovie(void *a, void *b, s32 aspect, u8 *arena, void *engineCtx, void 
  *   - `volatile` on the g_playerProgress and D_1A7A10 aliases is a CODEGEN DEVICE
  *     (RULING #8404 terms), NOT a claim that another agent writes them during the
  *     loop: it keeps cc1 from moving the two loads, which gives the ROM's empty
- *     slots. Writer census: see the task #2429 store NOTE (cv_address 0x34FD90).
- *     Native reads the plain symbols.
- * Measured on the s136 screen (NOTE #12306): without the aliases and volatiles,
- * 27 words differ where the arm has 20 at that stage. */
+ *     slots. Writer census (task #2429, asm/usa + src/usa at 34e2187ae): no
+ *     named store to D_1A7A10; named stores to g_playerProgress only in
+ *     CommitProgressCheckpoint and func_00299BF8. Both words lie in the save
+ *     block at 0x1A79F8, so whole-block copies write them too (not
+ *     enumerated). Native reads the plain symbols.
+ * Removal probes on the landed form (s136 screen, task #2429; the full arm reads
+ * 0): plain symbols instead of the aliases 7 words (216 built), the two
+ * volatiles dropped 11. */
 #ifndef TARGET_NATIVE
 __asm__(".extern g_cinematicExitPendingFmv, 16\n\tg_cinematicExitPendingFmv = g_cinematicExitPending");
 extern s32 g_cinematicExitPendingFmv;
@@ -1829,7 +1833,8 @@ s32 FmvStreamFeedLoop(void *ctx, void *base, void *addq) {
         if (D_138180.b.w.lo == 0) released = 1;
         if (released) {
             /* Two names for one read (RULING #8598 pin on the second): the ROM
-             * tests 3 and 2 on $3 and the != 0 on its copy in $5. */
+             * tests 3 and 2 on $3 and the != 0 on its copy in $5. Without the
+             * pin: 10 words (218 built). */
             s32 exitNow = FMV_EXIT_PENDING;
             register s32 exitp EE_REG("$5") = exitNow;
             if (exitNow != 3) {
@@ -1850,8 +1855,8 @@ s32 FmvStreamFeedLoop(void *ctx, void *base, void *addq) {
              * FMV_AFTER_STORE edge keeps the argument add after the store, so
              * reorg puts it in the jal slot (and the branch above becomes the
              * ROM's bnel). The $2 pin (RULING #8598) is the ROM's arena register.
-             * Removal probes (s136 screen, words off with the dli row's 2):
-             * first barrier 4, second 6, FMV_AFTER_STORE 7, the pin 7; all on 2. */
+             * Removal probes on the landed form (s136 screen, full arm 0):
+             * first barrier 2 words, second 4, FMV_AFTER_STORE 5, the $2 pin 5. */
             register u8 *arena EE_REG("$2") = g_pFmvArenaBase;
             s32 off;
             FMV_SCHED_BARRIER();
