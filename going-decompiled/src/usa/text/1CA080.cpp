@@ -1121,23 +1121,43 @@ void TickFrontEndScreenIdle(void) {
 }
 #endif
 
-/* Front-end screen-machine per-frame tick (TickFrontEndScreenMachine).
- * Advances the menu-idle counter (saturating at 0x7D00) and the transition
- * countdown, runs the area-transition fade timer, lets the save/load driver
- * (func_002DECE0) run, and — if a save/load op just finished while the screen is
- * in the "commit" state (4) with a level-exit queued — kicks the game-state
- * change to bring up the next level. Then dispatches the current screen state
- * (g_menuScreenBlock[0], 1..5) to its per-state handler and, for the non-terminal
- * states, runs the shared moby + sound-emitter tick and the optional post-hook.
- * Matching arm stays INCLUDE_ASM. The jump table is no longer the reason: since
- * tools/ee/jtbl_bind.sh (task #2247) a switch binds to the ROM's
- * jtbl_0026CC60_text, and an s136os body splices at the ROM's 108 words, 17 off
- * in allocation and issue order (NOTE #12174 holds that body, task #2288). */
+/* TickFrontEndScreenMachine: per-frame handler for game state 3 (front end,
+ * menus, map, pause). Saturates the menu-idle counter at 0x7D00, steps the
+ * transition countdown, and runs the area-transition fade timer while the area
+ * controller is idle (g_areaTable+0x15C < 3 with its +0x164 timer negative),
+ * else resets it. After the save/load driver (func_002DECE0) runs, a finished
+ * save/load (g_gameStateFlags bit 0) while the screen machine is committing
+ * (state 4) with a level exit queued (>= 8) raises the pause overlay through
+ * RequestGameStateChange(4, 1, 1, stateArg, 0); if that refuses (returns 0) the
+ * tick ends there. Then it dispatches screen state 1..5 to its handler. State 5
+ * (the terminal one) also re-arms the nanotech heal timer (10), clears
+ * g_hudClutSlots+0x10 and returns without the shared tail; every other state
+ * runs the moby and sound-emitter ticks and, if an exit is pending, the menu
+ * exit (func_002CB560). Takes nothing and returns nothing: no path sets a
+ * deliberate result ($v0 is 0xA on the state-5 path and scratch elsewhere), and
+ * nothing reads one.
+ *
+ * Compiled ALONE by the s136os arm (tools/ee/s136os_functions.txt); its switch
+ * table is bound to the ROM's jtbl_0026CC60_text by tools/ee/jtbl_bind.sh.
+ * Devices, each load-bearing on the s136 probe (task #2382):
+ *  - `z`, an operand-tied EMPTY fence copy of the block pointer (RULING #8483):
+ *    the ROM's second pointer register ($5) for the 0x158/0x168 accesses
+ *    (NOTE #12174, the RequestMenuScreenChange device of NOTE #9972).
+ *  - two EE_REG pins on live locals (RULING #8598): `counter` in $2 gives the
+ *    ROM's idle-counter registers (counter $2, 0x7D00 $3) and its prologue
+ *    order (11 -> 3 words without it), and `pending` in $2 the exit test's
+ *    `lw $2,0x1C($3)` (3 -> 0 words). cc1 still emits every instruction.
+ *  - g_gameStateFlags, g_levelExitWords and g_hudClutSlots are declared
+ *    cc1-small with an `.extern` size above (RULING #8620 addressing model):
+ *    the ROM reads/writes each through the assembler's load macro
+ *    (`lui $2; lw $2,%lo(..)($2)`, `lui $1; sw $0,%lo(..)($1)`). For
+ *    g_nLevelExitDestination that is the unit's own size-12 model (see
+ *    func_002CDF48's device below), declared here as well so the s136os TU and
+ *    the spliced unit agree before this block (s136os_splice ADDRESSING check). */
 extern u8 g_areaTable[];
 extern u8 g_nNanotechBonusHealTimer[];
 extern u8 g_nSaveLoadStatusCode[];
 extern u8 g_nLevelExitDestination[];
-extern u8 g_hudClutSlots[];
 extern s32 RequestGameStateChange(s32 stateId, s32 push, s32 c, s32 d, s32 e);
 extern void func_002DECE0(void);
 extern void UpdateSoundEmitters(void);
@@ -1149,70 +1169,82 @@ extern void MenuScreenBeginLoad(void);
 extern void func_002CBA40(void);
 extern void MenuScreenCommitTransition(void);
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", TickFrontEndScreenMachine);
+__asm__(".extern g_gameStateFlags, 16");
+extern s32 g_gameStateFlags;
+__asm__(".extern g_nLevelExitDestination, 12");
+extern s32 g_levelExitWords[2] __asm__("g_nLevelExitDestination");
+__asm__(".extern g_hudClutSlots, 16");
+extern s32 g_hudClutSlots[2];
 #else
-/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 70.66% -> STRUCTURAL,
- * first differing row @3: ROM `addiu a3,v0,0  [LO16 0x001F27C0]` vs `addiu s0,v0,0  [LO16 0x001F27C0]`;
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 79.65% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`.
- * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): this member's prologue - the
- * ROM's save set at its 8-byte stride, and its frame - is reproduced exactly (NOTE #9871), so
- * the save-slot wall named above is a cc1 2.9 property and was measured false as the reason
- * this member stays unmatched (FACT #9873). Residual: UNMEASURED. */
-s32 TickFrontEndScreenMachine(void) {
-    u8 *mb = g_menuScreenBlock;
-    s32 counter;
-
-    *(s32 *)(mb + 0x168) = 0;
-    counter = *(s32 *)(mb + 0x120);
-    *(s32 *)(mb + 0x120) = (counter > 0x7CFF) ? 0x7D00 : counter + 1;
-    if (*(s32 *)(mb + 0x158) != 0)
-        *(s32 *)(mb + 0x158) -= 1;
-
-    /* area-transition fade timer: tick while the area controller is idle
-     * (g_areaTable+0x15C < 3 and its +0x164 timer negative), else reset. */
-    if (*(s32 *)(g_areaTable + 0x15C) < 3 &&
-        *(s32 *)(g_areaTable + 0x164) < 0)
-        *(s32 *)(mb + 0x164) += 1;
-    else
-        *(s32 *)(mb + 0x164) = 0;
-
+#define g_gameStateFlags (*(s32 *)(g_nSaveLoadStatusCode + 0x4))
+#define g_levelExitWords ((s32 *)g_nLevelExitDestination)
+extern u8 g_hudClutSlots[];
+#endif
+#if !defined(TARGET_NATIVE) && !defined(S136OS_TickFrontEndScreenMachine)
+S136OS_SLOT(TickFrontEndScreenMachine);
+#else
+/* The screen-machine words of g_menuScreenBlock this tick touches. */
+struct FrontEndMachineBlock {
+    s32 state;          /* 0x000: screen state, 1..5 */
+    u8  unk4[0x10];
+    s32 stateArg;       /* 0x014: passed to RequestGameStateChange */
+    u8  unk18[0x4];
+    s32 exitPending;    /* 0x01C: run the menu exit after the tick */
+    u8  unk20[0x100];
+    s32 idleCounter;    /* 0x120: saturates at 0x7D00 */
+    u8  unk124[0x34];
+    s32 countdown;      /* 0x158: transition countdown */
+    u8  unk15C[0x8];
+    s32 fadeTimer;      /* 0x164: area-transition fade timer */
+    s32 unk168;         /* 0x168: cleared every tick */
+};
+#define g_frontEnd (*(struct FrontEndMachineBlock *)g_menuScreenBlock)
+void TickFrontEndScreenMachine(void) {
+    {
+        struct FrontEndMachineBlock *mb = &g_frontEnd;
+        struct FrontEndMachineBlock *z = mb;
+        u8 *area;
+        register s32 counter EE_REG("$2");
+        s32 cd;
+        __asm__("" : "+r"(z));
+        counter = mb->idleCounter;
+        cd = z->countdown;
+        z->unk168 = 0;
+        mb->idleCounter = (counter > 0x7CFF) ? 0x7D00 : counter + 1;
+        if (cd != 0)
+            z->countdown = cd - 1;
+        area = g_areaTable;
+        if (*(s32 *)(area + 0x15C) < 3 && *(s32 *)(area + 0x164) < 0)
+            mb->fadeTimer += 1;
+        else
+            g_frontEnd.fadeTimer = 0;
+    }
     func_002DECE0();
-
-    if ((*(s32 *)(g_nSaveLoadStatusCode + 4) & 1) &&
-        *(s32 *)mb == 4 &&
-        *(s32 *)(g_nLevelExitDestination + 4) >= 8)
-        RequestGameStateChange(4, 1, 1, *(s32 *)(mb + 0x14), 0);
-
-    switch (*(s32 *)mb) {
-    case 1:
-        MenuScreenBeginLoad();
-        break;
-    case 2:
-        func_002CBA40();
-        break;
-    case 3:
-        MenuScreenCommitTransition();
-        break;
-    case 4:
-        MenuScreenUpdate();
-        break;
+    if ((g_gameStateFlags & 1) && g_frontEnd.state == 4 && g_levelExitWords[1] >= 8) {
+        if (RequestGameStateChange(4, 1, 1, g_frontEnd.stateArg, 0) == 0)
+            return;
+    }
+    switch (g_frontEnd.state) {
+    case 1: MenuScreenBeginLoad(); break;
+    case 2: func_002CBA40(); break;
+    case 3: MenuScreenCommitTransition(); break;
+    case 4: MenuScreenUpdate(); break;
     case 5:
         func_002CBD68();
         UpdateSoundEmitters();
         *(s16 *)(g_nNanotechBonusHealTimer + 4) = 0xA;
-        *(s32 *)(g_hudClutSlots + 0x10) = 0;
-        return 0;
-    default:
-        break;
+        *(s32 *)((u8 *)g_hudClutSlots + 0x10) = 0;
+        return;
     }
-
     UpdateActiveMobys();
     UpdateSoundEmitters();
-    if (*(s32 *)(mb + 0x1C) != 0)
-        func_002CB560();
-    return 0;
+    {
+        register s32 pending EE_REG("$2") = g_frontEnd.exitPending;
+        if (pending != 0)
+            func_002CB560();
+    }
 }
+#undef g_frontEnd
 #endif
 
 /* MenuScreenLoad then mark the screen-state scratch ready (state=2). */
@@ -2456,8 +2488,9 @@ extern u8 D_00259128[], D_00259178[], D_002591C8[], D_00259218[], D_00259268[], 
  * cc1-small word: one-insn `%gp_rel` where the access fills a branch delay slot
  * (0x002CDFA4, 0x002CE050, 0x002CE0A8) and the absolute lui/$at macro everywhere else
  * (0x002CDFE0, 0x002CE088) - asm_unit.sh's size-12 class. The unit declares the symbol
- * `u8[]` for TickFrontEndScreenMachine's +4 read, which cc1 treats as large and splits;
- * the s32 alias gives cc1 the small word and `.extern ..., 12` the assembler model.
+ * `u8[]` (cc1 treats it as large and splits; TickFrontEndScreenMachine reads its +4
+ * word through its own small `g_levelExitWords[2]` alias); the s32 alias gives cc1 the
+ * small word and `.extern ..., 12` the assembler model.
  * Relocations name g_nLevelExitDestination; no alias reaches nm. File scope so the
  * unit's 2.9 TU sees the same `.extern` (FACT #9067). Native reads the real symbol. */
 #ifndef TARGET_NATIVE
