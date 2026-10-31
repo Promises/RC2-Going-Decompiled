@@ -150,9 +150,10 @@
 - **OpenRAC — `rac2-gc-decomp`, commit `96927f87`, s136os bodies** (GPL-3.0)
   <https://github.com/OpenRAC/rac2-gc-decomp> at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`
 
-  Two engine C bodies in text/16E980, adopted with the authors' permission
-  (held by the operator, RULING #10405) and re-checked byte-exact against our
-  v2.00 ROM on the s136os arm (task #2232, from audit NOTE #12089 row 3).
+  Three engine C bodies, two in text/16E980 and one in text/1A8180, adopted
+  with the authors' permission (held by the operator, RULING #10405) and
+  re-checked byte-exact against our v2.00 ROM on the s136os arm (tasks #2232
+  and #2234, from audit NOTE #12089 rows 3 and 5).
   Contributors: bigbeno37 and Flavius. Each doc comment carries the `Source:`
   line, which names every change beyond extern spellings.
 
@@ -173,6 +174,14 @@
     is carried. ADAPTED: the fog block and region array are reached through
     our `g_blobShadowCount` and `g_collTriBuffer`, with our signature and
     callee spellings.
+  - **`func_002AD590`** (`0x002AD590`) in
+    `going-decompiled/src/usa/text/1A8180.c`, from `src/game/002AA800.c`
+    (`func_002AC728`, v1.01 address, author commit `8f3538bb`, bigbeno37),
+    task #2234, from audit NOTE #12089 row 5. ADAPTED: our callee and data
+    spellings (the colour palettes read through a struct view of our
+    `D_1A9F20`/`D_1A9F38`), and EE-only callee prototypes in upstream's
+    argument order except SpawnShockwaveRingMoby, whose f32 is first in
+    ours and last upstream (EABI-neutral), with the native arm keeping ours.
 
 - **OpenRAC — `rac2-gc-decomp`, commit `96927f87`, core bodies** (GPL-3.0)
   <https://github.com/OpenRAC/rac2-gc-decomp> at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`

@@ -5019,108 +5019,126 @@ void func_002ACA20(f32 queryRadius, f32 queryPower, f32 ringRadius, f32 whiteRin
 
 /**
  * func_002AD590 — explosion / impact FX spawner. Emits a 3-particle sparkle
- * burst, optional pair of expanding shockwave rings around `moby`, an optional
- * impact sound, and an optional camera shake.
+ * burst, an optional pair of expanding shockwave rings on `object` with an
+ * optional impact sound, and an optional camera shake.
  *
- * @param a          intensity/scale (drives particle spawn speed and ring size).
- * @param b          camera-shake magnitude; 0 skips the shake, values <= 0 are
- *                   clamped up to 13.0.
- * @param moby       moby the rings attach to and the impact sound plays from;
- *                   0 skips rings + sound.
- * @param spawnCtx   opaque spawn/handle context forwarded to every FX call.
- * @param sound      impact sound index; -1 skips the sound.
+ * @param object    moby the rings attach to and the sound plays from; NULL
+ *                  skips rings and sound. A +0x20 class byte of 0xFE or 0xFD
+ *                  suppresses the sound (the rings still spawn).
+ * @param position  spawn context forwarded to every FX call.
+ * @param sound     impact sound index; -1 skips the sound.
+ * @param scale     intensity: particle energy (scale * 400000), particle
+ *                  speed and ring radius (scale * 4, scale * 3).
+ * @param radius    camera-shake magnitude written to D_258CA0[8..10]; 0 skips
+ *                  the shake, a negative value means 13.0.
  *
- * Each of the 3 particles copies two 6-entry u32 color palettes (D_1A9F20 and
- * D_1A9F38) onto the stack, then picks one random color from each palette
- * (GetRandomInt(6) index) for the SpawnParticleType0B tint pair. The rings are
- * only spawned when the moby's +0x20 class byte is not 0xFE/0xFD (those two
- * class ids suppress the impact sound). Faithful #else transcription — the
- * matching build uses the INCLUDE_ASM arm above.
- */
-/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 54.53%
-   -> UNKNOWN-@0: ROM `addiu sp,sp,-224` vs `addiu sp,sp,-208` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AD590);
+ * Each particle copies both 6-entry colour palettes (D_1A9F20, D_1A9F38) onto
+ * the stack and picks one entry from each with GetRandomInt(6).
+ *
+ * MATCHED on the s136os arm (task #2234; unit S136EXTRA -fno-strict-aliasing).
+ * Byte-exact only with SpawnParticleType0B declared in upstream's EE-bank
+ * argument order (spawnCtx, pos, c1, c2, f32 speed, a7, a8, f32 life, a9,
+ * a10): in our (f32, f32, ...) order the `speed * scale` argument is computed
+ * before the GetRandomInt calls, and the body builds 179/178 words (measured,
+ * task #2234). Native arguments are positional, so TARGET_NATIVE keeps the
+ * file-scope (f32, f32, u64, ...) prototype and its call order. The FX
+ * callees take pointers on EE: with our u64/long prototypes the zero-extends
+ * make the body 182/178 words (measured, task #2234). FX_CTX/FX_MOBY convert
+ * only on native.
+ * GUARD: compiled alone by SN 2.95.3 v1.36 -fopt-stack and spliced over the
+ * S136OS_SLOT line (tools/ee/s136os_splice.sh); plain C on native.
+ * Source: OpenRAC/rac2-gc-decomp @96927f872c709e13aaa0f32265bb81a5531bf7ed
+ * (GPL-3.0, adopted with the authors' permission per RULING #10405),
+ * src/game/002AA800.c, func_002AC728 (v1.01 address; author commit 8f3538bb,
+ * bigbeno37), ADAPTED: (1) our callee spellings: func_00282C88_3 =
+ * func_00283638, func_002A7878 = GetRandomFloatRange, func_002A77E0 =
+ * GetRandomInt, func_002A7820 = RandRangeInclusive, func_002BBCB0 =
+ * SpawnParticleType0B, func_00308408 = SpawnShockwaveRingMoby, func_002E5CF8 =
+ * PlayMobySound, func_00312B70 = func_00313968; (2) our data spellings:
+ * ref_L00_002AC728_00/_01 = D_1A9F20/D_1A9F38, read through a
+ * `*(ImpactPalette *)` view of our u64[3] declarations (their Colors1043
+ * struct is our ImpactPalette), and ref_L00_002AC728_02 = D_258CA0; (3) our
+ * types: s32/f32/u8, and `(Moby *)` casts for func_00283638 and PlayMobySound;
+ * (4) the TARGET_NATIVE prototypes and calls described above; (5) one
+ * argument order: upstream declares and calls func_00308408 with its f32
+ * scale LAST, while our EE arm declares and calls SpawnShockwaveRingMoby with
+ * the f32 FIRST (EABI passes it in $f12 either way, so the bytes are the
+ * same; task #2254). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002AD590)
+S136OS_SLOT(func_002AD590);
 #else
 /* Prototypes this body needs whose declarations sit in other guarded arms:
  * the s136os arm compiles this arm alone, so it must see them here. */
-extern s32 GetRandomInt(s32 n);
-/* callees not yet declared above this point (RandRangeInclusive is block-scoped
- * in a later #else arm; the FX spawners have no file-scope decl). */
+extern s32  GetRandomInt(s32 n);                        /* 0x2A8648 */
 extern s32  RandRangeInclusive(s32 lo, s32 hi);         /* 0x2A8688 */
-extern void SpawnParticleType0B(f32 speed, f32 life, u64 spawnCtx, void *pos,
-                                u32 color1, u32 color2, s32 arg7, s32 arg8,
-                                s32 arg9, s32 arg10);    /* 0x2BCBD0 */
-extern void SpawnShockwaveRingMoby(f32 radius, long moby, u64 spawnCtx,
+extern s32  PlayMobySound(s32 soundIdx, s32 flags, Moby *owner);
+#ifndef TARGET_NATIVE
+extern void SpawnParticleType0B(void *spawnCtx, void *pos, u32 c1, u32 c2,
+                                f32 speed, s32 a7, s32 a8, f32 life, s32 a9, s32 a10);
+extern void SpawnShockwaveRingMoby(f32 radius, u8 *moby, void *spawnCtx,
                                    void *pos, s32 a4, s32 a5, s32 a6,
-                                   s32 a7, s32 a8);       /* 0x309200 */
-extern void func_00313968(void *shakeBlock, u64 spawnCtx, s32 a2, s32 a3);
-extern s32  PlayMobySound(s32 soundIdx, s32 flags, Moby *owner);   /* 0x2E6B30 */
+                                   s32 a7, s32 a8);
+extern void func_00313968(void *shakeBlock, void *spawnCtx, s32 a2, s32 a3);
+#define FX_CTX(p)  (p)
+#define FX_MOBY(o) (o)
+#else
+#define FX_CTX(p)  ((u64)(u32)(p))
+#define FX_MOBY(o) ((long)(o))
+#endif
 
-/* two 6-entry u32 color palettes copied wholesale onto the stack per particle */
-extern u64 D_1A9F20[3];   /* 0x1A9F20 particle color palette A (24 bytes) */
-extern u64 D_1A9F38[3];   /* 0x1A9F38 particle color palette B (24 bytes) */
-extern u8  D_258CA0[];    /* 0x258CA0 camera-shake request block */
+typedef struct ImpactPalette { s32 colors[6]; } ImpactPalette;
+extern u64 D_1A9F20[3];          /* 0x1A9F20 particle color palette A (6 u32) */
+extern u64 D_1A9F38[3];          /* 0x1A9F38 particle color palette B (6 u32) */
+extern f32 D_258CA0[];           /* 0x258CA0 camera-shake request block */
 
-void func_002AD590(f32 a, f32 b, long moby, u64 spawnCtx, s32 sound) {
-    const f32 invFrameRate = 0.016666668f;   /* 0x3C888889 = 1/60 */
-    u8 pos[16];                              /* zeroed spawn position (Vec4) */
-    u64 palA[3];                             /* stack copy of D_1A9F20 */
-    u64 palB[3];                             /* stack copy of D_1A9F38 */
-    s32 soundSlot = sound;
-    s32 i = 2;
+void func_002AD590(u8 *object, void *position, s32 sound, f32 scale, f32 radius) {
+    f32 zero[4];
+    ImpactPalette first, second;
+    f32 speed, energy;
+    s32 i, life;
+    s32 *a, *b;
 
-    func_00283638((Moby *)pos);              /* Vec4ZeroInt: clear the position */
-
-    do {
-        f32 speed = a * 400000.0f;           /* 0x48C35000 */
-        f32 rand;
-        s32 idxA;
-        s32 idxB;
-        s32 life7;
-        s32 life8;
-
-        i = i - 1;
-        rand = GetRandomFloatRange(8.0f, 10.0f) * invFrameRate;
-
-        palA[0] = D_1A9F20[0];
-        palA[1] = D_1A9F20[1];
-        palA[2] = D_1A9F20[2];
-        palB[0] = D_1A9F38[0];
-        palB[1] = D_1A9F38[1];
-        palB[2] = D_1A9F38[2];
-
-        idxA  = GetRandomInt(6);
-        idxB  = GetRandomInt(6);
-        life7 = RandRangeInclusive(0xF, 0x14);
-        life8 = RandRangeInclusive(0x19, 0x1E);
-        SpawnParticleType0B(speed, rand * a, spawnCtx, pos,
-                            *(u32 *)((u8 *)palA + idxA * 4),
-                            *(u32 *)((u8 *)palB + idxB * 4),
-                            life7, life8, 0, 0);
-    } while (-1 < i);
-
-    if (moby != 0) {
-        SpawnShockwaveRingMoby(a * 4.0f, moby, spawnCtx, pos,
-                               0x14, 0x7F, 0x40, 0, 0x30);   /* 0x40800000 */
-        SpawnShockwaveRingMoby(a * 3.0f, moby, spawnCtx, pos,
-                               0x1D, 0x60, 0x20, 0, 0x20);   /* 0x40400000 */
-        {
-            u8 classByte = *(u8 *)((u8 *)moby + 0x20);
-            if (classByte != 0xFE && classByte != 0xFD && soundSlot != -1) {
-                PlayMobySound(soundSlot, 0, (Moby *)moby);
-            }
-        }
+    func_00283638((Moby *)zero);
+    for (i = 2; i >= 0; i--) {
+        speed = GetRandomFloatRange(8.0f, 10.0f) * 0.01666666753590107f;
+        energy = scale * 400000.0f;
+        first = *(ImpactPalette *)D_1A9F20;
+        second = *(ImpactPalette *)D_1A9F38;
+        a = &first.colors[GetRandomInt(6)];
+        b = &second.colors[GetRandomInt(6)];
+        life = RandRangeInclusive(15, 20);
+#ifndef TARGET_NATIVE
+        SpawnParticleType0B(position, zero, *a, *b, energy, life,
+                            RandRangeInclusive(25, 30), speed * scale, 0, 0);
+#else
+        SpawnParticleType0B(energy, speed * scale, FX_CTX(position), zero, *a, *b,
+                            life, RandRangeInclusive(25, 30), 0, 0);
+#endif
     }
-
-    if (b != 0.0f) {
-        f32 shake = (b <= 0.0f) ? 13.0f : b;   /* 0x41500000 */
-        *(f32 *)(D_258CA0 + 0x20) = shake;
-        *(f32 *)(D_258CA0 + 0x24) = shake;
-        *(f32 *)(D_258CA0 + 0x28) = shake;
-        func_00313968(D_258CA0, spawnCtx, 0, 0);
+    if (object) {
+        SpawnShockwaveRingMoby(scale * 4.0f, FX_MOBY(object), FX_CTX(position), zero,
+                               20, 127, 64, 0, 48);
+        SpawnShockwaveRingMoby(scale * 3.0f, FX_MOBY(object), FX_CTX(position), zero,
+                               29, 96, 32, 0, 32);
+        if (object[0x20] != 0xfe)
+            if (object[0x20] != 0xfd)
+                if (sound != -1) PlayMobySound(sound, 0, (Moby *)object);
+    }
+    if (radius != 0.0f) {
+        if (radius > 0.0f) {
+            D_258CA0[9] = radius;
+            D_258CA0[10] = radius;
+            D_258CA0[8] = radius;
+        } else {
+            D_258CA0[9] = 13.0f;
+            D_258CA0[10] = 13.0f;
+            D_258CA0[8] = 13.0f;
+        }
+        func_00313968(D_258CA0, FX_CTX(position), 0, 0);
     }
 }
+#undef FX_CTX
+#undef FX_MOBY
 #endif
 
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
