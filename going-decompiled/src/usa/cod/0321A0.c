@@ -369,7 +369,7 @@ extern char D_001A76F8[]; /* "load already in progress" diagnostic (EE variant) 
 #if !defined(TARGET_NATIVE) && !defined(S136OS_snd_BankLoadFromEE_CB)
 S136OS_SLOT(snd_BankLoadFromEE_CB);
 #else
-void snd_BankLoadFromEE_CB(s32 arg0, s32 arg1, s64 arg2) {
+void snd_BankLoadFromEE_CB(s32 arg0, s32 arg1, long arg2) {
     D_001A7488 = 0;
 
     if (D_001A74C8 != 0) {
