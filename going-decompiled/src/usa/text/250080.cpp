@@ -30,8 +30,14 @@
  * unaffected.
  */
 
-/* cc1-small / assembler-absolute symbols (see header). */
-__asm__(".extern g_pFmvArenaBase, 12"); /* size 9..15: absolute, but %gp_rel in a delay slot (task #2364) */
+/* cc1-small / assembler-absolute symbols (see header). g_pFmvArenaBase is
+ * size 12, not 16 (task #2364): asm_unit.sh's size 9..15 class assembles it
+ * absolute everywhere except where cc1 itself put the bare read in a branch
+ * delay slot, which becomes one %gp_rel word. That is the ROM's model for this
+ * symbol (gp-relative only in delay slots, FACT #8058), and func_00350F88 needs
+ * it: reorg copies its join-point read into a `bnez` slot. At 16 that copy is
+ * hoisted (79 words, the splice refuses). */
+__asm__(".extern g_pFmvArenaBase, 12");
 __asm__(".extern D_1AE788, 16");
 __asm__(".extern D_1AE78C, 16");
 __asm__(".extern D_1AE790, 16");
@@ -55,8 +61,9 @@ extern s32 D_1AE790; /* GIF-DMA "frame consumed" pending flag */
 /* FMV_ARENA_BASE_GP: ADDRESSING-MODEL DEVICE (RULING #9073 under RULING #8620; emits
  * no code). An offset-0 assembler equate of g_pFmvArenaBase with no `.extern` size,
  * so an access spelled through it assembles gp-relative while every access
- * spelled g_pFmvArenaBase keeps the `.extern g_pFmvArenaBase, 16` absolute form
- * above. It reproduces two of the ROM's delay-slot reads,
+ * spelled g_pFmvArenaBase keeps the absolute form of its `.extern` above (size 16
+ * until task #2364, size 12 since, which is absolute outside delay slots). It
+ * reproduces two of the ROM's delay-slot reads,
  * `lw $2,%gp_rel(g_pFmvArenaBase)($28)`: FmvDecodeThreadEntry's at 0x0035283C
  * (task #1434) and FmvDisplayWorkerLoop's at 0x003528F8 (task #1888); the
  * relocation names the real symbol. At FILE SCOPE (task #1434), not in a member's
