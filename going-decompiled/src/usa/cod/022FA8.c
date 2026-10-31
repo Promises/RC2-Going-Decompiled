@@ -1419,7 +1419,96 @@ s16 CalcGsZbufferBasePtr(s16 psm, s16 width, s16 height) {
     return fbw * fbh * 2;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", BuildGsDrawEnvPacket);
+/* libgraph's sceGsDrawEnv1: eight (value, GS register address) pairs, all
+ * 64-bit, ready to go out as A+D data after a GIF tag. */
+typedef struct {
+    u64 frame1, frame1Addr;          /* 0x00: FRAME_1 (0x4C) */
+    u64 zbuf1, zbuf1Addr;            /* 0x10: ZBUF_1 (0x4E) */
+    u64 xyoffset1, xyoffset1Addr;    /* 0x20: XYOFFSET_1 (0x18) */
+    u64 scissor1, scissor1Addr;      /* 0x30: SCISSOR_1 (0x40) */
+    u64 prmodecont, prmodecontAddr;  /* 0x40: PRMODECONT (0x1A) */
+    u64 colclamp, colclampAddr;      /* 0x50: COLCLAMP (0x46) */
+    u64 dthe, dtheAddr;              /* 0x60: DTHE (0x45) */
+    u64 test1, test1Addr;            /* 0x70: TEST_1 (0x47) */
+} GsDrawEnv1;
+
+/**
+ * libgraph's sceGsSetDefDrawEnv: fill `draw` with a default drawing
+ * environment for a `w` x `h` frame buffer of pixel format `psm`, with a Z
+ * buffer of format `zpsm` placed right after it. Returns 8, the number of
+ * register pairs written.
+ *
+ * FRAME_1 takes the width in 64-pixel units and psm. ZBUF_1's base is the
+ * colour buffer's size in pages (CalcGsZbufferBasePtr on psm/w/h); with
+ * `ztest` 0 its ZMSK bit (bit 32) is set, so Z is never written, and TEST_1
+ * is 0x30000 (ZTE on, ZTST = ALWAYS); otherwise TEST_1 is ZTE plus
+ * `ztest & 3` as ZTST. XYOFFSET_1 centres the frame on the 4096-unit GS
+ * primitive space (2048 - w/2, 2048 - h/2, in 12.4 fixed point); SCISSOR_1
+ * covers the whole frame. PRMODECONT and COLCLAMP only get bit 0 set,
+ * keeping whatever else the caller's memory held; DTHE's bit 0 is set for a
+ * psm with bit 1 set (the 16-bit formats) and cleared otherwise.
+ *
+ * Both arms of the `ztest` test make the same CalcGsZbufferBasePtr call; the
+ * ROM has the call twice, so the C does too.
+ *
+ * Source: OpenRAC/rac2-gc-decomp @96927f87 (GPL-3.0, adopted with the authors'
+ * permission per RULING #10405), nonmatching/core/func_00125F20.c,
+ * func_00125F20 (origin commit 72cfdb68 in src/core/00125E58.c, author
+ * "agent"; moved to nonmatching/ by d67ee8c0, Louis-Philippe Le Sieur, for
+ * its inline `sync`); upstream rac1-decomp src/core/00122200.c func_001222C8.
+ * C body adapted: our names (func_00125E58 = CalcGsZbufferBasePtr, the struct
+ * as GsDrawEnv1 with camel-case address fields, func_00125F20 =
+ * BuildGsDrawEnvPacket), every `unsigned long` written u64 and `long` written
+ * s64 (`1UL`/`~1UL` as `(u64)1`/`~(u64)1`), the same types on the EE, so the
+ * native ILP32 build keeps 64-bit fields, and the `sync` put behind
+ * `#ifndef TARGET_NATIVE` (task #2297).
+ */
+int BuildGsDrawEnvPacket(GsDrawEnv1 *draw, short psm, short w, short h,
+                         short ztest, short zpsm) {
+    short fbw = ((w + 63) >> 6) & 0x3F;
+    short zbp;
+
+    draw->frame1Addr = 0x4C;
+    draw->frame1 = ((u64)fbw << 16) | ((u64)(psm & 0xF) << 24);
+    draw->zbuf1Addr = 0x4E;
+    if (ztest == 0) {
+        zbp = CalcGsZbufferBasePtr(psm, w, h);
+        draw->zbuf1 = (u64)zbp | ((u64)(zpsm & 0xF) << 24) | ((u64)1 << 32);
+    } else {
+        zbp = CalcGsZbufferBasePtr(psm, w, h);
+        draw->zbuf1 = (u64)zbp | ((u64)(zpsm & 0xF) << 24);
+    }
+    draw->xyoffset1Addr = 0x18;
+    {
+        s64 ofx = (s64)2048 - (w >> 1);
+        s64 ofy = (s64)2048 - (h >> 1);
+        draw->xyoffset1 = (u64)(ofx << 4) | ((u64)(ofy << 4) << 32);
+    }
+    draw->scissor1Addr = 0x40;
+    draw->scissor1 = ((u64)(w - 1) << 16) | ((u64)(h - 1) << 48);
+    draw->prmodecontAddr = 0x1A;
+    draw->prmodecont |= 1;
+    draw->colclampAddr = 0x46;
+    draw->colclamp |= 1;
+    draw->dtheAddr = 0x45;
+    if (psm & 2) {
+        draw->dthe |= 1;
+    } else {
+        draw->dthe &= ~(u64)1;
+    }
+    draw->test1Addr = 0x47;
+    if (ztest != 0) {
+        draw->test1 = ((u64)(ztest & 3) << 17) | 0x10000;
+    } else {
+        draw->test1 = 0x30000;
+    }
+#ifndef TARGET_NATIVE
+    /* HARDWARE BARRIER (RULING #12168): the ROM's `sync` at 0x1260D8, after
+     * the last store; ee-gcc has no C spelling for it. */
+    __asm__ __volatile__("sync");
+#endif
+    return 8;
+}
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00126104);
 

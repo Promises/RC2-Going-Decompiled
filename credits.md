@@ -426,11 +426,12 @@
 - **OpenRAC — `rac2-gc-decomp`, commit `96927f87`, libcdvd/libgraph/libmpeg bodies** (GPL-3.0)
   <https://github.com/OpenRAC/rac2-gc-decomp> at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`
 
-  Nine core C bodies, adopted with the authors' permission (held by the
+  Ten core C bodies, adopted with the authors' permission (held by the
   operator, RULING #10405) and re-checked byte-exact against our v2.00 ROM on
-  the plain sdk29 arm (tasks #2231, #2237 and #2273). Contributors: Flavius and
-  bigbeno37. Seven are rac1-decomp's C carried into rac2-gc-decomp; `sceCdInit` and
-  `func_00130A90` are OpenRAC's own. Each doc comment carries the `Source:`
+  the plain sdk29 arm (tasks #2231, #2237, #2273 and #2297). Contributors:
+  Flavius, bigbeno37, and the OpenRAC commit authored as "agent" with
+  Louis-Philippe Le Sieur's move of it to `nonmatching/`. Eight are rac1-decomp's
+  C carried into rac2-gc-decomp; `sceCdInit` and `func_00130A90` are OpenRAC's own. Each doc comment carries the `Source:`
   line, which names every change beyond extern spellings.
 
   Used so far, all in `going-decompiled/src/usa/cod/022FA8.c`:
@@ -462,6 +463,15 @@
     Flavius); rac1-decomp `src/core/0012AC80.c`; their header says it is
     adapted from **Lombyte** (GPL-3.0) `src/sdk/dma/sce_mpeg_demux_pss_ring.c`
     (task #2237).
+  - **`BuildGsDrawEnvPacket`** (`0x00125F20`, libgraph's sceGsSetDefDrawEnv),
+    adapted (`unsigned long`/`long` written `u64`/`s64`, our struct and callee
+    names, the `sync` behind `#ifndef TARGET_NATIVE`), from the draft
+    `nonmatching/core/func_00125F20.c` (`func_00125F20`; origin commit
+    `72cfdb68`, author "agent", in `src/core/00125E58.c`, moved to
+    `nonmatching/` by `d67ee8c0`, Louis-Philippe Le Sieur, for its inline
+    `sync`); rac1-decomp `src/core/00122200.c`. Admitted because it is
+    byte-exact on our ROM; its one inline `sync` is the hardware barrier
+    RULING #12168 allows (task #2297).
 
 - **Forja contributors** (MIT, © 2026 Forja contributors), via OpenRAC
   `rac2-gc-decomp` at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`
