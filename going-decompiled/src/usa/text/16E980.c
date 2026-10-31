@@ -1292,9 +1292,13 @@ typedef struct CamTakeRow {
  * The ROM has a jump-table switch (jtbl_0026C4F0_text) and three callee-saves
  * at 8-byte slot spacing (the packed-save frame cc1 2.9 cannot produce).
  * Unmatched; the save layout is a cc1 2.9 property and not the reason on the
- * s136os arm (FACT #9873 / NOTE #9871). The s136os arm was screened only as
- * written (NOTE #9857 at 75e6b6c1: 112 built vs 113 ROM words, a ranking
- * screen) and not retried. */
+ * s136os arm (FACT #9873 / NOTE #9871). The s136os arm was screened as written
+ * (NOTE #9857 at 75e6b6c1: 112 built vs 113 ROM words, a ranking screen) and
+ * retried in task #2322 (NEAR, 112/113 words, ~34 aligned word differences):
+ * the ROM keeps every `return 1` / `return 0` as branches into shared
+ * cross-jumped tails, where SN 1.36 cc1 emits store-flag sltu/sltiu, and the
+ * block layout differs around the kind-7 type test. Its best body and ladder
+ * are in the store at this address. */
 #ifdef TARGET_NATIVE
 extern s32 g_cameraCallbackCount;
 extern char g_soundBankHandlesBlk[]; /* g_soundBankHandles + 0x20 */
@@ -1370,7 +1374,9 @@ s32 TestCameraTakeover(Camera *cand, Camera *cur) {
             *(s32 *)((char *)D_001B1300 + (obj->linkIdx << 5) + 0x10)) {
             return 0;
         }
-        return *(s32 *)(g_soundBankHandlesBlk + 0x640) != 0;
+        /* == 0, from the ROM (0x2709E4: `beqz` to the epilogue with 1 in its
+         * delay slot, 0 on fall-through); this arm read `!= 0` until task #2322 */
+        return *(s32 *)(g_soundBankHandlesBlk + 0x640) == 0;
     }
     default: /* kinds 3, 5, 6 */
         return 0;
