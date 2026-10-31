@@ -4101,11 +4101,11 @@ finalize:
  * through a void-returning cast of its s32 declaration (theirs is void; still
  * a direct jal). The cast is load-bearing: called as s32, the build takes $3
  * instead of $2 for the -1 stored after the call, 2 of 341 words differing
- * (0x2B85D0/D8; measured with (3) in place, task #2262). (3) func_00132BC0 is
+ * (0x2B8650/58; measured with (3) in place, task #2262). (3) func_00132BC0 is
  * declared here with their parameter types (start callback
  * void (*)(s32, long), context long, which is 64-bit on the EE): with the
  * unit's earlier void * spelling the build swaps $5/$11 in states 2 and 6,
- * 8 of 341 words differing (0x2B8744..98; measured with the cast in place,
+ * 8 of 341 words differing (0x2B87C4..0x2B8818; measured with the cast in place,
  * task #2262). cod/0321A0.c defines both parameters as s32. (4) The callees
  * that an s136os compile of this function alone cannot see from other
  * functions' native arms are declared here. */
