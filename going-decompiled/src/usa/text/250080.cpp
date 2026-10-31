@@ -31,7 +31,7 @@
  */
 
 /* cc1-small / assembler-absolute symbols (see header). */
-__asm__(".extern g_pFmvArenaBase, 16");
+__asm__(".extern g_pFmvArenaBase, 12"); /* size 9..15: absolute, but %gp_rel in a delay slot (task #2364) */
 __asm__(".extern D_1AE788, 16");
 __asm__(".extern D_1AE78C, 16");
 __asm__(".extern D_1AE790, 16");
@@ -1124,54 +1124,73 @@ void func_00350F78(void) {
     D_1AE788 = 0;
 }
 
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00350F88);
+/**
+ * Copy a window of arrived bytes into the IPU payload ring's two writable
+ * spans. Clamps the request to the ring's arrived payload and the descriptor's
+ * remaining length, queries the stream's free spans (func_00352590, which
+ * forwards to func_003517C0 on stream+0x48) and masks both span pointers into
+ * the 0x20000000 uncached window, scatters into them (func_003511A8), records
+ * the DMA-add command (func_00352638) and reports an error if the queue was
+ * full, then advances the stream by the bytes stored (func_003525B0).
+ * @param unused   not read
+ * @param desc     stream descriptor: +0x8 window start, +0xC bytes remaining,
+ *                 +0x10/+0x18 the two 64-bit DMA tag words
+ * @param ringBase bitstream ring; +0x50008 is its payload length
+ * @return 1 if any bytes were stored, else 0
+ *
+ * The arena base is read ONCE at the join, as plain C. reorg then copies that
+ * read into the `bnez` delay slot after func_00352638 and retargets the branch
+ * past it, so the ROM shows it twice: `%gp_rel` in the slot (0x35106C) and
+ * absolute at 0x35107C. The slot form comes from the size-12 `.extern` class
+ * of g_pFmvArenaBase (file scope, task #2364; asm_unit.sh rewrites only
+ * delay-slot accesses of a size 9..15 symbol to %gp_rel). Keeping the read in
+ * the join block also fixes its schedule: with the `lw` taking an issue slot,
+ * the `move $a1` waits for the cycle after `lui`, as in the ROM. Two reads with
+ * a goto (task #2335) moved the `move` up one word: 2/78.
+ * `rest = remain - take` is its own local, so the subtraction lands in the
+ * first jal's delay slot (as `remain -= take` it does not: 4 words, #2335).
+ * GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+ * (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in tools/ee/s136os_functions.txt)
+ * and spliced over S136OS_SLOT by tools/ee/s136os_splice.sh (task #2364). There
+ * is no asm fallback: a build that skips the splice drops the function. On
+ * native it is plain C.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00350F88)
+S136OS_SLOT(func_00350F88);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern s32 func_00352638(u8 *obj, u64 a, u64 b, s32 pos, s32 n);
 extern char D_1AE7E8[];
+extern s32 func_00352590(FmvStream *obj, s32 *ptr0, s32 *len0, s32 *ptr1, s32 *len1);
+extern s32 func_003525B0(FmvStream *obj, s32 n);
 /* (end of this body's declarations) */
-/* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 72.19% / engine96 53.51%. Residual: PACKED-SAVE (7 callee saves) + 35 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs).
- * Save stride NOT re-measured for this member on the s136os arm: its C arm does not compile
- * solo there (NOTE #9871). Of the 111 labeled members that were, 0 reproduce the 16-byte save
- * stride there (FACT #9873), so the stride is not evidence that this member is walled.
- * Residual: UNMEASURED. */
-/* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
-   saves (s0..s4/ra). Revisit with the gameplay-TU compiler.
-
-   Copy a window of arrived bytes into the IPU payload ring's two writable
-   spans: clamps the request to the descriptor's remaining length, queries the
-   spans (func_003517C0 on the DMA-queue stream at arena+0xD9090, the two span
-   pointers masked to the 0x20000000 scratch-pad address window), scatters into
-   them (func_003511A8), records the resulting DMA-add command (func_00352638)
-   reporting an error if it could not be queued, advances the read cursor
-   (func_003525B0), and reports whether any bytes were stored. */
 s32 func_00350F88(u8 *unused, u8 *desc, u8 *ringBase) {
     s32 span0Ptr;
     s32 span0Len;
     s32 span1Ptr;
     s32 span1Len;
-    u8 *streamObj = g_pFmvArenaBase + FMV_STREAM_OFS;
     s32 start = *(s32 *)(desc + 8);
     s32 remain = *(s32 *)(desc + 0xC);
-    s32 take = ((s32)(ringBase + *(s32 *)(ringBase + 0x50008)) - start);
+    s32 take = (s32)(ringBase + *(s32 *)(ringBase + 0x50008)) - start;
     s32 stored;
+    s32 rest;
 
     if (remain < take) {
         take = remain;
     }
-    func_003517C0((s32 *)(streamObj + 0x48), &span0Ptr, &span0Len, &span1Ptr,
-                  &span1Len);
+    rest = remain - take;
+    func_00352590((FmvStream *)(g_pFmvArenaBase + FMV_STREAM_OFS), &span0Ptr, &span0Len,
+                  &span1Ptr, &span1Len);
     stored = func_003511A8((u8 *)((span0Ptr & 0xFFFFFFF) | 0x20000000), span0Len,
                            (u8 *)((span1Ptr & 0xFFFFFFF) | 0x20000000), span1Len,
-                           (u8 *)start, take, ringBase, remain - take);
+                           (u8 *)start, take, ringBase, rest);
     if (stored > 0 &&
-        func_00352638(streamObj, *(u64 *)(desc + 0x10), *(u64 *)(desc + 0x18),
-                      span0Ptr, stored) == 0) {
+        func_00352638(g_pFmvArenaBase + FMV_STREAM_OFS, *(u64 *)(desc + 0x10),
+                      *(u64 *)(desc + 0x18), span0Ptr, stored) == 0) {
         func_003504C8(D_1AE7E8);
     }
-    func_003518B8(streamObj + 0x48, stored);
+    func_003525B0((FmvStream *)(g_pFmvArenaBase + FMV_STREAM_OFS), stored);
     return stored > 0;
 }
 #endif

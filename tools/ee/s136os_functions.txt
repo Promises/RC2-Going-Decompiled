@@ -725,3 +725,4 @@ usa text/1CA080 TickFrontEndScreenMachine
 usa text/1CA080 func_002D34E8
 usa text/1CA080 func_002D38C8
 usa text/1DFF80 func_002E07F8
+usa text/250080 func_00350F88
