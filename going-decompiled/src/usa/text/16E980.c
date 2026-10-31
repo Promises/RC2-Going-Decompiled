@@ -37,12 +37,12 @@
  * 05_all29_report.txt, 07_all96_report.txt, classes 08/09_classify*.txt). None
  * reached 100 on either arm; sdk29 >= engine96 on 31 of 40, but 32 of those are
  * PACKED-SAVE-walled there. The wall is a property of the 2.9 arm only: the
- * s136os arm (SN 1.36 -fopt-stack) has the ROM's 8-byte slots, and twenty-five of
+ * s136os arm (SN 1.36 -fopt-stack) has the ROM's 8-byte slots, and twenty-six of
  * these arms are matched there (FACTs #8830, #9658, #9707, #9856, #10000,
  * #10023, UpdateScreenFadeBlack from its former MATCH_ guard (task #2092),
  * func_00273D20 (task #2101), func_00271140 (task #2116) and
  * BuildAttractReelPlaylist (OpenRAC's C, task #2207), ApplyCameraShakeAxis and
- * SampleCameraFogZone (OpenRAC's C, task #2232); the s136os
+ * SampleCameraFogZone (OpenRAC's C, task #2232), UpdateCamera (task #2322); the s136os
  * re-screen of the remaining arms is NOTE #9857, with func_00270D60 and
  * func_00270B68 taken further in NOTEs #9994 and #10024, func_00273D20's NOTE
  * #9998 ladder closed by task #2101 and func_00271140's NOTE #10031 ladder by
@@ -75,7 +75,7 @@
  *   ApplyCameraShakeAxis        77.87  60.29  3g/3f   PACKED-SAVE,GPREL (s136os: matched, task #2232)
  *   TrackHeroMotionForCamera    55.33  42.81  9g/4f   PACKED-SAVE,LIKELY-,GPREL
  *   func_00271FE8               75.86  60.38  0g/0f   GPREL
- *   UpdateCamera                 1.19   1.19  4g/1f   PACKED-SAVE,-
+ *   UpdateCamera                 1.19   1.19  4g/1f   PACKED-SAVE,- (s136os: matched, task #2322)
  *   DrawScreenSpriteFxEntry      4.74   7.33  4g/5f   PACKED-SAVE,SIBCALL,LIKELY-
  *   AddScreenSpriteFx           57.48  48.89  0g/0f   MULT,GPREL
  *   DrawScreenSpriteFxQueue     46.64  44.15  8g/1f   PACKED-SAVE,GPREL
@@ -210,7 +210,9 @@ typedef struct CameraSysState {
     /* 0x278 */ f32 fadeWhiteOutRate; /* alternate step clamp used while fadeWhiteTarget==0 (fade-out) */
     /* 0x27C */ f32 fadeWhiteTarget;  /* white flash-to level */
     /* 0x280 */ u8 fadeWhiteTimer[4]; /* TickCountdownTimer re-arm timer */
-    /* 0x284 */ u8 pad284[0xEC];
+    /* 0x284 */ u8 pad284[0xC];
+    /* 0x290 */ s16 transitionState;  /* g_cameraTransitionState: 1/2 pending, 3 blending */
+    /* 0x292 */ u8 pad292[0xDE];
     /* 0x370 */ Vec4 matrix[3];       /* camera rotation rows (g_cameraMatrix, 0x1B54F0) */
     /* 0x3A0 */ u8 pad3A0[0x30];
     /* 0x3D0 */ f32 fovSpringVel;     /* spring-ease state (func_002703C0) */
@@ -226,6 +228,7 @@ typedef struct CameraSysState {
     /* 0x3F0 */ f32 fovFrom;          /* ease start FOV */
     /* 0x3F4 */ u8 pad3F4[0xC];
     /* 0x400 */ s32 underwater;       /* set by CheckCameraUnderwater */
+    /* 0x404 */ s32 framesSinceCut;   /* g_cameraFramesSinceCut: ++ per UpdateCamera */
 } CameraSysState;
 extern CameraSysState g_cameraState;
 
@@ -1672,7 +1675,8 @@ void func_00270EB8(void) {
 }
 #endif
 
-/* BeginCameraTransition: kick a camera-to-camera blend into `active`. With the
+/* BeginCameraTransition: kick a camera-to-camera blend starting from `active`
+ * (the caller's g_prevCamera; the parameter keeps its old name). With the
  * transition armed (state==1) it captures the blend sources by pendingKind:
  * kind 0 = cur pair from the camera (pos row +0x30 + func_002AC468
  * orientation), kind 2 = src pair + func_00270D60, others = spherical path
@@ -1682,18 +1686,18 @@ void func_00270EB8(void) {
  * func_00270E40 + oriB<-src1, kind 0 = func_00270EB8. Then state=3, kind is
  * latched, and the interpolator state is seeded: kind 0 primes blendA and the
  * vec30/vec40 pair from cur0/cur1; other kinds bump blendCount and set
- * blendTarget/blendRate = 1/count. The second parameter is unused (kept for
- * the established caller signature). */
+ * blendTarget/blendRate = 1/count. ONE parameter: the ROM reads only $a0,
+ * and its sole caller UpdateCamera passes g_prevCamera there (the camera the
+ * blend starts from), never the active slot. */
 #ifdef TARGET_NATIVE
 extern void func_002AC468(void *dstOri, Camera *cam);
 extern void func_00270D60(void);
 extern void func_00270E40(void);
 extern void func_00270EB8(void);
-void BeginCameraTransition(Camera *active, Camera *prev) {
+void BeginCameraTransition(Camera *active) {
     CameraTransitionState *ts = &g_cameraTransitionState;
     Vec4 fwd, right, up;
 
-    (void)prev;
     if (ts->state == 1) {
         if (ts->pendingKind == 0) {
             ts->cur0 = *(Vec4 *)((u8 *)active + 0x30);
@@ -2597,20 +2601,60 @@ void UpdateScreenFadeWhite(void) {
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", UpdateScreenFadeWhite);
 #endif
 
-/* UpdateCamera: top-level per-frame camera tick. Advances the fade overlays and
- * frame counter, runs the hero-motion tracker and the mode-arbitration
- * dispatcher, then resolves the active transition: kicks a fresh blend when the
- * transition state just became 1/2, interpolates while it is 3, otherwise snaps
- * the live camera fields from the active slot. A forced-override hook
- * (func_0026F7C0) can rebuild the camera basis directly from a cinematic block.
- * Finally it derives g_cameraRot from g_cameraMatrix, applies the three shake
- * channels, runs the underwater + fog-zone sampling and the FOV interpolation. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", UpdateCamera);
+/* UpdateCamera: top-level per-frame camera tick. No params, no return.
+ * Bumps g_cameraFramesSinceCut, advances the fade overlays, runs the
+ * underwater-fog probe (func_00271FE8), the hero-motion tracker and the
+ * mode-arbitration dispatcher, then resolves the transition: a pending one
+ * (state 1/2) starts a blend from g_prevCamera; while blending (state 3)
+ * ApplyCameraTransition writes the live camera from the active slot, otherwise
+ * the live position and matrix rows are snapped from the active slot (its
+ * +0x30 position row and +0x00..+0x20 basis). A forced-override hook
+ * (func_0026F7C0, compiled out: always 0 in retail) can instead rebuild the
+ * camera from g_cinematicCameraBlock: position and forward row copied, then
+ * right = normalise(forward x V) and up = normalise(right x forward), V being
+ * the qword 0x14B0 below the block (0x189E40, unnamed). Finally it derives
+ * g_cameraRot from g_cameraMatrix, applies the three shake channels, runs the
+ * underwater test and fog-zone sampling, re-derives the up row when the
+ * camera-invert option (D_1A7A4C) is set, steps the FOV interpolation and
+ * clears the qword at g_cameraMatrix + 0x50.
+ *
+ * Non-obvious, from the ROM: BeginCameraTransition receives ONLY g_prevCamera
+ * (cs+0x194) in $a0; the active-slot pointer (cs+0x190) is never passed to it.
+ * The ROM reaches the matrix rows through three separate bases (g_cameraState,
+ * then g_cameraPos + 0x230, then g_cameraMatrix), so the C does too.
+ *
+ * MATCHED on the s136os arm (task #2322). Every 16-byte copy in the ROM goes
+ * through address registers (`addiu $3,$17,0x30; lq $2,0($3); sq $2,0($5)`),
+ * the block-move shape func_00270EB8 documents, where SN 1.36 cc1 folds the
+ * offsets into lq/sq. Devices, each removed ALONE in a solo s136 compile
+ * (positional word differences against the ROM, relocations masked):
+ *   - EMPTY asm fences (RULING #8483; emit nothing) on every copy's source and
+ *     destination keep each address in its own register; untied volatile
+ *     barriers taking the copy's source as an input hold the next copy's
+ *     address setup below the previous sq (removing one: 3 to 17 words);
+ *   - the snap path's destinations pinned to $5, $4, $5 and the last source to
+ *     $3 (RULING #8598, REGISTER-PIN DEVICE; 2, 3, 2 and 2 words): the ROM
+ *     alternates the two destination registers. Pins on the active-slot
+ *     pointer ($17) and the fourth destination ($4) measured dead weight and
+ *     are not here;
+ *   - the final clear stores a read-only `$0`-pinned qword (RULING #8479), the
+ *     ROM's `sq $0`; its fenced address and a trailing barrier keep it above
+ *     the epilogue (2 and 5 words);
+ *   - D_1A7A4C is cc1-small and assembler-absolute (`.extern D_1A7A4C, 16`,
+ *     the ROM's `lui $2; lbu $2,%lo($2)`).
+ * GUARD: on EE this C is compiled alone by SN 2.95.3 v1.36 -fopt-stack
+ * (tools/ee/s136os_functions.txt) and spliced over the S136OS_SLOT line by
+ * tools/ee/s136os_splice.sh. Native keeps its in-level no-op (below) ahead of
+ * the same body, with the fences emitting nothing and EE_REG empty. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_UpdateCamera)
+S136OS_SLOT(UpdateCamera);
 #else
-extern void TrackHeroMotionForCamera(void);
+extern void UpdateScreenFadeBlack(void);
+extern void UpdateScreenFadeWhite(void);
 extern void func_00271FE8(void);
-extern void BeginCameraTransition(Camera *active, Camera *prev);
+extern void TrackHeroMotionForCamera(void);
+extern s32 DispatchCameraMode(void);
+extern void BeginCameraTransition(Camera *from);
 extern s32 func_0026F7C0(void);
 extern void ApplyCameraTransition(Vec4 *out);
 extern void MatrixToEulerAngles(const Vec4 *m, Vec4 *outRot);
@@ -2621,29 +2665,114 @@ extern void Vec3CrossVu0(Vec4 *dst, const Vec4 *a, const Vec4 *b);
 extern void Vec3RescaleToLenVu0(Vec4 *dst, f32 len, const Vec4 *src); /* (dst,len,src) - see func_00270D60 note */
 extern void StepCameraFovInterp(void);
 extern Vec4 g_cameraPos;
-extern Vec4 g_cameraRot;
 extern Vec4 g_cameraMatrix;   /* 3-row rotation matrix at 0x1B54F0 */
-extern Vec4 g_cameraShakeUp;
-extern Vec4 g_cameraShakeRight;
-extern Vec4 g_cameraShakeRoll;
 extern Vec4 g_cinematicCameraBlock[]; /* g_nNanotechBonusHealTimer + 0x12F4 */
-extern u8 D_1A7A4C;
-/* TODO(match): functional equivalent - not byte-exact. The ROM saves four
-   callee-saves (incl. $f20) at 8-byte slot spacing (the 0x20-vs-0x10
-   packed-save frame on the cc1 2.9 arm); that layout is a cc1 2.9 property
-   and not the reason on the s136os arm (FACT #9873 / NOTE #9871). The EE arm
-   of this body is effectively empty (NOTE #9857 at 75e6b6c1: 2 built vs 118
-   ROM words; native-only body), so the s136os arm has not been tried. */
+#ifndef TARGET_NATIVE
+__asm__(".extern D_1A7A4C, 16"); /* cc1-small, assembler-absolute (see above) */
+#endif
+extern u8 D_1A7A4C;           /* camera-invert option */
 void UpdateCamera(void) {
+    CameraSysState *cs = &g_cameraState;
+    Camera *active;
+
+#ifdef TARGET_NATIVE
     /* IN-LEVEL native frame-path: UpdateCamera is an out-of-scope driven-frame
      * TRAP (tester state/inlevel_trap_list.md). It dereferences cs->activeCamera
      * (g_cameraState+0x190) - the OVERLAY-resident pointer (the unmapped
      * 0x089C1000) in-level, see tools/native/camera_map_re.md - and reads other
      * relocated-band camera globals, faulting on real EE. No-op the tick: the
      * camera transform is externally supplied (seeded from the in-level dump),
-     * and TrackHeroMotionForCamera is driven + validated separately. The full
-     * frontend reconstruction is preserved in git (commit 1fd00c0); restore and
-     * guard it if the in-level seed is ever un-relocated. */
+     * and TrackHeroMotionForCamera is driven + validated separately. Drop this
+     * return if the in-level seed is ever un-relocated. */
+    return;
+#endif
+    cs->framesSinceCut++;
+    UpdateScreenFadeBlack();
+    UpdateScreenFadeWhite();
+    func_00271FE8();
+    TrackHeroMotionForCamera();
+    DispatchCameraMode();
+    active = cs->activeCamera.p;
+    if (cs->transitionState == 1 || cs->transitionState == 2) {
+        BeginCameraTransition(cs->prevCamera);
+    }
+    if (cs->transitionState == 3) {
+        ApplyCameraTransition((Vec4 *)active);
+    } else {
+        register Vec4 *posDst EE_REG("$5");
+        register Vec4 *row0Dst EE_REG("$4");
+        register Vec4 *row1Dst EE_REG("$5");
+        register Vec4 *row2Src EE_REG("$3");
+        Vec4 *posSrc, *row1Src, *row2Dst;
+
+        posDst = &cs->camPos;
+        posSrc = (Vec4 *)active + 3;    /* +0x30 position row */
+        __asm__("" : "+r"(posDst), "+r"(posSrc));
+        *posDst = *posSrc;
+        __asm__ __volatile__("" : : "r"(posSrc));
+        row0Dst = &cs->matrix[0];
+        __asm__("" : "+r"(row0Dst));
+        *row0Dst = *(Vec4 *)active;
+        __asm__ __volatile__("" : : "r"(row0Dst));
+        row1Dst = &cs->matrix[1];
+        row1Src = (Vec4 *)active + 1;
+        __asm__("" : "+r"(row1Dst), "+r"(row1Src));
+        *row1Dst = *row1Src;
+        __asm__ __volatile__("" : : "r"(row1Src));
+        row2Dst = &cs->matrix[2];
+        row2Src = (Vec4 *)active + 2;
+        __asm__("" : "+r"(row2Dst), "+r"(row2Src));
+        *row2Dst = *row2Src;
+    }
+    if (func_0026F7C0() != 0) {
+        Vec4 *pos = &g_cameraPos;
+        Vec4 *blk = g_cinematicCameraBlock;
+        Vec4 *fwd, *right, *up, *src;
+
+        __asm__("" : "+r"(pos), "+r"(blk));
+        *pos = blk[0];
+        __asm__ __volatile__("" : : "r"(blk));
+        src = blk + 1;
+        fwd = pos + 0x23;     /* g_cameraMatrix row 0, 0x230 above g_cameraPos */
+        __asm__("" : "+r"(fwd), "+r"(src));
+        *fwd = *src;
+        __asm__ __volatile__("" : : "r"(src));
+        right = pos + 0x24;
+        Vec3CrossVu0(right, fwd, blk - 0x14B);
+        Vec3RescaleToLenVu0(right, 1.0f, right);
+        up = pos + 0x25;
+        Vec3CrossVu0(up, right, fwd);
+        Vec3RescaleToLenVu0(up, 1.0f, up);
+    }
+    {
+        Vec4 *m = &g_cameraMatrix;
+        u_long128 *tail;
+
+        MatrixToEulerAngles(m, m - 0x22);        /* g_cameraRot */
+        ApplyCameraShakeAxis(m - 0x21, 0);       /* g_cameraShakeUp */
+        ApplyCameraShakeAxis(m - 0x20, 1);       /* g_cameraShakeRight */
+        ApplyCameraShakeAxis(m - 0x1F, 2);       /* g_cameraShakeRoll */
+        CheckCameraUnderwater();
+        SampleCameraFogZone(m - 0x23);           /* g_cameraPos */
+        if (D_1A7A4C != 0) {
+            Vec3CrossVu0(m + 1, m + 2, m);
+        }
+        StepCameraFovInterp();
+        tail = (u_long128 *)(m + 5);
+        __asm__("" : "+r"(tail));
+#ifndef TARGET_NATIVE
+        {
+            register u_long128 zeroQuad EE_REG("$0");   /* read-only: never assigned */
+            *tail = zeroQuad;
+        }
+#else
+        {
+            Vec4 zero = {0.0f, 0.0f, 0.0f, 0.0f};
+            *(Vec4 *)tail = zero;
+        }
+#endif
+        __asm__ __volatile__("" : : "r"(tail));
+    }
 }
 #endif
 

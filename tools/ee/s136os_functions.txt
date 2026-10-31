@@ -697,3 +697,4 @@ usa text/1D54C0 func_002DCCC8
 usa cod/0321A0 snd_QueueCommandToRing
 usa cod/0321A0 OnVblankInterrupt
 usa cod/0314C0 main
+usa text/16E980 UpdateCamera
