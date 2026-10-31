@@ -1656,7 +1656,7 @@ void SetGalacticMapFadeAlpha(s32 progress, s32 color1, s32 color2) {
  * edge is set), and map the column across 3- and 5-column grids; with no link
  * they wrap unless flags bit 15 is set. Left/Right (0x8000/0x2000) do the same
  * per column. A cursor or focus change plays menu sound 1. On bit 0x40, for
- * a selectable grid (flags bit 0) with no cooldown (busy), an owned entry's item
+ * a selectable grid (flags bit 0 clear) with no cooldown (busy), an owned entry's item
  * is put in its weapon's equip slot (g_weaponTable[g_itemEquippedSlot[item]]
  * .equipMode), or taken out of slot 1 or 2 if already there; busy = 10 and menu
  * sound 0. An item not owned plays sound 2. Returns 0.
@@ -1682,7 +1682,7 @@ void SetGalacticMapFadeAlpha(s32 progress, s32 color1, s32 color2) {
  * read through the alias above (gridOwned); their D_00139568, D_00239BA0 and
  * func_002DF190 are our g_itemEquippedSlot, g_weaponTable (cast to their
  * WeaponInfo) and func_002DFFA0; (3) their `if (!((menu->flags ^ 1) & 1))` is
- * split through the local `unselectable`: this unit is C++, and the C++ front
+ * split through the local `selectable`: this unit is C++, and the C++ front
  * end folds the xor away (andi + bne at 0x2D79DC: 3 of 322 words differ, vmu)
  * where C keeps the ROM's xori/andi/beqz; (4) their `-g32` file-name flag is not carried (the unit is
  * -G8 and the body has no gp-relative access). Their typedefs and the rest of
@@ -1844,8 +1844,8 @@ finish:
         MenuRoot *root;
         GridEntry *entry;
         int slot;
-        int unselectable = (menu->flags ^ 1) & 1;
-        if (!unselectable)
+        int selectable = (menu->flags ^ 1) & 1;
+        if (!selectable)
             return 0;
         root = &gridRoot;
         if (root->busy != 0)
