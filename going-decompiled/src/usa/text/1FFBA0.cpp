@@ -948,22 +948,44 @@ void AdjustPointForHeroGroundMoby(u_long128 *out, u_long128 *in) {
     }
 }
 
-/* Project point `in` through the hero ground-moby (relative to point `ref`) into
- * `out`: when a ground moby is bound, transform via func_002AE198 into a stack
- * scratch quad then add `in` back onto it (Vec4AddVu0); otherwise copy `in`->`out`
- * verbatim (128-bit quad).
- * TODO(match): two callee-saves + lq/sq quad copy + Vu0 helper schedule cc1 won't
- * reproduce here; the C is functionally faithful. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1FFBA0", func_00301070);
+/**
+ * func_00301070 - project a point through the hero's ground moby and add it
+ * back onto itself.
+ *
+ *   out - result quad
+ *   in  - source point (quad)
+ *   ref - passed through to func_002AE198 untouched (its third argument)
+ *
+ * When a hero ground-moby is bound (g_pHeroGroundMoby), transforms via
+ * func_002AE198(g_pHeroMoby, g_pHeroGroundMoby, ref, &scratch) into a stack
+ * scratch quad, then writes `in + scratch` to `out` (Vec4AddVu0). Otherwise
+ * copies `in` to `out` as one 128-bit lq/sq.
+ *
+ * Byte-exact on the s136os arm (task #2390; gcse on and off emit the same
+ * block). HERO_MOBY_ABS gives the ROM's split `lui/lw %lo` of g_pHeroMoby, as
+ * in AdjustPointForHeroGroundMoby above.
+ *
+ * DEVICE: the empty operand-tied fence on `out` in the copy path is a
+ * REGISTER-ALLOCATION device (RULING #8483: emits nothing, both arms). Without
+ * it SN 1.36 gives `in` $16 and `out` $17, the reverse of the ROM, so the two
+ * argument saves and every use swap: 6 of 26 words (task #2390's removal
+ * probe; NOTE #12169's REGALLOC NEAR). The fence adds a reference to `out`,
+ * which raises its global-alloc priority above `in`'s. Two RULING #8598 pins
+ * were tried instead and do not close: cc1 then reuses the incoming $4/$5 in
+ * the copy path.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00301070)
+S136OS_SLOT(func_00301070);
 #else
 void func_00301070(u_long128 *out, u_long128 *in, void *ref) {
     u_long128 scratch;
-    if (g_pHeroGroundMoby == 0) {
-        *out = *in;
-    } else {
-        func_002AE198(g_pHeroMoby, g_pHeroGroundMoby, ref, &scratch);
+
+    if (g_pHeroGroundMoby != 0) {
+        func_002AE198(HERO_MOBY_ABS, g_pHeroGroundMoby, ref, &scratch);
         Vec4AddVu0(out, in, &scratch);
+    } else {
+        __asm__("" : "+r"(out)); /* regalloc device, see above */
+        *out = *in;
     }
 }
 #endif

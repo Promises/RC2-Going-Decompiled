@@ -719,3 +719,4 @@ usa text/1D54C0 LoadMenuBgImagePair
 usa text/1D54C0 func_002DD638
 usa text/191238 func_002984E0
 usa text/1D54C0 func_002D8A68
+usa text/1FFBA0 func_00301070
