@@ -2052,7 +2052,33 @@ extern s32 func_0011B030(s32 arg0);
  *
  * @param mode  unused
  *
- * Source: SOURCE_PLACEHOLDER
+ * Source: Lombyte github.com/mateuszklysz/Lombyte
+ * @2c4452dd03f5f7ebb2868dbe073ccdb1afb27f61 (MIT, (c) 2026 Mateusz Klysz;
+ * adopted with the authors' permission per RULING #10405),
+ * src/sdk/rpc/sce_sif_init_rpc.c, upstream sceSifInitRpc @0x0011AB20 (their
+ * RAC1 NTSC build), C body ADAPTED: statements verbatim apart from our
+ * spellings (D_0012FC08[0] -> the scalar D_001346A0, D_00155000 -> D_0013D100,
+ * D_00155800 -> D_0013D900, D_00156000 -> D_0013E100, D_00156800 ->
+ * D_0013E900, DIntr -> func_0011F5E0, EnableInterrupts -> func_0011F628,
+ * sceSifInitCmd -> func_0011C8D8, sceSifAddCmdHandler -> func_0011CB90,
+ * _request_end -> func_0011D238, _request_bind -> HandleRpcBindRequest,
+ * D_0011B138 -> func_0011D590, _request_rdata -> func_0011D2F0, sceSifGetReg
+ * -> func_0011B030, sceSifSetReg -> func_0011B020, sceSifSendCmd ->
+ * func_0011CD20, func_0011A458 -> func_0011C8B0; their SifRpcData is this
+ * unit's RpcPacketTable, fields pid/pkt_table/pkt_table_len/unk0C/unk10/
+ * rdata_table/rdata_table_len/client_table/client_table_len/rdata_table_idx
+ * -> lastId/packets/count/field0C/field10/rdataTable/rdataCount/clientTable/
+ * clientCount/rdataIndex). Their extern prototypes are dropped for the unit's
+ * own, which adds casts: the packet table is cast to (RpcPacket *) where
+ * theirs is (void *), and `(s32)` goes on the handler and data arguments of
+ * the four func_0011CB90 calls and on the packet argument of func_0011CD20,
+ * which this unit declares with s32 parameters (codegen-neutral). Byte-exact
+ * on our ROM: unit objdiff report 100% (objdiff_build.sh + unit_report.sh,
+ * 015180 104 -> 106/312 with sceSifRebootIop), verify_match_unit 104/104 words
+ * (st_size 103 plus the trailing pad word 0x11D114, zero in the ROM) with a
+ * base-seeded in-extent control firing, and image cmp 0 under landing_gate usa
+ * and eu --strict at the task #2243 tip; relocation targets discharged by that
+ * image cmp (tasks #2158, #2243).
  */
 void sceSifInitRpc(u32 mode) {
     s32 *packet;
@@ -2787,7 +2813,7 @@ extern u8 D_0013F600[];
 extern s32 func_0011F5E0(void);
 extern s32 func_0011F628(void);
 extern void func_0011D9C0(s32 *arg);
-extern void sceSifInitRpc(s32 mode);
+extern void sceSifInitRpc(u32 mode);
 extern void func_0011DDD8();
 
 /**
@@ -3493,7 +3519,20 @@ extern s32 sceSifResetIop(const char *arg, s32 mode);
  * @param img  IOP image name appended to the "rom0:UDNL " prefix
  * @return     sceSifResetIop's result, or 0 for an over-long name
  *
- * Source: SOURCE_PLACEHOLDER
+ * Source: Lombyte github.com/mateuszklysz/Lombyte
+ * @2c4452dd03f5f7ebb2868dbe073ccdb1afb27f61 (MIT, (c) 2026 Mateusz Klysz;
+ * adopted with the authors' permission per RULING #10405),
+ * src/sdk/rpc/sce_sif_reboot_iop.c, upstream sceSifRebootIop @0x0011CF48
+ * (their RAC1 NTSC build), C body adopted verbatim apart from our extern
+ * spellings (D_00152960 -> D_0013ABA0 'rom0:UDNL ', D_00152970 -> D_0013ABB0
+ * "too long parameter '%s'\n", scePrintf -> Kprintf, InitializeRpcCommand ->
+ * func_0011D118); the token streams are otherwise identical. Byte-exact on
+ * our ROM: unit objdiff report 100% (objdiff_build.sh + unit_report.sh),
+ * verify_match_unit 65 of 68 words compared, the 3 NOT COMPARED words
+ * 0x11EF08-0x11EF10 read zero in the base and in the ROM (NONZERO band
+ * empty), with a base-seeded in-extent control firing, and image cmp 0 under
+ * landing_gate usa and eu --strict at the task #2243 tip; relocation targets
+ * discharged by that image cmp (tasks #2158, #2243).
  */
 s32 sceSifRebootIop(const char *img) {
     const char *prefix = D_0013ABA0;

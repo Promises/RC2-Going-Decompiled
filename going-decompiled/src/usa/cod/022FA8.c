@@ -1684,7 +1684,21 @@ extern DmaEnv D_00141AD8; /* the last environment applied */
  *
  * The register reads are `volatile` MMIO semantics, not a codegen device.
  *
- * Source: SOURCE_PLACEHOLDER_DMA
+ * Source: Lombyte github.com/mateuszklysz/Lombyte
+ * @2c4452dd03f5f7ebb2868dbe073ccdb1afb27f61 (MIT, (c) 2026 Mateusz Klysz;
+ * adopted with the authors' permission per RULING #10405),
+ * src/sdk/dma/sce_dma_put_env.c, upstream sceDmaPutEnv @0x001230E8 (their
+ * RAC1 NTSC build), C body adopted verbatim apart from our extern spellings
+ * (D_00153420/30/40 -> D_0013B730/40/50, D_001599D8 -> D_00141AD8) and their
+ * sceDmaEnv typedef spelled DmaEnv here (same members, comments added); the
+ * token streams are otherwise identical. The name is testimony (RULING
+ * #10083), re-derived from the mechanism and the vendored libdma.h sceDmaEnv
+ * layout. Byte-exact on our ROM: unit objdiff report 100% (objdiff_build.sh +
+ * unit_report.sh, 022FA8 159 -> 162/262 with func_0012FD60 and func_0012FEC0),
+ * verify_match_unit 118/118 words (= st_size) with a base-seeded in-extent
+ * control firing, and image cmp 0 under landing_gate usa and eu --strict at
+ * the task #2243 tip; relocation targets discharged by that image cmp (tasks
+ * #2158, #2243).
  */
 s32 sceDmaPutEnv(DmaEnv *env) {
     u32 ctrl;
@@ -2544,7 +2558,7 @@ extern s32 D_00143600[];  /* 16 per-port connection states (copy of the above) *
 extern char D_0013B7E8[];  /* libdbc bind-failure message */
 extern char D_0013B800[];  /* libdbc version-mismatch banner */
 extern char D_0013B828[];  /* version-mismatch format: wanted major.minor, found major.minor */
-extern char D_0013B850[];  /* "sceDbcInit" success format, takes the work address */
+extern char D_0013B850[];  /* 'SifDmaAddr %08x\n', logs the work address */
 extern void func_00128898(const char *fmt, ...);
 extern void exit_runAtexitHandlers(s32 status) __attribute__((noreturn));
 extern s32 func_00128440(s32 arg0);
@@ -2577,7 +2591,35 @@ s32 func_00128250(void) {
  * block D_00143580 to the server as its work area (func_00128440) and
  * returns 1.
  *
- * Source: SOURCE_PLACEHOLDER_DBC
+ * exit_runAtexitHandlers is declared noreturn above. That is true of exit()
+ * and it also drives codegen: without it the unit report reads 89.65%
+ * (removed alone; tasks #2158, #2243), so it stays.
+ *
+ * Source: Lombyte github.com/mateuszklysz/Lombyte
+ * @2c4452dd03f5f7ebb2868dbe073ccdb1afb27f61 (MIT, (c) 2026 Mateusz Klysz;
+ * adopted with the authors' permission per RULING #10405),
+ * src/sdk/library/sceDbcInit.c, upstream sceDbcInit @0x00124510 (their RAC1
+ * NTSC build), C body ADAPTED: statements verbatim apart from our spellings
+ * (D_0015B008 -> D_00143108, D_0015B030 -> D_00143130, D_0015B480 ->
+ * D_00143580, D_0015B500 -> D_00143600, D_001534D8/F0 -> D_0013B7E8/800,
+ * D_00153518 -> D_0013B828, D_00153540 -> D_0013B850, func_00124A20 ->
+ * func_00128898, exit -> exit_runAtexitHandlers, sceDbcGetModVersion ->
+ * func_00128250, sceDbcSetWorkAddr -> func_00128440, scePrintf -> Kprintf),
+ * with D_00143580 passed as `&D_00143580` (this unit types it as the
+ * DbcPortStates struct where theirs is a u8 array) and cast `(s32)` for
+ * func_00128440's s32 parameter (codegen-neutral). Byte-exact on our ROM:
+ * unit objdiff report 99.80% (objdiff_build.sh + unit_report.sh; the residue
+ * is splat spelling the two spin constants 0xFFFF as %hi/%lo(D_FFFF) in the
+ * target, the mechanism FACT #9733 measured for D_FFFFF: an expected-vs-obj
+ * objdump diff differs, apart from placement offsets, only in those 4 words
+ * (task #2243), target reloc + zero immediate
+ * against built lui 0x1 / addiu -1, which resolve to the same words),
+ * verify_match_unit 91 of 101 words compared, the 10 NOT COMPARED words
+ * 0x1282D4-0x1282E0, 0x12833C-0x128348 and 0x1283F4-0x1283F8 read zero in the
+ * base and in the ROM (NONZERO band empty), with a base-seeded in-extent
+ * control firing, and image cmp 0 under landing_gate usa and eu --strict at
+ * the task #2243 tip; relocation targets discharged by that image cmp (tasks
+ * #2158, #2243).
  */
 s32 sceDbcInit(void) {
     s32 ver;
@@ -6861,7 +6903,6 @@ typedef struct {
     IpuDecoder *decoder;
 } MpegCtx;
 
-extern s32 func_0012D4B0(IpuDecoder *dec, s32 arg1);
 extern s32 func_00130020(s32 *arg0);
 
 /**
@@ -6877,7 +6918,31 @@ extern s32 func_00130020(s32 *arg0);
  * number in field8, and advances the picture count and outputPending unless a
  * field is still pending. Returns the decode result.
  *
- * Source: SOURCE_PLACEHOLDER_FD60
+ * The `t = 0; t = func_0012D350(...) != t;` pair is upstream's spelling and
+ * drives codegen: written as `t = func_0012D350(...) != 0` the unit report
+ * reads 99.78%, and with `t` folded away (each arm assigning `ret`
+ * directly) 95.43% (unit objdiff report, each alone; tasks #2158, #2243).
+ *
+ * Source: Lombyte github.com/mateuszklysz/Lombyte
+ * @2c4452dd03f5f7ebb2868dbe073ccdb1afb27f61 (MIT, (c) 2026 Mateusz Klysz;
+ * adopted with the authors' permission per RULING #10405),
+ * src/sdk/library/_decodeOrSkipFrame.c, upstream _decodeOrSkipFrame
+ * @0x0012BE00 (their RAC1 NTSC build; the name is testimony, RULING #10083,
+ * so the splat name stays), C body ADAPTED: statements as upstream with our
+ * names (their M2c_arg0 / M2c_temp_16_13 are MpegCtx / IpuDecoder, unk40 ->
+ * decoder, arg0->unk8 -> field8, tmp->unk8/unk4/unk118/unk120/unkAC/unk174 ->
+ * streamState/outputPending/count/pending/fieldAC/pictureStructure,
+ * parameters arg1/arg2 -> frameNo/limit; callees _updateRefImage ->
+ * func_0012D4B0, _decPicture -> func_0012D350, _dispatchMpegCbNodata ->
+ * func_0012FAE8, _outputFrame -> func_0012D420), four redundant `(s32)` result
+ * casts and their parentheses dropped, and `(s32 *)` added on the
+ * func_0012D350 and func_0012FAE8 arguments for this unit's prototypes (all
+ * codegen-neutral). Byte-exact on our ROM: unit objdiff report 100%
+ * (objdiff_build.sh + unit_report.sh), verify_match_unit 70/70 words (st_size
+ * 69 plus the trailing pad word 0x12FE74, zero in the ROM) with a base-seeded
+ * in-extent control firing, and image cmp 0 under landing_gate usa and eu
+ * --strict at the task #2243 tip; relocation targets discharged by that image
+ * cmp (tasks #2158, #2243).
  */
 s32 func_0012FD60(MpegCtx *arg0, s32 frameNo, s32 limit) {
     s32 ret;
@@ -6949,7 +7014,32 @@ s32 func_0012FE78(s32 *obj, s32 arg1, s32 arg2) {
  * outputPending advanced; a skipped picture also runs the no-data callback.
  * Returns 1 if the second field decoded, else 0.
  *
- * Source: SOURCE_PLACEHOLDER_FEC0
+ * `gate` is a CODEGEN DEVICE kept from upstream: testing secondOk directly
+ * reads 97.64% in the unit report (removed alone; tasks #2158, #2243).
+ * Revoke when a spelling without `gate` stays at 100%. The other
+ * decomp-permuter leftovers upstream carries (the unused `new_var`,
+ * `new_var2` typed unsigned, the `goto out` and an `(unsigned long long)`
+ * cast) were measured inert by removal in task #2158 and are gone; with the
+ * goto went its dead `uVar2` store, and `lVar5`'s `long` is written s32.
+ *
+ * Source: Lombyte github.com/mateuszklysz/Lombyte
+ * @2c4452dd03f5f7ebb2868dbe073ccdb1afb27f61 (MIT, (c) 2026 Mateusz Klysz;
+ * adopted with the authors' permission per RULING #10405),
+ * src/sdk/library/_decodeOrSkipField.c, upstream _decodeOrSkipField
+ * @0x0012BF60 (their RAC1 NTSC build; the name is testimony, RULING #10083,
+ * so the splat name stays), C body ADAPTED: upstream's control flow with the
+ * permuter leftovers above removed (`if (bVar3 == 0) goto out;` becomes the
+ * `decode != 0` test around the second decode), locals renamed (bVar3 ->
+ * decode, lVar5 -> result, iVar4 -> expected, new_var2 -> secondOk, uVar7 ->
+ * ret), our names for the structs and fields as in func_0012FD60 (plus unk0 ->
+ * field00, unkD4 -> firstPictureStructure) and the callees (_nextHeader ->
+ * IpuParseVideoStartCodes, _sceMpegFlush -> func_00130020), and `(s32 *)` on
+ * the callee arguments for this unit's prototypes. Byte-exact on our ROM:
+ * unit objdiff report 100% (objdiff_build.sh + unit_report.sh),
+ * verify_match_unit 88/88 words (st_size 87 plus the trailing pad word
+ * 0x13001C, zero in the ROM) with a base-seeded in-extent control firing, and
+ * image cmp 0 under landing_gate usa and eu --strict at the task #2243 tip;
+ * relocation targets discharged by that image cmp (tasks #2158, #2243).
  */
 s32 func_0012FEC0(MpegCtx *arg0, s32 frameNo, s32 limit) {
     IpuDecoder *p;

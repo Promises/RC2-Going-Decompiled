@@ -1264,7 +1264,6 @@ WaitVblankGetField = 0x001261F0; // type:func
 WaitGsPathsIdle = 0x001244B8; // type:func
 ResetDmacChannels = 0x00126F60; // type:func
 sceDmaPutEnv = 0x00127040; // type:func - CONFIRMED mechanism - applies a DMAC environment, validates the stall-source/stall-drain/MFIFO-drain channels (< 10, returns -1/-2/-3) and the release cycle (< 7, returns -4), rewrites D_CTRL (0x1000E000) STS/STD/MFD/RCYC from the D_0013B730/40/50 channel-code tables, loads D_PCR (E020), D_SQWC (E030), D_RBOR (E050) and D_RBSR (E040) from the 0x14-byte record and keeps a copy in D_00141AD8. Only caller ResetDmacChannels (sceDmaReset), which clears the record with func_00126F00 first. The record layout is the vendored include/rtl/ee/libdma.h sceDmaEnv, which declares int sceDmaPutEnv(sceDmaEnv *). Name testimony Lombyte @2c4452dd src/sdk/dma/sce_dma_put_env.c (RULING 10405), re-derived on our ROM, C body adopted verbatim (task #2158). EU twin keeps func_00127040 in cod/015180 per RULING 5339
-func_0012D4B0 = 0x0012D4B0; // type:func - splat name kept, no identity claimed. Brings the IPU decoder's reference images up to date, taking the IpuDecoder and a 0 or 1 flag, a non-zero result lets the caller decode the picture. Called by func_0012FD60 and func_0012FEC0, which are compiled C since task 2158. This line holds the token outside its nonmatchings .s (landing_gate ORPHAN_LATENT)
 EnableDmacChannels = 0x0029DE88; // type:func
 KickGifImageUpload = 0x001265B0; // type:func
 

@@ -227,10 +227,24 @@ above applies to these bodies too.
 
 ### Lombyte (MIT)
 
-The C body of `_sysbitFlush` in `going-decompiled/src/usa/cod/022FA8.c` is
-taken from Lombyte, <https://github.com/mateuszklysz/Lombyte> at commit
-`2c4452dd03f5f7ebb2868dbe073ccdb1afb27f61`, `src/sdk/debug/sysbit_flush.c`,
-under this notice:
+Seven C function bodies are taken from Lombyte,
+<https://github.com/mateuszklysz/Lombyte> at commit
+`2c4452dd03f5f7ebb2868dbe073ccdb1afb27f61` (before Lombyte's GPL-3.0 relicence
+at `a1379f5`), with the authors' permission (RULING #10405). Each function's
+`Source:` line names every respelling and edit.
+
+| Here | Upstream file | Upstream name |
+|---|---|---|
+| `_sysbitFlush` in `going-decompiled/src/usa/cod/022FA8.c` (two inert permuter temporaries dropped, task #2134) | `src/sdk/debug/sysbit_flush.c` | `_sysbitFlush` |
+| `sceSifInitRpc` in `going-decompiled/src/usa/cod/015180.c` (adapted: our spellings and struct, `(s32)` casts for the unit's prototypes, task #2243) | `src/sdk/rpc/sce_sif_init_rpc.c` | `sceSifInitRpc` |
+| `sceSifRebootIop` in `going-decompiled/src/usa/cod/015180.c` (verbatim apart from extern spellings, task #2243) | `src/sdk/rpc/sce_sif_reboot_iop.c` | `sceSifRebootIop` |
+| `sceDmaPutEnv` in `going-decompiled/src/usa/cod/022FA8.c` (verbatim apart from extern spellings and the typedef's name, task #2243) | `src/sdk/dma/sce_dma_put_env.c` | `sceDmaPutEnv` |
+| `sceDbcInit` in `going-decompiled/src/usa/cod/022FA8.c` (adapted: our spellings, `&` on our struct-typed work area and a `(s32)` cast, task #2243) | `src/sdk/library/sceDbcInit.c` | `sceDbcInit` |
+| `func_0012FD60` in `going-decompiled/src/usa/cod/022FA8.c` (adapted: our struct, field and callee names, redundant casts dropped, task #2243) | `src/sdk/library/_decodeOrSkipFrame.c` | `_decodeOrSkipFrame` |
+| `func_0012FEC0` in `going-decompiled/src/usa/cod/022FA8.c` (adapted: inert permuter leftovers removed, our names, task #2243) | `src/sdk/library/_decodeOrSkipField.c` | `_decodeOrSkipField` |
+
+They are used under this notice (the repository's root `LICENSE` at that
+commit):
 
     MIT License
 

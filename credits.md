@@ -337,3 +337,19 @@
     verbatim when it is byte-exact on our ROM. Two unused permuter temporaries
     were dropped; the body is otherwise Lombyte's. Its doc comment in
     `going-decompiled/src/usa/cod/022FA8.c` carries the `Source:` line.
+  - **Six SDK C bodies** (tasks #2158, #2243), with the authors' permission
+    (RULING #10405), each byte-exact on our ROM. Every doc comment carries the
+    `Source:` line naming its respellings and edits:
+    - **`sceSifInitRpc`** (`0x0011CF78`, `going-decompiled/src/usa/cod/015180.c`),
+      adapted, from `src/sdk/rpc/sce_sif_init_rpc.c`.
+    - **`sceSifRebootIop`** (`0x0011EED8`, `cod/015180.c`), verbatim apart
+      from extern spellings, from `src/sdk/rpc/sce_sif_reboot_iop.c`.
+    - **`sceDmaPutEnv`** (`0x00127040`, `cod/022FA8.c`, splat `func_00127040`
+      until task #2158), verbatim apart from extern spellings, from
+      `src/sdk/dma/sce_dma_put_env.c`.
+    - **`sceDbcInit`** (`0x001282A8`, `cod/022FA8.c`), adapted, from
+      `src/sdk/library/sceDbcInit.c`.
+    - **`func_0012FD60`** (`0x0012FD60`, `cod/022FA8.c`), adapted, from
+      `src/sdk/library/_decodeOrSkipFrame.c` (`_decodeOrSkipFrame`).
+    - **`func_0012FEC0`** (`0x0012FEC0`, `cod/022FA8.c`), adapted, from
+      `src/sdk/library/_decodeOrSkipField.c` (`_decodeOrSkipField`).
