@@ -770,17 +770,30 @@ void SetPopupItemText(GuiWidget *w, s32 count, s32 *ids) {
     }
 }
 #endif
-/* GuiScreenWithPlanetNameInit(screen, pool): build the planet-name popup screen.
- * Sets the layout mode, optionally allocs the 0x10-byte config object at +0x4A4
- * (title position 250,190), inits seven header GuiElements from fixed templates
- * (D_1ADBE8/BF0/C00, D_1ADF98/FA0, D_1AE570/578) at their offsets, then a run of
- * seven text rows (w+0x218, stride 0x58) - each text-inited, blanked, unit-scaled,
- * coloured 0x80F0F0F0, and flagged at w+0x488+i*4. Recolours the seven header
- * elements and assigns their glyphs (codes 0x1C-0x20/0x73/0x74 from the shared
- * atlas g_guiInstance+0x8710), then runs UpdatePopupMenu. Matching arm stays asm
- * (0x80 frame, many callee saves - frame-layout wall). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", GuiScreenWithPlanetNameInit);
+/* GuiScreenWithPlanetNameInit(screen, pool): construct the pop-up menu object
+ * (FACT #5859: despite the name, it references no planet-name string; it is the
+ * constructor of the popup that SetPopup* and UpdatePopupMenu operate on,
+ * built at GuiSystemInit base+0x39160; layout NOTE #5868).
+ *   screen - the PopupMenu to initialise; pool - the GUI element pool (may be 0).
+ * Returns nothing. Order of work: clear selIndex and set layout mode 0; record
+ * the pool and, when there is one, allocate the 0x10-byte origin vector from it
+ * (zeroed, then set to (250, 190)); init the five header elements and the two
+ * button widgets from their templates; init the seven item text rows (text 0,
+ * scale 1.0, colour 0x80F0F0F0 = enabled) and mark every item enabled; colour
+ * the headers and buttons and give them their glyphs from the shared atlas at
+ * g_guiInstance+0x8710; finally run one UpdatePopupMenu pass to lay it out.
+ * Non-obvious: selIndex is cleared BEFORE SetPopupLayoutMode is called (the ROM
+ * issues that store in the call's delay slot), and the four zero stores into the
+ * new origin vector go +4, +8, +0xC, +0 (cc1 1.36 issues the last int store
+ * first).
+ *
+ * MATCHED on the s136os arm (SN 2.95.3 v1.36 -fopt-stack, gcse ON: needs the
+ * unit's S136EXTRA="" unpin; with -fno-gcse it reads 184/207 words differing on
+ * task #2334's probe). The ROM computes the six element pointers once, at first
+ * use, and keeps them across the row loop (five spilled to 0..0x10($sp), +0x1C8
+ * in $30): that is gcse PRE's code (NOTE #9932). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_GuiScreenWithPlanetNameInit)
+S136OS_SLOT(GuiScreenWithPlanetNameInit);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
@@ -793,82 +806,107 @@ extern void GuiElementSetScale(GuiWidget *e, f32 x, f32 y, f32 z, f32 w);
 extern s32 *GuiElementGetColor(GuiWidget *e);
 extern void GuiElementSetGlyph(void *e, u8 *atlas, s32 code);
 /* (end of this body's declarations) */
-/* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
- * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
- * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
- * cc1 2.96-ee-001003-1): sdk29 59.04% / engine96 57.26%.
- * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 179/194 words differ;
- * frozen-.s census: 9 callee GPR saves, 1 fp saves.
- * Residual: PACKED-SAVE (9 callee GPR saves, 1 fp) — 10 of the 179 differing words are frame/save-slot; remainder REGALLOC/SCHED, not iterated.
- * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
- * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
- * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
- * property and was measured false as the reason this member stays unmatched (FACT #9873).
- * Residual: the saved-register set; the rest UNMEASURED. */
 extern void UpdatePopupMenu(GuiWidget *w, s32 arg);
+/* element templates: headers "0","1","3","4","5", buttons "0-back","1-border",
+ * item rows "aText" (FACT #5859) */
 extern u8 D_1ADBE8[], D_1ADBF0[], D_1ADC00[], D_1ADF98[], D_1ADFA0[];
 extern u8 D_1AE570[], D_1AE578[], D_1AE588[];
+
+/* PopupMenu: the pop-up menu object (NOTE #5868). Each header/button element is
+ * 0x4C bytes, each item row 0x58. */
+typedef struct PopupMenu {
+    /* 0x000 */ u8 header0[0x4C];
+    /* 0x04C */ u8 header2[0x4C];
+    /* 0x098 */ u8 header3[0x4C];
+    /* 0x0E4 */ u8 header4[0x4C];
+    /* 0x130 */ u8 header1[0x4C];
+    /* 0x17C */ u8 backButton[0x4C];
+    /* 0x1C8 */ u8 borderButton[0x50];
+    /* 0x218 */ u8 itemRows[7][0x58];
+    /* 0x480 */ s32 unk480;
+    /* 0x484 */ void *itemLayout;
+    /* 0x488 */ s32 itemEnabled[7];
+    /* 0x4A4 */ f32 *origin;
+    /* 0x4A8 */ void *pool;
+    /* 0x4AC */ s32 selIndex;
+    /* 0x4B0 */ s32 unk4B0;
+    /* 0x4B4 */ s32 itemCount;
+} PopupMenu;
+#if defined(TARGET_NATIVE) && defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+_Static_assert(__builtin_offsetof(PopupMenu, itemRows) == 0x218, "PopupMenu.itemRows @ +0x218");
+_Static_assert(__builtin_offsetof(PopupMenu, itemEnabled) == 0x488, "PopupMenu.itemEnabled @ +0x488");
+_Static_assert(__builtin_offsetof(PopupMenu, itemCount) == 0x4B4, "PopupMenu.itemCount @ +0x4B4");
+#endif
+
 void GuiScreenWithPlanetNameInit(void *screen, void *pool) {
-    char *w = (char *)screen;
-    char *cfg;
-    void *obj;
+    PopupMenu *menu = (PopupMenu *)screen;
     s32 i;
 
-    SetPopupLayoutMode((GuiWidget *)w, 0);
-    *(s32 *)(w + 0x4AC) = 0;
-    *(void **)(w + 0x4A8) = pool;
+    menu->selIndex = 0;
+    SetPopupLayoutMode((GuiWidget *)menu, 0);
+    menu->pool = pool;
     if (pool != 0) {
-        obj = GuiPoolAlloc(pool);
-        obj = GuiPlacementNew(0x10, obj);
-        *(void **)(w + 0x4A4) = obj;
-        *(s32 *)((char *)obj + 0x0) = 0;
-        *(s32 *)((char *)obj + 0x4) = 0;
-        *(s32 *)((char *)obj + 0x8) = 0;
-        *(s32 *)((char *)obj + 0xC) = 0;
+        s32 *vec = (s32 *)GuiPlacementNew(0x10, GuiPoolAlloc(pool));
+
+        menu->origin = (f32 *)vec;
+        vec[1] = 0;
+        vec[2] = 0;
+        vec[3] = 0;
+        vec[0] = 0;
     }
-    *(s32 *)(w + 0x4B0) = 1;
-    cfg = *(char **)(w + 0x4A4);
-    *(f32 *)(cfg + 0x0) = 250.0f; /* 0x437A0000 */
-    *(f32 *)(cfg + 0x4) = 190.0f; /* 0x433E0000 */
+    menu->unk4B0 = 1;
+    menu->origin[0] = 250.0f;
+    menu->origin[1] = 190.0f;
 
-    GuiElementInit((GuiWidget *)(w + 0x0),   D_1ADBE8, pool);
-    GuiElementInit((GuiWidget *)(w + 0x130), D_1ADBF0, pool);
-    GuiElementInit((GuiWidget *)(w + 0x4C),  D_1ADC00, pool);
-    GuiElementInit((GuiWidget *)(w + 0x98),  D_1ADF98, pool);
-    GuiElementInit((GuiWidget *)(w + 0xE4),  D_1ADFA0, pool);
-    GuiElementInit((GuiWidget *)(w + 0x17C), D_1AE570, pool);
-    GuiElementInit((GuiWidget *)(w + 0x1C8), D_1AE578, pool);
+    GuiElementInit((GuiWidget *)menu->header0,      D_1ADBE8, pool);
+    GuiElementInit((GuiWidget *)menu->header1,      D_1ADBF0, pool);
+    GuiElementInit((GuiWidget *)menu->header2,      D_1ADC00, pool);
+    GuiElementInit((GuiWidget *)menu->header3,      D_1ADF98, pool);
+    GuiElementInit((GuiWidget *)menu->header4,      D_1ADFA0, pool);
+    GuiElementInit((GuiWidget *)menu->backButton,   D_1AE570, pool);
+    GuiElementInit((GuiWidget *)menu->borderButton, D_1AE578, pool);
 
-    *(s32 *)(w + 0x480) = 0;
-    *(s32 *)(w + 0x4B4) = 0;
+    menu->unk480 = 0;
+    menu->itemCount = 0;
 
     for (i = 0; i < 7; i++) {
-        char *elem = w + 0x218 + i * 0x58;
-        GuiTextElementInit(elem, D_1AE588, pool);
-        GuiElementSetText((GuiWidget *)elem, 0);
-        GuiElementSetScale((GuiWidget *)elem, 1.0f, 0.0f, 0.0f, 0.0f);
-        *(s32 *)(elem + 0x54) = 0;
-        *GuiElementGetColor((GuiWidget *)elem) = 0x80F0F0F0;
-        *(s32 *)(w + 0x488 + i * 4) = 1;
+        u8 *row = menu->itemRows[i];
+
+        GuiTextElementInit(row, D_1AE588, pool);
+        GuiElementSetText(row, 0);
+        GuiElementSetScale((GuiWidget *)row, 1.0f, 0.0f, 0.0f, 0.0f);
+        *(s32 *)(row + 0x54) = 0;
+        *GuiElementGetColor((GuiWidget *)row) = 0x80F0F0F0;
+        menu->itemEnabled[i] = 1;
     }
 
-    *GuiElementGetColor((GuiWidget *)(w + 0x0))   = 0x60442D00;
-    *GuiElementGetColor((GuiWidget *)(w + 0x130)) = 0x55F0C070;
-    *GuiElementGetColor((GuiWidget *)(w + 0x4C))  = 0x55F0C070;
-    *GuiElementGetColor((GuiWidget *)(w + 0x98))  = 0x80FFDE8D;
-    *GuiElementGetColor((GuiWidget *)(w + 0xE4))  = 0x70FFFEED;
-    *GuiElementGetColor((GuiWidget *)(w + 0x17C)) = 0x60442D00;
-    *GuiElementGetColor((GuiWidget *)(w + 0x1C8)) = 0x55F0C070;
+    *GuiElementGetColor((GuiWidget *)menu->header0)      = 0x60442D00;
+    *GuiElementGetColor((GuiWidget *)menu->header1)      = 0x55F0C070;
+    *GuiElementGetColor((GuiWidget *)menu->header2)      = 0x55F0C070;
+    *GuiElementGetColor((GuiWidget *)menu->header3)      = 0x80FFDE8D;
+    *GuiElementGetColor((GuiWidget *)menu->header4)      = 0x70FFFEED;
+    *GuiElementGetColor((GuiWidget *)menu->backButton)   = 0x60442D00;
+    *GuiElementGetColor((GuiWidget *)menu->borderButton) = 0x55F0C070;
 
-    GuiElementSetGlyph((GuiWidget *)(w + 0x0),   g_guiInstance + 0x8710, 0x1C);
-    GuiElementSetGlyph((GuiWidget *)(w + 0x130), g_guiInstance + 0x8710, 0x1D);
-    GuiElementSetGlyph((GuiWidget *)(w + 0x4C),  g_guiInstance + 0x8710, 0x1E);
-    GuiElementSetGlyph((GuiWidget *)(w + 0x98),  g_guiInstance + 0x8710, 0x1F);
-    GuiElementSetGlyph((GuiWidget *)(w + 0xE4),  g_guiInstance + 0x8710, 0x20);
-    GuiElementSetGlyph((GuiWidget *)(w + 0x17C), g_guiInstance + 0x8710, 0x73);
-    GuiElementSetGlyph((GuiWidget *)(w + 0x1C8), g_guiInstance + 0x8710, 0x74);
+    GuiElementSetGlyph(menu->header0,      g_guiInstance + 0x8710, 0x1C);
+    GuiElementSetGlyph(menu->header1,      g_guiInstance + 0x8710, 0x1D);
+    GuiElementSetGlyph(menu->header2,      g_guiInstance + 0x8710, 0x1E);
+    GuiElementSetGlyph(menu->header3,      g_guiInstance + 0x8710, 0x1F);
+    GuiElementSetGlyph(menu->header4,      g_guiInstance + 0x8710, 0x20);
+    GuiElementSetGlyph(menu->backButton,   g_guiInstance + 0x8710, 0x73);
+    GuiElementSetGlyph(menu->borderButton, g_guiInstance + 0x8710, 0x74);
 
-    UpdatePopupMenu((GuiWidget *)w, 0);
+    UpdatePopupMenu((GuiWidget *)menu, 0);
+    /* CODEGEN DEVICE (RULING #8483: empty, untied, emit nothing, both arms). Two
+     * extra insns raise this function's RTL insn count so that gcse sizes its
+     * expression hash table at 101 buckets, not 99. PRE creates the six
+     * element-pointer pseudos in hash-bucket order, and reload gives the five
+     * spilled ones their stack slots in pseudo order, so the bucket count picks
+     * the slot permutation: at 99 the slots come out in a rotated order (15 of
+     * 207 words differ, all spill/reload offsets); at 101 they match the ROM
+     * (task #2334; cc1 -dG dump). */
+    __asm__ __volatile__("");
+    __asm__ __volatile__("");
 }
 #endif
 
