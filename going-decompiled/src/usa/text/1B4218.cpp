@@ -1889,10 +1889,35 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_0
  * run (lastUpdateTime == 0), stamps lastUpdateTime, then runs the pipeline
  * (velocity -> collision -> ground/events -> lean -> profile) and returns the
  * accumulated eventFlags.
- * WALL: save-layout — 4 callee-saves + $ra at 8-byte spacing, with fp/madd and
- * sq/lq 128-bit moves; matching arm stays INCLUDE_ASM, portable #else below. */
+ *   moby    the moby to step (position Vec4 at +0x10)
+ *   target  the steering target handed to the velocity and ground stages
+ *   speed   this frame's move speed (also the lean stage's heading input)
+ *   returns ctrl->eventFlags, or 8 when the moby has no motion controller
+ *
+ * MATCHED on the s136os arm (SN 1.36 cc1plus -O2 -G8 -fopt-stack, gcse on; a row
+ * in tools/ee/s136os_functions.txt, spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh); plain C on native. The old "save-layout" WALL was
+ * the 2.9 arm's. What carries the match (each dropped alone breaks it, solo s136
+ * probe, task #2336):
+ *  - `.extern g_gameTime, 12` (ADDRESSING-MODEL device, RULING #8620 family):
+ *    cc1 prints the one-insn macro and the assembler expands it absolute
+ *    (lui+%lo) except in the two delay slots, where the ROM has %gp_rel. Without
+ *    it every load is %gp_rel (90 of 93 words). g_gameTime has no other compiled
+ *    reader in this unit;
+ *  - the entry position copied with ONE 128-bit move (lq/sq) through a pointer
+ *    pinned to $3 (REGISTER-PIN device, RULING #8598) between two EMPTY tied
+ *    fences (RULING #8483): without the first the lq folds to 16(moby) (3
+ *    words), without the second the copy sinks below the g_gameTime load (6),
+ *    without the pin the pointer/quad registers swap ($2/$3, 3);
+ *  - UpdateMobyLeanFromTurn called through a (moby, speed, ctrl) prototype
+ *    (ARGUMENT-ORDER CAST, RULING #12184): EABI passes moby/ctrl in $4/$5 and
+ *    speed in $f12 in either order, so only the arg-setup order moves - the ROM
+ *    sets $4 before $f12 (2 words without it). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", StepMobyMotion);
+__asm__(".extern g_gameTime, 12");
+#endif
+#if !defined(TARGET_NATIVE) && !defined(S136OS_StepMobyMotion)
+S136OS_SLOT(StepMobyMotion);
 #else
 extern s32 GetMobyMotionController(Moby *moby);                 /* defined below; forward decl */
 extern void CheckMobyGroundMover(Moby *moby, MobyMotionController *ctrl);           /* below */
@@ -1925,13 +1950,23 @@ s32 StepMobyMotion(Moby *moby, Vec4 *target, f32 speed) {
         CheckMobyGroundMover(moby, ctrl);
     }
 
+#ifndef TARGET_NATIVE
+    {
+        typedef unsigned int Quad __attribute__((mode(TI)));
+        register Vec4 *pos __asm__("$3") = (Vec4 *)((u8 *)moby + 0x10);
+        __asm__("" : : "r"(pos));
+        *(Quad *)&entryPos = *(Quad *)pos;
+        __asm__("" : : "r"(pos));
+    }
+#else
     entryPos = *(Vec4 *)((u8 *)moby + 0x10);
+#endif
 
     lastTime = ctrl->lastUpdateTime;
     if (g_gameTime - lastTime >= 2 || lastTime == 0) {
         ProbeMobyGroundLine(moby, ctrl, 0.0f);
         ctrl->animSeqActive = 0xFF;
-        ctrl->stateFlags &= ~2;
+        ctrl->stateFlags = (s32)ctrl->stateFlags & ~2;  /* s32 mask: the ROM's addiu -3, not lui/ori */
         ctrl->turnDelta = 0.0f;
         ctrl->wallContactCount = 0;
         func_00283638((Vec4 *)ctrl->velAccum);
@@ -1941,7 +1976,11 @@ s32 StepMobyMotion(Moby *moby, Vec4 *target, f32 speed) {
     UpdateMobyMotionVelocity(moby, ctrl, target, speed, &stepOut, &velOut);
     ResolveMobyMotionCollision(moby, ctrl, &entryPos, &velOut);
     ApplyMobyGroundAndEvents(moby, ctrl, target, &entryPos);
+#ifndef TARGET_NATIVE
+    ((void (*)(Moby *, f32, MobyMotionController *))UpdateMobyLeanFromTurn)(moby, speed, ctrl);
+#else
     UpdateMobyLeanFromTurn(speed, moby, ctrl);
+#endif
     AccumMobyMotionProfile();
     return ctrl->eventFlags;
 }
