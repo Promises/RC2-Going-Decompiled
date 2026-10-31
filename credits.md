@@ -200,6 +200,31 @@
     `(SifRpcClient *)` cast on the bind client and `(char *)` casts on two
     `u8[]` buffers.
 
+- **OpenRAC — `rac2-gc-decomp`, commit `96927f87`, boundary-split bodies** (GPL-3.0, and MIT for one carried file)
+  <https://github.com/OpenRAC/rac2-gc-decomp> at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`
+
+  Two bodies at real entries that our split had fused onto a few words of the
+  previous function's debris; task #2240 split them off (symbol_addrs pins)
+  and adopted these bodies, re-checked byte-exact against our v2.00 ROM (from
+  audit NOTE #12089 rows 10 and 11). Each doc comment carries the `Source:`
+  line, which names every change.
+
+  Used so far:
+  - **`func_002907C0`** (`0x002907C0`) in
+    `going-decompiled/src/usa/text/188858.c`, from `src/game/0028FF50.c`
+    (`func_0028FF50`, v1.01 address, author commit `d9e7028d`, Flavius), on
+    the 2.9 arm, with the authors' permission (RULING #10405). ADAPTED: their
+    `Gauge` view of the element is our `HudElement` by raw offset, and the
+    signature is ours.
+  - **`func_00336B48`** (`0x00336B48`) in
+    `going-decompiled/src/usa/text/235FE8.c`, from `src/game/00335D30-rc2.c`
+    (`func_00335D30`, v1.01 address), on the s136os arm. That file came into
+    OpenRAC in commit `fe9859d7` (Sergio Rodmauser) from an unnamed RC2 fork
+    and is MIT-licensed, © 2026 Forja contributors; the notice is kept
+    verbatim in the doc comment and in THIRD-PARTY.md. ADAPTED: callee spelled
+    and prototyped as our `func_00336678`, so the call passes `(p, flag)` on
+    explicitly; name and signature ours.
+
 - **Lombyte** (MIT, © 2026 Mateusz Kłysz)
   <https://github.com/mateuszklysz/Lombyte> at commit `2c4452dd03f5f7ebb2868dbe073ccdb1afb27f61`
 

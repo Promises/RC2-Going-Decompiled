@@ -91,6 +91,7 @@ usa text/250080 FmvFrameQueueGetWriteSlot
 usa text/235FE8 GuiComputeBlendWeights
 usa text/235FE8 func_00336988
 usa text/235FE8 func_00336A28
+usa text/235FE8 func_00336B48
 usa text/235FE8 func_00336A78
 usa text/235FE8 func_00337098
 usa text/235FE8 GuiElementSetGlyph

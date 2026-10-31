@@ -5753,7 +5753,7 @@ extern void func_0028C4C8(HudElement *w);
 /* (end of this body's declarations) */
 extern s32 D_1A8FBC;                  /* gp hard-disable gate (0x1A8FBC) */
 extern u8  g_soundBankHandlesBlk[];   /* g_soundBankHandles+0x20 (0x189E20) */
-extern void func_002907C0(void *w);  /* ammo-vendor widget tick callback (task #2240 split) */
+extern void func_002907C0(HudElement *w); /* ammo-vendor widget tick callback (task #2240 split) */
 extern void func_0028E640(void);      /* generic-bank widget draw callback (INCLUDE_ASM) */
 /* EE codegen device (RULING #8404), see above; plain store on native. */
 #ifndef TARGET_NATIVE
@@ -7083,4 +7083,53 @@ void func_00290640(s32 x0, s32 y0, s32 x1, s32 y1, u64 reg4, s32 zHigh, s32 mode
  * a symbol_addrs type:func pin on the body (task #2240); kept as layout asm. */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/188858", func_002907B8);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_002907C0);
+/* func_002907C0: the ammo-vendor HUD widget's tick callback (passed by address
+ * by func_0028EB10, never jal'd). Each frame it
+ * (1) sets the shown value +0x74 to *valuePtr (+0xC) capped at the live value
+ *     +0x8, or 0 when *valuePtr is negative -- no easing, unlike the counter
+ *     tick func_0028C4C8;
+ * (2) while the +0x7C show timer has >= 5 frames left, pins it at 5 and ramps
+ *     the digit-roll bytes up (+0x70 first, each capped at 8); otherwise sets
+ *     the reveal phase +0x6C to 1 and winds them down (+0x71 first), and once
+ *     both are 0 sets +0x6C to -6 (hidden).
+ *
+ * w  the ammo HudElement (fields as in the HudElement map above). No return.
+ *
+ * MATCHED on the 2.9 arm, plain C, no device (task #2240).
+ * Source: OpenRAC/rac2-gc-decomp @96927f872c709e13aaa0f32265bb81a5531bf7ed
+ * (GPL-3.0, adopted with the authors' permission per RULING #10405),
+ * src/game/0028FF50.c, func_0028FF50 (v1.01 address; author commit d9e7028d,
+ * Flavius), ADAPTED: (1) their `Gauge` view of the element is this unit's
+ * opaque HudElement, reached by raw offset as the other callbacks here do
+ * (their current/limit/state/counter/clamped/level are +0x8/+0xC/+0x6C/+0x70/
+ * +0x74/+0x7C); (2) our name and signature (HudElement *w); int is s32. The
+ * statement order and control flow are theirs. */
+void func_002907C0(HudElement *w) {
+    u8  *b   = (u8 *)w;
+    u8  *c   = b + 0x70;              /* [0] +0x70, [1] +0x71 digit-roll bytes */
+    s32  max = **(s32 **)(b + 0xC);   /* *valuePtr */
+    s32  cur = *(s32 *)(b + 0x8);     /* live value */
+
+    *(s32 *)(b + 0x74) = max;
+    if (cur < max)
+        *(s32 *)(b + 0x74) = cur;
+    else if (max < 0)
+        *(s32 *)(b + 0x74) = 0;
+    if (*(s32 *)(b + 0x7C) >= 5) {
+        *(s32 *)(b + 0x7C) = 5;
+        if (c[0] < 8) {
+            c[0]++;
+        } else if (c[1] < 8) {
+            c[1]++;
+        }
+    } else {
+        *(s32 *)(b + 0x6C) = 1;
+        if (c[1] != 0) {
+            c[1]--;
+        } else if (c[0] != 0) {
+            c[0]--;
+        } else {
+            *(s32 *)(b + 0x6C) = -6;
+        }
+    }
+}

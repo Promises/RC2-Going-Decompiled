@@ -867,7 +867,61 @@ void func_00336AC8(f32 *src, f32 t, f32 *dst) {
  * symbol_addrs size:0x10 pin (task #2240); kept as layout asm. */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336B38);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336B48);
+/* func_00336B48: forward (p, flag) to func_00336678, the base ctor that
+ * installs the vtable &D_1AD9A8 at p+0x4. A GUI vtable slot (the data word at
+ * 0x1AD954), never jal'd; twin of func_00336B68 below.
+ *
+ * p     the GUI object; flag  passed through unchanged. No return.
+ *
+ * MATCHED on the s136os arm (task #2240) under the unit's current flags (the
+ * -fno-gcse pin of FACT #10233 kept). No device: SN 1.36 -fopt-stack keeps
+ * the ROM's jal + frame where cc1 2.9 emits a sibling `j` (2 words vs the
+ * ROM's 7, FACT #12087), which is why func_00336B68 needs an empty asm on the
+ * 2.9 arm.
+ * GUARD: compiled alone by SN 2.95.3 v1.36 -fopt-stack and spliced over the
+ * S136OS_SLOT line (tools/ee/s136os_splice.sh); plain C on native.
+ * Source: OpenRAC/rac2-gc-decomp @96927f872c709e13aaa0f32265bb81a5531bf7ed,
+ * src/game/00335D30-rc2.c, func_00335D30 (v1.01 address; carried into
+ * OpenRAC by commit fe9859d7, Sergio Rodmauser, "carry over 129 verified RC2
+ * fork functions"), adopted under the operator's 2026-10-31 instruction
+ * (task #2240); the file is under the MIT licence of "Forja contributors",
+ * whose notice follows verbatim. ADAPTED: (1) their callee func_00335870 is
+ * our func_00336678 (ROM jal 0x336678), declared with our (void *p, s32 flag)
+ * prototype; (2) so the body passes (p, flag) on explicitly where theirs
+ * calls an unprototyped `func_00335870()` with no arguments, leaving $a0/$a1
+ * live (same bytes: neither form moves a register); (3) our name and
+ * signature.
+ *
+ * SPDX-License-Identifier: MIT
+ * MIT License
+ *
+ * Copyright (c) 2026 Forja contributors
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00336B48)
+S136OS_SLOT(func_00336B48);
+#else
+void func_00336B48(void *p, s32 flag) {
+    func_00336678(p, flag);
+}
+#endif
 
 /* func_00336B68: forward to func_00336678. */
 void func_00336B68(void *p, s32 flag) {

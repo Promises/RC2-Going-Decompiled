@@ -112,6 +112,53 @@ License, version 3), with the authors' permission (RULING #10405), tasks #2230, 
 
 The GPL-2.0-or-later note in the section "OpenRAC rac2-gc-decomp (GPL-3.0)" above applies to these bodies too.
 
+### OpenRAC rac2-gc-decomp at 96927f87, boundary-split bodies (GPL-3.0)
+
+One C function body is taken from OpenRAC's `rac2-gc-decomp`,
+<https://github.com/OpenRAC/rac2-gc-decomp> at commit
+`96927f872c709e13aaa0f32265bb81a5531bf7ed` (root `LICENSE`: GNU General Public
+License, version 3), with the authors' permission (RULING #10405), task #2240:
+
+| Here | Upstream file | Upstream name |
+|---|---|---|
+| `func_002907C0` in `going-decompiled/src/usa/text/188858.c` (adapted: their `Gauge` view is our `HudElement` by raw offset; signature ours) | `src/game/0028FF50.c` | `func_0028FF50` (v1.01 address) |
+
+The GPL-2.0-or-later note in the section "OpenRAC rac2-gc-decomp (GPL-3.0)" above applies to this body too.
+
+### Forja contributors (MIT), carried by OpenRAC rac2-gc-decomp
+
+The C body of `func_00336B48` in `going-decompiled/src/usa/text/235FE8.c` is
+taken from OpenRAC's `rac2-gc-decomp` at commit
+`96927f872c709e13aaa0f32265bb81a5531bf7ed`, `src/game/00335D30-rc2.c`
+(`func_00335D30`, v1.01 address), a file OpenRAC carried over from an RC2 fork
+in commit `fe9859d7` and which keeps its own MIT notice. It was adopted on the
+operator's instruction (task #2240), adapted (callee spelled and prototyped as
+ours, so the call passes our `(p, flag)` on explicitly; our name and
+signature). Neither OpenRAC's CREDITS.md nor its notices file names the fork or
+a URL for it. The notice, which the doc comment also carries verbatim:
+
+    MIT License
+
+    Copyright (c) 2026 Forja contributors
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
+
 ### Lombyte (MIT)
 
 The C body of `_sysbitFlush` in `going-decompiled/src/usa/cod/022FA8.c` is
