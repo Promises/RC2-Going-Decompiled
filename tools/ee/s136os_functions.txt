@@ -716,3 +716,4 @@ usa text/1CA080 DrawInsomniacMuseumMenu
 usa text/1D54C0 func_002DFE60
 usa text/1D54C0 func_002D5C58
 usa text/1D54C0 LoadMenuBgImagePair
+usa text/1D54C0 func_002DD638

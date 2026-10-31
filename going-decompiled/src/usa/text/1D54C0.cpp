@@ -4539,67 +4539,86 @@ s32 func_002DD450(IntroTextBox *box) {
 }
 #endif
 
+/* Dead debris ahead of func_002DD638: `addiu $sp,$sp,0x90` and a nop after
+ * func_002DD450's jr. No prologue and no jr of its own, so it is not a
+ * function body and cannot be C. Split off by a symbol_addrs size pin; the
+ * data word at 0x25DC7C points past it, at 0x2DD638 (task #2289). */
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DD630);
+
 /* Draw the current level-select row label/value for the focused map screen.
  * Only renders while the area transition state permits it (area+0x15C < 3,
  * area+0x164 < 0, menuBlock+0x164 >= 0xB, area+0x8 == 2). Derives a level index
- * from the focused screen's area record (areaEntry->0x30 mod 0x1C); index -1 draws
- * the "unknown" placeholder string 0x2DAA centered (y + g_levelSelectRowLineHeight/2). Otherwise it
- * draws the level label (formatted by func_002E0010) and, when the row carries a
- * value string id (>= 0), a second value line below it (y + g_levelSelectRowLineHeight); a row with
- * no value string is drawn as a single centered line (y + g_levelSelectRowLineHeight>>1). Returns 2.
- *
- * The matching (INCLUDE_ASM) arm remains the byte-exact source of truth (leading
- * alternate-entry sp adjust + the compiler's div-by-0x1C guard are not modelled).
- * Offsets read verbatim from asm; area/level structs only partially recovered. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DD630);
+ * from the focused widget's area record (the 0x1C-byte records at
+ * g_areaTable+0x30, indexed by focus+0x40; its first word mod 0x1C); index -1
+ * draws the "unknown" placeholder string 0x2DAA centred
+ * (y + g_levelSelectRowLineHeight/2). Otherwise it draws the level label
+ * (formatted by func_002E0010 into a stack buffer) and, when the row's value
+ * string id (g_levelSelectEntries[lvl], second word) is >= 0, the value string
+ * one line below (y + g_levelSelectRowLineHeight); a row with no value string is
+ * drawn as a single centred line (y + g_levelSelectRowLineHeight >> 1). The
+ * value id is re-read from the table for the second draw. Returns 2.
+ * Reached only through the screen-handler word at 0x25DC7C. Until task #2289
+ * this body sat under func_002DD630 behind 2 words of debris (split above).
+ * MATCHED on the s136os arm (SN 2.95.3 v1.36 cc1plus -fopt-stack), task #2289,
+ * no device. Three spellings were each measured as necessary:
+ *   - the value id's address as `&tbl[idx]` with `tbl` taken FIRST and
+ *     `idx = lvl * 2 + 1` its own statement: the ROM computes (lvl << 3) | 4
+ *     (combine's no-carry `ori`) and then adds the base. Folded into one
+ *     expression, cse puts the +4 into %lo (6 words differ);
+ *   - the area records through a typed AreaRec pointer: with byte arithmetic
+ *     the record `addu` comes out with its operands swapped (1 word);
+ *   - the half-line offset as its own variable, 0 when the value id is valid.
+ * The div-by-0x1C trap guard (beql/break) is cc1's own.
+ * GUARD: compiled alone by SN 2.95.3 v1.36 -fopt-stack and spliced over the
+ * S136OS_SLOT line (tools/ee/s136os_splice.sh); plain C on native. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002DD638)
+S136OS_SLOT(func_002DD638);
 #else
-/* Declarations this body needs whose only other declarations sit in other
- * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern s32 GetLocalizedString(s32 id);
-extern s32 func_002801B8(s32 x, s32 y, u32 color, s32 str, s32 wrap);
+#ifndef TARGET_NATIVE
+/* The ROM signature (as above at func_002D5A48): a 64-bit colour, built
+ * zero-extended. Native keeps the unit-wide 32-bit declaration. */
+extern void func_002801B8(s32 x, s32 y, u64 color, s32 str, s32 wrap);
+#endif
 extern s32 func_002E0010(char *dst, s32 level);
-/* (end of this body's declarations) */
-/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
- * objdiff): sdk29 72.72% / engine96 57.70%; better arm sdk29; 73 differing
- * rows on it, class STRUCTURAL; first differing insn: ROM `addiu sp,sp,144` vs
- * `addiu sp,sp,-160`. Not iterated in t495. */
-s32 func_002DD630(void *screenArg) {
-    extern u8  g_areaTable[];
-    extern u8  g_levelSelectEntries[];  /* (labelStrId, valueStrId) pairs, stride 8 */
-    extern s32 g_levelSelectRowLineHeight;                /* row vertical spacing */
-    u8 *obj  = (u8 *)screenArg;
-    u8 *area = (u8 *)g_areaTable;
-    u8 *mgr  = (u8 *)g_menuScreenBlock;
-    u8 *focusScreen;
-    s32 areaIdx, lvlIdx, x, baseY;
+extern u8  g_areaTable[];
+extern u8  g_levelSelectEntries[];       /* {label id, value id} pairs, stride 8 */
+extern s32 g_levelSelectRowLineHeight;   /* row vertical spacing */
+typedef struct { s32 level; s32 _04[6]; } AreaRec;  /* 0x1C-byte record at g_areaTable+0x30 */
 
-    focusScreen = *(u8 **)(mgr + 0x14);
-    areaIdx = *(s32 *)(*(u8 **)(focusScreen + 0xE8) + 0x40);
-    lvlIdx  = *(s32 *)(area + areaIdx * 0x1C + 0x30) % 0x1C;
+s32 func_002DD638(void *screenArg) {
+    u8 *obj = (u8 *)screenArg;
+    u8 *area = g_areaTable;
+    u8 *mgr = g_menuScreenBlock;
+    s32 lvl;
 
+    {
+        AreaRec *recs = (AreaRec *)(area + 0x30);
+        lvl = recs[*(s32 *)(*(u8 **)(*(u8 **)(mgr + 0x14) + 0xE8) + 0x40)].level % 0x1C;
+    }
     Begin2dDrawBatch(0);
-
     if (*(s32 *)(area + 0x15C) < 3 && *(s32 *)(area + 0x164) < 0 &&
         *(s32 *)(mgr + 0x164) >= 0xB && *(s32 *)(area + 0x8) == 2) {
-        x     = *(s32 *)(obj + 0x18);
-        baseY = *(s32 *)(obj + 0x1C);
-        if (lvlIdx == -1) {
-            func_002801B8(x, baseY + g_levelSelectRowLineHeight / 2, 0x80F0F0F0,
-                          GetLocalizedString(0x2DAA), -1);
+        if (lvl == -1) {
+            func_002801B8(*(s32 *)(obj + 0x18), *(s32 *)(obj + 0x1C) + g_levelSelectRowLineHeight / 2,
+                          0x80F0F0F0, GetLocalizedString(0x2DAA), -1);
         } else {
-            s32 valStrId = *(s32 *)(g_levelSelectEntries + lvlIdx * 8 + 4);
-            s32 labelY = (valStrId >= 0) ? baseY : baseY + (g_levelSelectRowLineHeight >> 1);
-            char buf[64];   /* func_002E0010 formats the level label here */
+            s32 *tbl = (s32 *)g_levelSelectEntries;
+            s32 idx = lvl * 2 + 1;
+            s32 *valueId = &tbl[idx];
+            s32 valueStr = *valueId;
+            s32 halfLine = 0;
+            char label[64];   /* func_002E0010 formats the level label here */
 
-            func_002801B8(x, labelY, 0x80F0F0F0, func_002E0010(buf, lvlIdx), -1);
-            if (valStrId >= 0) {
-                func_002801B8(x, baseY + g_levelSelectRowLineHeight, 0x80F0F0F0,
-                              GetLocalizedString(valStrId), -1);
-            }
+            if (valueStr < 0)
+                halfLine = g_levelSelectRowLineHeight >> 1;
+            func_002801B8(*(s32 *)(obj + 0x18), *(s32 *)(obj + 0x1C) + halfLine, 0x80F0F0F0,
+                          func_002E0010(label, lvl), -1);
+            if (valueStr >= 0)
+                func_002801B8(*(s32 *)(obj + 0x18), *(s32 *)(obj + 0x1C) + g_levelSelectRowLineHeight,
+                              0x80F0F0F0, GetLocalizedString(*valueId), -1);
         }
     }
-
     End2dDrawBatch();
     return 2;
 }
