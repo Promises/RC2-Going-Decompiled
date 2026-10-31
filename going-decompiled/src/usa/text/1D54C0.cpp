@@ -2153,7 +2153,8 @@ s32 SoundOptionsMenuInput(MenuWidget *obj) {
  * register ($s0), and fills row 2's last jal slot with the `addu` that forms
  * 3*ry. Spelled `2 * ry`, or as a fresh row-3 expression, cc1 fills that slot
  * with the icon call's `sll` argument instead (12 words). A row-3 local set
- * before the row-2 icon call costs 55..148 words. */
+ * before the row-2 icon call costs 55..148 words. Also worse, measured before
+ * the walking local: `ry + 2 * ry` (79 words) and `lx + (fill + 8)` (187). */
 /* ADDRESSING-MODEL DEVICE (RULING #8620 class; directive-only, emits nothing):
  * the ROM reads all three volumes absolutely (%hi/%lo), never gp-relative. At
  * FILE SCOPE, outside the guard, so the unit's 2.9 TU declares them before the
