@@ -244,6 +244,35 @@
     and prototyped as our `func_00336678`, so the call passes `(p, flag)` on
     explicitly; name and signature ours.
 
+- **OpenRAC — `rac2-gc-decomp`, commit `96927f87`, text/1CA080 menu-input bodies** (GPL-3.0)
+  <https://github.com/OpenRAC/rac2-gc-decomp> at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`
+
+  Four engine C bodies, adopted with the authors' permission (held by the
+  operator, RULING #10405) and re-checked byte-exact against our v2.00 ROM on
+  the s136os arm (task #2236). Contributors: bigbeno37 and Flavius. Each doc
+  comment carries the `Source:` line, which names every respelling. All four
+  are ADAPTED in the same way: our symbol names per the ROM's relocations,
+  our `PlayGlobalSound` prototype, the menu-screen block read through a view
+  of `g_menuScreenBlock`, upstream's `sda` attribute dropped, and its
+  `MACRO_ADDR` spelled as the EE-only `.sdata` extern device (RULING #8620) or
+  this unit's `.extern` model.
+
+  Used so far:
+  - **`UpdateBestiaryMenuInput`** (`0x002CEAB8`) in
+    `going-decompiled/src/usa/text/1CA080.cpp`, from `src/game/002CDB30-g8.c`
+    (`func_002CDB30`, author commit `14fd82f2`, bigbeno37; its back-button
+    block carries over from upstream's `src/pal/game/002D3DE8.c`, `20d9186d`,
+    Flavius).
+  - **`UpdateSkillPointsMenu`** (`0x002D0B48`), from
+    `src/game/002CFBE8-g32.c` (`func_002CFBE8`, author commit `0eb05a7c`,
+    Flavius).
+  - **`UpdateHelpTopicMenuInput`** (`0x002D2CD0`), from
+    `src/game/002D1D20-g32.c` (`func_002D1D20`, author commit `0eb05a7c`,
+    Flavius).
+  - **`func_002D2FC8`** (`0x002D2FC8`, the options sub-screen input), from
+    `src/game/002D2018-g32.c` (`func_002D2018`, author commits `0eb05a7c` and
+    `0f3403f8`, Flavius).
+
 - **Lombyte** (MIT, © 2026 Mateusz Kłysz)
   <https://github.com/mateuszklysz/Lombyte> at commit `2c4452dd03f5f7ebb2868dbe073ccdb1afb27f61`
 

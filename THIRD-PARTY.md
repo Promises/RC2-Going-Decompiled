@@ -98,10 +98,12 @@ The GPL-2.0-or-later note in the section above applies to these bodies too.
 
 ### OpenRAC rac2-gc-decomp at 96927f87 (GPL-3.0)
 
-Four C function bodies are taken from OpenRAC's `rac2-gc-decomp`,
+Eight C function bodies are taken from OpenRAC's `rac2-gc-decomp`,
 <https://github.com/OpenRAC/rac2-gc-decomp> at commit
 `96927f872c709e13aaa0f32265bb81a5531bf7ed` (root `LICENSE`: GNU General Public
-License, version 3), with the authors' permission (RULING #10405), tasks #2230, #2232 and #2234:
+License, version 3), with the authors' permission (RULING #10405), tasks #2230, #2232,
+#2234 and #2236. Each is adapted, with every respelling named in the function's
+`Source:` line.
 
 | Here | Upstream file | Upstream name |
 |---|---|---|
@@ -109,6 +111,10 @@ License, version 3), with the authors' permission (RULING #10405), tasks #2230, 
 | `SampleCameraFogZone` in `going-decompiled/src/usa/text/16E980.c` (adapted: fog block and region array reached through our symbols; signature and callees ours) | `src/game/0026EA00.c` | `func_002735A0` (v1.01 address) |
 | `func_0011DE08` in `going-decompiled/src/usa/cod/015180.c` (adapted: the unit's own prototypes, with a `(SifRpcClient *)` and two `(char *)` casts) | `src/core/0011DDC8.c` (from rac1-decomp `src/core/00119D88.c`) | `func_0011DE08` |
 | `func_002AD590` in `going-decompiled/src/usa/text/1A8180.c` (adapted: callee and data spellings ours; EE-only callee prototypes, task #2234) | `src/game/002AA800.c` | `func_002AC728` (v1.01 address) |
+| `UpdateBestiaryMenuInput` in `going-decompiled/src/usa/text/1CA080.cpp` (adapted) | `src/game/002CDB30-g8.c` | `func_002CDB30` (v1.01 address) |
+| `UpdateSkillPointsMenu` in `going-decompiled/src/usa/text/1CA080.cpp` (adapted) | `src/game/002CFBE8-g32.c` | `func_002CFBE8` (v1.01 address) |
+| `UpdateHelpTopicMenuInput` in `going-decompiled/src/usa/text/1CA080.cpp` (adapted) | `src/game/002D1D20-g32.c` | `func_002D1D20` (v1.01 address) |
+| `func_002D2FC8` in `going-decompiled/src/usa/text/1CA080.cpp` (adapted) | `src/game/002D2018-g32.c` | `func_002D2018` (v1.01 address) |
 
 The GPL-2.0-or-later note in the section "OpenRAC rac2-gc-decomp (GPL-3.0)" above applies to these bodies too.
 
