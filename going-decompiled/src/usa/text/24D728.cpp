@@ -906,17 +906,27 @@ GuiInstance *func_0034F300(GuiInstance *mgr) {
  * the HUD lists (GuiManagerInitHudLists), clears the manager status words at
  * gui+0x38000+0x79D0.., and finally zeroes two small tables. Returns gui.
  *
- * Purely integer/pointer construction (no float, no GS/DMA). The matching build
- * keeps the asm (engine save-layout wall on the cc1 2.9 arm: the ROM saves ten
- * GPRs at 8-byte stride, 0x70..0xB8); the #else is a faithful op-for-op
- * transcription.
- * Save stride NOT re-measured for this member on the s136os arm (SN 1.36
- * -fopt-stack): NOTE #9871's census vocabulary did not match this label, so
- * FACT #9873's re-screen never ran it. Of the 111 labeled members that were
- * run, 0 reproduce the 16-byte save stride there, so the stride is not
- * evidence that this member is walled. Residual: UNMEASURED.
- * GuiManagerInitListRows/GuiManagerInitHudLists live in this unit
- * as INCLUDE_ASM; the ~50 per-screen constructors live in neighbouring units.
+ * Purely integer/pointer construction (no float, no GS/DMA). Pass 2 really does
+ * call GuiQuitDialogInit and func_0033D4B0 twice each (the ROM has both jal pairs); the
+ * second pair is not a transcription slip. The ~50 per-screen constructors live
+ * in neighbouring units.
+ *
+ * MATCHED on the s136os arm (task #2340): SN 2.95.3 v1.36 -fopt-stack compiles
+ * the body below byte-exact. The cc1 2.9 arm's ten-GPR save layout was never
+ * the wall here. Four spelling points closed it:
+ *   - ctx and mgr are computed where the ROM computes them, after the clear
+ *     loop and after pass 1. Computed at their declarations, both became
+ *     long-lived pseudos and shifted every slot of the pass-1 spill table
+ *     (302 of 344 words differ with the old body).
+ *   - the GUI block size 0x3FB20 sits in a local (`guiSize`). Written inline,
+ *     cc1 folds `+ 3` into one 0x3FB23 constant. The ROM loads 0x3FB20 once
+ *     and reuses it for the +0x79D0 store.
+ *   - g_guiInstance is stored through the g_guiInstanceAbs equate (RULING
+ *     #8620, declared above for func_0034F240), because the ROM stores it
+ *     absolutely (lui $1 / sw %lo). Through the plain symbol it comes out gp_rel.
+ *   - the three trailing status clears are written +0x79EC, +0x79F0, +0x79F4.
+ *     The scheduler then issues them in the ROM's F4, EC, F0 order. Written in
+ *     ROM order they come out F0, F4, EC (3 words).
  */
 #ifdef TARGET_NATIVE
 extern void *g_guiInstance;
@@ -991,12 +1001,13 @@ extern void  func_0033F000(void *s, void *ctx);
 extern void  func_0033F200(void *s, void *ctx);
 #endif
 
-/* TODO(match) GuiSystemInit - task #566 (round 4), measured on the COMMITTED tree (this file,
- * both arms promoted whole-unit; instrument: tools/ee/unit_report.sh over
- * tools/ee/objdiff_build.sh, clean): sdk29 81.91%, engine96 52.60%. Eligible arm: e96.
- * Residual: ORDER, 351 body rows */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", GuiSystemInit);
+/* GUARD (task #2340): on EE the #else body below is the image's GuiSystemInit,
+ * compiled alone by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810;
+ * row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_GuiSystemInit)
+S136OS_SLOT(GuiSystemInit);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
@@ -1074,10 +1085,11 @@ extern s32 g_discToc[];
 /* (end of this body's declarations) */
 void *GuiSystemInit(void *guiArg) {
     u8 *gui = (u8 *)guiArg;
-    u8 *ctx = gui + 0x36F10;   /* shared GUI manager context ($17) */
-    u8 *mgr = gui + 0x38000;   /* manager status block ($18) */
+    u8 *ctx;   /* shared GUI manager context, gui + 0x36F10 ($17) */
+    u8 *mgr;   /* manager status block, gui + 0x38000 ($18) */
     s32 *p;
     s32  i;
+    s32  guiSize;   /* bytes in the whole GUI block */
 
     /* zero the 0x8700-byte working area at gui+4 (0x870 x 0x10-byte rows) */
     p = (s32 *)(gui + 4);
@@ -1090,6 +1102,7 @@ void *GuiSystemInit(void *guiArg) {
     }
 
     /* pass 1 — construct each sub-object */
+    ctx = gui + 0x36F10;
     func_00337C58(ctx);
     GuiManagerInitListRows(gui + 0x36F28);
     func_00349200(gui + 0x39160);
@@ -1124,9 +1137,11 @@ void *GuiSystemInit(void *guiArg) {
     func_0033B4E8(gui + 0x3F7B0);
 
     /* publish the singleton, align the pool cursor into gui[0] */
-    g_guiInstance = gui;
-    *(s32 *)(gui + 0) = ((s32)(gui + 0x3FB20) + 3) & ~3;
-    *(s32 *)(mgr + 0x79D0) = 0x3FB20;
+    mgr = gui + 0x38000;
+    g_guiInstanceAbs = gui;   /* g_guiInstance, stored absolutely */
+    guiSize = 0x3FB20;
+    *(s32 *)(gui + 0) = ((s32)(gui + guiSize) + 3) & ~3;
+    *(s32 *)(mgr + 0x79D0) = guiSize;
 
     /* load + relocate the font atlas from disc, size the GUI pool */
     StartFileLoadPumpingVoice(gui + 0x8710,
@@ -1175,9 +1190,9 @@ void *GuiSystemInit(void *guiArg) {
     func_0033F200(gui + 0x3F3F0, ctx);
 
     /* clear the trailing manager status words, zero two small tables */
-    *(s32 *)(mgr + 0x79F4) = 0;
     *(s32 *)(mgr + 0x79EC) = 0;
     *(s32 *)(mgr + 0x79F0) = 0;
+    *(s32 *)(mgr + 0x79F4) = 0;
     memset(gui + 0x3F9F8, 0, 0x20);
     memset(gui + 0x3FA18, 0, 0x100);
     return gui;
