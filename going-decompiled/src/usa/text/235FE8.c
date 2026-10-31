@@ -3246,14 +3246,22 @@ void GuiConfirmPopupInit(void *w, GuiPool *pool) {
  * increments the saturating u16 play-count at +0x1C8, always raises the u32
  * high-water mark at +0x1CC toward g_gsPixelOffsetY+0x3C, and sets this
  * g_playerProgress slot's bit (plus the 0x80000000 sentinel) in the seen-mask
- * at +0x1D0. arg2 is unused (the ABI-uniform second tick parameter). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiConfirmPopupTick);
+ * at +0x1D0. arg2 is unused (the ABI-uniform second tick parameter).
+ *
+ * w: the popup widget. arg2: unused. Returns 0.
+ *
+ * Matched byte-exact on the s136os arm WITH GCSE ON (task #2338): its selector
+ * row carries `S136EXTRA=-fno-strict-aliasing`, the per-function override of
+ * RULING #12178, because the unit's -fno-gcse pin builds it 158 words against
+ * the ROM's 156. Two spellings are load-bearing:
+ *  - the seen-mask update ORs the progress bit into the record value first and
+ *    the 0x80000000 sentinel last, the ROM's `or v1,v1,a0; or v1,v1,a1` order;
+ *  - g_mapCurrentLevel is read through a RULING #8620 `.data` alias, so cc1
+ *    splits %hi/%lo itself and the %lo load fills the func_002E0010 jal slot.
+ * Without the alias the remaining difference is 3 words. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_GuiConfirmPopupTick)
+S136OS_SLOT(GuiConfirmPopupTick);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiConfirmPopupTick, unit objdiff): 26.00%,
-   177/193 insns differ. Residual: UNKNOWN-addiu + gp/abs-mixed symbol (first differing insn: 'addiu sp, sp, -0x90' vs 'addiu sp, sp, -0x60').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
 extern char *func_002E0010(void *dst, s32 level);
 extern f32 D_1ADC38[2], D_1ADC40[2], D_1ADC48[2];
 extern s32 g_health;            /* 0x18C2EC - base of the per-cutscene unlock records at +0x464 */
@@ -3277,7 +3285,14 @@ extern u8 D_18C750[];
 /* the play-count source g_gsPixelOffsetY+0x3C, likewise by its own address */
 extern s32 D_1A7390[];
 #define POPUP_PLAY_COUNT D_1A7390[0]
+/* RULING #8620 addressing-model device: section(".data") on this EXTERN
+ * declaration makes cc1 split %hi/%lo of g_mapCurrentLevel itself (ROM:
+ * `lui v0,%hi` before the jal, `lw a1,%lo(v0)` in its delay slot) instead of
+ * printing the one-insn macro. It moves no data and emits nothing; the
+ * relocations name the real symbol. */
+extern s32 g_mapCurrentLevelSplit __asm__("g_mapCurrentLevel") __attribute__((section(".data")));
 #else
+#define g_mapCurrentLevelSplit g_mapCurrentLevel
 #define POPUP_UNLOCK_RECORD ((u8 *)&g_health + 0x464)
 #define POPUP_PLAY_COUNT (*(s32 *)((u8 *)&g_gsPixelOffsetY + 0x3C))
 #define D_1ADC38Split (*(PopupOffset *)D_1ADC38)
@@ -3310,7 +3325,7 @@ s32 GuiConfirmPopupTick(void *w, s32 arg2) {
 #undef POPUP_PLACE
 #undef POPUP_ORIGIN
 
-    func_002E0010((char *)w + 0x298, g_mapCurrentLevel);
+    func_002E0010((char *)w + 0x298, g_mapCurrentLevelSplit);
 
 #define REC(off, T) (((struct { u8 pad[off]; T v; } *)POPUP_UNLOCK_RECORD)->v)
     if (g_gameTime >= 11 && REC(0x1C8, u16) <= 0xFFFE) {
@@ -3320,7 +3335,7 @@ s32 GuiConfirmPopupTick(void *w, s32 arg2) {
     if ((u32)REC(0x1CC, s32) < (u32)target) {
         REC(0x1CC, s32) = target;
     }
-    REC(0x1D0, u32) |= (1u << g_playerProgress) | 0x80000000u;
+    REC(0x1D0, u32) = (REC(0x1D0, u32) | (1u << g_playerProgress)) | 0x80000000u;
 #undef REC
     return 0;
 }
@@ -4942,14 +4957,17 @@ void GuiDialogBoxVariantCInit(void *w, GuiPool *pool) {
  * >= -0x20) / +1 on 0x4000 (clamp <= 0x20); X (+0x168) -1 on 0x8000 (clamp
  * >= -0x28) / +1 on 0x2000 (clamp <= 0x28). If the pan actually moved, plays
  * sound 4, then rebuilds the display env via func_002857F0(). Returns bit 6 of
- * flags. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033CEE0);
+ * flags.
+ *
+ * Matched byte-exact on the s136os arm WITH GCSE ON, with this body unchanged
+ * (FACT #12193, task #2307; landed by task #2338): its selector row carries
+ * `S136EXTRA=-fno-strict-aliasing`, the per-function override of RULING
+ * #12178. The ROM holds a bare %hi across blocks, which only gcse produces
+ * (FACT #8485 class); under the unit's -fno-gcse pin it builds 102 words
+ * against the ROM's 99. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0033CEE0)
+S136OS_SLOT(func_0033CEE0);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033CEE0, unit objdiff): 25.09%,
-   113/137 insns differ. Residual: UNKNOWN-addiu (first differing insn: 'addiu sp, sp, -0x20' vs 'addiu sp, sp, -0x30').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
 extern u8 g_gsScreenContext[];
 extern void func_002857F0(void);
 extern s32 PlayGlobalSound(s32 id, s32 a, s32 b);
