@@ -2923,29 +2923,58 @@ s32 CheckMobyOverWater(void *moby, void *waterVol) {
  * DMA/GIF header: a DIRECT-mode chain (0x30000009/0x50000009) selecting the GS
  * screen context (the g_gsScreenContextPtr packet + 0xC0, masked to the 28-bit
  * physical address the DMAC needs), followed by an UNPACK (0x30000025/0x50000025)
- * of the framebuffer-setup packet at g_screenBlitPacketB+0x290. Advances the
- * cursor past the header, bumps the scene-frame counter, then appends either the
+ * of the framebuffer-setup packet at g_screenBlitPacketB+0x290 (0x1A6AF0).
+ * Advances the cursor past the header, bumps the scene-frame counter
+ * (g_cameraSlotActive+0x990 scene block, +0x34), then appends either the
  * cinematic-queue draw path (func_0027DB38, when g_cinematicQueue is set) or the
- * normal scene path (func_0027DC40), closes the chain with a 0x70000000 end tag,
- * and flushes the data cache (iFlushCache) so the DMAC sees the finished packet.
+ * normal scene path (func_0027DC40), closes the chain with a 0x70000000 end tag
+ * and advances the cursor one quadword, and flushes the data cache
+ * (iFlushCache(0)) so the DMAC sees the finished packet.
+ *   dmaCursor  word-aligned DMA buffer the frame's chain starts at
+ *   returns    nothing; g_frameDmaCursor is left just past the end tag
+ * The ROM re-reads g_frameDmaCursor after every tag store; this C, compiled on
+ * the arm below, does the same with no device for it (the reason is not traced).
  *
- * Engine region (ee-gcc 2.96) - the original reloads g_frameDmaCursor after every
- * tag store and mixes %lo-absolute with %gp_rel access to the same cursor, which
- * the pinned 2.9 cc1 won't reproduce, so this is a faithful #else, not a byte match. */
+ * MATCHED on the s136os arm (SN 1.36 cc1plus -O2 -G8 -fopt-stack, gcse on; a row
+ * in tools/ee/s136os_functions.txt, spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh); plain C on native. Three ADDRESSING-MODEL devices
+ * (RULING #8620 family), all EE-only and on declarations, emitting nothing:
+ *   - `.extern g_frameDmaCursor, 12`: cc1 sees a small (4-byte) global and prints
+ *     the one-insn `lw`/`sw` macro; the assembler expands it absolute
+ *     (lui+%lo) except in the two delay slots, where it is %gp_rel - the ROM's
+ *     mixed access to one symbol (the FACT #9597 size-12 class);
+ *   - `.extern g_gsScreenContextPtr, 16`: absolute, its `lui $2` + `lw %lo($2)`;
+ *   - g_cinematicQueue ABSOLUTE_GLOBAL: cc1 splits its %hi into $9 early and
+ *     keeps the `lw` below the header stores, as the ROM does.
+ * Measured (solo s136 probe, task #2336): without the cursor extern 64 of 77
+ * words, without the context extern 76, without ABSOLUTE_GLOBAL 76 with 50
+ * positional differences. History (sdk29 arm, best 86.55%): FACT #8001. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", BeginFrameDrawList);
-#else
-extern u32 *g_frameDmaCursor;      /* VIF1/GIF chain write cursor */
-extern u8 *g_gsScreenContextPtr;   /* pointer to the GS screen-context packet */
-extern s32 g_cinematicQueue;
-extern u8 g_cameraSlotActive[];    /* scene-frame counter lives at +0x9C4 */
-extern u8 g_screenBlitPacketB[];   /* framebuffer-setup packet lives at +0x290 */
-extern void func_0027DB38(void);   /* cinematic-queue draw path */
-extern void func_0027DC40(void);   /* normal scene draw path */
-extern void iFlushCache(s32);    /* data-cache flush */
+__asm__(".extern g_frameDmaCursor, 12");
+__asm__(".extern g_gsScreenContextPtr, 16");
+#endif
+extern u32 *g_frameDmaCursor;                    /* VIF1/GIF chain write cursor */
+extern u8 *g_gsScreenContextPtr;                 /* pointer to the GS screen-context packet */
+extern s32 g_cinematicQueue ABSOLUTE_GLOBAL;     /* nonzero: a cinematic owns the frame */
+extern u8 g_cameraSlotActive[];                  /* scene block lives at +0x990 */
+extern u8 g_screenBlitPacketB[];                 /* framebuffer-setup packet lives at +0x290 */
+extern void func_0027DB38(void);                 /* cinematic-queue draw path */
+extern void func_0027DC40(void);                 /* normal scene draw path */
+extern void iFlushCache(s32);                    /* data-cache flush */
 
+/* The scene-state block at g_cameraSlotActive+0x990 (see LoadCinematicChunkCast). */
+typedef struct SceneFrameState {
+    u8  pad0[0x34];
+    s32 frameCount;  /* 0x34 scene-frame counter */
+} SceneFrameState;
+
+#if !defined(TARGET_NATIVE) && !defined(S136OS_BeginFrameDrawList)
+S136OS_SLOT(BeginFrameDrawList);
+#else
 void BeginFrameDrawList(u32 *dmaCursor)
 {
+    SceneFrameState *scene;
+
     g_frameDmaCursor = dmaCursor;
     g_frameDmaCursor[0] = 0x30000009;
     g_frameDmaCursor[1] = ((u32)g_gsScreenContextPtr + 0xC0) & 0x0FFFFFFF;
@@ -2956,11 +2985,12 @@ void BeginFrameDrawList(u32 *dmaCursor)
     g_frameDmaCursor[6] = 0;
     g_frameDmaCursor[7] = 0x50000025;
     g_frameDmaCursor += 8;
-    *(s32 *)&g_cameraSlotActive[0x9C4] += 1;
-    if (g_cinematicQueue == 0) {
-        func_0027DC40();
-    } else {
+    scene = (SceneFrameState *)(g_cameraSlotActive + 0x990);
+    scene->frameCount++;
+    if (g_cinematicQueue != 0) {
         func_0027DB38();
+    } else {
+        func_0027DC40();
     }
     g_frameDmaCursor[0] = 0x70000000;
     g_frameDmaCursor[1] = 0;
