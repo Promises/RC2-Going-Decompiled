@@ -68,6 +68,8 @@ __asm__(".extern D_1ABA88, 16");
 __asm__(".extern D_1ABA8C, 16");
 __asm__(".extern D_1ABA90, 16");
 __asm__(".extern D_138180, 16");
+/* DrawInsomniacMuseumMenu: cc1-small D_1ABDA8[2], assembler-absolute (task #2288). */
+__asm__(".extern D_1ABDA8, 16");
 /* func_002CDEB0 cheat-flag mirror: source byte flags + s16 menu mirrors. */
 __asm__(".extern D_1A7BD1, 16");
 __asm__(".extern D_1A7BD2, 16");
@@ -5153,66 +5155,75 @@ s32 UpdateInsomniacMuseumInput(void) {
  * selected row (g_museumMenuCursor) else 0x80F0F0F0, and its label is the localized
  * D_1ABDA8[i] when the item is enabled (D_1ABA80[i] != 0) else the fallback 0x2C56.
  * (func_003017F8 takes 2 ints + 5 floats; it reads no $a2/$a3 — FACT #8918.)
- * Wall (cc1 2.9 arm): 8-byte-packed-save (7 GPRs) + FP-arg scheduling — later cc1 save-slot packing
- * not reproduced. Preserved as portable C.
- * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
- * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
- * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
- * property and was measured false as the reason this member stays unmatched (FACT #9873).
- * Residual: the saved-register set; the rest UNMEASURED. */
-/* s136os arm, measured by task #2117 (SN 1.36 -O2 -G8 -fstrict-aliasing -fopt-stack, gcse on):
- * this #else body builds 202 words against the ROM's 208 (SHORTER), so the splice refuses it on
- * LENGTH. Residual class: length/structure, not yet attributed. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawInsomniacMuseumMenu);
+ *
+ * Byte-exact on the s136os arm (task #2288) with NOTE #9703's body unchanged;
+ * that NOTE measured it 5/208 words off at cf365542, this tree builds it
+ * ROM-identical. Its levers, each load-bearing there:
+ *  - `scale`, the per-call 1.0, pinned to $f14 (EE_REG, RULING #8598) and reset
+ *    before every glyph draw: the ROM rematerialises 1.0 into $f14 for each call
+ *    (`lui $1,0x3F80; mtc1 $1,$f14`); unpinned, cc1 shares one 1.0 in a
+ *    callee-saved FPR (the DrawHelpTopicMenu lever, FACT #9705);
+ *  - `tilt` (0.775) as a local, the ROM's $f20;
+ *  - the item colour as u64, and func_002904B0's colour passed as u64 through a
+ *    cast (EE arm only): the ROM loads each as one DImode `dli` placed after
+ *    $4..$7; an s32 colour makes cc1 split it and hoist the `lui`. The unit's
+ *    func_002904B0 prototype says s32 for its other callers;
+ *  - D_1ABDA8 declared cc1-small (`[2]`) with the unit-level
+ *    `.extern D_1ABDA8, 16`: the ROM's one-insn `la` and its s1..s5 allocation. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_DrawInsomniacMuseumMenu)
+S136OS_SLOT(DrawInsomniacMuseumMenu);
 #else
-/* Declarations this body needs whose only other declarations sit in other
- * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern s32 g_screenWidth;
-/* (end of this body's declarations) */
-/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 23.83% -> STRUCTURAL,
- * first differing row @0: ROM `addiu sp,sp,-80` vs `lui v0,0x0  [HI16 0x001A7340]`;
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 47.77% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-80` vs `addiu sp,sp,-176`. */
 extern void func_003017F8(s32 handle, s32 color0, f32 px, f32 py, f32 sx, f32 syg, f32 v38);
 extern s32 GuiFontAtlasLookupGlyph(void *atlas, s32 codepoint);
 extern void func_002904B0(s32 x0, s32 y0, s32 x1, s32 y1, s32 color, s32 flag);
-extern s32 g_museumMenuCursor;   /* museum carousel cursor 0..4 */
-extern s32 D_1ABA94;             /* title glyph row (int, converted to float) */
-extern s32 D_1ABDA8[];           /* per-item label string ids */
-extern s32 g_swapGadgetItemIndex; /* +0x8E holds the global sprite y-fudge (f32) */
+extern s32 g_museumMenuCursor;
+extern s32 D_1ABA94;
+extern s32 D_1ABDA8[2];          /* item label string ids; cc1-small (see above) */
+extern s32 g_swapGadgetItemIndex;
+/* One framing line in colour 0x55F0C070. EE: the colour goes as a u64 (see above). */
+#ifndef TARGET_NATIVE
+#define MUSEUM_FRAME_LINE(x0, y0, x1, y1) \
+    ((void (*)(s32, s32, s32, s32, u64, s32))func_002904B0)(x0, y0, x1, y1, 0x55F0C070, 0)
+#else
+#define MUSEUM_FRAME_LINE(x0, y0, x1, y1) func_002904B0(x0, y0, x1, y1, 0x55F0C070, 0)
+#endif
 s32 DrawInsomniacMuseumMenu(void) {
-    void *atlas = g_guiInstance + 0x8710;
-    f32 centerX = (f32)(g_screenWidth / 2);
-    f32 row = (f32)D_1ABA94;
-    f32 yfudge = *(f32 *)((u8 *)&g_swapGadgetItemIndex + 0x8E);
-    s32 cursor;
+    f32 tilt;
+    register f32 scale EE_REG("$f14");
+    s32 glyph;
     s32 i;
     s32 y;
 
     Begin2dDrawBatch(0);
-    /* three title glyphs (v38 = 0.775f = 0x3F466666) */
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0x8B), 0x60442D00,
-                  centerX, row, 1.0f, yfudge, 0.775f);
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0x8C), 0x55F0C070,
-                  centerX, row, 1.0f, yfudge, 0.775f);
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0x8D), 0x55F0C070,
-                  centerX, row, 1.0f, yfudge, 0.775f);
-    /* three centred header strings */
+    tilt = 0.775f;
+    glyph = GuiFontAtlasLookupGlyph(g_guiInstance + 0x8710, 0x8B);
+    scale = 1.0f;
+    func_003017F8(glyph, 0x60442D00, (f32)(g_screenWidth / 2), (f32)D_1ABA94, scale,
+                  *(f32 *)((u8 *)&g_swapGadgetItemIndex + 0x8E), tilt);
+    glyph = GuiFontAtlasLookupGlyph(g_guiInstance + 0x8710, 0x8C);
+    scale = 1.0f;
+    func_003017F8(glyph, 0x55F0C070, (f32)(g_screenWidth / 2), (f32)D_1ABA94, scale,
+                  *(f32 *)((u8 *)&g_swapGadgetItemIndex + 0x8E), tilt);
+    glyph = GuiFontAtlasLookupGlyph(g_guiInstance + 0x8710, 0x8D);
+    scale = 1.0f;
+    func_003017F8(glyph, 0x55F0C070, (f32)(g_screenWidth / 2), (f32)D_1ABA94, scale,
+                  *(f32 *)((u8 *)&g_swapGadgetItemIndex + 0x8E), tilt);
     func_002801B8(g_screenWidth / 2, 0x41, 0x80F0F0F0, GetLocalizedString(0x30A2), -1);
     func_002801B8(g_screenWidth / 2, 0x141, 0x80F0F0F0, GetLocalizedString(0x2C0B), -1);
     func_002801B8(g_screenWidth / 2, 0x15A, 0x80F0F0F0, GetLocalizedString(0x2BE5), -1);
-    /* framing lines */
-    func_002904B0(0x138, 0x80, 0x1C1, 0x82, 0x55F0C070, 0);
-    func_002904B0(0x138, 0x109, 0x1C3, 0x10B, 0x55F0C070, 0);
-    func_002904B0(0x138, 0x80, 0x13A, 0x109, 0x55F0C070, 0);
-    func_002904B0(0x1C1, 0x80, 0x1C3, 0x109, 0x55F0C070, 0);
-    /* five menu items */
-    cursor = g_museumMenuCursor;
+    MUSEUM_FRAME_LINE(0x138, 0x80, 0x1C1, 0x82);
+    MUSEUM_FRAME_LINE(0x138, 0x109, 0x1C3, 0x10B);
+    MUSEUM_FRAME_LINE(0x138, 0x80, 0x13A, 0x109);
+    MUSEUM_FRAME_LINE(0x1C1, 0x80, 0x1C3, 0x109);
     y = 0x7D;
     for (i = 0; i < 5; i++) {
-        u32 color = (i == cursor) ? 0x7000FFFF : 0x80F0F0F0;
-        s32 strId = ((&D_1ABA80)[i] != 0) ? D_1ABDA8[i] : 0x2C56;
+        u64 color = 0x80F0F0F0;
+        s32 strId = 0x2C56;
+        if (i == g_museumMenuCursor)
+            color = 0x7000FFFF;
+        if ((&D_1ABA80)[i] != 0)
+            strId = D_1ABDA8[i];
         func_002801B8(0xA5, y, color, GetLocalizedString(strId), -1);
         y += 0x1F;
     }
