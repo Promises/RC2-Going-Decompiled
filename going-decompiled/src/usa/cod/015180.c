@@ -2748,7 +2748,8 @@ extern void func_0011DDD8();
  * D_0013FE80, r1_D_0012FDA0 -> D_00134738, r1_func_00118C90 -> SignalSema,
  * r1_D_001575C0 -> D_0013F5C0, r1_D_00156940 -> D_0013E940, r1_D_00158080 ->
  * D_00140080, r1_func_0011B4C8 -> sceSifCallRpc, r1_D_001580A8 -> D_001400A8,
- * r1_D_0012FD98 -> D_00134730, r1_D_0012FD94 -> D_0013472C). Their extern
+ * r1_D_0012FD98 -> D_00134730, r1_D_0012FD94 -> D_0013472C, r1_D_00157600 ->
+ * D_0013F600). Their extern
  * prototypes are dropped for the unit's own, which adds casts where the types
  * differ: `(SifRpcClient *)` on the client D_00140080 passed to sceSifBindRpc,
  * and `(char *)` on D_0013FE80 (the slot loop) and D_0013F600 (the two buffer
