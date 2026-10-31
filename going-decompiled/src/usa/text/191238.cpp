@@ -4759,10 +4759,15 @@ typedef struct MapBlipListEntry {
     u8  _pad0E[0x28 - 0xE];
 } MapBlipListEntry;
 typedef struct MapCache {
-    u8  _pad00[0x20];
+    u8  _pad00[0xC];
+    u8 *bitmapSource;      /* +0xC   loaded map image func_002984E0 downsamples; func_002848A0's 4th arg */
+    s32 bitmapLoaded;      /* +0x10  0 == no map loaded (func_00297FA0 returns at once) */
+    u8 *bitmapSpans;       /* +0x14  byte-pair list func_002848A0 walks (its 3rd arg) */
+    u8  _pad18[0x20 - 0x18];
     MapBlipListEntry *blipList; /* +0x20 g_pMapBlipList (0x1C4F40) */
     s32 available;         /* +0x24  */
-    u8  _pad28[0x230 - 0x28];
+    s32 hasData;           /* +0x28  g_mapHasData (0x1C4F48) */
+    u8  _pad2C[0x230 - 0x2C];
     s32 currentLevel;      /* +0x230 */
     s32 activeSlot;        /* +0x234 */
     s32 tocHandle;         /* +0x238  map-data IOP ring handle, -1 == none */
@@ -4844,7 +4849,10 @@ void MapMoveCacheSlot(s32 dst, s32 src) {
 /* Offset checks only on a C11+ host (ee-gcc 2.9 used by the EE-backend suite
  * predates _Static_assert). */
 #if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
+_Static_assert(__builtin_offsetof(MapCache, bitmapSource) == 0xC,   "MapCache.bitmapSource");
+_Static_assert(__builtin_offsetof(MapCache, bitmapSpans)  == 0x14,  "MapCache.bitmapSpans");
 _Static_assert(__builtin_offsetof(MapCache, available)    == 0x24,  "MapCache.available");
+_Static_assert(__builtin_offsetof(MapCache, hasData)      == 0x28,  "MapCache.hasData");
 _Static_assert(__builtin_offsetof(MapCache, currentLevel) == 0x230, "MapCache.currentLevel");
 _Static_assert(__builtin_offsetof(MapCache, activeSlot)   == 0x234, "MapCache.activeSlot");
 _Static_assert(__builtin_offsetof(MapCache, slotState)    == 0x288, "MapCache.slotState");
@@ -6423,7 +6431,84 @@ void func_00297E80(void *dstArg, s32 row, void *srcAArg, void *srcBArg) {
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/191238", func_00297F98);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00297FA0);
+/* GUARD (task #2293): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack; row in tools/ee/s136os_functions.txt)
+ * and spliced over S136OS_SLOT by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice drops the function. On native it is
+ * plain C. */
+#ifndef TARGET_NATIVE
+/* ADDRESSING-MODEL DEVICE (RULING #8620 class): a 16-byte absolute alias of
+ * D_1399B8 makes cc1 load the table base with the one-insn `la` the ROM issues
+ * ahead of the index shift; it moves no data. */
+__asm__(".extern D_1399B8Abs, 16\n\tD_1399B8Abs = D_1399B8");
+#endif
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00297FA0)
+S136OS_SLOT(func_00297FA0);
+#else
+extern s32  func_002848A0(void *dst, s32 nbytes, const void *spans, const void *source);
+extern void func_002984E0(u8 *out);
+#ifndef TARGET_NATIVE
+extern s32  g_mapBitmapSizeMax[2] __asm__("D_1399B8Abs");
+#else
+extern s32  g_mapBitmapSizeMax[2] __asm__("D_1399B8");
+#endif
+/*
+ * func_00297FA0(out) — build the 2 KB galactic-map discovered-area bitmap for
+ * the current level into `out` (save-path helper).
+ *   - no map loaded (g_mapVertexData.bitmapLoaded == 0): return, `out` untouched;
+ *   - no map data (hasData == 0) or no map-data TOC handle (tocHandle < 0):
+ *     zero all 0x800 bytes of `out` and return;
+ *   - otherwise mark the level discovered (func_002956F8(g_playerProgress)) and
+ *     encode with func_002848A0(out, 0x800, bitmapSpans, bitmapSource); a
+ *     result of -1 falls back to downsampling the 4bpp map (func_002984E0).
+ * Finally D_1399B8[level] (here g_mapBitmapSizeMax, a per-level high-water
+ * mark) is raised to the encoder's result if that is larger — including the
+ * -1 of the fallback path, which therefore never raises it.
+ * No return value.
+ *
+ * The ROM reads g_playerProgress three times: gp-relative as func_002956F8's
+ * argument, gp-relative in the non-likely `bne` delay slot (so on both paths),
+ * and absolute (`lui; lw %lo`) after func_002984E0 — the unit's
+ * g_playerProgressAbs alias.
+ *
+ * MATCHED on the s136os arm (task #2293; NOTE #9518's 3-word ordering residual
+ * closed). Three levers, each measured load-bearing by removing it alone
+ * (private solo screen, ee_cc1.sh s136 -O2 -G8 -fopt-stack, words differing of
+ * 48):
+ *  - the D_1399B8Abs alias above: 47 words, 15 differ;
+ *  - REGISTER-PIN DEVICE (RULING #8598): `level` pinned to $4 through EE_REG;
+ *    cc1 still emits every instruction, the pin only steers allocation: 3
+ *    differ without it (the `la` issued after the `sll`);
+ *  - the operand-tied EMPTY asm fence on `level` at the join (RULING #8483,
+ *    emits nothing): 3 differ without it.
+ * gcse on and off compile identically.
+ */
+void func_00297FA0(u8 *out) {
+    MapCache *map = &g_mapVertexData;
+    s32 size;
+    register s32 level EE_REG("$4");
+
+    if (map->bitmapLoaded == 0) {
+        return;
+    }
+    if (map->hasData == 0 || map->tocHandle < 0) {
+        FillMemory32(out, 0, 0x800);
+        return;
+    }
+    func_002956F8(g_playerProgress);
+    size = func_002848A0(out, 0x800, map->bitmapSpans, map->bitmapSource);
+    if (size == -1) {
+        func_002984E0(out);
+        level = g_playerProgressAbs;
+    } else {
+        level = g_playerProgress;
+    }
+    __asm__("" : "+r"(level));
+    if (size > g_mapBitmapSizeMax[level]) {
+        g_mapBitmapSizeMax[level] = size;
+    }
+}
+#endif
 
 /* GUARD (task #1702): on EE this C is the image's body, compiled alone by the
  * s136os arm (SN 2.95.3 v1.36 -fopt-stack; row in tools/ee/s136os_functions.txt)
