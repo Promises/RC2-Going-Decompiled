@@ -1415,7 +1415,8 @@ void ComputeListenerOcclusionProbe(Vec4 *out) {
  * src/game/002E4528-rc2.c, func_002E4528 (v1.01 address; author commit
  * ebf90a4c, atlasbez-dot, "carry over func_002E4528", carried from
  * atlasbez-dot/rac2-gc-decomp at 921a4dee), under the MIT notice above and
- * adopted with permission per RULING #10405. ADAPTED: (1) our callee and data
+ * adopted with permission per RULING #10405 and RULING #12108 (the MIT-fork
+ * call). ADAPTED: (1) our callee and data
  * spellings and prototypes: func_00282CF0 = Vec4SubVu0, func_00282D30 =
  * Vec4ScaleVu0 and func_00282FB8 = func_00283968 (float argument second in our
  * (dst, f32, src) prototypes; same registers), func_00282CC0 = Vec4AddVu0,
@@ -1424,7 +1425,8 @@ void ComputeListenerOcclusionProbe(Vec4 *out) {
  * with the slot's pos and pOwnerMoby fields for their +0x20 and +0x18; (3)
  * their `s32 sp[1]` probe is a Vec4 here - the four callees write 16 bytes
  * through it, so a 4-byte buffer overflows on native; s32[1], f32[4] and Vec4
- * all build the ROM's 39 words alone (measured, task #2239). */
+ * all build the ROM's 39 words alone (measured, task #2239); (4) upstream's
+ * `temp_ret` local is folded into `return CollLine(...)` (byte-neutral; task #2257). */
 #if !defined(TARGET_NATIVE) && !defined(S136OS_CastEmitterOcclusionRay)
 S136OS_SLOT(CastEmitterOcclusionRay);
 #else
