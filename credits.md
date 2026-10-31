@@ -150,12 +150,13 @@
 - **OpenRAC — `rac2-gc-decomp`, commit `96927f87`, s136os bodies** (GPL-3.0)
   <https://github.com/OpenRAC/rac2-gc-decomp> at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`
 
-  Eleven engine C bodies, two in text/16E980, one in text/1A00F0, one in
-  text/1A8180, three in text/1B4218, one in text/1D54C0, one in text/1DFF80
-  and two in text/188858, adopted with the authors' permission (held by the
-  operator, RULING #10405) and re-checked byte-exact against our v2.00 ROM on
-  the s136os arm (tasks #2232, #2234, #2235, #2248, #2251, #2252 and #2262,
-  from audit NOTE #12089 rows 3, 4, 5, 6, 8 and 9).
+  Thirteen engine C bodies, two in text/16E980, one in text/1A00F0, one in
+  text/1A8180, three in text/1B4218, one in text/1D54C0, one in text/1DFF80,
+  two in text/188858 and two in cod/0321A0, adopted with the authors'
+  permission (held by the operator, RULING #10405) and re-checked byte-exact
+  against our v2.00 ROM on the s136os arm (tasks #2232, #2234, #2235, #2248,
+  #2251, #2252, #2262 and #2294, from audit NOTE #12089 rows 3, 4, 5, 6, 8
+  and 9 and NOTE #12161).
   Contributors: bigbeno37, Flavius and Louis-Philippe Le Sieur. Each doc comment carries the `Source:`
   line, which names every change beyond extern spellings.
 
@@ -245,6 +246,21 @@
     (audit NOTE #12089 row 4). Its jump table is bound to
     `jtbl_0026C780_text`. ADAPTED: their subtitle block `D_00254E78` is our
     `g_subtitleState`, with our struct and field names.
+  - **`snd_QueueCommandToRing`** (`0x00132DF0`, 989snd's
+    snd_SendIOPCommandNoWait) in `going-decompiled/src/usa/cod/0321A0.c`,
+    from `src/core/00132DF0-g8.c` (`func_00132DF0`, author commit
+    `fddb10bf`, Flavius), task #2294 (audit NOTE #12161). ADAPTED: our
+    signature (an `s32` return where theirs is void; the 64-bit last
+    parameter kept), our callee and descriptor spellings, and their `sda`
+    declarations dropped for the unit's own (`.extern ,16` on the RPC client
+    and receive block, RULING #8620).
+  - **`OnVblankInterrupt`** (`0x001339B0`) in
+    `going-decompiled/src/usa/cod/0321A0.c`, from `src/core/001339B0.c`
+    (`func_001339B0`, author commit `962455ea`, Louis-Philippe Le Sieur,
+    whose note credits rac1-decomp `src/core/permcb.c` `func_0012F308`),
+    task #2294 (audit NOTE #12161). ADAPTED: our names (`g_vblankCount`,
+    `g_hblankTicksAccum`), their `NOT_SDA` declarations replaced by
+    `.extern ,16` lines and their `MACRO_ADDR` dropped (RULING #8620).
 
 - **RC2 decomp contributions — `src/game/002E4528-rc2.c` in OpenRAC `rac2-gc-decomp`, commit `96927f87`** (MIT, © 2026 RC2 decomp contributions)
   <https://github.com/OpenRAC/rac2-gc-decomp> at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`

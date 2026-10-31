@@ -691,3 +691,5 @@ usa text/1D54C0 func_002D8DD0
 usa text/1D54C0 func_002DA358
 usa text/1D54C0 func_002DCBF0
 usa text/1D54C0 func_002DCCC8
+usa cod/0321A0 snd_QueueCommandToRing
+usa cod/0321A0 OnVblankInterrupt

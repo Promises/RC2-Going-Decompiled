@@ -270,7 +270,7 @@ extern void func_002FCFC8(void);
 extern void ResetFrameArenas(void);
 extern void InstallVif1DmacHandlers(void);
 extern void AppendFrameInitGsState(void);
-extern void OnVblankInterrupt(void);
+extern s32  OnVblankInterrupt(void);   /* INTC handler; returns 0 to continue the chain */
 extern s32  sceCdInit(s32 mode);
 extern s32  sceCdDiskReady(s32 mode);
 extern s32  sceSifRebootIop(const char *img);

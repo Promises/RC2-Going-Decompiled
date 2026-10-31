@@ -1276,7 +1276,7 @@ void func_0029DAD0(void *str, s32 arg);
 void func_002895E0(void *queue);       /* cinematic-queue helper */
 void func_00126288(void *dest, s32 a, s32 b, s32 c, s32 d, s32 e, s32 f, s32 g); /* BuildGsImageUploadPacket */
 s32  func_00126DC0(void *handler);     /* install INTC-2 vblank-start handler; returns the previous one */
-void OnVblankInterrupt(void);
+s32  OnVblankInterrupt(void);      /* INTC handler; returns 0 to continue the chain */
 s32  PopGameState(s32 a, s32 b);
 void WaitFrameDmaFence(s32 mask);
 s32 KickGifImageUpload(void *packet, s32 dataAddr);

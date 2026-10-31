@@ -350,7 +350,7 @@ extern void DisableDmac(s32 channel);
 extern void RemoveDmacHandler(s32 a, s32 b);
 extern s32  func_00126DC0(void *handler);    /* install INTC-2 vblank-start handler; returns the previous one */
 extern s32  g_fmvThreadId;
-extern void OnVblankInterrupt(void);
+extern s32  OnVblankInterrupt(void);   /* INTC handler; returns 0 to continue the chain */
 /* forward decls — these are declared/defined later in this file */
 extern s32  func_00124B88(s32 mode);
 extern void func_003512F0(u8 *arena);
@@ -382,7 +382,7 @@ extern s32 func_003525D8(FmvStream *obj);
 extern s32 func_003505E0(u8 *ptsQueue);
 extern s32 func_003513F0(u8 *block);
 extern s32 g_fmvThreadId;
-extern void OnVblankInterrupt(void);
+extern s32  OnVblankInterrupt(void);   /* INTC handler; returns 0 to continue the chain */
 /* (end of this body's declarations) */
 /* History: task #513 measured sdk29 75.25% / engine96 61.41% (unit objdiff report,
  * no arguments) and 95.59% on sdk29 with the arguments restored, the residual being

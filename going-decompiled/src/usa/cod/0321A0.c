@@ -14,7 +14,7 @@
  * incomplete array type (extern T sym[];) so cc1 cannot prove it small.
  */
 
-extern s32 snd_QueueCommandToRing(s32 sel, s32 count, void *data, s32 arg3, s32 arg4);
+extern s32 snd_QueueCommandToRing(s32 sel, s32 count, void *data, s32 cb, s64 cbData);
 extern s32 snd_SendCommandSync(s32 arg0, s32 arg1, void *arg2);
 /* The SDK SIF RPC call (sceSifCallRpc): client, fn, mode, send buf/size,
  * recv buf/size, end callback/param. Shared by the 989snd RPC senders below. */
@@ -581,7 +581,7 @@ void func_00132B28(s32 arg0) {
  * address in a stack local, and arg1/arg2 forwarded as the two trailing
  * arguments.
  */
-void func_00132B58(s32 arg0, s32 arg1, s32 arg2) {
+void func_00132B58(s32 arg0, s32 arg1, s64 arg2) {
     s32 value = arg0;
     snd_QueueCommandToRing(0x19, 4, &value, arg1, arg2);
 }
@@ -727,112 +727,121 @@ s32 snd_SendCommandSync(s32 fno, s32 count, void *cmdBytes) {
 }
 #endif
 
-/* snd_QueueCommandToRing: append one command to the active double-buffered
- * 989snd ring (or, when idle with an empty command, issue a bare sync RPC). Not
- * matched — on cc1 2.9 the multi-callee-save frame hits the same 16-byte save-slot
- * layout wall as snd_SetupDmaTransfer, itself now matched on the s136os arm (near-miss).
- * Portable #else body (no branch-likely
- * delay slots; all control flow is plain bnez/beqz/bne/beq/blez/b).
+/**
+ * snd_QueueCommandToRing - queue one 989snd command on the active command
+ * ring, or send it at once when nothing is queued. This is 989snd's own
+ * snd_SendIOPCommandNoWait (FACT #5531).
  *
- * Ring model (buffer i = D_001A74C0): D_001A74A0[i] -> a 0x1000-byte command
+ * @sel:    the command (the RPC function number on the bare path).
+ * @count:  number of payload bytes.
+ * @data:   the payload bytes, copied into the ring.
+ * @cb:     word stored in the entry's descriptor; upstream reads it as the
+ *          reply callback (testimony, RULING #10083: not measured here).
+ * @cbData: 64-bit qword stored beside it in the descriptor.
+ * Returns sceSifCallRpc's result on the bare path, otherwise
+ * snd_CommitRingEntry's (some wrappers below forward it).
+ *
+ * Bare path: with no service pending (D_001A74C4), no transfer in flight
+ * (D_001A7480), no payload and no callback, the command goes straight out as
+ * a mode-1 (NOWAIT) RPC on g_sndRpcClientCmd (D_001A7040), after the same
+ * channel-idle wait snd_SendCommandSync uses.
+ *
+ * Ring model (buffer i = D_001A74C0): D_001A74A0[i] points at a 0x1000-byte
  * buffer whose leading word is the entry count and whose remaining bytes hold
- * packed (u16 sel, u16 count, payload...) records; D_001A74A8[i] is the bytes of
- * free space left (write cursor = base + 0x1000 - free); D_001A74B0[i] -> a
- * parallel array of 16-byte descriptors (word0 = arg3, qword@8 = arg4). A buffer
- * caps at 0x100 entries. arg4 is a 32-bit parameter here (the shared decl) but
- * lands in the descriptor as a sign-extended 64-bit qword, matching the original.
- * D_001A74C4 is a "service pending" flag briefly borrowed (cleared then restored)
- * while spinning for space.
- * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
- * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
- * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
- * property and was measured false as the reason this member stays unmatched (FACT #9873).
- * Residual: the saved-register set; the rest UNMEASURED. */
-extern s32   snd_CommitRingEntry(void);
-extern s32   D_001A74A8[2]; /* per-buffer free space in bytes */
-extern u8   *D_001A74B0[2]; /* per-buffer 16-byte ring-entry descriptor arrays */
-extern char  D_0013BFF8[];  /* ring-wrap diagnostic format string */
-extern char  D_001A78D0[];  /* ring-stall diagnostic format string */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", snd_QueueCommandToRing);
-#else
-s32 snd_QueueCommandToRing(s32 sel, s32 count, void *data, s32 arg3, s32 arg4) {
-    s32 idx;
-    s32 alignedSize;
-    s32 raisedFlag = 0; /* set when we transiently cleared the service flag */
-    s32 spins = 0;      /* ring-full retry counter (drives the stall diagnostics) */
-    s32 i;
-    u8 *cursor;
-    u8 *entry;
+ * packed (u16 sel, u16 count, payload) records; D_001A74A8[i] is its free
+ * space in bytes, so the write cursor is base + 0x1000 - free; D_001A74B0[i]
+ * is the parallel array of 16-byte descriptors. A buffer holds at most 0x100
+ * entries. Each record takes count + 4 bytes rounded up to a multiple of 4.
+ * While the buffer is full it spins on snd_Pump, holding the service-pending
+ * flag down for the duration (restored afterwards), and counts EVERY spin:
+ * the second spin prints the ring-wrap diagnostic and the total prints the
+ * stall diagnostic, unless D_001A74F8 silences them.
+ *
+ * Compiled by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, selected in
+ * tools/ee/s136os_functions.txt), with this unit's declarations above: the
+ * RPC client and receive block are complete 8-byte objects under
+ * `.extern ,16`, the RULING #8620 addressing-model device the unit already
+ * carries for snd_SendCommandSync, so cc1 prints an unsplit `la` that GNU as
+ * expands absolutely, as the ROM rebuilds both addresses at each use. Task
+ * #2294.
+ *
+ * Source: OpenRAC/rac2-gc-decomp @96927f872c709e13aaa0f32265bb81a5531bf7ed
+ * (GPL-3.0, adopted with the authors' permission per RULING #10405),
+ * src/core/00132DF0-g8.c, func_00132DF0 (author commit fddb10bf, Flavius).
+ * ADAPTED: (1) our signature: s32 return (the bare path returns sceSifCallRpc's
+ * result and the ring path snd_CommitRingEntry's, where theirs is void), s32
+ * for int, s64 for long, `void *data` read through a u8 pointer. cbData must
+ * stay 64-bit: as s32 the in-unit body is 188 words, not 184; (2) our symbols:
+ * func_001322B8 = snd_SetupDmaTransfer, func_0011D810 = sceSifCheckStatRpc,
+ * func_0011D620 = sceSifCallRpc, func_00115D48 = snd_PrintError, func_00132028
+ * = snd_Pump, func_001330D0 = snd_CommitRingEntry, SndRingEntry = SndRingDesc;
+ * (3) DEVICE: their `__attribute__((sda))` declarations dropped for this
+ * unit's (RULING #8620 `.extern ,16` on the complete D_001A7040[8] /
+ * D_001A7080[8]; the other seven are complete small objects that -G8 places in
+ * small data). Their locals, control flow and every test are kept.
+ */
+typedef struct SndRingDesc {
+    s32 cb;     /* +0x0 */
+    s32 pad;    /* +0x4 */
+    s64 cbData; /* +0x8 */
+} SndRingDesc;
 
-    /* idle with an empty command: nothing to queue, so just issue a bare
-     * synchronous RPC (selector as the RPC function number) */
-    if (D_001A74C4 == 0 && D_001A7480 == 0 && count == 0 && arg3 == 0) {
+extern s32          snd_CommitRingEntry(void);
+extern s32          D_001A74A8[2]; /* per-buffer free space in bytes */
+extern SndRingDesc *D_001A74B0[2]; /* per-buffer ring-entry descriptor arrays */
+extern char         D_0013BFF8[];  /* ring-wrap diagnostic format string */
+extern char         D_001A78D0[];  /* ring-stall diagnostic format string */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_snd_QueueCommandToRing)
+S136OS_SLOT(snd_QueueCommandToRing);
+#else
+s32 snd_QueueCommandToRing(s32 sel, s32 count, void *data, s32 cb, s64 cbData) {
+    s32 need;
+    s32 tries;
+    s32 held;
+    s32 i;
+    s32 slot;
+    u8 *p;
+
+    held = 0;
+    if (D_001A74C4 == 0 && D_001A7480 == 0 && count == 0 && cb == 0) {
         snd_SetupDmaTransfer(D_001A7080, 1);
         while (sceSifCheckStatRpc(D_001A7040) != 0) {
-            if (D_001A74F8 == 0) {
+            if (D_001A74F8 == 0)
                 snd_PrintError(D_001A7578);
-            }
             snd_Pump();
             func_0011AEA0(0);
         }
         return sceSifCallRpc(D_001A7040, sel, 1, 0, 0, D_001A7080, 0xC, 0, 0);
     }
-
-    /* bytes this command occupies: payload rounded up to a multiple of 4, plus
-     * the 4-byte (sel, count) header */
-    alignedSize = ((count + 3) & ~3) + 4;
-
-    /* wait until the active buffer has room and isn't at its 0x100-entry cap,
-     * pumping the sound system while we spin */
-    idx = D_001A74C0;
-    if (*D_001A74A0[idx] == 0x100 || D_001A74A8[idx] < alignedSize) {
-        for (;;) {
-            if (D_001A74C4 != 0) {
-                D_001A74C4 = 0;
-                raisedFlag = 1;
-            }
-            snd_Pump();
-            if (spins == 1 && D_001A74F8 == 0) {
-                idx = D_001A74C0;
-                snd_PrintError(D_0013BFF8, idx, *D_001A74A0[idx]);
-            }
-            idx = D_001A74C0;
-            if (*D_001A74A0[idx] == 0x100) {
-                spins++;
-                continue;
-            }
-            if (D_001A74A8[idx] < alignedSize) {
-                continue;
-            }
-            break;
+    need = count + 4;
+    tries = 0;
+    if (need % 4 != 0)
+        need += 4 - need % 4;
+    while (*D_001A74A0[D_001A74C0] == 0x100 || D_001A74A8[D_001A74C0] < need) {
+        if (D_001A74C4 != 0) {
+            D_001A74C4 = 0;
+            held = 1;
         }
+        snd_Pump();
+        if (tries == 1 && D_001A74F8 == 0)
+            snd_PrintError(D_0013BFF8, D_001A74C0, *D_001A74A0[D_001A74C0]);
+        tries++;
     }
-    if (spins != 0 && D_001A74F8 == 0) {
-        snd_PrintError(D_001A78D0, spins);
-    }
-    if (raisedFlag != 0) {
-        D_001A74C4 = 1; /* restore the service flag we borrowed */
-    }
-
-    /* append the command bytes at the buffer's write cursor: 2-byte selector,
-     * 2-byte length, then the payload */
-    idx = D_001A74C0;
-    cursor = (u8 *)D_001A74A0[idx] + (0x1000 - D_001A74A8[idx]);
-    *(u16 *)cursor = sel;
-    cursor += 2;
-    *(u16 *)cursor = count;
-    cursor += 2;
-    for (i = 0; i < count; i++) {
-        cursor[i] = ((u8 *)data)[i];
-    }
-
-    /* consume the space, write the parallel 16-byte descriptor at the next free
-     * slot (arg3 word + arg4 qword), and commit */
-    D_001A74A8[idx] -= alignedSize;
-    entry = D_001A74B0[idx] + *D_001A74A0[idx] * 16;
-    *(s32 *)entry = arg3;
-    *(s64 *)(entry + 8) = arg4;
+    if (tries != 0 && D_001A74F8 == 0)
+        snd_PrintError(D_001A78D0, tries);
+    if (held != 0)
+        D_001A74C4 = 1;
+    p = (u8 *)D_001A74A0[D_001A74C0] - (D_001A74A8[D_001A74C0] - 0x1000);
+    *(s16 *)p = sel;
+    p += 2;
+    *(s16 *)p = count;
+    p += 2;
+    for (i = 0; i < count; i++)
+        p[i] = ((u8 *)data)[i];
+    D_001A74A8[D_001A74C0] -= need;
+    slot = D_001A74C0;
+    D_001A74B0[slot][*D_001A74A0[slot]].cb = cb;
+    D_001A74B0[slot][*D_001A74A0[slot]].cbData = cbData;
     return snd_CommitRingEntry();
 }
 #endif
@@ -1004,13 +1013,6 @@ s32 func_00133310(void) {
  * size:0x10; the real start begins at snd_PlaySample. Pure padding, no C. */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_00133340);
 
-/* snd_QueueCommandToRing as the ROM really takes it: arg4 is a 64-bit qword
- * (the ring stores it with `sd`). The shared declaration above keeps arg4 at
- * s32 because the other callers in this unit pass 32-bit values with no
- * widening, and an s64 prototype would sign-extend them (it un-matches
- * func_00132B58, func_00133430 and func_00133460). */
-typedef s32 (*SndQueueCommand64Fn)(s32 sel, s32 count, void *data, s32 arg3, s64 arg4);
-
 /**
  * snd_PlaySample - 989snd EE command-ring wrapper for opcode 0x2C (start voice
  * / play sample). Queues a 0x20-byte record through snd_QueueCommandToRing.
@@ -1018,9 +1020,8 @@ typedef s32 (*SndQueueCommand64Fn)(s32 sel, s32 count, void *data, s32 arg3, s64
  * Twelve arguments, eight in a0..a7 and four on the caller's stack (FACT #7455):
  * a0/a1 are stored as-is; a2/a3 are 16-bit low halves packed with the 16-bit
  * high halves a4/a5 into two words; a6..a9 fill the record tail. a10 and the
- * 64-bit a11 are forwarded as the ring entry's two descriptor fields. a11 is
- * passed through unnarrowed, via SndQueueCommand64Fn. Returns the ring's
- * result.
+ * 64-bit a11 are forwarded as the ring entry's two descriptor fields (cb,
+ * cbData). Returns the ring's result.
  *
  * rec[3]'s halves are computed into locals, low half first: that source order
  * reproduces the ROM's `andi a3` ahead of `sll t1`. rec[2] is computed inline.
@@ -1041,7 +1042,7 @@ s32 snd_PlaySample(s32 a0, s32 a1, s32 a2, s32 a3, s32 a4, s32 a5,
     rec[5] = a7;
     rec[6] = a8;
     rec[7] = a9;
-    return ((SndQueueCommand64Fn)snd_QueueCommandToRing)(0x2C, 0x20, rec, a10, a11);
+    return snd_QueueCommandToRing(0x2C, 0x20, rec, a10, a11);
 }
 
 /* func_001333C0: 0x10 bytes of inter-function padding split off by symbol_addrs
@@ -1073,7 +1074,7 @@ void func_00133400(s32 arg0) {
  * address in a stack local, and arg1/arg2 forwarded as the two trailing
  * arguments.
  */
-void func_00133430(s32 arg0, s32 arg1, s32 arg2) {
+void func_00133430(s32 arg0, s32 arg1, s64 arg2) {
     s32 value = arg0;
     snd_QueueCommandToRing(0x32, 4, &value, arg1, arg2);
 }
@@ -1083,7 +1084,7 @@ void func_00133430(s32 arg0, s32 arg1, s32 arg2) {
  * address in a stack local, and arg1/arg2 forwarded as the two trailing
  * arguments.
  */
-void func_00133460(s32 arg0, s32 arg1, s32 arg2) {
+void func_00133460(s32 arg0, s32 arg1, s64 arg2) {
     s32 value = arg0;
     snd_QueueCommandToRing(0x4F, 4, &value, arg1, arg2);
 }
@@ -1466,10 +1467,46 @@ s32 func_00133988(s32 x) {
     return x * 0x5F4 / 0x2E5;
 }
 
-/* OnVblankInterrupt: bumps the 64-bit tick counter D_001A7208 and snapshots
- * D_001A7210 = D_001A7200 + T1_COUNT (0x10000800). Best attempt 75% (15/16
- * insns, volatile u64 scalars + `.extern ,16` overrides reproduce the
- * $at-macro store) — the one residue is the timer-address `ori`, which this
- * cc1 schedules after the D_001A7200 load while the original keeps it before.
- * A scheduling choice not expressible in source. Left as INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", OnVblankInterrupt);
+/**
+ * OnVblankInterrupt - 989snd's vblank-start interrupt handler, installed
+ * through the INTC cause-2 installer func_00126DC0 (FACT #5905).
+ *
+ * Bumps the 64-bit vblank counter g_vblankCount and snapshots the time base:
+ * D_001A7210 = g_hblankTicksAccum + the live T1_COUNT (0x10000800, RCNT1,
+ * zero-extended). No parameters; returns 0, which lets the INTC handler chain
+ * continue.
+ *
+ * Compiled by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, selected in
+ * tools/ee/s136os_functions.txt); 0/16 words on either gcse setting. The ROM
+ * reaches g_vblankCount and g_hblankTicksAccum with absolute lui/ld pairs and
+ * D_001A7210 $gp-relative (its store sits in the jr delay slot). The
+ * `.extern ,16` lines below are the unit's RULING #8620 addressing-model
+ * device (FACT #9925): -G8 sees two complete 8-byte objects and prints unsplit
+ * macros, and GNU as expands them absolutely. Without them the body is 13
+ * words, not 16 (FACT #12159). Task #2294.
+ *
+ * Source: OpenRAC/rac2-gc-decomp @96927f872c709e13aaa0f32265bb81a5531bf7ed
+ * (GPL-3.0, adopted with the authors' permission per RULING #10405),
+ * src/core/001339B0.c, func_001339B0 (author commit 962455ea, Louis-Philippe
+ * Le Sieur; their note credits rac1-decomp src/core/permcb.c func_0012F308).
+ * ADAPTED: (1) our names: D_001A7208 = g_vblankCount, D_001A7200 =
+ * g_hblankTicksAccum, s32 for int, s64 for long; (2) DEVICE: their NOT_SDA
+ * (`section(".data")`) on those two declarations replaced by the `.extern
+ * ,16` lines (RULING #8620), and their MACRO_ADDR (`section(".sdata")`) on
+ * D_001A7210 dropped, since -G8 already places a complete 8-byte object in
+ * small data. The statements are theirs. (Their comment calls 0x10000800
+ * T0_COUNT; it is T1_COUNT, rtl/ee/eeregs.h.)
+ */
+__asm__(".extern g_vblankCount, 16\n\t.extern g_hblankTicksAccum, 16");
+extern s64 g_vblankCount;      /* 0x1A7208: vblanks since boot */
+extern s64 g_hblankTicksAccum; /* 0x1A7200: accumulated RCNT1 time base */
+extern s64 D_001A7210;         /* time-base snapshot taken each vblank */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_OnVblankInterrupt)
+S136OS_SLOT(OnVblankInterrupt);
+#else
+s32 OnVblankInterrupt(void) {
+    g_vblankCount++;
+    D_001A7210 = g_hblankTicksAccum + (u32)*(volatile s32 *)0x10000800;
+    return 0;
+}
+#endif

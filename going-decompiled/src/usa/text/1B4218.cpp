@@ -3957,9 +3957,9 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", StepDialogVoice
 extern void func_00132A70(s32 handle);    /* 0x132A70 989snd cmd 0x15 for the voice handle */
 extern void func_001333D0(s32 handle);    /* 0x1333D0 989snd cmd 0x2D (voice key-on) */
 extern void func_00133400(s32 handle);    /* 0x133400 snd_StopVoice: 989snd cmd 0x2E */
-extern void func_00133430(s32 handle, void *cb, long ctx);  /* 0x133430 989snd cmd 0x32 (install cb) */
-extern void func_00132B58(s32 handle, void *cb, long ctx);  /* 0x132B58 989snd cmd 0x19 (install cb) */
-extern void func_00133460(s32 handle, void *cb, long ctx);  /* 0x133460 989snd cmd 0x4F (install cb) */
+extern void func_00133430(s32 handle, void *cb, s64 ctx);   /* 0x133430 989snd cmd 0x32 (install cb) */
+extern void func_00132B58(s32 handle, void *cb, s64 ctx);   /* 0x132B58 989snd cmd 0x19 (install cb) */
+extern void func_00133460(s32 handle, void *cb, s64 ctx);   /* 0x133460 989snd cmd 0x4F (install cb) */
 extern void func_002B8F68(s32 byteCursor, long handleAddr);       /* below; sample-cursor callback */
 extern void OnTertiaryVoiceStarted(s32 voiceId, long handleAddr); /* below; tertiary voice-started callback */
 extern void func_002B8D18(s32 flag, long handleAddr);            /* below; voice-event callback */
@@ -4021,15 +4021,15 @@ substate_check:
     if ((u32)(st - 2) < 2) {                 /* state 2 or 3 */
         if (*(s32 *)(ch + 0x0) == -1) goto finalize;
         if (st == 2) {
-            func_00133460(*(s32 *)(ch + 0x0), (void *)&func_002B8D18, (long)(u32)ch);
+            func_00133460(*(s32 *)(ch + 0x0), (void *)&func_002B8D18, (s64)(u32)ch);
         }
         goto finalize;
     }
     /* default: not 1/2/3/8/9 */
     handle = *(s32 *)(ch + 0x0);
-    func_00133430(handle, (void *)&func_002B8F68, (long)(u32)ch);
+    func_00133430(handle, (void *)&func_002B8F68, (s64)(u32)ch);
     *(s32 *)(ch + 0x0) = -1;
-    func_00132B58(handle, (void *)&OnTertiaryVoiceStarted, (long)(u32)ch);
+    func_00132B58(handle, (void *)&OnTertiaryVoiceStarted, (s64)(u32)ch);
     goto finalize;
 
 cleanup:
