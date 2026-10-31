@@ -2,7 +2,7 @@
 # storage symbol: g_dataArena  ==  __gamedata_start (linker)
 # seed: memcpy snapshot[rom_addr] -> g_dataArena[rom_addr - base]
 #       for rom_addr in [base, base+span).
-# base 0x133E70  span 0x14AA90  placed 1720  (const 11)
+# base 0x133E70  span 0x14AA90  placed 1721  (const 11)
 # columns: <symbol> <rom_addr> <arena_offset> [const]
 #   'const' tag = static rodata/string literal (see data_const.txt);
 #   NOT mutable state - the tester's effect-diff must EXCLUDE these.
@@ -128,6 +128,7 @@ g_weaponAmmoCapacity 0x139868 0x59F8
 g_weaponXp 0x139868 0x59F8
 D_1398A8 0x1398A8 0x5A38
 g_anAvailableLevelOrder 0x139948 0x5AD8
+D_1399B8 0x1399B8 0x5B48
 D_139A28 0x139A28 0x5BB8
 g_mapBlipTable 0x139A28 0x5BB8
 g_weaponUpgradeLevel 0x139A34 0x5BC4
