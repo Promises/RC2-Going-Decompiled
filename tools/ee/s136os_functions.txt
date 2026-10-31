@@ -700,3 +700,4 @@ usa cod/0314C0 main
 usa text/16E980 UpdateCamera
 usa text/248B50 func_0034BA50
 usa text/248B50 GuiScreenWithPlanetNameInit
+usa text/1B4218 StepDialogVoiceChannel

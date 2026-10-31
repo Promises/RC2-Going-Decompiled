@@ -189,15 +189,22 @@ a URL for it. The notice, which the doc comment also carries verbatim:
 
 ### RC2 decomp contributions, via OpenRAC rac2-gc-decomp (MIT)
 
-The C body of `CastEmitterOcclusionRay` in
-`going-decompiled/src/usa/text/1DFF80.cpp` is adapted from OpenRAC's
-`rac2-gc-decomp`, <https://github.com/OpenRAC/rac2-gc-decomp> at commit
-`96927f872c709e13aaa0f32265bb81a5531bf7ed` (the file is identical at
-`d43c3b99b984fb63556c844a21ee99e8e31d2deb`), `src/game/002E4528-rc2.c`,
-`func_002E4528` (v1.01 address). That file was carried over from
-atlasbez-dot/rac2-gc-decomp at `921a4dee` (upstream commit `ebf90a4c`) and
-carries its own MIT notice, not the repository's GPL-3.0, reproduced verbatim
-here and in the function's doc comment (task #2239, RULING #10405):
+Two C bodies are adapted from OpenRAC's `rac2-gc-decomp`,
+<https://github.com/OpenRAC/rac2-gc-decomp> at commit
+`96927f872c709e13aaa0f32265bb81a5531bf7ed`, from files that carry their own
+MIT notice, not the repository's GPL-3.0. The notice is the same, word for
+word, in both files. It is reproduced verbatim here and in each function's doc
+comment (RULINGs #10405 and #12108):
+
+- `CastEmitterOcclusionRay` in `going-decompiled/src/usa/text/1DFF80.cpp`,
+  from `src/game/002E4528-rc2.c`, `func_002E4528` (v1.01 address; the file is
+  identical at `d43c3b99b984fb63556c844a21ee99e8e31d2deb`). That file was
+  carried over from atlasbez-dot/rac2-gc-decomp at `921a4dee` (upstream commit
+  `ebf90a4c`), task #2239.
+- `StepDialogVoiceChannel` in `going-decompiled/src/usa/text/1B4218.cpp`,
+  from `src/game/002B7380-rc2.c`, `func_002B7380` (v1.01 address). That file
+  came in with upstream commit `fe9859d7` (Sergio Rodmauser, "carry over 129
+  verified RC2 fork functions"), task #2296.
 
     SPDX-License-Identifier: MIT
     MIT License

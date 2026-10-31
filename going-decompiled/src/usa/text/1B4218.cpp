@@ -63,15 +63,17 @@
  * UpdateMobyMotionVelocity [since matched on the s136os arm from OpenRAC's C,
  * task #2235] ResolveMobyMotionCollision ApplyMobyGroundAndEvents
  * ProbeMobyGroundLine ResolveMobySphereCollision UpdateMobyLeanFromTurn
- * UpdateActiveMobys StepDialogVoiceChannel UpdateDialogVoiceManager [since
+ * UpdateActiveMobys StepDialogVoiceChannel [since matched on the s136os arm
+ * from OpenRAC's C, task #2296] UpdateDialogVoiceManager [since
  * matched on the s136os arm from OpenRAC's C, task #2262, its switch table
  * bound to the ROM's by tools/ee/jtbl_bind.sh]) the save
  * stride is NOT re-measured on the s136os arm and the residual is UNMEASURED:
  * tree-wide, 0 of the 111 labeled members that were run reproduce the 16-byte
  * stride there (FACT #9873). A per-member
  * "WALL (matching build): save-layout" below describes the cc1 2.9 arm.
- * The two switch functions (UpdateGameState 0x2B5B38, StepDialogVoiceChannel
- * 0x2B82A0) also stay INCLUDE_ASM behind the splat jtbl reloc-identity gap.
+ * UpdateGameState 0x2B5B38 also stays INCLUDE_ASM behind the splat jtbl
+ * reloc-identity gap. StepDialogVoiceChannel 0x2B82A0, once listed with it,
+ * has no jump table; it was matched on the s136os arm (task #2296).
  *
  * PADDING/FRAGMENT PSEUDO-FUNCTIONS: of the 92 splat symbols, 14 are pure
  * inter-function fill or unreachable handwritten fragments and keep INCLUDE_ASM
@@ -3933,26 +3935,86 @@ void SetDialogVoiceFadeTargets(s32 target) {
     }
 }
 
-/* Step one dialog-voice channel's per-frame playback state machine. No-op (and
- * on some transitions frees the channel slot) unless a voice is allocated; drives
- * the 989snd command ring for the channel's voice handle (+0x00) based on its
- * state (+0x0A) and sub-phase (+0x0C):
- *   - state 5: send cmd 0x15 (func_00132A70) and advance to state 6;
- *   - substate wants key-on (+0x0C bit 0x8000) and not yet latched: send cmd 0x2D
- *     (func_001333D0) + latch state bit 0x8000; when the frame timer (+0x0E)
- *     expires (FastDecTimer == 2) mark the sub-phase finishing (+0x0C = 4);
- *   - key-on latched but sub-phase no longer wants it: send stop cmd 0x2E
- *     (func_00133400) + clear the latch;
- *   - state 2: install the voice-event callback (cmd 0x4F, func_00133460);
- *   - default (not 1/2/3/8/9): install the sample-cursor + tertiary-started
- *     callbacks (cmd 0x32 / 0x19) and invalidate the handle (+0x00 = -1);
- *   - state 7 / no handle: clear state; when the resolved state is 0 free the
- *     slot (+0x04 = -1).
- * WALL: splat jtbl reloc-identity gap (the callback-install %hi/%lo refs) +
- * save-layout — 3 callee-saves + $ra at 8-byte spacing; matching arm stays
- * INCLUDE_ASM, portable #else below. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", StepDialogVoiceChannel);
+/* The C body of StepDialogVoiceChannel below is adapted from a file that
+ * carries this notice, reproduced verbatim:
+ *
+ * SPDX-License-Identifier: MIT
+ * MIT License
+ *
+ * Copyright (c) 2026 RC2 decomp contributions
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+/* StepDialogVoiceChannel: step one dialog-voice channel's per-frame playback
+ * state machine. UpdateDialogVoiceManager calls it for the primary, transition
+ * and secondary channels.
+ *   ch: the channel record (no dedicated struct; offsets from the asm):
+ *     +0x00 s32 handle    989snd voice handle (0 = none, -1 = released)
+ *     +0x04 s16 slot      set to -1 (free) whenever the state ends at 0
+ *     +0x0A s16 state     playback state; bit 0x8000 = key-on latched
+ *     +0x0C s16 substate  bit 0x8000 = wants key-on; set to 4 when the timer
+ *                         expires
+ *     +0x0E s16 timer     frame timer ticked by FastDecTimer
+ * No return value. With a live handle (not 0, not -1):
+ *   - state 5 sends cmd 0x15 (func_00132A70) and moves to state 6;
+ *   - while the substate wants key-on, send cmd 0x2D once (func_001333D0) and
+ *     latch it; when FastDecTimer returns 2, set the substate to 4. Once the
+ *     substate drops the request, send stop cmd 0x2E (func_00133400) and clear
+ *     the latch;
+ *   - unlatched, state 2 installs the voice-event callback func_002B8D18
+ *     (cmd 0x4F, func_00133460); state 3 does nothing; any state other than
+ *     1/2/3/8/9 releases the voice: the handle becomes -1 and the old handle
+ *     gets the sample-cursor callback func_002B8F68 (cmd 0x32, func_00133430)
+ *     and OnTertiaryVoiceStarted (cmd 0x19, func_00132B58). Every callback's
+ *     context is the channel address, zero-extended to 64 bits.
+ * State 9, or no handle (0 or -1): state 7 resets to 0, and so does any state
+ * when the handle is 0. A handle of -1 keeps a nonzero state, so the slot
+ * stays held until the release completes.
+ *
+ * MATCHED on the s136os arm (task #2296). No device. No jump table (the ROM
+ * has none for this function); its three callback addresses are %hi/%lo
+ * pairs. The `long long` -> `long` change in (5) below is what made it
+ * buildable there: the s136 compilers make `long long` 128-bit and reject this
+ * body's 64-bit shift as "unsupported wide integer operation" (NOTE #12163).
+ * GUARD: compiled alone by SN 2.95.3 v1.36 -fopt-stack (cc1plus, this unit's
+ * S136EXTRA="") and spliced over the S136OS_SLOT line
+ * (tools/ee/s136os_splice.sh, row in tools/ee/s136os_functions.txt); plain C
+ * on native.
+ * Source: OpenRAC/rac2-gc-decomp @96927f872c709e13aaa0f32265bb81a5531bf7ed,
+ * src/game/002B7380-rc2.c, func_002B7380 (v1.01 address; author commit
+ * fe9859d7, Sergio Rodmauser, "feat(src): carry over 129 verified RC2 fork
+ * functions"), under the MIT notice above and adopted with permission per
+ * RULINGs #10405 and #12108. ADAPTED: the statements are theirs, unchanged.
+ * Changed from theirs: (1) our signature (u8 *ch), the unit's declaration that
+ * UpdateDialogVoiceManager calls, for their (s32 arg0); `s32 arg0 = (s32)ch;`
+ * opens the body, so every statement below reads arg0 as theirs does; (2)
+ * func_00282978 = FastDecTimer, called with the (s16 *) its prototype takes;
+ * (3) their s8[] labels at the callbacks' v1.01 addresses are our functions:
+ * D_002B8048 = func_002B8F68, D_002B7FF0 = OnTertiaryVoiceStarted and
+ * D_002B7DF8 = func_002B8D18, passed as (void *) for their (s32); (4) the
+ * unit's prototypes for their unprototyped externs (C++ requires them):
+ * (s32, void *, long) for the three callback installers, with long 64-bit on
+ * the EE as their u64 argument is; (5) their u64/s64 are `unsigned long long`
+ * / `signed long long` in their common.h and the 64-bit `long` types in ours,
+ * so the text is theirs and the type is not. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_StepDialogVoiceChannel)
+S136OS_SLOT(StepDialogVoiceChannel);
 #else
 extern void func_00132A70(s32 handle);    /* 0x132A70 989snd cmd 0x15 for the voice handle */
 extern void func_001333D0(s32 handle);    /* 0x1333D0 989snd cmd 0x2D (voice key-on) */
@@ -3960,90 +4022,131 @@ extern void func_00133400(s32 handle);    /* 0x133400 snd_StopVoice: 989snd cmd 
 extern void func_00133430(s32 handle, void *cb, s64 ctx);   /* 0x133430 989snd cmd 0x32 (install cb) */
 extern void func_00132B58(s32 handle, void *cb, s64 ctx);   /* 0x132B58 989snd cmd 0x19 (install cb) */
 extern void func_00133460(s32 handle, void *cb, s64 ctx);   /* 0x133460 989snd cmd 0x4F (install cb) */
+extern s32  FastDecTimer(s16 *timer);     /* 0x283328 tick a frame timer; nonzero when it expires */
 extern void func_002B8F68(s32 byteCursor, long handleAddr);       /* below; sample-cursor callback */
 extern void OnTertiaryVoiceStarted(s32 voiceId, long handleAddr); /* below; tertiary voice-started callback */
 extern void func_002B8D18(s32 flag, long handleAddr);            /* below; voice-event callback */
 
-/* Channel record fields (offsets observed from the asm; no dedicated struct):
- *   +0x00 s32 handle    active 989snd voice handle (0 = none, -1 = pending/invalid)
- *   +0x04 s16 slotId    channel slot id (set -1 = free once the voice resolves off)
- *   +0x0A s16 state     playback state (1/2/3/5/6/7/8/9; bit 0x8000 = key-on latched)
- *   +0x0C s16 substate  sub-phase (bit 0x8000 = wants key-on; 4 = finishing)
- *   +0x0E s16 timer     frame timer ticked by FastDecTimer
- */
 void StepDialogVoiceChannel(u8 *ch) {
-    s32 handle;
-    s16 st;
+    s32 arg0 = (s32)ch;
+    s16 temp_v1;
+    s16 temp_v1_2;
+    u16 temp_u16;
+    s32 temp_a0;
+    s32 temp_a0_2;
+    s32 temp_a0_3;
+    s32 temp_s1;
+    u64 temp_s0;
 
-    if (*(s16 *)(ch + 0xA) == 9) goto cleanup;
-    if (*(s32 *)(ch + 0x0) == 0) goto cleanup;
-    if (*(s32 *)(ch + 0x0) == -1) goto cleanup;
-
-    if (*(s16 *)(ch + 0xA) == 5) {
-        if (*(s32 *)(ch + 0x0) == 0) {   /* handle != 0 here; dead but faithful */
-            *(s16 *)(ch + 0xA) = 0;
-            goto handle_check;
-        }
-        func_00132A70(*(s32 *)(ch + 0x0));
-        *(s16 *)(ch + 0xA) = 6;
-        goto handle_check;
+    temp_v1 = (*(s16 *)((s8 *)(arg0) + (0xA)));
+    if (temp_v1 == 9) {
+        goto block_29;
     }
-    if (*(s16 *)(ch + 0xA) == 6) {
-        if (*(s32 *)(ch + 0x0) == 0) {   /* handle != 0 here; dead but faithful */
-            *(s16 *)(ch + 0xA) = 0;
-            goto handle_check;
-        }
-        goto substate_check;
+    temp_a0 = (*(s32 *)((s8 *)(arg0) + (0)));
+    if (temp_a0 == 0) {
+        goto block_29;
     }
-
-handle_check:
-    if (*(s32 *)(ch + 0x0) == 0) goto finalize;
-substate_check:
-    if ((*(s16 *)(ch + 0xC) & 0x8000) != 0) {
-        if ((*(s16 *)(ch + 0xA) & 0x8000) == 0) {
-            func_001333D0(*(s32 *)(ch + 0x0));
-            *(u16 *)(ch + 0xA) |= 0x8000;
-        }
-        if (FastDecTimer((s16 *)(ch + 0xE)) == 2) {
-            *(s16 *)(ch + 0xC) = 4;
-        }
-    } else {
-        if ((*(s16 *)(ch + 0xA) & 0x8000) != 0) {
-            func_00133400(*(s32 *)(ch + 0x0));
-            *(u16 *)(ch + 0xA) ^= 0x8000;
-        }
+    if (temp_a0 == 0xFFFFFFFF) {
+        goto block_28;
     }
-
-    if ((*(s16 *)(ch + 0xA) & 0x8000) != 0) goto finalize;
-
-    st = *(s16 *)(ch + 0xA);
-    if (st == 1 || st == 8 || st == 9) goto finalize;
-    if ((u32)(st - 2) < 2) {                 /* state 2 or 3 */
-        if (*(s32 *)(ch + 0x0) == -1) goto finalize;
-        if (st == 2) {
-            func_00133460(*(s32 *)(ch + 0x0), (void *)&func_002B8D18, (s64)(u32)ch);
-        }
-        goto finalize;
+    if (temp_v1 != 5) {
+        goto block_6;
     }
-    /* default: not 1/2/3/8/9 */
-    handle = *(s32 *)(ch + 0x0);
-    func_00133430(handle, (void *)&func_002B8F68, (s64)(u32)ch);
-    *(s32 *)(ch + 0x0) = -1;
-    func_00132B58(handle, (void *)&OnTertiaryVoiceStarted, (s64)(u32)ch);
-    goto finalize;
-
-cleanup:
-    if (*(s16 *)(ch + 0xA) == 7) {
-        *(s16 *)(ch + 0xA) = 0;
-        goto finalize;
+    if (temp_a0 == 0) {
+        goto block_8;
     }
-    if (*(s32 *)(ch + 0x0) != 0) goto finalize;
-    *(s16 *)(ch + 0xA) = 0;
-
-finalize:
-    if (*(s16 *)(ch + 0xA) == 0) {
-        *(s16 *)(ch + 0x4) = -1;
+    func_00132A70(temp_a0);
+    (*(s16 *)((s8 *)(arg0) + (0xA))) = 6;
+    goto block_9;
+block_6:
+    if (temp_v1 != 6) {
+        goto block_9;
     }
+    if (temp_a0 != 0) {
+        goto block_10;
+    }
+block_8:
+    (*(s16 *)((s8 *)(arg0) + (0xA))) = 0;
+block_9:
+    if ((*(s32 *)((s8 *)(arg0) + (0))) == 0) {
+        goto block_32;
+    }
+block_10:
+    if (!((*(s16 *)((s8 *)(arg0) + (0xC))) & 0x8000)) {
+        goto block_15;
+    }
+    if ((*(s16 *)((s8 *)(arg0) + (0xA))) & 0x8000) {
+        goto block_13;
+    }
+    func_001333D0((*(s32 *)((s8 *)(arg0) + (0))));
+    (*(s16 *)((s8 *)(arg0) + (0xA))) = (s16) ((u16) (*(s16 *)((s8 *)(arg0) + (0xA))) | 0x8000);
+block_13:
+    if (FastDecTimer((s16 *)(arg0 + 0xE)) != 2) {
+        goto block_17;
+    }
+    (*(s16 *)((s8 *)(arg0) + (0xC))) = 4;
+    goto block_17;
+block_15:
+    if (!((*(s16 *)((s8 *)(arg0) + (0xA))) & 0x8000)) {
+        goto block_18;
+    }
+    func_00133400((*(s32 *)((s8 *)(arg0) + (0))));
+    (*(s16 *)((s8 *)(arg0) + (0xA))) = (s16) ((u16) (*(s16 *)((s8 *)(arg0) + (0xA))) ^ 0x8000);
+block_17:
+    if ((*(s16 *)((s8 *)(arg0) + (0xA))) & 0x8000) {
+        goto block_32;
+    }
+block_18:
+    temp_v1_2 = (*(s16 *)((s8 *)(arg0) + (0xA)));
+    temp_u16 = (*(u16 *)((s8 *)(arg0) + (0xA)));
+    if (temp_v1_2 == 1) {
+        goto block_32;
+    }
+    if (temp_v1_2 == 8) {
+        goto block_32;
+    }
+    if (temp_v1_2 == 9) {
+        goto block_32;
+    }
+    if ((u32) (temp_u16 - 2) >= 2U) {
+        goto block_23;
+    }
+    temp_a0_2 = (*(s32 *)((s8 *)(arg0) + (0)));
+    goto block_25;
+block_23:
+    temp_s1 = (*(s32 *)((s8 *)(arg0) + (0)));
+    temp_a0_3 = temp_s1;
+    (*(u32 *)((s8 *)(arg0) + (0))) = 0xFFFFFFFF;
+    temp_s0 = (u64) ((s64) arg0 << 0x20) >> 0x20;
+    func_00133430(temp_a0_3, (void *)func_002B8F68, temp_s0);
+    func_00132B58(temp_s1, (void *)OnTertiaryVoiceStarted, temp_s0);
+    goto block_32;
+block_25:
+    if (temp_a0_2 == 0xFFFFFFFF) {
+        goto block_32;
+    }
+    if (temp_v1_2 != 2) {
+        goto block_32;
+    }
+    func_00133460(temp_a0_2, (void *)func_002B8D18, (u64) ((s64) arg0 << 0x20) >> 0x20);
+    goto block_32;
+block_28:
+block_29:
+    if (temp_v1 == 7) {
+        goto block_31;
+    }
+    if ((*(s32 *)((s8 *)(arg0) + (0))) != 0) {
+        goto block_32;
+    }
+block_31:
+    (*(s16 *)((s8 *)(arg0) + (0xA))) = 0;
+block_32:
+    if ((*(s16 *)((s8 *)(arg0) + (0xA))) != 0) {
+        goto block_34;
+    }
+    (*(s16 *)((s8 *)(arg0) + (4))) = -1;
+block_34:
+    return;
 }
 #endif
 

@@ -284,16 +284,17 @@
     dropped for the unit's `.extern g_guiInstance, 16`; the control flow and
     expressions are theirs.
 
-- **RC2 decomp contributions — `src/game/002E4528-rc2.c` in OpenRAC `rac2-gc-decomp`, commit `96927f87`** (MIT, © 2026 RC2 decomp contributions)
+- **RC2 decomp contributions — `src/game/002E4528-rc2.c` and `src/game/002B7380-rc2.c` in OpenRAC `rac2-gc-decomp`, commit `96927f87`** (MIT, © 2026 RC2 decomp contributions)
   <https://github.com/OpenRAC/rac2-gc-decomp> at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`
 
-  One engine C body, adopted with permission (held by the operator, RULING
-  #10405) and re-checked byte-exact against our v2.00 ROM on the s136os arm
-  (task #2239, from audit NOTE #11286 §(b) row 3). The file was carried into
-  rac2-gc-decomp by atlasbez-dot (commit `ebf90a4c`, from
-  atlasbez-dot/rac2-gc-decomp at `921a4dee`) under its own MIT notice, which
-  is kept in the doc comment and in `THIRD-PARTY.md`. The doc comment carries
-  the `Source:` line, which names every change beyond extern spellings.
+  Two engine C bodies, adopted with permission (held by the operator, RULINGs
+  #10405 and #12108) and re-checked byte-exact against our v2.00 ROM on the
+  s136os arm. `002E4528-rc2.c` was carried into rac2-gc-decomp by atlasbez-dot
+  (commit `ebf90a4c`, from atlasbez-dot/rac2-gc-decomp at `921a4dee`);
+  `002B7380-rc2.c` came in with commit `fe9859d7` (Sergio Rodmauser). Both
+  files carry the same MIT notice, which is kept in each doc comment and in
+  `THIRD-PARTY.md`. Each doc comment carries the `Source:` line, which names
+  every change beyond extern spellings.
 
   Used so far:
   - **`CastEmitterOcclusionRay`** (`0x002E5340`) in
@@ -302,6 +303,15 @@
     signature with the `SoundEmitterSlot` fields for its +0x20/+0x18, and a
     `Vec4` probe for their 4-byte `s32 sp[1]` (written 16 bytes by every
     callee). Returning `CollLine`'s result, as upstream does, is load-bearing.
+    Task #2239, from audit NOTE #11286 §(b) row 3.
+  - **`StepDialogVoiceChannel`** (`0x002B82A0`) in
+    `going-decompiled/src/usa/text/1B4218.cpp`, from `func_002B7380` (v1.01
+    address). ADAPTED: their statements unchanged, under our `(u8 *ch)`
+    signature with `s32 arg0 = (s32)ch;`; `FastDecTimer` for their
+    `func_00282978`; our three callback functions for their `s8[]` labels;
+    the unit's prototypes; and their `long long` u64/s64 as our 64-bit
+    `long`, which the s136 compiler requires. Task #2296, from audit NOTE
+    #12163 row 17.
 - **OpenRAC — `rac2-gc-decomp`, commit `96927f87`, core bodies** (GPL-3.0)
   <https://github.com/OpenRAC/rac2-gc-decomp> at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`
 

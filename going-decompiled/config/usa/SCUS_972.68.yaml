@@ -499,7 +499,8 @@ segments:
       #   text/1B21E8 asm tile into a -G8 -fno-gcse c sub-unit text/1B4218
       #   (later-cc1 TU model: sized externs under -G8, no load-PRE -> -fno-gcse,
       #   8-byte-packed saves + the two switch fns 0x2B5B30/0x2B82A0 stay
-      #   INCLUDE_ASM behind the jtbl reloc gap). 6 pure 8-byte epilogue-pad
+      #   INCLUDE_ASM behind the jtbl reloc gap; 0x2B82A0 has no jtbl and is
+      #   C on the s136os arm since task #2296). 6 pure 8-byte epilogue-pad
       #   mis-splits (a preceding fn's epilogue-pad pair demoting the next real
       #   prologue to an internal label) pinned the proven way in symbol_addrs:
       #   func_002B50B8/5FF8/61B8/6FC8/7038/7140 each `type:func size:0x8`,
