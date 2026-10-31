@@ -329,16 +329,78 @@ void snd_BankLoadAsync(s32 arg0, s32 arg1, s32 arg2, s32 arg3) {
 }
 #endif
 
-/* func_001325E0: 4 bytes of inter-function fill (`addiu sp,0x20`) before the
- * unrecoverable snd_BankLoadFromEE_CB body at 0x1325E8 (reached only by
- * fallthrough/data-ref, so spimdisasm emits no .s for it — see STATUS). */
+/* func_001325E0: 4 bytes of inter-function fill (`addiu sp,0x20`) before
+ * snd_BankLoadFromEE_CB at 0x1325E8. */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_001325E0);
 
-/* func_001325E8 = snd_BankLoadFromEE_CB (0x1325E8): recovered splat-dropped
- * function (spimdisasm emitted no .s — reached by fallthrough/data-ref).
- * Byte-exact; recovers the 0xF0 that shifted cod rodata/jtbls -0xF0. A raw .word
- * dump while it was func_001325E8; decoded instructions since the rename (task #1255). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", snd_BankLoadFromEE_CB);
+extern char D_001A76F8[]; /* "load already in progress" diagnostic (EE variant) */
+
+/**
+ * snd_BankLoadFromEE_CB - start loading a sound bank from EE memory (load RPC
+ * function 0x57, one 4-byte argument) and return at once; snd_Pump calls the
+ * completion callback once the IOP writes the result.
+ *
+ * @arg0: the request word (the bank's EE address), sent from D_001A71C0.
+ * @arg1: the completion callback, kept in D_001A74D0 for snd_Pump's bank
+ *        channel.
+ * @arg2: the callback's 64-bit context, kept in D_001A74D8.
+ * Returns nothing.
+ *
+ * Clears the last bank-load status, then gives up (printing a diagnostic unless
+ * D_001A74F8 suppresses it) when the command ring still has pending work.
+ * Otherwise stages the request and the callback, presets the result word to the
+ * 0xFFFFFFFF "pending" sentinel, waits (pumping the sound engine) until the
+ * load RPC channel is idle, marks a load pending (D_001A74C8 = 1) and issues
+ * the RPC without blocking on the result. Unlike snd_BankLoadAsync there is no
+ * snd_CheckLoadInProgress gate, and the request store is not in a
+ * branch-likely slot.
+ *
+ * Splat dropped this function until task #1255 recovered it (it was a raw
+ * .word dump named func_001325E8, which shifted cod rodata/jtbls by -0xF0).
+ *
+ * Compiled by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, selected in
+ * tools/ee/s136os_functions.txt). Devices: the addressing declarations above
+ * snd_BankLoadByLoc, and the empty volatile fence (RULING #8483) after the last
+ * staging store. As in snd_BankLoadAsync, the fence keeps the loop's hoisted
+ * `lui $16,%hi(D_001A7578)` below the stores so cc1 puts it in the `b` delay
+ * slot at 0x132648. Without it sched1 lifts the lui above the D_001A74D8 `sd`
+ * (96.53% unit objdiff report, s136os arm, task #2358).
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_snd_BankLoadFromEE_CB)
+S136OS_SLOT(snd_BankLoadFromEE_CB);
+#else
+void snd_BankLoadFromEE_CB(s32 arg0, s32 arg1, s64 arg2) {
+    D_001A7488 = 0;
+
+    if (D_001A74C8 != 0) {
+        /* command ring still busy: can't start a load */
+        if (D_001A74F8 == 0) {
+            snd_PrintError(D_001A76F8);
+        }
+        return;
+    }
+
+    /* stage the request, the result sentinel and the completion callback */
+    D_001A71C0 = arg0;
+    D_001A7180 = 0xFFFFFFFF;
+    D_001A74D0 = arg1;
+    D_001A74D8 = arg2;
+    __asm__ __volatile__(""); /* scheduling device, see the doc comment */
+
+    /* wait for the load RPC channel to go idle */
+    while (sceSifCheckStatRpc(D_001A7140) != 0) {
+        if (D_001A74F8 == 0) {
+            snd_PrintError(D_001A7578);
+        }
+        snd_Pump();
+        func_0011AEA0(0);
+    }
+
+    /* mark a load pending and issue the RPC without blocking on the result */
+    D_001A74C8 = 1;
+    sceSifCallRpc(D_001A7140, 0x57, 1, &D_001A71C0, 4, &D_001A7180, 4, 0, 0);
+}
+#endif
 
 extern char D_001A7730[]; /* "sound system not ready" diagnostic */
 extern char D_001A7760[]; /* "IOP load RPC failed" diagnostic */
