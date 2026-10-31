@@ -3234,8 +3234,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DB080);
  * %hi(g_menuScreenBlock) in $16 across Begin2dDrawBatch and re-forms %lo at each
  * use, which SN 1.36 cc1 emits only with gcse on (task #2090, NOTE #10224,
  * which holds the best body). This unit's s136os arm inherited -fno-gcse then;
- * it compiles with gcse on since task #2252, so that wall is lifted, but the
- * body has not been re-measured on it. Bare INCLUDE_ASM. */
+ * it compiles with gcse on since task #2252. NOTE #10224 measured that body
+ * with gcse on (a local flag edit): 218 words against 219, three residuals
+ * left (return-1 tail placement, the entry index, a store order). Bare
+ * INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DB700);
 
 /* Load a menu background-image pair (front/back) from disc into the bg buffers.
