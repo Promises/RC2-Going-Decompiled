@@ -6,7 +6,8 @@
 #
 #   sh tools/ee/s136os_splice.sh <region> <unit> <src> <unit.s> <GFLAG> [CC1EXTRA]
 #   The 6th argument is the CALLER's S136EXTRA for the unit: the 2.9 compile's
-#   CC1EXTRA unless the flag table gives this arm its own (RULING #9004).
+#   CC1EXTRA unless the flag table gives this arm its own (RULING #9004). A
+#   selector row's own `S136EXTRA=` field replaces it for that row (below).
 #   e.g. sh tools/ee/s136os_splice.sh usa text/248B50 \
 #            going-decompiled/src/usa/text/248B50.c $BUILD/.../248B50._u.s -G8 -fno-gcse
 #
@@ -18,6 +19,17 @@
 #
 # SELECTOR: tools/ee/s136os_functions.txt, one `<region> <unit> <function>`
 # row per selected function (unit without extension, as objdiff names it).
+# A row may carry a 4th field `S136EXTRA=<flag>[,<flag>...]` (task #2307,
+# RULING #12178): THAT function's s136 compile takes those flags instead of the
+# unit's S136EXTRA (argument 6), commas read as spaces; `S136EXTRA=` (empty) is
+# the -O2 default. Every other row of the unit keeps the unit's flags, so e.g.
+# one member can compile with gcse ON in a `-fno-gcse` unit. A row without the
+# field compiles exactly as before (the same cc1 string, byte for byte). Each
+# flag must look like an option (`-` then [A-Za-z0-9_=+.-]); anything else is a
+# malformed row. tools/ee/cc1_arglog_check.py derives the expected s136 flags
+# per row from the same field. The field is the s136os arm's only: under
+# `--arm sn2952` (below) a 4th field is a malformed row, so RULING #12178's
+# override can never reach the 2.95.2 compile (task #2436).
 # THE SOURCE SIDE of a selected function is its guard, re-predicated from
 #     #ifndef TARGET_NATIVE / INCLUDE_ASM(...) / #else <C> / #endif
 # to
@@ -124,20 +136,41 @@
 set -eu
 
 # arm_vars <arm>: set the arm's selector, slot token, ee_cc1.sh arm, compiler
-# dir + pinned sha256s, cc1 flag tail, label suffix and banner; rc 1 for an
-# arm this helper does not know (the caller names it and stops).
+# dir + pinned sha256s, cc1 flag tail, label suffix, banner and whether a row
+# may carry the S136EXTRA= override (OVOK; task #2436: s136os only, RULING
+# #12178 names no other arm); rc 1 for an arm this helper does not know (the
+# caller names it and stops).
 arm_vars() {
   case "$1" in
     s136os) SEL=tools/ee/s136os_functions.txt; TOK=S136OS; CCARM=s136; GDIR=tools/ee/cc/lib/gcc-lib/ee/2.95.3
             CC1_SHA256=0393bcd31f91a6b9f0255db97f1cc99eba78ee8fc003e9a04dfabed1ae1d522e
             CC1PLUS_SHA256=78a0df900a396098986cbc97a8d3eab6dbbc587a343d4dbd22929a4112c003fb
-            FLAGTAIL=-fopt-stack; LSUF=s136; DESC="SN 2.95.3 v1.36 -fopt-stack"; TAG=s136os_splice ;;
+            FLAGTAIL=-fopt-stack; LSUF=s136; DESC="SN 2.95.3 v1.36 -fopt-stack"; TAG=s136os_splice; OVOK=1 ;;
     sn2952) SEL=tools/ee/sn2952_functions.txt; TOK=SN2952; CCARM=sn2952; GDIR=tools/ee/cc/lib/gcc-lib/ee/2.95.2
             CC1_SHA256=2aaf3d22ce5c3508ecba15f16b06737713263e6aee289ca1e43d3ff9c17d964f
             CC1PLUS_SHA256=
-            FLAGTAIL=; LSUF=sn2952; DESC="SN 2.95.2 v2.73a"; TAG="s136os_splice[sn2952]" ;;
+            FLAGTAIL=; LSUF=sn2952; DESC="SN 2.95.2 v2.73a"; TAG="s136os_splice[sn2952]"; OVOK=0 ;;
     *) return 1 ;;
   esac
+}
+
+# sel_bad <selector> <ovok>: print every malformed row (`file:line: row`);
+# empty = well formed. 3 fields, or (only when <ovok> is 1, the s136os arm) 4
+# with a well-formed S136EXTRA= override.
+sel_bad() {
+  awk -v ovok="$2" '{ sub(/#.*/, "") }
+    function badov(v,   n, i, F) { if (ovok != 1 || v !~ /^S136EXTRA=/) return 1; sub(/^S136EXTRA=/, "", v); if (v == "") return 0
+      n = split(v, F, ","); for (i = 1; i <= n; i++) if (F[i] !~ /^-[A-Za-z0-9][A-Za-z0-9_=+.-]*$/) return 1; return 0 }
+    NF && (NF < 3 || NF > 4 || $1 !~ /^(usa|eu)$/ || $3 !~ /^[A-Za-z_][A-Za-z0-9_]*$/ || (NF == 4 && badov($4))) { print FILENAME ":" FNR ": " $0 }' "$1"
+}
+
+# sel_override <selector> <region> <unit> <fn>: print `1 <flags>` (commas as
+# spaces; `1 ` for an empty override) when the row carries S136EXTRA=, else
+# `0`. Called on a selector sel_bad has passed and DUP has de-duplicated.
+sel_override() {
+  awk -v r="$2" -v u="$3" -v f="$4" '{ sub(/#.*/, "") }
+    NF && $1 == r && $2 == u && $3 == f { if (NF == 4) { v = $4; sub(/^S136EXTRA=/, "", v); gsub(/,/, " ", v); print "1 " v } else print "0"; n++ }
+    END { if (!n) print "0" }' "$1"
 }
 
 # carry_externs <unit.s> <s136os.s>: print, tab-indented and sorted, the
@@ -459,6 +492,31 @@ if [ "${1:-}" = "--selftest" ]; then
   else echo "  FAIL arm 22: sn2952 resolves to '$SEL $TOK $CCARM $GDIR $CC1_SHA256 [$CC1PLUS_SHA256] [$FLAGTAIL] $LSUF'"; rc=1; fi
   if arm_vars s29 || arm_vars ""; then echo "  FAIL arm 23: an unknown arm name resolved"; rc=1
   else echo "  OK   arm 23: unknown arms 's29' and '' -> refused"; fi
+  # Arms 24-26 (task #2307, RULING #12178; numbered past #2286's 21-23): the
+  # per-function S136EXTRA override. 24: three well-formed rows (plain, an
+  # empty override, a two-flag override) admit. 25: each row resolves to its
+  # own flags, commas as spaces, and the plain row to none. 26: four malformed
+  # rows (a non-option flag, an unknown key, a 5th field, an empty flag
+  # between commas) are each refused. A parser that drops the field fails 25;
+  # one that admits any 4th field fails 26; the pre-#2307 3-field check fails 24.
+  printf 'usa text/X f\nusa text/X g S136EXTRA=\nusa text/X h S136EXTRA=-fno-strict-aliasing,-fno-gcse # c\n' > "$T/sel"
+  v="$(sel_bad "$T/sel" 1)"
+  if [ -z "$v" ]; then echo "  OK   arm 24: plain row, empty override and a two-flag override -> admitted"; else echo "  FAIL arm 24: refused a well-formed row: '$v'"; rc=1; fi
+  v="$(sel_override "$T/sel" usa text/X f)|$(sel_override "$T/sel" usa text/X g)|$(sel_override "$T/sel" usa text/X h)"
+  if [ "$v" = "0|1 |1 -fno-strict-aliasing -fno-gcse" ]; then echo "  OK   arm 25: f -> unit flags, g -> '' (override), h -> '-fno-strict-aliasing -fno-gcse'"
+  else echo "  FAIL arm 25: resolved '$v', want '0|1 |1 -fno-strict-aliasing -fno-gcse'"; rc=1; fi
+  printf 'usa text/X a S136EXTRA=fno-gcse\nusa text/X b CC1EXTRA=-fno-gcse\nusa text/X c S136EXTRA=-fno-gcse x\nusa text/X d S136EXTRA=-fno-gcse,,-O3\n' > "$T/sel"
+  v="$(sel_bad "$T/sel" 1 | wc -l | tr -d ' ')"
+  if [ "$v" = 4 ]; then echo "  OK   arm 26: 4 malformed override rows -> 4 refused"; else echo "  FAIL arm 26: $v of 4 malformed override rows refused: $(sel_bad "$T/sel" 1 | tr '\n' ' ')"; rc=1; fi
+  # Arm 27 (task #2436, composing #2286 with #2307): the override is the s136os
+  # arm's only. arm_vars gives s136os OVOK=1 and sn2952 OVOK=0, and under
+  # OVOK=0 sel_bad refuses every 4-field row (here two overrides, one empty)
+  # while still admitting the plain row. A table or parser that lets the
+  # S136EXTRA= field onto the 2.95.2 compile fails it.
+  printf 'usa text/X f\nusa text/X g S136EXTRA=\nusa text/X h S136EXTRA=-fno-gcse\n' > "$T/sel"
+  v="$(arm_vars s136os; echo "$OVOK")|$(arm_vars sn2952; echo "$OVOK")|$(sel_bad "$T/sel" 0 | awk '$NF ~ /^S136EXTRA=/ { o++ } $NF !~ /^S136EXTRA=/ { p++ } END { print o + 0 "|" p + 0 }')"
+  if [ "$v" = "1|0|2|0" ]; then echo "  OK   arm 27: s136os OVOK=1, sn2952 OVOK=0; under OVOK=0 the 2 override rows -> refused, the plain row -> admitted"
+  else echo "  FAIL arm 27: '$v', want '1|0|2|0' (s136os OVOK|sn2952 OVOK|override rows refused|plain rows refused)"; rc=1; fi
   [ "$rc" = 0 ] && echo "#### s136os_splice --selftest: PASS" || echo "#### s136os_splice --selftest: FAIL"
   exit "$rc"
 fi
@@ -471,7 +529,8 @@ CPPDEF="-D__GNUC__=2 -D__GNUC_MINOR__=9 -D__mips__ -D__mips=3 -D__R5900 -D__LANG
 
 fatal() { echo "$TAG: FATAL [$REGION/$UNIT] — $1" >&2; shift; for x in "$@"; do echo "    $x" >&2; done; exit 3; }
 
-# SPLICE_SEL_OVERRIDE=<file> (landing_gate.sh --selftest arm (31) only): read
+# SPLICE_SEL_OVERRIDE=<file> (landing_gate.sh --selftest arms (31) and (32)
+# only; tasks #2286 and #2307 added it under the same name and meaning): read
 # the rows from <file> instead of the arm's selector, so a seeded fixture can
 # be spliced without editing the real one. Announced on stdout every time, so
 # a build log that carries it shows it; build.sh and objdiff_build.sh never
@@ -490,8 +549,9 @@ fi
 eval "SELMD5=\${${TOK}_FUNCS_MD5:-}"
 if [ -n "$SELMD5" ]; then sh tools/ee/mount_sync.sh check "$SEL" "$SELMD5"; fi
 
-BAD="$(awk '{ sub(/#.*/, "") } NF && (NF != 3 || $1 !~ /^(usa|eu)$/ || $3 !~ /^[A-Za-z_][A-Za-z0-9_]*$/) { print FILENAME ":" FNR ": " $0 }' "$SEL")"
-[ -z "$BAD" ] || fatal "malformed row(s) in $SEL (want: <usa|eu> <unit> <function>)" "$BAD"
+BAD="$(sel_bad "$SEL" "$OVOK")"
+if [ "$OVOK" = 1 ]; then WANT="<usa|eu> <unit> <function> [S136EXTRA=<-flag>[,<-flag>...]]"; else WANT="<usa|eu> <unit> <function>; the S136EXTRA= field is the s136os arm's only"; fi
+[ -z "$BAD" ] || fatal "malformed row(s) in $SEL (want: $WANT)" "$BAD"
 DUP="$(awk '{ sub(/#.*/, "") } NF { k = $1 " " $2 " " $3; if (seen[k]++) print k }' "$SEL")"
 [ -z "$DUP" ] || fatal "repeated row(s) in $SEL" "$DUP"
 
@@ -523,8 +583,16 @@ case "$GNUM" in ''|*[!0-9]*) fatal "GFLAG '$GFLAG' is not -G<N>; the addressing 
 OUT="$TMP/work.s"
 cp "$UNIT_S" "$OUT"
 for f in $ROWS; do
-  # (the s136os string is the pre-#2286 one, byte for byte: "-O2 G EXTRA -fopt-stack")
-  sh tools/ee/ee_cc1.sh "$CCARM" "$SRC" "$TMP/$f.i" "$TMP/$f.s" "$CPPDEF $INC -D${TOK}_$f" "-O2 $GFLAG $CC1EXTRA${FLAGTAIL:+ $FLAGTAIL}" \
+  # The row's own S136EXTRA (task #2307, RULING #12178) or the unit's; a row
+  # without one compiles with the pre-#2307 string, byte for byte (and the
+  # s136os string is the pre-#2286 one: "-O2 G EXTRA -fopt-stack"). sel_bad
+  # has refused a 4th field under sn2952 (OVOK=0), so there OV is always 0.
+  OV="$(sel_override "$SEL" "$REGION" "$UNIT" "$f")"
+  case "$OV" in
+    "1 "*) XF="${OV#1 }"; OVNOTE="; per-function S136EXTRA override '$XF', unit's '$CC1EXTRA' (RULING #12178)" ;;
+    *) XF="$CC1EXTRA"; OVNOTE="" ;;
+  esac
+  sh tools/ee/ee_cc1.sh "$CCARM" "$SRC" "$TMP/$f.i" "$TMP/$f.s" "$CPPDEF $INC -D${TOK}_$f" "-O2 $GFLAG $XF${FLAGTAIL:+ $FLAGTAIL}" \
     || fatal "$CCARM $FE compile failed for $f (ee_cc1.sh $CCARM $SRC)"
   extract_block "$f" "$TMP/$f.s" "$TMP/$f.blk" > "$TMP/$f.why"
   [ ! -s "$TMP/$f.why" ] || fatal "no single .ent/.end block for $f in $TMP/$f.s ($(cat "$TMP/$f.why"))"
@@ -560,7 +628,7 @@ for f in $ROWS; do
   # (No line count here: cc1's text lines are macro instructions, not words.
   # #1509's 23-word and 24-word bodies both printed "22 insn lines". The body
   # length is the `length:` line below, from the assembled unit, task #1531.)
-  echo "$TAG: $REGION/$UNIT: $f spliced ($(wc -l < "$TMP/$f.ext" | tr -d ' ') .extern carried; not carried, the unit declares the name: ${KEPT:-none})"
+  echo "$TAG: $REGION/$UNIT: $f spliced ($(wc -l < "$TMP/$f.ext" | tr -d ' ') .extern carried; not carried, the unit declares the name: ${KEPT:-none}$OVNOTE)"
 done
 LEFT="$(awk -v t="#${TOK}_SLOT" '{ sub(/\r$/, "") } $1 == t { print $2 }' "$OUT")"
 [ -z "$LEFT" ] || fatal "slot(s) still present after the splice:" $LEFT

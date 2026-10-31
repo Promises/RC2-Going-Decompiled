@@ -42,13 +42,16 @@
 #            tools/ee/cc1_arglog_check.py asserts that every sdk29 compile
 #            carries `-O2 GFLAG CC1EXTRA` and every s136 compile `-O2 GFLAG
 #            S136EXTRA -fopt-stack`, as build.sh's flag table assigns them
-#            (derived from the table, not listed). It also asserts that every
+#            (derived from the table, not listed), or, for a selector row that
+#            carries its own `S136EXTRA=` field (task #2307, RULING #12178),
+#            `-O2 GFLAG <that field> -fopt-stack`. It also asserts that every
 #            source has one sdk29 line and that each unit has as many s136
 #            lines as the selector has rows, and as many sn2952 lines (`-O2
 #            GFLAG CC1EXTRA`, the held SN 2.95.2 arm, task #2286) as
 #            tools/ee/sn2952_functions.txt has rows. On usa it adds RULING #9004's
 #            floor: 1B4218's 2.9 compile keeps -fno-gcse, its s136 compiles carry
-#            none, and 1DFF80 keeps it on both arms. WHY a row: #1364 measured
+#            none, and 1DFF80 keeps it on both arms (its s136 lines of rows
+#            WITHOUT an override; #12178 lets one member drop it). WHY a row: #1364 measured
 #            that unpinning BOTH 1B4218 arms leaves the unit object
 #            BYTE-IDENTICAL, so the image cmp cannot see it (FACT #9034). Fails
 #            CLOSED: an absent, empty or older-than-this-build log is a FAIL,
@@ -1641,6 +1644,7 @@ selftest() {
   selftest_arena "$T" || bad=1
   selftest_jtbl "$T" || bad=1
   selftest_sn2952 "$T" || bad=1
+  selftest_s136extra "$T" || bad=1
 
   say "-- (14) the real gate on this tree (--no-build, the build above) must PASS"
   STRICT=0
@@ -3137,6 +3141,72 @@ selftest_sn2952() {
     if [ "$rc" = 3 ] && printf '%s\n' "$out" | /usr/bin/grep -q '^func_00115E68: NOT FOUND in base.o'; then ok "fired (31): the fixture with the sn2952 splice skipped -> vmu rc 3, func_00115E68 NOT FOUND (the slot assembles to nothing)"
     else say "SELFTEST-FAIL (31) the unwired fixture did not read NOT FOUND (vmu rc $rc):"; show < <(printf '%s\n' "$out" | tail -3 | sed 's/^/  inner| /'); b=1; fi
   else say "SELFTEST-FAIL (31) the unwired fixture pipeline did not run (rc $rc):"; show < <(printf '%s\n' "$out" | tail -6 | sed 's/^/  inner| /'); b=1; fi
+  return "$b"
+}
+
+# selftest_s136extra — arm (32) (task #2307, RULING #12178; numbered past
+# #2286's (31)): the per-function S136EXTRA override, a 4th selector field
+# `S136EXTRA=<flags>` that s136os_splice.sh compiles THAT row with instead of
+# the unit's flags. Legs:
+#   control  the fixture tools/ee/s136extra_selftest (USA func_002E6D98, which
+#            the s136os arm makes ROM-identical only with -fno-gcse, NOTE
+#            #12173) spliced by the real helper with the unit flags EMPTY and
+#            the row's override `S136EXTRA=-fno-gcse` -> vmu rc 0, BYTE
+#            IDENTICAL 30/30;
+#   fired    the same with a helper whose override line compiles with the
+#            unit's flags instead (the override IGNORED) -> vmu rc 1, exactly
+#            NOTE #12173's 5 words, 0x002e6da4/dac/db4/dc0/dc4;
+#   CC1ARGS  on the BUILD's arg log (arm (3)'s): a selector copy giving the real
+#            1DFF80 func_002E6D98 row `S136EXTRA=` (gcse ON) -> exactly one
+#            FAIL, naming that row's override (the build compiled it pinned,
+#            i.e. as if the override were ignored); the same selector with
+#            that one log line unpinned (what an honoured override logs) ->
+#            rc 0, so neither the 1DFF80 floor nor the per-row mapping fires on
+#            the override row and on no other. USA only: the fixture is a USA
+#            ROM function and the seeds are USA rows.
+selftest_s136extra() {
+  local T="$1" b=0 rc out m k ns D="$1/s136extra" L="$OUT/cc1_args.tsv" S="$1/s136extra_sel.txt" F="$1/s136extra_log.tsv"
+  say "-- (32) S136EXTRA OVERRIDE (#2307): the fixture func_002E6D98 (unit flags empty, row override -fno-gcse) through the real s136os_splice.sh -> vmu BYTE IDENTICAL 30/30; through a helper that ignores the override -> vmu rc 1 on exactly 5 words; CC1ARGS: an override the build's log does not carry -> 1 FAIL naming it; the log carrying it -> PASS"
+  if [ "$REGION" != usa ]; then ok "n/a (32) on $REGION: the fixture is USA func_002E6D98; run --selftest usa"; return 0; fi
+  # control: the real helper
+  out=$(in_vm "sh $HERE/s136extra_selftest/run.sh $D/real $HERE/s136os_splice.sh $HERE/s136extra_selftest/sel.txt" 2>&1); rc=$?
+  if [ "$rc" = 0 ] && printf '%s\n' "$out" | /usr/bin/grep -q "func_002E6D98 spliced .*per-function S136EXTRA override '-fno-gcse', unit's ''" \
+     && printf '%s\n' "$out" | /usr/bin/grep -q 'func_002E6D98 length: built 30 words (assembled st_size 0x78) = ROM 30 words'; then
+    out=$(bash "$HERE/verify_match_unit.sh" func_002E6D98 "$D/real/fx.o" "$D/real/tgt.o" usa 2>&1); rc=$?
+    if [ "$rc" = 0 ] && printf '%s\n' "$out" | /usr/bin/grep -q '^func_002E6D98: BYTE IDENTICAL TO ROM .* (30/30 words'; then ok "control (32): the fixture with its row's S136EXTRA=-fno-gcse over empty unit flags -> vmu rc 0, $(printf '%s\n' "$out" | /usr/bin/grep -o 'BYTE IDENTICAL TO ROM .*')"
+    else say "SELFTEST-FAIL (32) the fixture through the real helper is not BYTE IDENTICAL 30/30 (vmu rc $rc):"; show < <(printf '%s\n' "$out" | tail -4 | sed 's/^/  inner| /'); b=1; fi
+  else say "SELFTEST-FAIL (32) the fixture pipeline with the real helper did not run, apply the override or splice 30 words (rc $rc):"; show < <(printf '%s\n' "$out" | tail -6 | sed 's/^/  inner| /'); b=1; fi
+  # fired: the override ignored (the row compiles with the unit's flags)
+  m="$T/s136os_splice_override_ignored.sh"
+  sed 's|"1 "\*) XF="${OV#1 }";|"1 "*) XF="$CC1EXTRA";|' "$HERE/s136os_splice.sh" > "$m"
+  if [ "$(diff "$HERE/s136os_splice.sh" "$m" | /usr/bin/grep -c '^>' || true)" != 1 ]; then say "SELFTEST-BROKEN: (32) the override-ignored mutant did not rewrite exactly the override line: re-aim the seed"; b=1
+  else
+    out=$(in_vm "sh $HERE/s136extra_selftest/run.sh $D/mut $m $HERE/s136extra_selftest/sel.txt" 2>&1); rc=$?
+    if [ "$rc" = 0 ]; then
+      out=$(bash "$HERE/verify_match_unit.sh" func_002E6D98 "$D/mut/fx.o" "$D/mut/tgt.o" usa 2>&1); rc=$?
+      if [ "$rc" = 1 ] && printf '%s\n' "$out" | /usr/bin/grep -q '^func_002E6D98: DIFFERS .* 5/30 words differ' \
+         && [ "$(printf '%s\n' "$out" | /usr/bin/grep -oE '^  0x[0-9a-f]+: built' | sed 's/: built//; s/^ *//' | tr '\n' ' ')" = "0x002e6da4 0x002e6dac 0x002e6db4 0x002e6dc0 0x002e6dc4 " ]; then
+        ok "fired (32): the override ignored (unit flags, gcse ON) -> vmu rc 1, 5/30 at 0x002e6da4 0x002e6dac 0x002e6db4 0x002e6dc0 0x002e6dc4 ($(printf '%s\n' "$out" | /usr/bin/grep -m1 '^  0x002e6da4' | sed 's/^ *//'))"
+      else say "SELFTEST-FAIL (32) the override-ignored fixture did not DIFFER on exactly NOTE #12173's 5 words (vmu rc $rc):"; show < <(printf '%s\n' "$out" | tail -7 | sed 's/^/  inner| /'); b=1; fi
+    else say "SELFTEST-FAIL (32) the override-ignored fixture pipeline did not run (rc $rc):"; show < <(printf '%s\n' "$out" | tail -6 | sed 's/^/  inner| /'); b=1; fi
+  fi
+  rm -f "$m"
+  # CC1ARGS: the per-row expectation on the build's own log
+  if [ ! -s "$L" ]; then say "SELFTEST-FAIL (32) no build arg log at $L to seed (arm (3)'s build writes it)"; return 1; fi
+  sed 's|^usa text/1DFF80 func_002E6D98$|usa text/1DFF80 func_002E6D98 S136EXTRA=|' "$HERE/s136os_functions.txt" > "$S"
+  k=$(awk '{ sub(/#.*/, "") } $1 == "usa" && $2 == "text/1DFF80" { n++ } $1 == "usa" && $2 == "text/1DFF80" && $3 == "func_002E6D98" { print n; exit }' "$S")
+  ns=$(awk -F'\t' '$1 == "s136" && $2 ~ /\/usa\/text\/1DFF80\.(c|cpp)$/' "$L" | wc -l | tr -d ' ')
+  if cmp -s "$S" "$HERE/s136os_functions.txt" || [ -z "$k" ]; then say "SELFTEST-BROKEN: (32) the selector seed did not give usa text/1DFF80 func_002E6D98 an override: re-aim it"; return 1; fi
+  out=$(python3 "$HERE/cc1_arglog_check.py" usa "$L" --table "$HERE/build.sh" --selector "$S" 2>&1); rc=$?
+  if [ "$rc" = 1 ] && [ "$(printf '%s\n' "$out" | /usr/bin/grep -c '^FAIL ' || true)" = 1 ] \
+     && printf '%s\n' "$out" | /usr/bin/grep -q "^FAIL usa/text/1DFF80 s136 (row $k, per-function S136EXTRA=''): -O2 -G8 -fno-gcse -fopt-stack != override -O2 -G8 -fopt-stack\$"; then
+    ok "fired (32): CC1ARGS with func_002E6D98 given S136EXTRA= and the build's pinned line -> 1 FAIL: $(printf '%s\n' "$out" | /usr/bin/grep '^FAIL ' | sed 's/^FAIL //')"
+  else say "SELFTEST-FAIL (32) CC1ARGS did not name exactly the ignored override (rc $rc):"; show < <(printf '%s\n' "$out" | /usr/bin/grep -E '^FAIL|^# failures' | head -6 | sed 's/^/  inner| /'); b=1; fi
+  awk -F'\t' -v OFS='\t' -v k="$k" '$1 == "s136" && $2 ~ /\/usa\/text\/1DFF80\.(c|cpp)$/ && ++n == k { sub(/ -fno-gcse/, "", $3) } { print }' "$L" > "$F"
+  out=$(python3 "$HERE/cc1_arglog_check.py" usa "$F" --table "$HERE/build.sh" --selector "$S" 2>&1); rc=$?
+  if [ "$rc" = 0 ] && [ "$(diff "$L" "$F" | /usr/bin/grep -c '^>' || true)" = 1 ] && printf '%s\n' "$out" | /usr/bin/grep -q 'per-function S136EXTRA overrides 1)'; then
+    ok "control (32): the same selector with row $k of $ns 1DFF80 s136 lines unpinned in the log -> rc 0 ($(printf '%s\n' "$out" | /usr/bin/grep -o 'per-function S136EXTRA overrides 1'); the 1DFF80 floor holds on the other $((ns - 1)))"
+  else say "SELFTEST-FAIL (32) CC1ARGS refused a log carrying the override (rc $rc):"; show < <(printf '%s\n' "$out" | /usr/bin/grep -E '^FAIL|^# ' | head -8 | sed 's/^/  inner| /'); b=1; fi
   return "$b"
 }
 

@@ -27,6 +27,13 @@ defaults (-G0, no extra flags). Then, for each line:
            starts to is a mismatch here until this rule learns its column)
 where S136EXTRA is the arm's own value if it sets one, else CC1EXTRA (the
 scripts' `${S136EXTRA-$CC1EXTRA}`). Compared as word lists, order included.
+PER-FUNCTION OVERRIDE (task #2307, RULING #12178): a selector row may carry a
+4th field `S136EXTRA=<flag>[,<flag>...]`, and s136os_splice.sh compiles that
+row with those flags (commas as spaces) instead of the unit's. The splice
+compiles a unit's rows in selector order, so when a unit's s136 line count
+equals its row count the i-th s136 line is held to the i-th row's flags: the
+override for an override row, the unit's S136EXTRA for every other. An
+override the splice ignored, or one applied to the wrong row, is a mismatch.
 
 POPULATION (a check over the lines present cannot see a compile that never
 logged): every .c/.cpp under going-decompiled/src/<region> — build.sh's own
@@ -46,6 +53,10 @@ the derived rule above):
            the -O2 default)
     1DFF80 keeps -fno-gcse on BOTH arms (>=1 s136 line; its pin is load-bearing:
            StopAllSoundEmitters +110 B unpinned)
+The s136 half of the floor is applied to the lines of rows WITHOUT an
+override: RULING #12178 permits one member its own S136EXTRA (gcse ON in
+1DFF80) while the unit, and so every other row, keeps the pin. An override
+row's line is held to its own field by the derived rule instead.
 Each line is revoked with its ruling (its revoked_by); delete that line in that row.
 
 Exit 0 every line and every count as derived; 1 a FAIL line was printed
@@ -86,12 +97,21 @@ def sources(region):
 
 
 def selector_rows(path, region):
+    """unit -> [override or None, ...] in selector order (task #2307): None
+    for a 3-field row, the flag string for a `S136EXTRA=` 4th field. A row of
+    any other shape is not counted (s136os_splice.sh refuses it, so the build
+    never logs it, and the count check names the unit)."""
     n = {}
     with open(path) as fh:
         for line in fh:
             w = line.split("#", 1)[0].split()
-            if len(w) == 3 and w[0] == region:
-                n[w[1]] = n.get(w[1], 0) + 1
+            if len(w) in (3, 4) and w[0] == region:
+                ov = None
+                if len(w) == 4:
+                    if not w[3].startswith("S136EXTRA="):
+                        continue
+                    ov = w[3][len("S136EXTRA="):].replace(",", " ")
+                n.setdefault(w[1], []).append(ov)
     return n
 
 
@@ -127,6 +147,7 @@ def main(argv):
         return 2
 
     fails = []
+    rows = selector_rows(sel_path, region)
     sdk = {}       # unit -> [args...]
     s136 = {}      # unit -> [args...]
     sn2952 = {}    # unit -> [args...]
@@ -146,8 +167,16 @@ def main(argv):
             want = ["-O2", g] + c.split()
             sdk.setdefault(u, []).append(got)
         elif arm == "s136":
-            want = ["-O2", g] + s.split() + ["-fopt-stack"]
+            # the row this line compiled, by position (selector order); its
+            # override if it has one, else the unit's S136EXTRA
+            k = len(s136.get(u, []))
+            ovs = rows.get(u, [])
+            ov = ovs[k] if k < len(ovs) else None
+            want = ["-O2", g] + (s if ov is None else ov).split() + ["-fopt-stack"]
             s136.setdefault(u, []).append(got)
+            if ov is not None and got != want:
+                fails.append(f"{r}/{u} {arm} (row {k + 1}, per-function S136EXTRA={ov!r}): {' '.join(got)} != override {' '.join(want)}")
+                continue
         elif arm == "sn2952":
             want = ["-O2", g] + c.split()
             sn2952.setdefault(u, []).append(got)
@@ -159,7 +188,6 @@ def main(argv):
 
     # population
     srcs = sources(region)
-    rows = selector_rows(sel_path, region)
     for u in sorted(srcs):
         n = len(sdk.get(u, []))
         if n != 1:
@@ -167,20 +195,29 @@ def main(argv):
     for u in sorted(set(sdk) - srcs):
         fails.append(f"{region}/{u} sdk29: logged, but no such source under going-decompiled/src/{region}")
     for u in sorted(set(rows) | set(s136)):
-        n, w = len(s136.get(u, [])), rows.get(u, 0)
+        n, w = len(s136.get(u, [])), len(rows.get(u, []))
         if n != w:
             fails.append(f"{region}/{u} s136: {n} compile line(s), selector has {w} row(s)")
     rows2952 = selector_rows(sel2952_path, region)
     for u in sorted(set(rows2952) | set(sn2952)):
-        n, w = len(sn2952.get(u, [])), rows2952.get(u, 0)
+        n, w = len(sn2952.get(u, [])), len(rows2952.get(u, []))
         if n != w:
             fails.append(f"{region}/{u} sn2952: {n} compile line(s), sn2952 selector has {w} row(s)")
+        # task #2436: the S136EXTRA= field is the s136os arm's only
+        # (s136os_splice.sh --arm sn2952 refuses it), so an sn2952 row
+        # carrying one is a FAIL here too, never a flag this rule applies
+        for k, ov in enumerate(rows2952.get(u, [])):
+            if ov is not None:
+                fails.append(f"{region}/{u} sn2952 (row {k + 1}): carries S136EXTRA={ov!r}, a field only the s136os selector may carry")
 
     # RULING #9004 floor
     floor = []
     if region == "usa":
         def floor_unit(u, sdk_pinned, s136_pinned):
-            sd, ss = sdk.get(u, []), s136.get(u, [])
+            sd = sdk.get(u, [])
+            # override rows are held to their own field above (RULING #12178)
+            ov = rows.get(u, [])
+            ss = [a for k, a in enumerate(s136.get(u, [])) if not (k < len(ov) and ov[k] is not None)]
             if not sd:
                 fails.append(f"(floor) usa/{u}: no sdk29 compile logged — RULING #9004 cannot be checked")
             for a in sd:
@@ -203,8 +240,8 @@ def main(argv):
         print(f"FAIL {f}")
     pinned = sorted(u for u, v in sdk.items() if any(FLOOR_PIN in a for a in v))
     print(f"# {len(lines)} lines: sdk29 {sum(map(len, sdk.values()))} over {len(sdk)} units (sources {len(srcs)}), "
-          f"s136 {sum(map(len, s136.values()))} over {len(s136)} units (selector rows {sum(rows.values())}), "
-          f"sn2952 {sum(map(len, sn2952.values()))} over {len(sn2952)} units (sn2952 selector rows {sum(rows2952.values())}); "
+          f"s136 {sum(map(len, s136.values()))} over {len(s136)} units (selector rows {sum(map(len, rows.values()))}, per-function S136EXTRA overrides {sum(o is not None for v in rows.values() for o in v)}), "
+          f"sn2952 {sum(map(len, sn2952.values()))} over {len(sn2952)} units (sn2952 selector rows {sum(map(len, rows2952.values()))}); "
           f"table {table_path} {len(table)} units")
     print(f"# sdk29 {FLOOR_PIN}: {len(pinned)} units: {' '.join(pinned)}")
     s136_unpinned = sorted(u for u in s136 if u in pinned and not any(FLOOR_PIN in a for a in s136[u]))
