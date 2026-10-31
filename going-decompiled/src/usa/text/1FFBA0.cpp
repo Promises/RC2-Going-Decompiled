@@ -949,8 +949,8 @@ void AdjustPointForHeroGroundMoby(u_long128 *out, u_long128 *in) {
 }
 
 /**
- * func_00301070 - project a point through the hero's ground moby and add it
- * back onto itself.
+ * func_00301070 - offset a point by the hero ground-moby transform of `ref`:
+ * out = in + func_002AE198(hero, ground, ref) (`in` itself is not projected).
  *
  *   out - result quad
  *   in  - source point (quad)
@@ -970,7 +970,8 @@ void AdjustPointForHeroGroundMoby(u_long128 *out, u_long128 *in) {
  * it SN 1.36 gives `in` $16 and `out` $17, the reverse of the ROM, so the two
  * argument saves and every use swap: 6 of 26 words (task #2390's removal
  * probe; NOTE #12169's REGALLOC NEAR). The fence adds a reference to `out`,
- * which raises its global-alloc priority above `in`'s. Two RULING #8598 pins
+ * which presumably raises its global-alloc priority above `in`'s (inferred
+ * from the result, not traced in a cc1 dump). Two RULING #8598 pins
  * were tried instead and do not close: cc1 then reuses the incoming $4/$5 in
  * the copy path.
  */
