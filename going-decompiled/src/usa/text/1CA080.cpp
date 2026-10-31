@@ -5702,29 +5702,31 @@ s32 func_002D33A8(void) {
 }
 #endif
 
-/* Help/hint-page screen draw: inside a 2D batch, draws the two header glyphs
- * (0xE5/0xE4, centred at row D_1ABAAC), then the left/right page arrows when the
- * page cursor (g_helpPageCursor, 0..6) allows: a "prev" arrow (glyph 0x4B at
- * 216,373) when cursor>0 and a "next" arrow (glyph 0x4A at 295,373) when cursor<6,
- * each drawn white while its pad direction is held (L1 0x8000 / R1 0x2000) else in
- * the pulsing inactive colour from func_002AA3F0. The arrows carry their prompt
- * labels (0x2DD6 / 0x2DD7), and the screen title (0x312A) + footer (0x2BE5) are
- * centred. Returns 0. (func_003017F8 reads no $a2/$a3 — FACT #8918.)
- * Wall (cc1 2.9 arm): 8-byte-packed-save + FP-arg scheduling — later cc1 save-slot packing not
- * reproduced. Preserved as portable C.
- * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): the ROM's save set at its
- * 8-byte stride is reproduced; only the frame size differs (NOTE #9871). So the save-slot wall
- * named above is a cc1 2.9 property and was measured false as the reason this member stays
- * unmatched (FACT #9873). Residual: the frame size; the rest UNMEASURED. */
+/* func_002D34E8: help/hint-page screen draw. Inside a 2D batch it draws the two
+ * header glyphs (0xE5 / 0xE4 from the GUI font atlas at g_guiInstance+0x8710,
+ * centred on the screen at row D_1ABAAC), then the page arrows the page cursor
+ * (g_helpPageCursor, 0..6) allows: "prev" (glyph 0x4B at 216,373) when the cursor
+ * is above 0 and "next" (glyph 0x4A at 295,373) when it is below 6. Each arrow is
+ * white while its pad direction is held (L1 0x8000 / R1 0x2000), else the pulsing
+ * inactive colour from func_002AA3F0, drawn at 0.8 of the global sprite y-scale
+ * and followed by its prompt label (0x2DD6 / 0x2DD7). The screen title (0x312A)
+ * and footer (0x2BE5) are centred last. Takes nothing; returns 0.
+ * func_003017F8 reads no $a2/$a3 (FACT #8918). The cursor is re-read from the
+ * global for the second arrow test, as the ROM does.
+ *
+ * Compiled ALONE by the s136os arm (tools/ee/s136os_functions.txt), from the
+ * glyph template of DrawInsomniacMuseumMenu / DrawExtrasMenu (NOTE #12174 /
+ * #12181): g_guiInstance re-read per glyph, a `tilt` local for the 0.0 last
+ * argument (held in $f20), and one device, EE_REG("$f14") on the per-glyph 1.0
+ * scale (RULING #8598, the DrawHelpTopicMenu precedent FACT #9705). Each screen-
+ * centre x is formed before its string fetch, so it lives in $16 across the call
+ * (task #2382). */
 extern u32 func_002AA3F0(u32 color1, u32 color2, s32 period, s32 counterSel, s32 reset);
 extern void func_0027FBA8(s32 x, s32 y, u64 color, char *str, s64 wrap);
 extern s32 g_padButtonsHeld;
 extern s32 D_1ABAAC;      /* glyph row (int, converted to float) */
-/* s136os arm, measured by task #2117 (SN 1.36 -O2 -G8 -fstrict-aliasing -fopt-stack, gcse on):
- * this #else body builds 179 words against the ROM's 189 (SHORTER), so the splice refuses it on
- * LENGTH. Residual class: length/structure, not yet attributed. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D34E8);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002D34E8)
+S136OS_SLOT(func_002D34E8);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
@@ -5733,47 +5735,50 @@ extern void func_003017F8(s32 handle, s32 color0, f32 px, f32 py, f32 sx, f32 sy
 extern s32 g_screenWidth;
 extern s32 g_swapGadgetItemIndex;
 /* (end of this body's declarations) */
-/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 41.88% -> STRUCTURAL,
- * first differing row @0: ROM `addiu sp,sp,-48` vs `lui v1,0x0  [HI16 0x001A8D04]`;
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 43.96% -> STRUCTURAL, first differing row @0: ROM `addiu sp,sp,-48` vs `lui v0,0x0  [HI16 0x001A7340]`. */
 s32 func_002D34E8(void) {
-    void *atlas = g_guiInstance + 0x8710;
-    f32 centerX = (f32)(g_screenWidth / 2);
-    f32 row = (f32)D_1ABAAC;
-    f32 yfudge = *(f32 *)((u8 *)&g_swapGadgetItemIndex + 0x8E);
+    f32 tilt;
+    register f32 scale EE_REG("$f14");
+    s32 glyph;
     u32 inactiveArrow;
-    s32 cursor;
     char *text;
 
     Begin2dDrawBatch(0);
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xE5), 0x60442D00,
-                  centerX, row, 1.0f, yfudge, 0.0f);
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xE4), 0x55F0C070,
-                  centerX, row, 1.0f, yfudge, 0.0f);
+    tilt = 0.0f;
+    glyph = GuiFontAtlasLookupGlyph(g_guiInstance + 0x8710, 0xE5);
+    scale = 1.0f;
+    func_003017F8(glyph, 0x60442D00, (f32)(g_screenWidth / 2), (f32)D_1ABAAC, scale,
+                  *(f32 *)((u8 *)&g_swapGadgetItemIndex + 0x8E), tilt);
+    glyph = GuiFontAtlasLookupGlyph(g_guiInstance + 0x8710, 0xE4);
+    scale = 1.0f;
+    func_003017F8(glyph, 0x55F0C070, (f32)(g_screenWidth / 2), (f32)D_1ABAAC, scale,
+                  *(f32 *)((u8 *)&g_swapGadgetItemIndex + 0x8E), tilt);
     inactiveArrow = func_002AA3F0(0x60241700, 0x55F0C070, 0x19, 0, 0);
-
-    cursor = g_helpPageCursor;
-    if (cursor > 0) {
+    if (g_helpPageCursor > 0) {
         u32 color = (g_padButtonsHeld & 0x8000) ? 0x80F0F0F0 : inactiveArrow;
-        func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0x4B), color,
-                      216.0f, 373.0f, 1.0f, yfudge * 0.8f, 0.0f);
+        glyph = GuiFontAtlasLookupGlyph(g_guiInstance + 0x8710, 0x4B);
+        func_003017F8(glyph, color, 216.0f, 373.0f, 1.0f,
+                      *(f32 *)((u8 *)&g_swapGadgetItemIndex + 0x8E) * 0.8f, tilt);
         text = GetLocalizedString(0x2DD6);
         func_0027FBA8(0x40, 0x171, 0x80F0F0F0, text, -1);
-        cursor = g_helpPageCursor;
     }
-    if (cursor < 6) {
+    if (g_helpPageCursor < 6) {
         u32 color = (g_padButtonsHeld & 0x2000) ? 0x80F0F0F0 : inactiveArrow;
-        func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0x4A), color,
-                      295.0f, 373.0f, 1.0f, yfudge * 0.8f, 0.0f);
+        glyph = GuiFontAtlasLookupGlyph(g_guiInstance + 0x8710, 0x4A);
+        func_003017F8(glyph, color, 295.0f, 373.0f, 1.0f,
+                      *(f32 *)((u8 *)&g_swapGadgetItemIndex + 0x8E) * 0.8f, tilt);
         text = GetLocalizedString(0x2DD7);
         func_00280090(0x1C1, 0x171, 0x80F0F0F0, text, -1);
     }
-
-    text = GetLocalizedString(0x312A);
-    func_002801B8(g_screenWidth / 2, 0x1D, 0x80F0F0F0, text, -1);
-    text = GetLocalizedString(0x2BE5);
-    func_002801B8(g_screenWidth / 2, 0x173, 0x80F0F0F0, text, -1);
+    {
+        s32 x = g_screenWidth / 2;
+        text = GetLocalizedString(0x312A);
+        func_002801B8(x, 0x1D, 0x80F0F0F0, text, -1);
+    }
+    {
+        s32 x = g_screenWidth / 2;
+        text = GetLocalizedString(0x2BE5);
+        func_002801B8(x, 0x173, 0x80F0F0F0, text, -1);
+    }
     End2dDrawBatch();
     return 0;
 }
