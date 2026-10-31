@@ -35,6 +35,15 @@ __asm__(".extern g_pFmvArenaBase, 16");
 __asm__(".extern D_1AE788, 16");
 __asm__(".extern D_1AE78C, 16");
 __asm__(".extern D_1AE790, 16");
+#ifndef TARGET_NATIVE
+/* ADDRESSING-MODEL DEVICE (emits no code; the same `.extern ,16` model as the four
+ * lines above): OnFmvVblankFlip reads and writes these with the ROM's absolute
+ * `lui; lw` / `lui $1; sw` pairs. No 2.9 code in this unit names them. */
+__asm__(".extern D_1AE794, 16");
+__asm__(".extern D_1AE798, 16");
+__asm__(".extern g_pFmvGsBase, 16");
+__asm__(".extern g_bProgressiveScan, 16");
+#endif
 
 /* The FMV arena base pointer (0x1B234C). Declared as a small pointer so cc1
  * schedules the load as one insn; expanded absolutely by the assembler. */
@@ -930,14 +939,145 @@ void func_00350910(void *object) {
    FMV frame to GS texture memory, then BeginFrameDrawList. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00350B60);
 
-/* TODO(hle): needs PS2 graphics/IO HLE backend — vblank-start handler: reads
-   the GS CSR FIELD bit, kicks the prebuilt GIF display-transfer DMA chain on
-   channel 2, and ends with the handwritten `sync.l; ei` pair. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", OnFmvVblankFlip);
+/* FMV_EXIT_HANDLER(): the SDK's ExitHandler() (eekernel.h: `sync.l; ei`) that
+ * closes both FMV interrupt handlers, written as two HARDWARE BARRIERS (RULING
+ * #12168: one operand-free barrier per asm statement, EE arm only). ROM sites:
+ * OnFmvVblankFlip 0x00350DD0/0x00350DD4 and 0x00350EB4/0x00350EB8,
+ * OnFmvGifDmaInterrupt 0x00350F0C/0x00350F10. C has no spelling for either
+ * instruction. On native it is nothing. */
+#ifndef TARGET_NATIVE
+/* Two bare statements, not do { } while (0): the loop wrapper moves
+ * OnFmvGifDmaInterrupt's `move $v0,$0` ahead of its `ld $ra` (2 words, s136os
+ * probe). Use it only as a whole statement. */
+#define FMV_EXIT_HANDLER()          \
+    __asm__ __volatile__("sync.l"); \
+    __asm__ __volatile__("ei")
+#else
+#define FMV_EXIT_HANDLER() ((void)0)
+#endif
 
-/* OnFmvGifDmaInterrupt: DMAC ch2 handler — contains the handwritten `sync;
- * ei` interrupt-reenable pair, which no C source can produce. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", OnFmvGifDmaInterrupt);
+/**
+ * OnFmvVblankFlip - INTC vblank-start handler (installed by
+ * InitFmvPlaybackEngine through func_00126DC0, FACT #5907) that shows decoded
+ * FMV frames one field at a time.
+ * @param cause  interrupt cause (not read)
+ * @return 0, after the ExitHandler barrier pair
+ *
+ * Latches the field parity in D_1AE794: GS_CSR's FIELD bit (bit 13) when
+ * interlaced, a plain toggle in progressive mode. Then, only while the
+ * handler is enabled (D_1AE788, set by func_00350F28) and the GS paths are idle
+ * (WaitGsPathsIdle(1, 0) == 0, kept in D_1AE798), it takes the oldest queued
+ * frame. On field 0, a frame in state 2 (pushed) gets its first-field chain
+ * (slot + 0x40) sent on DMAC channel 2 and goes to state 1. On field 1, a frame
+ * in state 1 gets its second-field chain (slot + 0x13880), goes to state 0, and
+ * raises D_1AE790 for OnFmvGifDmaInterrupt, which releases it from the queue.
+ * Each kick first waits for the GS and starts the frame's draw list at
+ * g_pFmvGsBase + (slot index << 14) + 0x1C81C0 (NOTE #5618).
+ *
+ * The four shared flags are read and written through FMV_IRQ_FLAG, a
+ * volatile view: a CODEGEN DEVICE (RULING #8404), not a claim about these
+ * objects. It keeps the ROM's reload of D_1AE798 straight after its store, the
+ * re-read of D_1AE794 at the field-1 test, and the unfilled delay slots after
+ * the D_1AE788 and slot tests. Writer census (USA asm): D_1AE788 func_00350F28
+ * and func_00350F78; D_1AE78C func_00350F28 and this; D_1AE794 and D_1AE798 this
+ * only. Measured without the view (s136os probe, positional words of 116):
+ * D_1AE788 8, D_1AE78C 90, D_1AE794 81, D_1AE798 78. D_1AE790 needs none. The
+ * parity goes through a `field` local: stored straight from each arm, cc1
+ * keeps the CSR address in $3 and the ROM's beql is lost (12 words).
+ * func_00127220 (sceDmaSend, FACT #1162) is declared `void` because the
+ * ROM never reads its return: as `s32`, cc1 schedules the field-0 kick
+ * differently (5 words). The definition (cod/022FA8.c) types its arguments
+ * `(struct Obj127220 *, u32)`. This declaration passes the same two values
+ * in the same registers ($a0, $a1).
+ * GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+ * (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in tools/ee/s136os_functions.txt)
+ * and spliced over S136OS_SLOT by tools/ee/s136os_splice.sh (task #2335). There
+ * is no asm fallback: a build that skips the splice drops the function. On
+ * native it is plain C.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_OnFmvVblankFlip)
+S136OS_SLOT(OnFmvVblankFlip);
+#else
+extern s32 FmvFrameQueueGetDisplaySlot(FmvFrameQueue *q);
+extern s32 func_00126F38(s32 channel);     /* DMAC channel handle */
+extern s32 WaitGsPathsIdle(s32 mode, s32 arg);
+extern void BeginFrameDrawList(u8 *list, s32 arg);
+extern void func_00127220(s32 channel, void *chain); /* sceDmaSend */
+extern s32 g_bProgressiveScan;
+extern u8 *g_pFmvGsBase;
+extern s32 D_1AE794; /* current field parity (0/1) */
+extern s32 D_1AE798; /* last WaitGsPathsIdle(1, 0) result */
+#define FMV_IRQ_FLAG(x) (*(volatile s32 *)&(x))
+s32 OnFmvVblankFlip(s32 cause) {
+    s32 channel = func_00126F38(2);
+    s32 *slot; /* [0] state: 2 pushed, 1 field 0 sent, 0 both sent; [1] index */
+
+    {
+        s32 field;
+        if (g_bProgressiveScan != 0) {
+            field = FMV_IRQ_FLAG(D_1AE794) ^ 1;
+        } else {
+            field = (*(volatile u64 *)0x12001000 >> 13) & 1; /* GS_CSR.FIELD */
+        }
+        FMV_IRQ_FLAG(D_1AE794) = field;
+    }
+    if (FMV_IRQ_FLAG(D_1AE788) != 0) {
+        FMV_IRQ_FLAG(D_1AE78C)++;
+        FMV_IRQ_FLAG(D_1AE798) = WaitGsPathsIdle(1, 0);
+        if (FMV_IRQ_FLAG(D_1AE798) == 0) {
+            slot = (s32 *)FmvFrameQueueGetDisplaySlot(
+                (FmvFrameQueue *)(FMV_ARENA_BASE_GP + FMV_FRAMEQ_OFS));
+            if (slot == 0) {
+                FMV_EXIT_HANDLER();
+                return 0;
+            }
+            if (FMV_IRQ_FLAG(D_1AE794) == 0 && slot[0] == 2) {
+                WaitGsPathsIdle(0, 0);
+                BeginFrameDrawList(g_pFmvGsBase + ((slot[1] << 14) + 0x1C81C0), 0);
+                func_00127220(channel, (u8 *)slot + 0x40);
+                slot[0] = 1;
+            } else if (FMV_IRQ_FLAG(D_1AE794) == 1 && slot[0] == 1) {
+                WaitGsPathsIdle(0, 0);
+                BeginFrameDrawList(g_pFmvGsBase + ((slot[1] << 14) + 0x1C81C0), 0);
+                func_00127220(channel, (u8 *)slot + 0x13880);
+                slot[0] = 0;
+                D_1AE790 = 1;
+            }
+        }
+    }
+    FMV_EXIT_HANDLER();
+    return 0;
+}
+#undef FMV_IRQ_FLAG
+#endif
+
+/**
+ * OnFmvGifDmaInterrupt - DMAC handler (installed by InitFmvPlaybackEngine
+ * through AddDmacHandler, FACT #5907): once OnFmvVblankFlip has sent a frame's
+ * second field (D_1AE790), release that frame from the display queue
+ * (func_00352CE8) and clear the latch.
+ * @param channel  DMAC channel (not read)
+ * @return 0, after the ExitHandler barrier pair (FMV_EXIT_HANDLER above)
+ *
+ * GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+ * (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in tools/ee/s136os_functions.txt)
+ * and spliced over S136OS_SLOT by tools/ee/s136os_splice.sh (task #2335). There
+ * is no asm fallback: a build that skips the splice drops the function. On
+ * native it is plain C.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_OnFmvGifDmaInterrupt)
+S136OS_SLOT(OnFmvGifDmaInterrupt);
+#else
+extern void func_00352CE8(FmvFrameQueue *q);
+s32 OnFmvGifDmaInterrupt(s32 channel) {
+    if (D_1AE790 != 0) {
+        func_00352CE8((FmvFrameQueue *)(g_pFmvArenaBase + FMV_FRAMEQ_OFS));
+        D_1AE790 = 0;
+    }
+    FMV_EXIT_HANDLER();
+    return 0;
+}
+#endif
 
 /* func_00350F28: vblank field-sync waiter — spin while WaitVblankGetField(0) still
  * reports `targetField` and progressive-scan is off; once the field changes (or
