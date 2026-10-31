@@ -98,10 +98,10 @@ The GPL-2.0-or-later note in the section above applies to these bodies too.
 
 ### OpenRAC rac2-gc-decomp at 96927f87 (GPL-3.0)
 
-Thirty-two C function bodies are taken from OpenRAC's `rac2-gc-decomp`,
+Thirty-six C function bodies are taken from OpenRAC's `rac2-gc-decomp`,
 <https://github.com/OpenRAC/rac2-gc-decomp> at commit
 `96927f872c709e13aaa0f32265bb81a5531bf7ed` (root `LICENSE`: GNU General Public
-License, version 3), with the authors' permission (RULING #10405), tasks #2230, #2232, #2234, #2235, #2236, #2248, #2251, #2252, #2261, #2262, #2272, #2294, #2295, #2304, #2306, #2308 and #2320. Each is adapted, with every respelling named in the
+License, version 3), with the authors' permission (RULING #10405), tasks #2230, #2232, #2234, #2235, #2236, #2248, #2251, #2252, #2261, #2262, #2272, #2294, #2295, #2304, #2306, #2308, #2311 and #2320. Each is adapted, with every respelling named in the
 function's `Source:` line.
 
 | Here | Upstream file | Upstream name |
@@ -112,6 +112,10 @@ function's `Source:` line.
 | `func_0011C1F8` in `going-decompiled/src/usa/cod/015180.c` (adapted: our alias spellings, the float conversion spelled explicitly, `char *ap` for `va_list ap`; task #2261) | `src/core/0011BF18.c` (from rac1-decomp `src/core/00119D88.c`) | `func_0011C1F8` |
 | `func_0011D9C0` in `going-decompiled/src/usa/cod/015180.c` (adapted: our extern spellings, one `(volatile s32 *)` cast for their `volatile` table; task #2261) | `src/core/0011D950.c` (from rac1-decomp `src/core/00119D88.c`) | `func_0011D9C0` |
 | `WaitVblankStartIntc` in `going-decompiled/src/usa/cod/015180.c` (adapted: our name; each `__sync_synchronize()` written as an inline `sync` behind `#ifndef TARGET_NATIVE`, the RULING #12168 hardware barrier), task #2308 | `nonmatching/core/func_0011B0B0.c`, a near-miss draft (its only commit `df6a5a10`, author "agent-core-04") | `func_0011B0B0` |
+| `IntegerToAscii` in `going-decompiled/src/usa/cod/015180.c` (adapted: our name, `s32`/`u32` for `int`/`unsigned int`; sn2952 arm, task #2311) | `src/core/00118548.c` | `func_00118548` |
+| `BufferedWrite128` in `going-decompiled/src/usa/cod/015180.c` (adapted: our name, `s32`/`u32`, the unit's `func_0011B1E8` prototype; sn2952 arm, task #2311) | `src/core/00118BC0.c` | `func_00118BC0` |
+| `VfprintfDispatch` in `going-decompiled/src/usa/cod/015180.c` (adapted: our names for it and its two engines, `s32`, the `+0x54` read through a `PrintfStream` view; its switch table bound to the ROM's by `tools/ee/jtbl_bind.sh`; sn2952 arm, task #2311) | `src/core/00118CC8.c` | `func_00118CC8` |
+| `BufferedWrite128Secondary` in `going-decompiled/src/usa/cod/015180.c` (adapted: as `BufferedWrite128`; sn2952 arm, task #2311) | `src/core/00119AC0.c` | `func_00119AC0` |
 | `func_002AD590` in `going-decompiled/src/usa/text/1A8180.c` (adapted: callee and data spellings ours; EE-only callee prototypes, task #2234) | `src/game/002AA800.c` | `func_002AC728` (v1.01 address) |
 | `UpdateBestiaryMenuInput` in `going-decompiled/src/usa/text/1CA080.cpp` (adapted) | `src/game/002CDB30-g8.c` | `func_002CDB30` (v1.01 address) |
 | `UpdateSkillPointsMenu` in `going-decompiled/src/usa/text/1CA080.cpp` (adapted) | `src/game/002CFBE8-g32.c` | `func_002CFBE8` (v1.01 address) |

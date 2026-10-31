@@ -339,11 +339,13 @@
 - **OpenRAC — `rac2-gc-decomp`, commit `96927f87`, core bodies** (GPL-3.0)
   <https://github.com/OpenRAC/rac2-gc-decomp> at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`
 
-  Four core C bodies, adopted with the authors' permission (held by the
-  operator, RULING #10405) and re-checked byte-exact against our v2.00 ROM on
-  the plain sdk29 arm (tasks #2230, #2261 and #2308). Contributors: Flavius,
-  and the OpenRAC commit authored as "agent-core-04". The doc comment carries
-  the `Source:` line, which names every change beyond extern spellings.
+  Eight core C bodies, adopted with the authors' permission (held by the
+  operator, RULING #10405) and re-checked byte-exact against our v2.00 ROM:
+  four on the plain sdk29 arm (tasks #2230, #2261 and #2308) and four on the
+  per-function SN 2.95.2 arm (RULING #12157, task #2311). Contributors:
+  Flavius, bigbeno37, Louis-Philippe Le Sieur, and the OpenRAC commit authored
+  as "agent-core-04". The doc comment carries the `Source:` line, which names
+  every change beyond extern spellings.
 
   Used so far:
   - **`func_0011DE08`** (`0x0011DE08`, the file-I/O RPC library init) in
@@ -377,6 +379,21 @@
     this cc1) written as an inline `sync` behind `#ifndef TARGET_NATIVE`.
     Admitted because it is byte-exact on our ROM; its two `sync` are the
     hardware barriers RULING #12168 allows (task #2308).
+  - **`IntegerToAscii`** (`0x00118548`, itoa), **`BufferedWrite128`**
+    (`0x00118BC0`) and **`BufferedWrite128Secondary`** (`0x00119AC0`, the two
+    128-byte TTY staging writers) in `going-decompiled/src/usa/cod/015180.c`,
+    from `src/core/00118548.c`, `src/core/00118BC0.c` and
+    `src/core/00119AC0.c` (author commit `d4ac4036`, bigbeno37), on the
+    sn2952 arm (task #2311). ADAPTED: our symbol names, `int`/`unsigned int`
+    written `s32`/`u32`, and the writers' `func_0011B1E8` extern dropped for
+    the unit's own prototype.
+  - **`VfprintfDispatch`** (`0x00118CC8`, newlib's split-vfprintf engine
+    selector) in `going-decompiled/src/usa/cod/015180.c`, from
+    `src/core/00118CC8.c` (author commit `cd02daa5`, Louis-Philippe Le
+    Sieur), on the sn2952 arm (task #2311). ADAPTED: our symbol names for it
+    and its two engines, `int` written `s32`, and the stream's `+0x54` read
+    through a `PrintfStream` view. Its switch's jump table is bound to the
+    ROM's `jtbl_0013A4B0` by `tools/ee/jtbl_bind.sh`.
 
 - **OpenRAC — `rac2-gc-decomp`, commit `96927f87`, boundary-split bodies** (GPL-3.0, and MIT for one carried file)
   <https://github.com/OpenRAC/rac2-gc-decomp> at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`
