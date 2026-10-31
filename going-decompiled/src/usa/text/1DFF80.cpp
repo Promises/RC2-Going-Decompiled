@@ -177,7 +177,14 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_0
  * SDK sprintf func_00115DA8. Returns dst.
  * The 25-case jtbl->flag mapping was extracted from jtbl_0026CEB0_text (0x2E0054
  * => normal, 0x2E005C => special) — the faithful #else the prior park-note asked
- * for. Match-walled by the jtbl reloc (engine-2.96); matching arm stays INCLUDE_ASM. */
+ * for. Match-walled by the jtbl reloc (engine-2.96); matching arm stays INCLUDE_ASM.
+ * s136os arm: OpenRAC rac2-gc-decomp @96927f87 src/game/002DF1B8-g8.c
+ * func_002DF1F8 closes masked 0/58 standalone (FACT #12087), but with our
+ * symbols, an S136OS_SLOT guard and a selector row the real build refuses it
+ * on SHAPE: "func_002E0010 is outside the s136os arm's domain (its block needs
+ * data spliced from outside .ent..end): section switch: .rdata" (task #2234).
+ * Its switch makes SN 1.36 emit its own .rdata table, and the ROM's is
+ * jtbl_0026CEB0_text in the data segment. Not adopted. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E0010);
 #else
