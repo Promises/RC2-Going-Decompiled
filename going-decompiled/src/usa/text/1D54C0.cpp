@@ -5443,44 +5443,74 @@ void func_002DF710(void *dst, s32 slot) {
  * global blocks — far beyond a faithful #else. Bare INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", RestorePlayerProgressState);
 
-/* Configure the skill-points / unlockables summary screen labels & icon ids
- * from the three progress counters (skill points x2, and a misc count):
- * picks "complete" vs "partial" icon/string ids per threshold (15 / 30 / 10). */
+/* Set the skill-points / unlockables summary page's icon frames and caption
+ * strings from the three progress counters. CountSkillPointsCompleted() is
+ * taken twice (>= 15 and >= 30 skill points), func_002B1D40() once (>= 10).
+ * Each test picks a "complete" or "partial" value for:
+ *   - four halfword icon fields in the D_0025EBB0 widget block (+0x3E, +0x4A,
+ *     +0x56, +0x62; 3 or 10 when complete, 2 when partial);
+ *   - four caption string ids (D_1AB2BC..D_1AB2C8, 0x2CB5/0x2CB6/0x2CB9/0x2CBA
+ *     when complete, 0x2CBB/0x2CBC/0x2CBD/0x2CBD when partial).
+ * When the D_1A7318 selector is nonzero it also clears the block's +0x60
+ * halfword. No return value. Called from 1CA080's galactic-map refresh.
+ * MATCHED on the s136os arm (SN 2.95.3 v1.36 cc1plus -fopt-stack), task #2289.
+ * It needs gcse on: the ROM keeps %hi(D_0025EBB0) in $11 and re-forms %lo for
+ * each halfword store, the cross-block HIGH copy only gcse makes (NOTE #9901),
+ * so it could not close before task #2252 unpinned this unit's s136os arm.
+ * Two devices:
+ *   - the four caption ids and D_1A7318 are cc1-small but assembler-absolute
+ *     (`.extern ,16`, EE arm only), as D_001B1E90 is above. cc1 emits each as
+ *     one macro and gas expands it to the ROM's lui/sw (`lui $1`) or lui/lw
+ *     (in the destination register). Read as a cc1-split global instead,
+ *     D_1A7318's %hi is scheduled early and costs one register through the
+ *     whole function (every temporary shifts up by one).
+ *   - the last caption store is volatile. That is a SCHEDULING DEVICE, not a
+ *     claim that the word is shared with anything asynchronous: cc1 believes
+ *     the store is one instruction and would put it in the D_1A7318 branch's
+ *     delay slot. The assembler then hoists the two-word expansion and leaves
+ *     a nop (asm_unit.sh's SN-as slot rule). The ROM fills that slot with the
+ *     +0x60 address instead, which reorg does once the store cannot move (the
+ *     same volatile-memop-before-branch shape as text/250080 func_00352B90).
+ *     An empty __asm__ fence before the `if` was measured instead and is worse
+ *     (19 words differ).
+ * GUARD: compiled alone by SN 2.95.3 v1.36 -fopt-stack and spliced over the
+ * S136OS_SLOT line (tools/ee/s136os_splice.sh); plain C on native. */
+/* The assembler-absolute device above. File scope, outside the guard, so the
+ * 2.9 TU the block is spliced into carries the same sizes ahead of it. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DFE60);
+__asm__(".extern D_1AB2BC, 16");
+__asm__(".extern D_1AB2C0, 16");
+__asm__(".extern D_1AB2C4, 16");
+__asm__(".extern D_1AB2C8, 16");
+__asm__(".extern D_1A7318, 16");
+#endif
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002DFE60)
+S136OS_SLOT(func_002DFE60);
 #else
-/* Declarations this body needs whose only other declarations sit in other
- * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern s32 CountSkillPointsCompleted(void);
 extern s32 func_002B1D40(void);
-/* (end of this body's declarations) */
-/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
- * objdiff): sdk29 49.82% / engine96 41.23%; better arm sdk29; 62 differing
- * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
- * insn: ROM `addiu sp,sp,-32` vs `addiu sp,sp,-48`. Not iterated in t495.
- * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): this member's prologue - the
- * ROM's save set at its 8-byte stride, and its frame - is reproduced exactly (NOTE #9871), so
- * the save-slot wall named above is a cc1 2.9 property and was measured false as the reason
- * this member stays unmatched (FACT #9873). Residual: UNMEASURED. */
-    /* TODO(match): functional equivalent - not byte-exact. */
+extern u8 D_0025EBB0[];           /* summary-page widget block */
+extern s32 D_1AB2BC, D_1AB2C0, D_1AB2C4;  /* caption string ids */
+extern volatile s32 D_1AB2C8;              /* volatile: the slot device above */
+extern s32 D_1A7318;
+
 void func_002DFE60(void) {
-    extern s16 D_0025EBEE, D_0025EBFA, D_0025EC06, D_0025EC12, D_0025EC10;
-    extern s32 D_001AB2C8, D_001AB2BC, D_001AB2C0, D_001AB2C4;
-    extern s32 D_001A7318;
-    s32 sp1 = CountSkillPointsCompleted();
-    s32 sp2 = CountSkillPointsCompleted();
-    s32 misc = func_002B1D40();
-    s32 miscDone = misc > 9;
-    D_0025EBEE = (sp1 > 0xe) ? 3 : 2;
-    D_0025EBFA = (sp2 > 0x1d) ? 3 : 2;
-    D_0025EC06 = miscDone ? 10 : 2;
-    D_0025EC12 = miscDone ? 3 : 2;
-    D_001AB2C8 = miscDone ? 0x2cba : 0x2cbd;
-    D_001AB2BC = (sp1 > 0xe) ? 0x2cb5 : 0x2cbb;
-    D_001AB2C0 = (sp2 > 0x1d) ? 0x2cb6 : 0x2cbc;
-    D_001AB2C4 = miscDone ? 0x2cb9 : 0x2cbd;
-    if (D_001A7318 != 0) {
-        D_0025EC10 = 0;
+    s32 skillsHalf = CountSkillPointsCompleted() >= 15;
+    s32 skillsAll = CountSkillPointsCompleted() >= 30;
+    s32 extras = func_002B1D40() >= 10;
+    u8 *page;
+
+    page = D_0025EBB0; *(s16 *)(page + 0x3E) = skillsHalf ? 3 : 2;
+    page = D_0025EBB0; *(s16 *)(page + 0x4A) = skillsAll ? 3 : 2;
+    page = D_0025EBB0; *(s16 *)(page + 0x56) = extras ? 10 : 2;
+    page = D_0025EBB0; *(s16 *)(page + 0x62) = extras ? 3 : 2;
+    D_1AB2BC = skillsHalf ? 0x2CB5 : 0x2CBB;
+    D_1AB2C0 = skillsAll ? 0x2CB6 : 0x2CBC;
+    D_1AB2C4 = extras ? 0x2CB9 : 0x2CBD;
+    D_1AB2C8 = extras ? 0x2CBA : 0x2CBD;
+    if (D_1A7318 != 0) {
+        u8 *block = D_0025EBB0;
+        *(s16 *)(block + 0x60) = 0;
     }
 }
 #endif
