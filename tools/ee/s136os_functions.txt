@@ -732,3 +732,4 @@ usa text/16E980 TestCameraTakeover
 usa text/1CA080 DrawExtrasMenu
 usa text/1CA080 DrawPlanetWarpMenu
 usa text/248B50 func_0034B220
+usa text/188858 DrawWeaponSelectWheel

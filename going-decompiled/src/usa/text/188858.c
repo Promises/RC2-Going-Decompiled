@@ -4848,25 +4848,61 @@ void func_0028C840(void *wheel) {
 }
 #endif
 
-/* DrawWeaponSelectWheel(w): render the weapon quick-select wheel widget (~0x5C4).
+/**
+ * DrawWeaponSelectWheel(w): render the weapon quick-select wheel widget.
  *
- * `w` is the wheel HudElement: w+0x70/+0x71 are the open/close animation counters
- * (each /8, clamped to [0,1] -> fillA/fillB); w+0x74 is the highlighted item
- * index; w+0x50/+0x54 are the screen anchor (x,y), aligned in place by
- * func_0028C180. For each wheel item (count/callback-array at
- * g_hudMobySpawnStart+0x28/+0x2C, 0x1C stride, indexed base = array[D_1A8D48]) it
- * computes a per-item angle (WrapAnglePiSum, result unused here), drives the
- * highlight tween for the selected item (func_0034DAB0), and pokes the GUI alpha
- * slot (FloatToInt(alpha*0.5) while func_00290FC0(), else 0). For the highlighted
- * item — unless the popup gate g_noticeOwner is set — it draws the equipped weapon's
- * ammo counter "%d/%d" (red 0x804040FF when out of ammo, white gradient
- * otherwise) and the localized weapon name, split onto two lines at the first '-'
- * or ' '. Returns w+0x58 (the widget status word).
+ *   w       the wheel HudElement. +0x70/+0x71 are the open/close animation
+ *           counters (each /8, clamped to [0,1] -> fillA/fillB); +0x74 is the
+ *           highlighted slot index (negative = none); +0x50/+0x54 are the
+ *           screen anchor (x,y), aligned into posX/posY by func_0028C180.
+ *   return  w+0x58, the widget status word, on every path.
  *
- * WALL: extensive float geometry math; FP scheduling not reproducible from C.
- * Matching arm stays INCLUDE_ASM; the #else below is the portable body. */
+ * For each wheel slot (count / per-page record arrays at
+ * g_hudMobySpawnStart+0x28/+0x2C, 0x1C stride, page = D_1A8D48) it computes
+ * the slot angle (WrapAnglePiSum; the result is unused), drives the
+ * highlight tween of the selected slot (func_0034DAB0, t = slot+7 wrapped into
+ * [0,8)), and writes the GUI alpha word (FloatToInt(alpha * 0.5) while
+ * func_00290FC0(), else 0). Then, for a populated selected slot and only
+ * while no notice is up (g_noticeOwner == 0), it draws the equipped weapon's
+ * "%d/%d" ammo counter (red-gradient 0x804040FF when out of ammo, white
+ * otherwise; only for a weapon whose WeaponDef exists and sells ammo) and its
+ * localized name (WeaponDef +0x48, via the slot record's +0x18 item id). The
+ * name is split onto two lines after the first '-' (kept on line one) or else
+ * at the first ' ' (dropped). The baseline is posY+0x4B for an ammo weapon,
+ * posY+0x55 for a split name and posY+0x64 otherwise. A NULL or empty name
+ * draws nothing.
+ *
+ * MATCHED byte-exact on the s136os arm at the unit's -O2 default (gcse on),
+ * task #2430. Devices, each measured necessary by removing it alone (the
+ * NOTE #12247 per-function probe, positional words incl. 1 probe pad word;
+ * with all three in place it reads 1, i.e. 0 in the extent):
+ *   - `w` pinned to $21 (EE_REG, RULING #8598) [22];
+ *   - the empty tied fence on textColor (RULING #8483, no clobber) [107,
+ *     368 built];
+ *   - g_equippedItemSlotsLa, read in BOTH the ammo lookup and the baseline
+ *     test (RULING #8620 addressing-model device, below). Plain
+ *     g_equippedItemSlots in the baseline test [65], in the ammo lookup [67],
+ *     or the alias without its section attribute [30].
+ *     Why it works (from cc1's -dg/-dl dumps): cc1 then emits the address as
+ *     one `la` macro, not a lui/addiu pair. gcse makes the second `la`
+ *     redundant with the first. Its copy crosses calls and gets no hard
+ *     register, so reload rematerialises `la $3` into a single register at
+ *     0x28D5F8, which is the ROM's `lui $3; addiu $3,$3` pair. The split form
+ *     instead keeps the %hi in its own reload register. A pseudo for the
+ *     alias in only one place gets PRE-hoisted to before the '-' scan.
+ */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", DrawWeaponSelectWheel);
+/* g_equippedItemSlotsLa: an asm-label name for g_equippedItemSlots declared
+ * section(".sdata") (RULING #8620). cc1 -G8 then treats it as small data and
+ * prints `la`; the assembler knows the real 32-byte symbol and expands that
+ * to %hi/%lo, so every relocation names g_equippedItemSlots and nm shows no
+ * alias. Moves no data, emits nothing. Natively it is the array itself. */
+extern s32 g_equippedItemSlotsLa[8] __asm__("g_equippedItemSlots") __attribute__((section(".sdata")));
+#else
+#define g_equippedItemSlotsLa g_equippedItemSlots
+#endif
+#if !defined(TARGET_NATIVE) && !defined(S136OS_DrawWeaponSelectWheel)
+S136OS_SLOT(DrawWeaponSelectWheel);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
@@ -4878,188 +4914,174 @@ extern s32   func_00290FC0(void);                              /* GUI state gate
 extern s32  func_002801B8(s32 x, s32 y, u32 color, const char *text, s32 flag);
 extern char  g_szAmmoFraction[];             /* "%d/%d" ammo-count format string */
 extern s32   g_noticeOwner;                        /* on-screen notice slot owner; nonzero = a notice is up */
+extern s32   ColorLerpPacked(s32 colorA, s32 colorB, f32 t);   /* 0x2846E8 packed-RGBA lerp */
 
-s32 DrawWeaponSelectWheel(HudElement *w) {
+#define HUD_WORD(e, off) (*(s32 *)((u8 *)(e) + (off)))
+#define WHEEL_COUNT HUD_WORD(&g_hudMobySpawnStart, 0x28)
+#define WHEEL_TABLE (*(u8 ***)((u8 *)&g_hudMobySpawnStart + 0x2C))
+#define WHEEL_REC(k) (WHEEL_TABLE[D_1A8D48] + (k) * 0x1C)
+
+s32 DrawWeaponSelectWheel(HudElement *wArg) {
+    register HudElement *w EE_REG("$21") = wArg;
     char buf[0x50];
     s32 posX, posY;
+    u8 *anim;
     f32 fillA, fillB, combined;
-    s32 alpha, selectedIndex, n, i, off;
-    void **table;
+    s32 alpha, sel, i;
 
-    /* open/close animation fractions, each clamped to [0,1] */
-    fillA = IntToFloat(*((u8 *)w + 0x70)) / IntToFloat(8);
+    anim = (u8 *)w + 0x70;
+
+    fillA = IntToFloat(anim[0]) / IntToFloat(8);
     if (1.0f < fillA) {
         fillA = 1.0f;
     } else if (fillA < 0.0f) {
         fillA = 0.0f;
     }
-
-    fillB = IntToFloat(*((u8 *)w + 0x71)) / IntToFloat(8);
+    fillB = IntToFloat(anim[1]) / IntToFloat(8);
     if (1.0f < fillB) {
         fillB = 1.0f;
     } else if (fillB < 0.0f) {
         fillB = 0.0f;
     }
-
     alpha = FloatToInt(fillA * 128.0f);
 
-    /* copy the widget's anchor and let func_0028C180 align it in place */
-    posX = *(s32 *)((u8 *)w + 0x50);
-    posY = *(s32 *)((u8 *)w + 0x54);
+    {
+        s32 x = HUD_WORD(w, 0x50);
+        s32 y = HUD_WORD(w, 0x54);
+        posX = x;
+        posY = y;
+    }
     func_0028C180(w, &posX, &posY);
 
-    n = *(s32 *)((u8 *)&g_hudMobySpawnStart + 0x28);
-    if (n > 0) {
-        table = *(void ***)((u8 *)&g_hudMobySpawnStart + 0x2C);
-        off = 0;
-        i = 0;
-        do {
-            u8 *rec;
-
-            /* per-item angle; the original discards the result (extern call kept) */
-            (void)WrapAnglePiSum(2.0f * (f32)i * 3.14159274f / (f32)n - 3.14159274f,
-                                 1.57079637f);
-
-            if (*(s32 *)((u8 *)w + 0x74) == i) {                 /* highlighted item */
-                rec = (u8 *)table[D_1A8D48] + off;
-                if (*(s32 *)rec != 0 && g_guiInstance != 0) {
-                    f32 fi = (f32)(i + 7);
-                    if (fi > 7.0f) {
-                        fi -= 8.0f;
-                    }
-                    func_0034DAB0((u8 *)g_guiInstance + 0x376C8, 1, fi);
+    for (i = 0; i < WHEEL_COUNT; i++) {
+        (void)WrapAnglePiSum(((f32)i + (f32)i) * 3.14159274f / (f32)WHEEL_COUNT - 3.14159274f,
+                             1.57079637f);
+        if (HUD_WORD(w, 0x74) == i) {
+            if (*(s32 *)WHEEL_REC(i) != 0 && g_guiInstance != 0) {
+                f32 t = (f32)(i + 7);
+                if (t > 7.0f) {
+                    t -= 8.0f;
                 }
+                func_0034DAB0((u8 *)g_guiInstance + 0x376C8, 1, t);
             }
-
-            rec = (u8 *)table[D_1A8D48] + off;
-            if (*(s32 *)rec != 0 && g_guiInstance != 0) {
-                s32 v = (func_00290FC0() != 0) ? FloatToInt((f32)alpha * 0.5f) : 0;
-                *(s32 *)((u8 *)g_guiInstance + 0x38000 + 0x79DC) = v;
-            }
-
-            n = *(s32 *)((u8 *)&g_hudMobySpawnStart + 0x28);
-            i++;
-            off += 0x1C;
-        } while (i < n);
+        }
+        if (*(s32 *)WHEEL_REC(i) != 0 && g_guiInstance != 0) {
+            u8 *gui = (u8 *)g_guiInstance + 0x38000;
+            *(s32 *)(gui + 0x79DC) = (func_00290FC0() != 0) ? FloatToInt((f32)alpha * 0.5f) : 0;
+        }
     }
 
-    selectedIndex = *(s32 *)((u8 *)w + 0x74);
-    if (selectedIndex < 0) {
-        return *(s32 *)((u8 *)w + 0x58);
+    sel = HUD_WORD(w, 0x74);
+    if (sel < 0) {
+        return HUD_WORD(w, 0x58);
     }
-
-    table = *(void ***)((u8 *)&g_hudMobySpawnStart + 0x2C);
-    if (*(s32 *)((u8 *)table[D_1A8D48] + selectedIndex * 0x1C) == 0) {
-        return *(s32 *)((u8 *)w + 0x58);
+    if (*(s32 *)WHEEL_REC(sel) == 0) {
+        return HUD_WORD(w, 0x58);
     }
     if (g_noticeOwner != 0) {
-        return *(s32 *)((u8 *)w + 0x58);
+        return HUD_WORD(w, 0x58);
     }
 
     combined = fillA * fillB;
-
-    /* ammo counter for the equipped weapon in the highlighted slot */
     {
-        s32 itemId = g_equippedItemSlots[selectedIndex];
+        s32 itemId = g_equippedItemSlotsLa[sel];
         WeaponDef *wd = &g_weaponTable[g_itemEquippedSlot[itemId]];
 
         if (wd->exists != 0 && wd->sellsAmmoFlag != 0) {
             s32 curAmmo = g_weaponAmmo[itemId];
-            u16 capacity = wd->ammoCapacity;
             s32 color;
 
-            func_00115DA8(buf, g_szAmmoFraction, curAmmo, capacity);
-            if (curAmmo == 0) {
-                color = ColorLerpPacked(0x004040FF, 0x804040FF, combined);   /* out of ammo: red */
+            func_00115DA8(buf, g_szAmmoFraction, curAmmo, wd->ammoCapacity);
+            if (curAmmo != 0) {
+                color = ColorLerpPacked(0x00F0F0F0, 0x80F0F0F0, combined);
             } else {
-                color = ColorLerpPacked(0x00F0F0F0, 0x80F0F0F0, combined);   /* white gradient */
+                color = ColorLerpPacked(0x004040FF, 0x804040FF, combined);
             }
             func_002801B8(posX + 0x69, posY + 0x70, color, buf, -1);
         }
     }
-
-    /* localized weapon name, from the wheel record's item id at +0x18 */
     {
-        s32 textColor = ColorLerpPacked(0x00F0F0F0, 0x80F0F0F0, combined);
-        u8 *rec = (u8 *)table[D_1A8D48] + selectedIndex * 0x1C;
-        s32 itemId2 = *(s32 *)(rec + 0x18);
-        s16 nameId = *(s16 *)((u8 *)&g_weaponTable[g_itemEquippedSlot[itemId2]] + 0x48);
-        char *name = GetLocalizedString(nameId);
+        s32 nameColor = ColorLerpPacked(0x00F0F0F0, 0x80F0F0F0, combined);
+        s32 textColor;
         s32 splitLen = 0;
-        char *tail = name;
+        u8 *name = (u8 *)GetLocalizedString(
+            g_weaponTable[g_itemEquippedSlot[*(s32 *)(WHEEL_REC(sel) + 0x18)]].localizedNameId);
+        u8 *tail;
         s32 len, j, lineY;
 
         if (name == 0) {
-            return *(s32 *)((u8 *)w + 0x58);
+            return HUD_WORD(w, 0x58);
         }
-        if (func_001157AC(name) == 0) {
-            return *(s32 *)((u8 *)w + 0x58);
+        if (func_001157AC((char *)name) == 0) {
+            return HUD_WORD(w, 0x58);
         }
-        len = func_001157AC(name);
-
-        /* first pass: split at the first '-' (checked from index 1) */
+        textColor = nameColor;
+        __asm__("" : "+r"(textColor));
+        len = func_001157AC((char *)name);
+        tail = name;
+        j = 0;
+        /* split after the first '-' (kept on line one) */
         if (len > 0) {
             if (name[1] == '-') {
                 tail = name + 2;
                 splitLen = 2;
             } else {
                 tail = name + 1;
-                j = 1;
-                while (j < len) {
+            dash:
+                j++;
+                if (j < len) {
                     tail++;
-                    if (*tail == '-') {
-                        splitLen = j + 2;
-                        tail++;
-                        break;
+                    if (*tail != '-') {
+                        goto dash;
                     }
-                    j++;
+                    splitLen = j + 2;
+                    tail++;
                 }
             }
         }
-
-        /* if no '-', second pass: split at the first ' ' */
-        if (splitLen == 0 && 0 < len) {
-            if (name[1] == ' ') {
-                tail = name + 2;
-                splitLen = 1;
-            } else {
-                tail = name + 1;
-                j = 1;
-                while (j < len) {
-                    tail++;
-                    if (*tail == ' ') {
+        /* else at the first ' ' (dropped) */
+        if (splitLen == 0) {
+            tail = name;
+            j = 0;
+            if (splitLen < len) {
+                if (name[1] == ' ') {
+                    tail = name + 2;
+                    splitLen = 1;
+                } else {
+                    tail = name + 1;
+                space:
+                    j++;
+                    if (j < len) {
+                        tail++;
+                        if (*tail != ' ') {
+                            goto space;
+                        }
                         splitLen = j + 1;
                         tail++;
-                        break;
                     }
-                    j++;
                 }
             }
         }
-
-        /* baseline Y depends on whether the equipped weapon sells ammo */
-        {
-            s32 itemId3 = g_equippedItemSlots[selectedIndex];
-            if (g_weaponTable[g_itemEquippedSlot[itemId3]].sellsAmmoFlag != 0) {
-                lineY = posY + 0x4B;
-            } else {
-                lineY = posY + 0x64;
-                if (splitLen != 0) {
-                    lineY = posY + 0x55;
-                }
-            }
-        }
-
-        if (splitLen != 0) {
-            func_002801B8(posX + 0x69, lineY, textColor, name, splitLen);
-            func_002801B8(posX + 0x69, lineY + 0x10, textColor, tail, -1);
+        lineY = posY + 0x64;
+        if (g_weaponTable[g_itemEquippedSlot[g_equippedItemSlotsLa[sel]]].sellsAmmoFlag != 0) {
+            lineY = posY + 0x4B;
         } else {
-            func_002801B8(posX + 0x69, lineY, textColor, name, -1);
+            s32 splitY = posY + 0x55;
+            if (splitLen != 0) lineY = splitY;
+        }
+        if (splitLen != 0) {
+            func_002801B8(posX + 0x69, lineY, textColor, (char *)name, splitLen);
+            func_002801B8(posX + 0x69, lineY + 0x10, textColor, (char *)tail, -1);
+        } else {
+            func_002801B8(posX + 0x69, lineY, textColor, (char *)name, -1);
         }
     }
-
-    return *(s32 *)((u8 *)w + 0x58);
+    return HUD_WORD(w, 0x58);
 }
+#undef WHEEL_REC
+#undef WHEEL_TABLE
+#undef WHEEL_COUNT
+#undef HUD_WORD
 #endif
 
 /**
