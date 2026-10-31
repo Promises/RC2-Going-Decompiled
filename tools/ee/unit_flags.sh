@@ -38,7 +38,7 @@ unit_flags() {
     */usa/text/248B50.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
     */usa/text/235FE8.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse -fno-strict-aliasing";; # -fsa restores per-store pointer-member reload in GuiElementSetPos/Scale (#75)
     */usa/text/1CA080.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse"; S136EXTRA="-fstrict-aliasing";; # RULING #9235 (task #1540); RULING #9491 (task #1685) drops -fno-gcse from the s136os arm
-    */usa/text/1D54C0.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
+    */usa/text/1D54C0.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse"; S136EXTRA="";; # RULING #9491 shape (task #2252, FACT #10232): s136os arm unpinned, 2.9 arm keeps -fno-gcse
     */usa/text/1B4218.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse"; S136EXTRA="";; # RULING #9004: s136os arm unpinned, 2.9 arm keeps -fno-gcse
     */usa/text/178E88.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
     */usa/text/1823B8.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse"; S136EXTRA="";; # RULING #9491 shape (task #2115): s136os arm unpinned, 2.9 arm keeps -fno-gcse

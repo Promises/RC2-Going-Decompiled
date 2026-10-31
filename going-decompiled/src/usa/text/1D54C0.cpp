@@ -30,7 +30,9 @@
  * forwarding wrappers.
  *
  * Built at -O2 -G8 -fno-gcse (later SN cc1 TU model — see the part-A header for
- * the full -G8 extern-sizing rules). Walls left as INCLUDE_ASM (per function):
+ * the full -G8 extern-sizing rules). The s136os arm (S136OS_SLOT rows) compiles
+ * with gcse on, S136EXTRA="" (RULING #9491 shape, task #2252, FACT #10232); the
+ * 2.9 compile keeps -fno-gcse. Walls left as INCLUDE_ASM (per function):
  * the 8-byte-packed callee-save wall (2+ GPR saves), the delay-slot store
  * scheduling wall (a lone global store + return-0 the original keeps OUT of
  * the jr delay slot while cc1 sinks it in), pad-load reorder, register
@@ -1640,10 +1642,233 @@ void SetGalacticMapFadeAlpha(s32 progress, s32 color1, s32 color2) {
     __asm__ __volatile__("");   /* keep the jal + ra frame; cc1 would tail-jump */
 }
 
-/* Galactic-map grid cursor input (paged Up/Down/Left/Right with edge wrap into
- * linked sibling screens). Wall: very large nested branch graph + divide traps.
- * Bare INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D75D8);
+/* Galactic-map grid cursor input: moves a GridMenu's cursor with the d-pad and
+ * handles select.
+ *   menu: the grid (+0x30 flags, +0x3C index, +0x40 rows, +0x44 cols,
+ *         +0x48 entries, +0x4C/+0x50/+0x54/+0x58 up/down/left/right links).
+ * The pressed mask is D_138180+0x1C4 (g_padButtonsPressed). Returns 0 when
+ * menu is not the focused grid (menu block owner+0xE8). Returns
+ * 1 when pressed-mask bits 0x900 are set with no fallback. On bit 0x10 it
+ * copies owner+0xE0 to the menu block's value and returns 0, or returns -1 when
+ * that is 0 and there is no fallback. Otherwise Up/Down (0x1000/0x4000) step a
+ * row: at an edge they move focus (owner+0x128) to the linked grid, skipping
+ * links whose flags have bit 3 (when the block's wrap is set) or bit 2 (when its
+ * edge is set), and map the column across 3- and 5-column grids; with no link
+ * they wrap unless flags bit 15 is set. Left/Right (0x8000/0x2000) do the same
+ * per column. A cursor or focus change plays menu sound 1. On bit 0x40, for
+ * a selectable grid (flags bit 0) with no cooldown (busy), an owned entry's item
+ * is put in its weapon's equip slot (g_weaponTable[g_itemEquippedSlot[item]]
+ * .equipMode), or taken out of slot 1 or 2 if already there; busy = 10 and menu
+ * sound 0. An item not owned plays sound 2. Returns 0.
+ * MATCHED on the s136os arm (SN 2.95.3 v1.36 cc1plus -fopt-stack), task #2252.
+ * It closes only with gcse ON (pinned -fno-gcse: 321 words against the ROM's
+ * 322), which is why the unit's s136os compile is unpinned (S136EXTRA="",
+ * RULING #9491 shape, FACT #10232). One device, already in this unit:
+ * g_inventoryOwned is read through g_inventoryOwnedAbs, the #8036 assembler
+ * alias func_002DECE0 uses (8 bytes to cc1, so it emits one `la` macro; 16 to
+ * gas, so the macro expands absolutely). The ROM forms that address as an
+ * adjacent lui/addiu pair; read as the plain unsized array, cc1 splits it and
+ * puts the lui in a delay slot (321 words). The relocations name
+ * g_inventoryOwned.
+ * GUARD: compiled alone by SN 2.95.3 v1.36 -fopt-stack and spliced over the
+ * S136OS_SLOT line (tools/ee/s136os_splice.sh); plain C on native.
+ * Source: OpenRAC/rac2-gc-decomp @96927f872c709e13aaa0f32265bb81a5531bf7ed
+ * (GPL-3.0, adopted with the authors' permission per RULING #10405),
+ * src/game/002D6970-g32.c, func_002D6970 (v1.01 address; author commit
+ * 0eb05a7c, Flavius), ADAPTED: (1) their D_001F2840 MenuRoot and D_00138180
+ * PadState are views of our g_menuScreenBlock and D_138180 (the gridRoot and
+ * gridPad macros below; same addresses, so the same relocations);
+ * (2) their D_001A7AF8 (declared MACRO_ADDR there) is our g_inventoryOwned,
+ * read through the alias above (gridOwned); their D_00139568, D_00239BA0 and
+ * func_002DF190 are our g_itemEquippedSlot, g_weaponTable (cast to their
+ * WeaponInfo) and func_002DFFA0; (3) their `if (!((menu->flags ^ 1) & 1))` is
+ * split through the local `unselectable`: this unit is C++, and the C++ front
+ * end folds the xor away (andi + bne at 0x2D79DC: 3 of 322 words differ, vmu)
+ * where C keeps the ROM's xori/andi/beqz; (4) their `-g32` file-name flag is not carried (the unit is
+ * -G8 and the body has no gp-relative access). Their typedefs and the rest of
+ * the body are verbatim. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002D75D8)
+S136OS_SLOT(func_002D75D8);
+#else
+typedef struct { char p00[0x14]; char *owner; int value; char p1c[0x24]; int slots[4]; char p50[0xE4]; int fallback; char p138[0xC]; int wrap; int edge; char p14c[0xC]; int busy; } MenuRoot;
+typedef struct { char reserved[0x1C4]; int flags; } PadState;
+typedef struct GridMenu { char p00[0x30]; int flags; char p34[8]; int index; int rows; int cols; void *entries; struct GridMenu *up; struct GridMenu *down; void *left; void *right; } GridMenu;
+typedef struct { char p00[6]; short item; char p08[2]; } GridEntry;
+typedef struct { char p00[0xC]; int slot; char p10[0xD0]; } WeaponInfo;
+
+extern u8 D_138180[];
+#ifndef TARGET_NATIVE
+extern u8 g_inventoryOwnedAbs[8];  /* the #8036 alias below (func_002DECE0's) */
+#define gridOwned g_inventoryOwnedAbs
+#else
+#define gridOwned g_inventoryOwned
+#endif
+extern u8 g_itemEquippedSlot[];
+extern u8 g_weaponTable[];
+#define gridRoot (*(MenuRoot *)g_menuScreenBlock)
+#define gridPad  (*(PadState *)D_138180)
+
+int func_002D75D8(GridMenu *menu)
+{
+    int flags;
+    int cols;
+    int old;
+    int row;
+    int rows;
+    int col;
+    int x;
+
+    if (*(GridMenu **)(gridRoot.owner + 0xE8) != menu)
+        return 0;
+    if ((gridPad.flags & 0x900) && gridRoot.fallback == 0)
+        return 1;
+    flags = gridPad.flags;
+    if (flags & 0x10) {
+        int value = *(int *)(gridRoot.owner + 0xE0);
+        int status;
+        if (value != 0)
+            gridRoot.value = value;
+        else if (gridRoot.fallback == 0) {
+            status = -1;
+            goto finish;
+        }
+        status = 0;
+finish:
+        return status;
+    }
+    cols = menu->cols;
+    old = menu->index;
+    rows = menu->rows;
+    col = old % cols;
+    row = old / cols;
+    x = col;
+    if (flags & 0x1000) {
+        if (row != 0)
+            menu->index = old - cols;
+        else if (menu->up != 0) {
+            GridMenu *link = menu;
+            int skip;
+            int lcols;
+            int lrows;
+            do {
+                link = link->up;
+                skip = 0;
+                lrows = link->rows;
+                lcols = link->cols;
+                if (gridRoot.wrap) {
+                    if (link->flags & 8)
+                        skip = 1;
+                    else
+                        skip = 0;
+                }
+                if (gridRoot.edge && (link->flags & 4))
+                    skip = 1;
+            } while (skip);
+            *(GridMenu **)(gridRoot.owner + 0x128) = link;
+            if (lcols == 5)
+            {
+                x = col + 1;
+                if (menu->cols != 3)
+                    x = col;
+            }
+            if (lcols == 3 && menu->cols == 5) {
+                x = x - 1;
+                if (x > 2)
+                    x = 2;
+                else if (x < 0)
+                    x = 0;
+            }
+            link->index = (lrows - 1) * lcols + (x < lcols - 1 ? x : lcols - 1);
+        } else if (!(menu->flags & 0x8000))
+            menu->index = cols * (rows - 1) + old;
+    }
+    if (gridPad.flags & 0x4000) {
+        if (row + 1 < rows)
+            menu->index = menu->index + cols;
+        else if (menu->down != 0) {
+            GridMenu *link = menu;
+            int skip;
+            int lcols;
+            do {
+                link = link->down;
+                skip = 0;
+                lcols = link->cols;
+                if (gridRoot.wrap) {
+                    if (link->flags & 8)
+                        skip = 1;
+                    else
+                        skip = 0;
+                }
+                if (gridRoot.edge && (link->flags & 4))
+                    skip = 1;
+            } while (skip);
+            *(GridMenu **)(gridRoot.owner + 0x128) = link;
+            if (lcols == 5 && menu->cols == 3)
+                x = x + 1;
+            if (lcols == 3 && menu->cols == 5) {
+                x = x - 1;
+                if (x > 2)
+                    x = 2;
+                else if (x < 0)
+                    x = 0;
+            }
+            link->index = x < lcols - 1 ? x : lcols - 1;
+        } else if (!(menu->flags & 0x8000))
+            menu->index = menu->index - menu->cols * (menu->rows - 1);
+    }
+    if (gridPad.flags & 0x8000) {
+        if (x != 0)
+            menu->index = menu->index - 1;
+        else if (menu->left != 0)
+            *(void **)(gridRoot.owner + 0x128) = menu->left;
+        else if (!(menu->flags & 0x8000))
+        {
+            int index = menu->index - 1;
+            menu->index = index + menu->cols;
+        }
+    }
+    if (gridPad.flags & 0x2000) {
+        if (x + 1 < cols)
+            menu->index = menu->index + 1;
+        else if (menu->right != 0)
+            *(void **)(gridRoot.owner + 0x128) = menu->right;
+        else if (!(menu->flags & 0x8000))
+        {
+            int index = menu->index + 1;
+            menu->index = index - menu->cols;
+        }
+    }
+    if (menu->index != old || *(int *)(gridRoot.owner + 0x128) != 0)
+        func_002DFFA0(1, 0x11);
+    if (gridPad.flags & 0x40) {
+        MenuRoot *root;
+        GridEntry *entry;
+        int slot;
+        int unselectable = (menu->flags ^ 1) & 1;
+        if (!unselectable)
+            return 0;
+        root = &gridRoot;
+        if (root->busy != 0)
+            return 0;
+        entry = (GridEntry *)menu->entries + menu->index;
+        if (entry->item != 0 && gridOwned[entry->item] != 0) {
+            WeaponInfo *info = &((WeaponInfo *)g_weaponTable)[g_itemEquippedSlot[entry->item]];
+            slot = info->slot;
+            func_002DFFA0(0, 0x11);
+            root->busy = 10;
+            if (root->slots[slot] == entry->item && slot != 0 && slot != 3)
+                root->slots[slot] = 0;
+            else
+                gridRoot.slots[slot] = entry->item;
+        } else
+            func_002DFFA0(2, 0x11);
+    }
+    return 0;
+}
+#undef gridRoot
+#undef gridPad
+#undef gridOwned
+#endif
 
 /* Galactic-map streaming-slot teardown. When no CD read is in flight
  * (g_fileLoadState == 0) it unlocks the currently locked map-cache slot: toggles
@@ -3007,9 +3232,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DB080);
  * +0/+2/+4/+6, text x/y at +8/+0xA, drawn height read back at +0xE, line height
  * at +0x10). This function's measured wall is different: the ROM keeps
  * %hi(g_menuScreenBlock) in $16 across Begin2dDrawBatch and re-forms %lo at each
- * use, which SN 1.36 cc1 emits only with gcse on, and this unit's s136os arm
- * inherits -fno-gcse (task #2090, NOTE #10224, which holds the best body).
- * Bare INCLUDE_ASM. */
+ * use, which SN 1.36 cc1 emits only with gcse on (task #2090, NOTE #10224,
+ * which holds the best body). This unit's s136os arm inherited -fno-gcse then;
+ * it compiles with gcse on since task #2252, so that wall is lifted, but the
+ * body has not been re-measured on it. Bare INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DB700);
 
 /* Load a menu background-image pair (front/back) from disc into the bg buffers.

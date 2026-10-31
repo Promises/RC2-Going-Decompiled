@@ -150,10 +150,11 @@
 - **OpenRAC — `rac2-gc-decomp`, commit `96927f87`, s136os bodies** (GPL-3.0)
   <https://github.com/OpenRAC/rac2-gc-decomp> at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`
 
-  Three engine C bodies, two in text/16E980 and one in text/1A8180, adopted
-  with the authors' permission (held by the operator, RULING #10405) and
-  re-checked byte-exact against our v2.00 ROM on the s136os arm (tasks #2232
-  and #2234, from audit NOTE #12089 rows 3 and 5).
+  Four engine C bodies, two in text/16E980, one in text/1A8180 and one in
+  text/1D54C0, adopted with the authors' permission (held by the operator,
+  RULING #10405) and re-checked byte-exact against our v2.00 ROM on the
+  s136os arm (tasks #2232, #2234 and #2252, from audit NOTE #12089 rows 3, 5
+  and 9).
   Contributors: bigbeno37 and Flavius. Each doc comment carries the `Source:`
   line, which names every change beyond extern spellings.
 
@@ -182,6 +183,16 @@
     `D_1A9F20`/`D_1A9F38`), and EE-only callee prototypes in upstream's
     argument order except SpawnShockwaveRingMoby, whose f32 is first in
     ours and last upstream (EABI-neutral), with the native arm keeping ours.
+  - **`func_002D75D8`** (`0x002D75D8`) in
+    `going-decompiled/src/usa/text/1D54C0.cpp`, from `src/game/002D6970-g32.c`
+    (`func_002D6970`, v1.01 address, author commit `0eb05a7c`, Flavius), with
+    its `MenuRoot`, `PadState`, `GridMenu`, `GridEntry` and `WeaponInfo`
+    typedefs. ADAPTED: their menu and pad blocks are views of our
+    `g_menuScreenBlock` and `D_138180`; their tables and callee are our
+    `g_inventoryOwned` (through the unit's `g_inventoryOwnedAbs` alias),
+    `g_itemEquippedSlot`, `g_weaponTable` and `func_002DFFA0`; one `!(...)`
+    test goes through a local so the C++ front end keeps the ROM's `xori`.
+    The unit's s136os compile is unpinned for it (`S136EXTRA=""`).
 
 - **RC2 decomp contributions — `src/game/002E4528-rc2.c` in OpenRAC `rac2-gc-decomp`, commit `96927f87`** (MIT, © 2026 RC2 decomp contributions)
   <https://github.com/OpenRAC/rac2-gc-decomp> at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`
@@ -201,7 +212,6 @@
     signature with the `SoundEmitterSlot` fields for its +0x20/+0x18, and a
     `Vec4` probe for their 4-byte `s32 sp[1]` (written 16 bytes by every
     callee). Returning `CollLine`'s result, as upstream does, is load-bearing.
-
 - **OpenRAC — `rac2-gc-decomp`, commit `96927f87`, core bodies** (GPL-3.0)
   <https://github.com/OpenRAC/rac2-gc-decomp> at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`
 

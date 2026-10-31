@@ -677,3 +677,4 @@ usa text/1CA080 UpdateBestiaryMenuInput
 usa text/1CA080 UpdateSkillPointsMenu
 usa text/1CA080 UpdateHelpTopicMenuInput
 usa text/1CA080 func_002D2FC8
+usa text/1D54C0 func_002D75D8

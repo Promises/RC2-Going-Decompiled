@@ -186,7 +186,7 @@ case "$REGION/$UNIT" in
   usa/text/248B50) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # GUI sub-chunk 1 (carve pick #3a; later-cc1 TU model, sized externs under -G8)
   usa/text/235FE8) GFLAG="-G8"; CC1EXTRA="-fno-gcse -fno-strict-aliasing";; # GUI widget-method band (carve pick #3b; same later-cc1 GUI TU model). -fno-strict-aliasing restores the per-store pointer-member reload in GuiElementSetPos/GuiElementSetScale (#75)
   usa/text/1CA080) GFLAG="-G8"; CC1EXTRA="-fno-gcse"; S136EXTRA="-fstrict-aliasing";; # menu-screens A (carve pick #5; later-cc1 TU model, gp-dense). S136EXTRA: RULING #9235 (task #1540) — the s136os arm adds -fstrict-aliasing; the 2.9 compile is unchanged; RULING #9491 (task #1685) drops -fno-gcse from the s136os arm
-  usa/text/1D54C0) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # menu-screens B (carve pick #5; later-cc1 TU model, gp-dense)
+  usa/text/1D54C0) GFLAG="-G8"; CC1EXTRA="-fno-gcse"; S136EXTRA="";; # menu-screens B (carve pick #5; later-cc1 TU model, gp-dense). S136EXTRA: the s136os arm compiles at the -O2 default (RULING #9491 shape, task #2252, FACT #10232); the 2.9 compile keeps -fno-gcse
   usa/text/1B4218) GFLAG="-G8"; CC1EXTRA="-fno-gcse"; S136EXTRA="";; # moby-bind band (carve pick #5/moby-bind; later-cc1 TU model, sized externs under -G8). S136EXTRA: the s136os arm compiles at the -O2 default (RULING #9004, FACT #9003); the 2.9 compile keeps -fno-gcse
   # USA CARVE MEGA-BATCH PHASE A (2026-06-14): 7 new c-units carved from the
   # TILE A/B/C/D asm tiles. 6 are later-cc1 gameplay/UI TUs (-G8 -fno-gcse);
