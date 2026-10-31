@@ -874,7 +874,67 @@ void WaitVblankStartIntc(void) {
     }
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B140);
+/* EE kernel syscall 0x73 stub (0x11AF90): registers `flag` and `data` with the
+ * kernel, which writes them from its vblank handler. */
+extern void SetVSyncFlag(volatile s32 *flag, volatile u64 *data);
+extern s32 func_0011F5E0(void);   /* disable interrupts; nonzero if they were on */
+extern s32 func_0011F628(void);   /* enable interrupts */
+
+/**
+ * Wait for the next vertical blank and return the 64-bit word the kernel
+ * reports for it.
+ *
+ * Registers a local flag/data pair with the kernel (SetVSyncFlag), then
+ * acknowledges any pending VBLANK-start interrupt by writing bit 2 (4) to
+ * INTC_STAT (0x1000F000) with interrupts disabled. It then spins until either
+ * INTC_STAT bit 2 is set again or the kernel's vblank handler has set `flag`,
+ * and acknowledges the bit once more on the way out. Interrupts are
+ * re-enabled after each acknowledge only if func_0011F5E0 reports that they
+ * were on before.
+ *
+ * @return the 64-bit value the kernel stored through `data` (read after the wait)
+ *
+ * `flag` and `data` are volatile because the kernel's interrupt handler writes
+ * them, not this function. That is also the codegen: the loop reloads `flag`
+ * from the stack on every pass, and the final `ld` of `data` stays after the
+ * last re-enable branch. With `data` non-volatile, reorg copies that `ld` into
+ * the branch's delay slot (ROM: nop) and duplicates it on the call path.
+ * The two `sync`s are the ROM's (0x11B170, 0x11B1C0), ordering the INTC_STAT
+ * store before interrupts can be re-enabled.
+ */
+u64 func_0011B140(void) {
+    volatile s32 flag;
+    volatile u64 data;
+    s32 wasEnabled;
+
+    flag = 0;
+    SetVSyncFlag(&flag, &data);
+
+    wasEnabled = func_0011F5E0();
+    *(volatile u32 *)0x1000F000 = 4;
+#ifndef TARGET_NATIVE
+    __asm__ volatile("sync");   /* HARDWARE BARRIER (RULING #12168), ROM 0x11B170 */
+#endif
+    if (wasEnabled) {
+        func_0011F628();
+    }
+
+    while (!(*(volatile u32 *)0x1000F000 & 4)) {
+        if (flag) {
+            break;
+        }
+    }
+
+    wasEnabled = func_0011F5E0();
+    *(volatile u32 *)0x1000F000 = 4;
+#ifndef TARGET_NATIVE
+    __asm__ volatile("sync");   /* HARDWARE BARRIER (RULING #12168), ROM 0x11B1C0 */
+#endif
+    if (wasEnabled) {
+        func_0011F628();
+    }
+    return data;
+}
 
 extern s32 func_0011BE20(void);
 extern s32 func_0011BCD0(const char *buf, s32 len);
