@@ -11,7 +11,11 @@
  *
  * The matcher builds THIS unit at -O2 -G8 -fno-gcse (per-unit GFLAG/CC1EXTRA
  * override in tools/ee/objdiff_build.sh / diff.sh / build.sh) — the same
- * later-SN-cc1 gameplay/UI TU model as the neighbouring text units.
+ * later-SN-cc1 gameplay/UI TU model as the neighbouring text units. That
+ * -fno-gcse is the cc1 2.9 compile's only: the s136os arm compiles at the -O2
+ * default (S136EXTRA="", RULING #9491 shape, task #2251), which leaves every
+ * s136os row that predates it byte- and reloc-identical in the unit object
+ * and is what closes UpdateMobyAnimLoopSound.
  *
  * -G8 extern-sizing rules (carried over from text/1A8180 / text/198FA0):
  *   - size <= 8: true small data, %gp_rel everywhere;
@@ -28,8 +32,8 @@
  * "Handwritten function" tag, and their 929 tagged instructions are trapping
  * addi/add/sub/neg plus teq, cache and bc0f, none of which cc1 emits from C;
  * func_002A1390 is a COP2 body that needs $at and pad nops (NOTE #9693);
- * UpdateMobyAnimLoopSound is a 2-word near miss (see its comment); and
- * func_002A7AA8 (470 words) has no C yet.
+ * UpdateMobyAnimLoopSound, then a 2-word near miss, is now matched (task
+ * #2251); and func_002A7AA8 (470 words) has no C yet.
  *
  * PADDING/FRAGMENT PSEUDO-FUNCTIONS: spimdisasm fused each function's trailing
  * epilogue-pad ("addiu $sp,+N; nop" runs) into the NEXT symbol start; those
@@ -162,57 +166,63 @@ void ResolveMobyAnimFramePtrs(Moby *moby) {
     *(void **)(m + 0x5C) = *(void **)(ANIM_SEQ_AT(*(u8 **)(m + 0x24) + 0x48, m[0x43]) - -(m[0x41] * 4) + 0x1C);
 }
 
-/* UpdateMobyAnimLoopSound: maintain the moby's looping sequence sound. The active
- * emitter slot is held in +0x6D (0xFF = none) and the current sequence id in +0x6C.
- * If a slot is active, it is stopped (and the slot released) when our slot was
- * stolen (the emitter's owner at +0x88 no longer points at this moby), the playing
- * sequence changed (emitter +0x7E != +0x6C), the moby's stop flag +0x34 bit 0x40 is
- * set, or +0x7C bit 0x8000 is set. If no slot is active and the sequence is present
- * (+0x6C != 0xFF) and neither stop flag is set, it starts the loop via
- * PlayMobySound(seq, 4, moby) and records the returned slot in +0x6D. Emitter slots
- * live at g_listenerPosHistory + slot*0x70.
- *
- * TODO(match): not closed on the s136os arm after four rounds (tasks #1791,
- * #1894, #1958, #2001; NOTEs #9699, #9852, #9970 and #10054 hold the
- * bodies and figures). The best body reaches 54 = 54 words with 2
- * differing: two empty tied fences give the ROM's slot -> $4 -> $5 copy chain,
- * and the idx fence then takes one of the R5900's two issue slots, so `mult`
- * and `addiu %lo(g_listenerPosHistory)` come out swapped (0x2A02B4/B8).
- * Without that fence the copies are propagated (53 words). This #else body
- * is the native arm, not the near-miss. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", UpdateMobyAnimLoopSound);
+/* UpdateMobyAnimLoopSound: keep the moby's looping sequence sound in step
+ * with its animation.
+ *   moby: the moby; +0x6D holds its active emitter slot (0xFF = none) and
+ *         +0x6C the current sequence's loop sound id (0xFF = none).
+ * No return. Emitter slots are 0x70-byte records at g_listenerPosHistory +
+ * slot*0x70. With a slot active: if the emitter's owner (+0x88) is no longer
+ * this moby, another moby took the slot, so only +0x6D is released --
+ * StopSoundEmitter is NOT called on that path (FACT #5523); otherwise the
+ * emitter is stopped and the slot released when the playing sound changed
+ * (emitter +0x7E != +0x6C), the moby's stop flag +0x34 bit 0x40 is set, or
+ * +0x7C bit 0x8000 is set. With no slot active it starts the loop with
+ * PlayMobySound(id, 4, moby) and records the returned slot, unless the id is
+ * 0xFF or either stop flag is set. Reached only by UpdateMobyAnimation's tail
+ * jump, every 4th frame per moby.
+ * MATCHED on the s136os arm (task #2251), with gcse ON: this unit's s136os
+ * compile is unpinned for it (S136EXTRA="", see the top of this file). Under
+ * the old -fno-gcse pin the same body differs in 16 of 54 words (FACT #12087),
+ * and four rounds of our own spellings there (tasks #1791, #1894, #1958,
+ * #2001; NOTEs #9699, #9852, #9970, #10054) stopped at 2 of 54. No device.
+ * GUARD: compiled alone by SN 2.95.3 v1.36 -fopt-stack and spliced over the
+ * S136OS_SLOT line (tools/ee/s136os_splice.sh); plain C on native.
+ * Source: OpenRAC/rac2-gc-decomp @96927f872c709e13aaa0f32265bb81a5531bf7ed
+ * (GPL-3.0, adopted with the authors' permission per RULING #10405),
+ * src/game/0029DE38.c, func_0029F450 (v1.01 address; author commit 4a78f7b7,
+ * Flavius), ADAPTED: (1) our signature (Moby *moby), with `u8 *m = (u8 *)moby`
+ * for their (void *object) and `u8 *s = (u8 *)object`, and their local `e`
+ * named emitter; (2) our symbols and prototypes: D_00188660 =
+ * g_listenerPosHistory, func_002E59F8 = StopSoundEmitter, func_002E5CF8 =
+ * PlayMobySound(s32, s32, Moby *), so the owner test reads
+ * `*(Moby **)(emitter + 0x88) != moby` for their `*(int *)(e + 0x88) !=
+ * (int)s` and the call passes moby for their `(char *)s`; (3) s16 / u16 for
+ * their short / unsigned short. The control flow and every test are theirs. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_UpdateMobyAnimLoopSound)
+S136OS_SLOT(UpdateMobyAnimLoopSound);
 #else
 extern u8 g_listenerPosHistory[];
 extern s32 PlayMobySound(s32 seq, s32 mode, Moby *moby);
 extern void StopSoundEmitter(s32 slot);
 void UpdateMobyAnimLoopSound(Moby *moby) {
     u8 *m = (u8 *)moby;
-    s32 slot = m[0x6D];
 
-    if (slot != 0xFF) {
-        u8 *emitter = g_listenerPosHistory + slot * 0x70;
-        if (*(void **)(emitter + 0x88) != (void *)moby) {
-            /* our slot was stolen by another moby */
+    if (m[0x6D] != 0xFF) {
+        u8 *emitter = g_listenerPosHistory + m[0x6D] * 0x70;
+
+        if (*(Moby **)(emitter + 0x88) != moby) {
             m[0x6D] = 0xFF;
-            return;
-        }
-        if (*(s16 *)(emitter + 0x7E) != m[0x6C] ||
-            (*(u16 *)(m + 0x34) & 0x40) ||
-            (*(u16 *)(m + 0x7C) & 0x8000)) {
-            StopSoundEmitter(slot);
+        } else if (*(s16 *)(emitter + 0x7E) != m[0x6C] ||
+                   (*(u16 *)(m + 0x34) & 0x40) != 0 ||
+                   (*(u16 *)(m + 0x7C) & 0x8000) != 0) {
+            StopSoundEmitter(m[0x6D]);
             m[0x6D] = 0xFF;
         }
-        return;
+    } else if (m[0x6C] != 0xFF &&
+               (*(u16 *)(m + 0x34) & 0x40) == 0 &&
+               (*(u16 *)(m + 0x7C) & 0x8000) == 0) {
+        m[0x6D] = (u8)PlayMobySound(m[0x6C], 4, moby);
     }
-
-    /* no active emitter: start the loop unless the sequence is absent or blocked */
-    if (m[0x6C] == 0xFF ||
-        (*(u16 *)(m + 0x34) & 0x40) ||
-        (*(u16 *)(m + 0x7C) & 0x8000)) {
-        return;
-    }
-    m[0x6D] = PlayMobySound(m[0x6C], 4, moby);
 }
 #endif
 
@@ -1264,8 +1274,13 @@ void func_002A1058(void) {
  * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
  * tools/ee/s136os_splice.sh. On native it is plain C.
  *
+ * PRICED ON THE OLD ARM: the figures below were measured while this unit's
+ * s136os compile was pinned to -fno-gcse. Task #2251 unpinned it; this
+ * body's bytes and relocs are unchanged by that (unit object compared), but
+ * no device was re-priced removed-alone on the unpinned arm.
+ *
  * Each device and phrasing priced by removing it alone (solo s136os compile at
- * the unit's -G8 -fno-gcse plus -fopt-stack, words compared positionally
+ * -G8 -fno-gcse plus -fopt-stack, words compared positionally
  * against the ROM .s with relocated fields masked, a length shortfall counted
  * as differing; with everything in place 0 of the 43 words differ):
  *  - ADDRESSING-MODEL DEVICES (RULING #8620; FACT #8036's size-16 equate
@@ -1789,8 +1804,13 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A75CC);
  * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
  * tools/ee/s136os_splice.sh. On native it is plain C.
  *
- * Devices, each priced by removing it alone (solo s136os compile at the
- * unit's -G8 -fno-gcse plus -fopt-stack, words compared positionally against
+ * PRICED ON THE OLD ARM: the figures below were measured while this unit's
+ * s136os compile was pinned to -fno-gcse. Task #2251 unpinned it; this
+ * body's bytes and relocs are unchanged by that (unit object compared), but
+ * no device was re-priced removed-alone on the unpinned arm.
+ *
+ * Devices, each priced by removing it alone (solo s136os compile at
+ * -G8 -fno-gcse plus -fopt-stack, words compared positionally against
  * the ROM .s with relocated fields masked, a length shortfall counted as
  * differing; with every device in place 0 of the 141 words differ):
  *  - ADDRESSING-MODEL DEVICE (RULING #8620 / FACT #8036, offset 0): the ROM
@@ -1919,8 +1939,13 @@ s32 PickLowAmmoWeaponForDrop(s32 arg0, s32 *outSlot) {
  * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
  * tools/ee/s136os_splice.sh. On native it is plain C.
  *
- * Devices, each priced by removing it alone (solo s136os compile at the
- * unit's -G8 -fno-gcse plus -fopt-stack, words compared positionally against
+ * PRICED ON THE OLD ARM: the figures below were measured while this unit's
+ * s136os compile was pinned to -fno-gcse. Task #2251 unpinned it; this
+ * body's bytes and relocs are unchanged by that (unit object compared), but
+ * no device was re-priced removed-alone on the unpinned arm.
+ *
+ * Devices, each priced by removing it alone (solo s136os compile at
+ * -G8 -fno-gcse plus -fopt-stack, words compared positionally against
  * the ROM .s with relocated fields masked, a length shortfall counted as
  * differing; with every device in place 0 of the 93 words differ):
  *  - ADDRESSING-MODEL DEVICE (RULING #8620 / FACT #8036 size-16 equates,

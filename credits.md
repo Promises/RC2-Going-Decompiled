@@ -150,11 +150,11 @@
 - **OpenRAC — `rac2-gc-decomp`, commit `96927f87`, s136os bodies** (GPL-3.0)
   <https://github.com/OpenRAC/rac2-gc-decomp> at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`
 
-  Six engine C bodies, two in text/16E980, one in text/1A8180, two in
-  text/1B4218 and one in text/1D54C0, adopted with the authors' permission
-  (held by the operator, RULING #10405) and re-checked byte-exact against our
-  v2.00 ROM on the s136os arm (tasks #2232, #2234, #2235 and #2252, from audit
-  NOTE #12089 rows 3, 5, 6 and 9).
+  Seven engine C bodies, two in text/16E980, one in text/1A00F0, one in
+  text/1A8180, two in text/1B4218 and one in text/1D54C0, adopted with the
+  authors' permission (held by the operator, RULING #10405) and re-checked
+  byte-exact against our v2.00 ROM on the s136os arm (tasks #2232, #2234,
+  #2235, #2251 and #2252, from audit NOTE #12089 rows 3, 5, 6 and 9).
   Contributors: bigbeno37, Flavius and Louis-Philippe Le Sieur. Each doc comment carries the `Source:`
   line, which names every change beyond extern spellings.
 
@@ -204,6 +204,14 @@
     `8f3538bb`, bigbeno37), whose comment names RAC1's `music_Transition` as
     the shape. ADAPTED: symbol spellings are ours and the sample start is
     narrowed to `s32` at the call (task #2235).
+  - **`UpdateMobyAnimLoopSound`** (`0x002A0288`) in
+    `going-decompiled/src/usa/text/1A00F0.cpp`, from `src/game/0029DE38.c`
+    (`func_0029F450`, v1.01 address, author commit `4a78f7b7`, Flavius),
+    task #2251 (audit NOTE #12089 row 9). It closes only with gcse on, so
+    text/1A00F0's s136os compile was unpinned with it. ADAPTED: our
+    signature, local names, symbol spellings (`g_listenerPosHistory`,
+    `StopSoundEmitter`, `PlayMobySound`) and prototypes; the control flow
+    and every test are theirs.
 
 - **RC2 decomp contributions — `src/game/002E4528-rc2.c` in OpenRAC `rac2-gc-decomp`, commit `96927f87`** (MIT, © 2026 RC2 decomp contributions)
   <https://github.com/OpenRAC/rac2-gc-decomp> at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`
