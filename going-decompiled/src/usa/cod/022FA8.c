@@ -574,18 +574,68 @@ void func_00124818(void) {
  * by a symbol_addrs size:0x8 pin (task #2143); kept as layout asm. */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_001248B0);
 
-/* func_001248B8: if the callback D_00141844 is installed and the suppression
- * flag D_001363A4 is clear, invoke the callback with the parameter D_00141848.
- * Reached only by address: func_001248F8 installs it as the SIF command
- * 0x80000012 handler (the %hi/%lo pair at 0x12491C). Until the task #2143
- * split it was func_001248B0 + 8. Its body was recorded here as compiling
- * byte-exact; it is now a clean extent, but this boundary-only row writes no
- * C, so it stays INCLUDE_ASM pending a promotion row. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_001248B8);
+extern void *D_00141844;  /* libcdvd's user callback for SIF command 0x80000012 */
+extern s32 D_00141848;    /* the parameter passed to it */
+extern s32 D_001363A4;    /* suppresses func_001248B8's callback while non-zero */
 
-extern s32 D_001363A4;  /* suppresses func_001248B8's callback while non-zero */
+/**
+ * libcdvd's SIF command 0x80000012 handler: if the user callback D_00141844
+ * is installed and the suppression flag D_001363A4 is clear, call it with
+ * its parameter D_00141848. No return value.
+ *
+ * Reached only by address: func_001248F8 installs it as that command's
+ * handler (the %hi/%lo pair at 0x12491C), and its suppression window covers
+ * the install itself. Until the task #2143 split it was func_001248B0 + 8.
+ *
+ * Source: OpenRAC/rac2-gc-decomp @96927f872c709e13aaa0f32265bb81a5531bf7ed,
+ * src/core/001248B0-rc2.c, func_001248B0 (v1.01 name; at our 0x1248B8),
+ * author commit fe9859d7961703d78264e8475922636440266093 (Sergio Rodmauser,
+ * "carry over 129 verified RC2 fork functions"), which carries the file from
+ * an unnamed fork under the MIT notice below; adopted under RULING #10405
+ * and the operator's 2026-10-31 call to adopt it with its notice (task
+ * #2237). ADAPTED: body statements verbatim; the function takes the name at
+ * our split address (func_001248B8); the file's `#ifndef NULL` fallback is
+ * dropped (common.h defines NULL); its three externs are this file's
+ * declarations above, with the same types. Relocations as the ROM decodes
+ * them: D_00141844, D_001363A4, D_00141848 (identity with upstream).
+ *
+ * The notice upstream's file carries, verbatim:
+ *
+ *   SPDX-License-Identifier: MIT
+ *   MIT License
+ *
+ *   Copyright (c) 2026 Forja contributors
+ *
+ *   Permission is hereby granted, free of charge, to any person obtaining a copy
+ *   of this software and associated documentation files (the "Software"), to deal
+ *   in the Software without restriction, including without limitation the rights
+ *   to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ *   copies of the Software, and to permit persons to whom the Software is
+ *   furnished to do so, subject to the following conditions:
+ *
+ *   The above copyright notice and this permission notice shall be included in all
+ *   copies or substantial portions of the Software.
+ *
+ *   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ *   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ *   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ *   AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ *   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ *   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ *   SOFTWARE.
+ */
+void func_001248B8(void) {
+    void (*temp_a1)(s32);
+
+    temp_a1 = (void (*)(s32))D_00141844;
+    if (temp_a1 != NULL) {
+        if (D_001363A4 == 0) {
+            temp_a1(D_00141848);
+        }
+    }
+}
+
 extern s32 D_001363BC;  /* set once the 0x80000012 handler is installed */
-extern void func_001248B8(void);
 extern void func_0011CB90(s32 index, s32 key, s32 value);
 
 /**
@@ -6214,11 +6264,177 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012EAA0);
  * size:0x8; the real function begins at func_0012EB30. Pure padding, no C. */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012EB28);
 
-/* func_0012EB30: real function recovered from the splat mis-split above (large
- * 0x150-frame routine iterating a 0x18-stride record list and dispatching via an
- * indirect call). Boundary now correct; body not yet decompiled. Left as
- * INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012EB30);
+/* Upstream's views of the demultiplexer's state, kept as adopted: the bit
+ * reader (func_0012E890's struct E890Rec, of which only the consumed-bit total
+ * at 0x18 is read here), a pack header and a PES header as func_0012EF20 and
+ * ParsePesPacketHeader fill them, the callback record handed to a stream
+ * callback, and the decoder's stream-callback table. */
+typedef struct {
+    u8 pad0[0x18];
+    u64 pos;
+    u8 pad20[0x10];
+} SysBit;
+typedef struct {
+    s32 v[6];
+} PackHdr;
+typedef struct {
+    u64 id;
+    s32 len;
+    s32 scrambling;
+    s64 pts;
+    s64 dts;
+    s32 data;
+    s32 datalen;
+    s32 header;
+    s32 pad2C;
+} PesHdr;
+typedef struct {
+    PackHdr pack;
+    PesHdr pes;
+} PssHdr;
+typedef struct {
+    s32 type;
+    u8 *header;
+    u8 *data;
+    u32 len;
+    s64 pts;
+    s64 dts;
+} sceMpegCbDataStr;
+typedef s32 (*sceMpegCallback)(void *mp, sceMpegCbDataStr *cbstr, void *data);
+typedef struct {
+    u64 id;
+    u64 mask;
+    sceMpegCallback func;
+    void *data;
+} StreamCb;
+typedef struct {
+    u8 pad0[0x44];
+    StreamCb *tbl;
+    s32 n;
+} MpegSys;
+typedef struct {
+    u8 pad0[0x40];
+    MpegSys *sys;
+} sceMpeg;
+
+/* Defined below, after the header types they take; unprototyped here, as
+ * func_0012F070 is. */
+extern s32 func_0012EF20();
+extern s32 ParsePesPacketHeader();
+
+/**
+ * libmpeg's sceMpegDemuxPssRing: demultiplex `size` bytes of a program stream
+ * starting at `start` inside the ring buffer `bufstart`/`bufsize`, handing
+ * each PES packet to the decoder's stream callbacks. Returns the byte offset
+ * just past the last packet a callback accepted (0 if none).
+ *
+ * The bit reader is set up over the ring (func_0012E890); the callback table
+ * is first searched for a catch-all entry (id 0xBDFF000000), remembered as the
+ * fallback. Then per pack: a pack start code (0x1BA) has its header parsed
+ * (func_0012EF20), and while the next start code is a packet's (24-bit prefix
+ * 1, not a pack or end code 0x1B9), the reader is within `size` and the last
+ * callback asked to continue, each PES header is parsed (ParsePesPacketHeader)
+ * and dispatched to the first entry whose id equals the stream id under its
+ * mask, or to the fallback; the callback gets a type-6 record with the
+ * header and payload pointers (func_0012EA70 converts bit positions to ring
+ * addresses), the payload length, PTS and DTS. Stops past `size` or when no
+ * pack start code follows.
+ *
+ * Source: OpenRAC/rac2-gc-decomp @96927f872c709e13aaa0f32265bb81a5531bf7ed,
+ * src/core/0012EAA0.c, func_0012EB28 (v1.01 name; at our 0x12EB30), author
+ * commit c8887184 (Flavius), carried from rac1-decomp src/core/0012AC80.c
+ * func_0012EB28; their header: "Adapted from Lombyte's project (GPL-3.0) for
+ * PAL by OpenRAC's tools/port.py: src/sdk/dma/sce_mpeg_demux_pss_ring.c,
+ * sceMpegDemuxPssRing" (Lombyte, github.com/mateuszklysz/Lombyte; the file is
+ * present at 2c4452dd, MIT, and after the a1379f5 GPL-3.0 relicence; upstream
+ * names no Lombyte sha). Adopted under RULING #10405 and the operator's
+ * 2026-10-31 call (task #2237). ADAPTED: body statements verbatim apart from
+ * the callee spellings, which are ours as the ROM decodes the jal targets
+ * (their r1_func_0012AA70 = func_0012E890, r1_func_0012AAA8 = func_0012E8C8,
+ * r1_func_0012B100 = func_0012EF20, r1_func_0012AC50 = func_0012EA70,
+ * r1_func_0012B2C0 = ParsePesPacketHeader), with their asm-label aliases
+ * dropped and casts to our prototypes' types at each call (codegen-neutral
+ * pointer/int conversions); the function takes the name at our address;
+ * the local typedefs above are upstream's, verbatim.
+ */
+int func_0012EB30(sceMpeg *mp, u8 *start, int size, u8 *bufstart, int bufsize) {
+    SysBit bs;
+    PssHdr hdr;
+    SysBit *b;
+    PssHdr *h;
+    sceMpegCbDataStr cb;
+    sceMpegCallback cbfunc = 0;
+    void *cbdata = 0;
+    StreamCb *tbl;
+    int ret;
+    int i;
+    int cont;
+    MpegSys *sys;
+    int headerpos;
+
+    cont = 1;
+    h = &hdr;
+    sys = mp->sys;
+    tbl = sys->tbl;
+    func_0012E890((struct E890Rec *)&bs, (s32)start, (s32)bufstart, bufsize);
+    ret = 0;
+    i = 0;
+    b = &bs;
+    if (i < sys->n) {
+        do {
+            if (tbl[i].id == 0xBDFF000000) {
+                cbfunc = tbl[i].func;
+                cbdata = tbl[i].data;
+            }
+            if (cbfunc != 0) {
+                break;
+            }
+            i++;
+        } while (i < sys->n);
+    }
+    for (;;) {
+        if (func_0012E8C8((u64 *)b, 32) == 0x1BA) {
+            func_0012EF20(b, &h->pack);
+        }
+        while (func_0012E8C8((u64 *)b, 24) == 1 && func_0012E8C8((u64 *)b, 32) != 0x1BA &&
+               func_0012E8C8((u64 *)b, 32) != 0x1B9 && b->pos < size * 8 && cont) {
+            ParsePesPacketHeader((s32)sys, b, &h->pes);
+            if (b->pos > size * 8) {
+                continue;
+            }
+            for (i = 0; i < sys->n; i++) {
+                if (tbl[i].id == (h->pes.id & tbl[i].mask)) {
+                    headerpos = h->pes.header;
+                    cb.type = 6;
+                    cb.header = (u8 *)func_0012EA70((s32 *)b, headerpos);
+                    cb.data = (u8 *)func_0012EA70((s32 *)b, h->pes.data);
+                    cb.len = h->pes.datalen;
+                    cb.pts = h->pes.pts;
+                    cb.dts = h->pes.dts;
+                    cont = tbl[i].func(mp, &cb, tbl[i].data);
+                    break;
+                }
+            }
+            if (i == sys->n && cbfunc != 0) {
+                headerpos = h->pes.header;
+                cb.type = 6;
+                cb.header = (u8 *)func_0012EA70((s32 *)b, headerpos);
+                cb.data = (u8 *)func_0012EA70((s32 *)b, h->pes.data);
+                cb.len = h->pes.datalen;
+                cb.pts = h->pes.pts;
+                cb.dts = h->pes.dts;
+                cont = cbfunc(mp, &cb, cbdata);
+            }
+            if (cont) {
+                ret = b->pos >> 3;
+            }
+        }
+        if (b->pos > size * 8 || func_0012E8C8((u64 *)b, 32) != 0x1BA) {
+            break;
+        }
+    }
+    return ret;
+}
 
 /* One register-shadow record: the packed register value, its field mask and
  * two caller words. 0x18 bytes. */

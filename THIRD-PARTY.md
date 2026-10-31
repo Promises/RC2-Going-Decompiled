@@ -225,6 +225,58 @@ All are in `going-decompiled/src/usa/cod/022FA8.c`:
 The GPL-2.0-or-later note in the section "OpenRAC rac2-gc-decomp (GPL-3.0)"
 above applies to these bodies too.
 
+### OpenRAC rac2-gc-decomp at 96927f87, Lombyte-origin body (GPL-3.0)
+
+One more C function body is taken from OpenRAC's `rac2-gc-decomp` at commit
+`96927f872c709e13aaa0f32265bb81a5531bf7ed` (root `LICENSE`: GNU General Public
+License, version 3), with the authors' permission (RULING #10405) and the
+operator's 2026-10-31 call to adopt it, task #2237:
+
+| Here | Upstream file | Upstream name |
+|---|---|---|
+| `func_0012EB30` in `going-decompiled/src/usa/cod/022FA8.c` (adapted: callee spellings with casts to our prototypes, name at our address) | `src/core/0012EAA0.c` (from rac1-decomp `src/core/0012AC80.c`), whose header says it is adapted from Lombyte (GPL-3.0) `src/sdk/dma/sce_mpeg_demux_pss_ring.c` | `func_0012EB28` (Lombyte `sceMpegDemuxPssRing`) |
+
+Upstream names no Lombyte commit. The Lombyte file exists both at
+`2c4452dd` (MIT, notice under "Lombyte (MIT)" below) and after Lombyte's
+GPL-3.0 relicence at `a1379f5`. The GPL-2.0-or-later note in the section
+"OpenRAC rac2-gc-decomp (GPL-3.0)" above applies to this body too.
+
+### Forja contributors (MIT), via OpenRAC rac2-gc-decomp at 96927f87
+
+The C body of `func_001248B8` in `going-decompiled/src/usa/cod/022FA8.c`
+(adapted: name at our split address, upstream's `NULL` fallback dropped) is
+taken from OpenRAC's `rac2-gc-decomp` at commit
+`96927f872c709e13aaa0f32265bb81a5531bf7ed`, `src/core/001248B0-rc2.c`
+(`func_001248B0`), added there by commit
+`fe9859d7961703d78264e8475922636440266093` ("carry over 129 verified RC2 fork
+functions"). That file carries a fork's MIT notice, not OpenRAC's GPL-3.0;
+upstream does not name the fork, its URL or a commit. Adopted with the
+operator's 2026-10-31 call (task #2237) and under this notice, reproduced
+verbatim:
+
+    SPDX-License-Identifier: MIT
+    MIT License
+
+    Copyright (c) 2026 Forja contributors
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
+
 ### Lombyte (MIT)
 
 Seven C function bodies are taken from Lombyte,

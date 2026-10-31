@@ -322,6 +322,26 @@
     (author commit `c8887184`, Flavius); rac1-decomp `src/core/0012AC80.c`.
   - **`func_00130A90`** (`0x00130A90`), adapted, from `src/core/00130890.c`
     (`func_00130A8C`, author commit `d9e7028d`, Flavius).
+  - **`func_0012EB30`** (`0x0012EB30`, libmpeg's sceMpegDemuxPssRing),
+    adapted (callee spellings, with casts to our prototypes), from
+    `src/core/0012EAA0.c` (`func_0012EB28`, author commit `c8887184`,
+    Flavius); rac1-decomp `src/core/0012AC80.c`; their header says it is
+    adapted from **Lombyte** (GPL-3.0) `src/sdk/dma/sce_mpeg_demux_pss_ring.c`
+    (task #2237).
+
+- **Forja contributors** (MIT, © 2026 Forja contributors), via OpenRAC
+  `rac2-gc-decomp` at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`
+
+  OpenRAC commit `fe9859d7` (Sergio Rodmauser) carried 129 functions over from
+  an RC2 fork it does not name, each `-rc2.c` file under that fork's MIT
+  notice. One is adopted, with the operator's 2026-10-31 call (task #2237);
+  the notice is reproduced in [THIRD-PARTY.md](THIRD-PARTY.md) and in the
+  function's doc comment.
+
+  Used so far:
+  - **`func_001248B8`** (`0x001248B8`, libcdvd's SIF command 0x80000012
+    handler) in `going-decompiled/src/usa/cod/022FA8.c`, adapted (name at
+    our split address), from `src/core/001248B0-rc2.c` (`func_001248B0`).
 
 - **Lombyte** (MIT, © 2026 Mateusz Kłysz)
   <https://github.com/mateuszklysz/Lombyte> at commit `2c4452dd03f5f7ebb2868dbe073ccdb1afb27f61`
