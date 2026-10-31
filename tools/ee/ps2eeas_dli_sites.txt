@@ -70,6 +70,11 @@
 # `or`. GNU as gives `ori $3,$0,0x8000; dsll32 $3,$3,16`; the ROM has the form
 # below at 0x26FE1C..0x26FE20.
 #
+# FmvStreamFeedLoop (text/24D728) is compiled from C (s136os arm, gcse on,
+# task #2429). Its site is the skip test's button mask, in reorder mode and
+# followed by an `ld`. GNU as gives `li 2048; dsll32; ori 0xf`; the ROM has the
+# form below at 0x34FE9C..0x34FEA4.
+#
 # region function       rom_addr    operands                 words
 usa      func_00290320  0x0029033C  $12,0x4400000000008001   340c8800 000c63fc 358c8001
 usa      func_00290320  0x002903AC  $4,0xfffff000000000      3404ffff 00042438 3484f000 00042638
@@ -181,3 +186,4 @@ usa      func_002E07F8  0x002E087C  $11,0x2400000000000001   340b9000 000b5bbc 3
 # ori 0x44`; the ROM has Ps2EeAs's `ori; dsll 24; ori` at 0x280F88..0x280F90.
 #
 usa      func_00280EC8  0x00280F88  $5,0x8000000044          34058000 00052e38 34a50044
+usa      FmvStreamFeedLoop  0x0034FE9C  $4,0x8000000000f  34048000 00042738 3484000f

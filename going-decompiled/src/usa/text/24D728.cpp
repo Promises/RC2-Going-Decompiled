@@ -1620,9 +1620,9 @@ extern void func_003503D8(void);     /* FMV teardown */
  * At file scope, EE only (task #1408): the s136os splice REFUSES a member whose
  * own arm carries an `.extern ,16` (ADDRESSING) or an equate (DEFINITION) that
  * the unit's 2.9 TU never sees (FACT #9057, FACT #9067). Native reads the real
- * symbol. No other C in this unit names g_pFmvGsBase, g_pFmvArenaBase or the
- * alias. FmvStreamFeedLoop's asm spells %hi/%lo(g_pFmvArenaBase) explicitly, so
- * these directives cannot change it. */
+ * symbol. FmvStreamFeedLoop's C (task #2429) also reads g_pFmvArenaBase, with
+ * the ROM's absolute `lui; lw %lo` pair, which the `, 16` gives it; it does not
+ * name the gp alias. */
 #ifndef TARGET_NATIVE
 __asm__(".extern g_pFmvGsBase, 16");
 __asm__(".extern g_pFmvArenaBase, 16");
@@ -1687,21 +1687,212 @@ s32 PlayFmvMovie(void *a, void *b, s32 aspect, u8 *arena, void *engineCtx, void 
 }
 #endif
 
-/* FmvStreamFeedLoop(playCtx, arg1, statsPtr): the FMV playback MAIN LOOP — reads the
- * elementary-stream length from *statsPtr, then per-vblank (WaitVblankGetField)
- * pumps the pipeline: a skip/exit decision (D_138180 pad state + g_cinematicExitPending
- * vs arg1 + D_1A7A10 + g_playerProgress + the pad's 0x800 button bit), a CD sector
- * read (func_003513F8) into the arena DMA-add queue (+0xD9048), IPU frame decode
- * (func_003526A8/func_00352780/func_00352C70 on the frame queue +0xD9168), audio
- * pump (func_00132888 mode 5 + snd_Pump), and pts-ring advance (+0xD9100). Runs
- * until the stream drains or the user skips; returns the stop reason (sp+0x8).
- *
- * PARK (doc-modeled INCLUDE_ASM, NOT #else — per the blast-radius guardrail):
- * this 880-byte real-time driver is (a) NOT cmp-oracle-able (absolute g_pFmvArenaBase
- * + the whole FMV IPU/DMA HLE callee set — the --gc-sections wall) AND (b) high
- * transcription-risk: its skip/exit decision at 0x34FE00–0x34FEBC is a subtle
- * boolean built from movz/movn + beql/bnel likely-branch delay-slot nullification
- * (0x34FE4C beql, 0x34FE6C bnel), exactly the class where a one-shot un-verified
- * #else silently mis-computes. Model it faithfully only once the FMV HLE backend
- * makes it oracle-able. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", FmvStreamFeedLoop);
+/* ADDRESSING- AND CODEGEN-MODEL DEVICES for FmvStreamFeedLoop (task #2429). At
+ * file scope, EE only: the s136os splice REFUSES an `.extern ,16` or an equate
+ * inside a member's own arm (FACT #9057, FACT #9067). They emit nothing.
+ *   - `.extern ,16` offset-0 equate aliases (RULING #8620 / #12316 `.extern X,N`
+ *     terms, #8036 alias) of g_cinematicExitPending, g_playerProgress and
+ *     D_1A7A10: the ROM reads each with the absolute `lui; lw %lo` pair, which
+ *     reorg never pulls into a delay slot (the empty slots at 0x34FE3C/0x34FE44).
+ *     The relocations name the real symbols; no alias reaches nm.
+ *   - `volatile` on the g_playerProgress and D_1A7A10 aliases is a CODEGEN DEVICE
+ *     (RULING #8404 terms), NOT a claim that another agent writes them during the
+ *     loop: it keeps cc1 from moving the two loads, which gives the ROM's empty
+ *     slots. Writer census: see the task #2429 store NOTE (cv_address 0x34FD90).
+ *     Native reads the plain symbols.
+ * Measured on the s136 screen (NOTE #12306): without the aliases and volatiles,
+ * 27 words differ where the arm has 20 at that stage. */
+#ifndef TARGET_NATIVE
+__asm__(".extern g_cinematicExitPendingFmv, 16\n\tg_cinematicExitPendingFmv = g_cinematicExitPending");
+extern s32 g_cinematicExitPendingFmv;
+__asm__(".extern g_playerProgressFmv, 16\n\tg_playerProgressFmv = g_playerProgress");
+extern volatile s32 g_playerProgressFmv;
+__asm__(".extern D_1A7A10Fmv, 16\n\tD_1A7A10Fmv = D_1A7A10");
+extern volatile u32 D_1A7A10Fmv;
+#define FMV_EXIT_PENDING g_cinematicExitPendingFmv
+#define FMV_PLAYER_PROGRESS g_playerProgressFmv
+#define FMV_D_1A7A10 D_1A7A10Fmv
+/* SCHEDULING DEVICES (RULING #8483 empty templates, no "memory" clobber; FACT
+ * #12379's dependence-edge form). They emit nothing and are insn-count fragile
+ * (RULING #12316): an edit inside the FmvRequestStop block can reorder it again.
+ *   FMV_SCHED_BARRIER: an empty volatile asm, which sched treats as using and
+ *     clobbering everything, so nothing in the block crosses it.
+ *   FMV_AFTER_STORE(p, m): `p` is rewritten after a read of `m`, so whatever
+ *     consumes `p` is scheduled after the store to `m`. */
+#define FMV_SCHED_BARRIER() __asm__ __volatile__("")
+#define FMV_AFTER_STORE(p, m) __asm__("" : "+r"(p) : "m"(m))
+#else
+extern s32 g_cinematicExitPending;
+extern s32 g_playerProgress;
+extern u32 D_1A7A10;
+#define FMV_EXIT_PENDING g_cinematicExitPending
+#define FMV_PLAYER_PROGRESS g_playerProgress
+#define FMV_D_1A7A10 D_1A7A10
+#define FMV_SCHED_BARRIER() ((void)0)
+#define FMV_AFTER_STORE(p, m) ((void)0)
+#endif
+
+/* GUARD (task #2429): on EE this C is the image's FmvStreamFeedLoop, compiled
+ * alone by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810) with gcse ON
+ * (its selector row carries `S136EXTRA=`, RULING #12178; under the unit's
+ * -fno-gcse the same body reads 76 words off, NOTE #12334) and spliced over
+ * S136OS_SLOT by tools/ee/s136os_splice.sh. No asm fallback. On native it is
+ * plain C. The `dli $4,0x8000000000f` at 0x34FE9C needs its RULING #8549 row in
+ * tools/ee/ps2eeas_dli_sites.txt (2 words without it).
+ * History: NOTE #12255 / #12306 / #12334 / #12354 (15 -> 7 words), closed by the
+ * FmvRequestStop-block devices below (task #2429). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_FmvStreamFeedLoop)
+S136OS_SLOT(FmvStreamFeedLoop);
+#else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern u8 *g_pFmvArenaBase;
+/* g_listenerPosHistory (0x188660) seen as the sound state it overlays: the word
+ * at +0x5C is the volume restored on channel slot 5 at the end. */
+typedef struct FmvSndState { u8 _pad0[0x48]; s32 channelVolume[6]; } FmvSndState;
+extern FmvSndState g_listenerPosHistory;
+/* D_138180 seen as the pad state it holds: +0x1A0 is a 64-bit button word, read
+ * both whole and as its two 32-bit halves. */
+typedef struct FmvPadState {
+    u8  _pad0[0x1A0];
+    union { u64 buttons; struct { s32 lo; s32 hi; } w; } b;
+} FmvPadState;
+extern FmvPadState D_138180;
+extern void func_0011AEA0(s32 arg);
+extern s32 WaitVblankGetField(s32 mode);
+extern void func_002B9F20(void);
+extern void FmvRequestStop(void *q);
+extern s32 func_003512F8(void *base, void *out);
+extern s32 func_003513F8(void *q, void *buf, s32 n, s32 z);
+extern void func_00351328(void *base, s32 n);
+extern void func_003504F0(void);
+extern void func_00350100(void);
+extern s32 func_00351370(void *base, void *out);
+extern s32 func_0012EB30(void *ctx, void *buf, s32 n, void *base, s32 x);
+extern void func_003513B8(void *base, s32 n);
+extern s32 func_00352BA0(void *q);
+extern s32 func_00350120(void);
+extern void func_00350F28(s32 a);
+extern void func_00350608(void *q);
+extern s32 func_00352620(void *ctx);
+extern void func_00132888(s32 slot, s32 value);
+extern void snd_Pump(void);
+extern s32 func_003526A8(void *ctx);
+extern s32 func_00352780(void *ctx);
+extern s32 func_00352C70(void *q);
+extern void func_00350F78(void);
+extern void func_00350660(void *q);
+/* (end of this body's declarations) */
+struct FmvFeedIo { void *readBuf; void *decBuf; s32 stopped; };
+/* MATCHED on the s136os arm (task #2429), not by cc1 2.9.
+ * FmvStreamFeedLoop(ctx, base, addq): the FMV playback main loop.
+ *   ctx   the playback context (PlayFmvMovie passes arena + 0xD9048);
+ *   base  the work arena (stream ring at base, DMA-add size at +0x50008);
+ *   addq  the read queue; *(s32 *)addq is the elementary-stream length.
+ * Flushes the caches and waits one vblank ONCE (FACT #5866), then loops while at
+ * least 5 bytes remain and the decoder state (func_00352620) is not 3. Each pass
+ * pumps the pad (func_002B9F20) and, once the button word's low half has read 0
+ * at least once, takes the skip decision: none when g_cinematicExitPending is 3;
+ * skip when it is 2, the low half is non-zero and the high half is 0; otherwise
+ * skip when bit 0x800 of the high half is set and any of D_1A7A10's high 16
+ * bits non-zero, the exit flag non-zero or g_playerProgress <= 0 holds; otherwise
+ * skip when every bit of 0x8000000000F is set in the button word. The first skip
+ * calls FmvRequestStop(arena + 0xD9048) and records it. Then, while stream is
+ * left and func_003512F8 reports more than 0xFFFF bytes, it reads 64 KiB
+ * (func_003513F8) and commits it (func_00351328); whatever func_00351370 reports
+ * is handed to func_0012EB30 and consumed (func_003513B8). The first time the
+ * frame queue (+0xD9168) is non-empty and func_00350120 agrees, it calls
+ * func_00350F28(1) and func_00350608(arena + 0xD9100). After the loop it sets
+ * sound slot 5 to 0, waits out func_003526A8 and then func_00352780 / the frame
+ * queue, calls func_00350F78 and func_00350660(arena + 0xD9100), and sets slot 5
+ * back to g_listenerPosHistory's word at +0x5C.
+ * Returns 1 if a skip was taken, else 0 (the ROM's sp+0x8 word). */
+s32 FmvStreamFeedLoop(void *ctx, void *base, void *addq) {
+    struct FmvFeedIo io;
+    s32 remain = *(s32 *)addq;
+    s32 toRead;
+    s32 released = 0;
+    s32 started = 0;
+    s32 stop;
+    s32 avail;
+    s32 readable;
+    s32 got;
+
+    func_0011AEA0(0);
+    io.stopped = 0;
+    func_0011AEA0(2);
+    toRead = remain;
+    WaitVblankGetField(0);
+    while (remain >= 5 && func_00352620(ctx) != 3) {
+        stop = 0;
+        func_002B9F20();
+        if (D_138180.b.w.lo == 0) released = 1;
+        if (released) {
+            /* Two names for one read (RULING #8598 pin on the second): the ROM
+             * tests 3 and 2 on $3 and the != 0 on its copy in $5. */
+            s32 exitNow = FMV_EXIT_PENDING;
+            register s32 exitp EE_REG("$5") = exitNow;
+            if (exitNow != 3) {
+                if (exitNow == 2 && D_138180.b.w.lo != 0 && D_138180.b.w.hi == 0) {
+                    stop = 1;
+                } else if (((FMV_D_1A7A10 & 0xFFFF0000) != 0 || exitp != 0
+                            || FMV_PLAYER_PROGRESS <= 0)
+                           && (D_138180.b.w.hi & 0x800)) {
+                    stop = 1;
+                } else if ((D_138180.b.buttons & 0x8000000000FULL) == 0x8000000000FULL) {
+                    stop = 1;
+                }
+            }
+        }
+        if (stop && io.stopped == 0) {
+            /* ROM order: lui;lw arena / lui;ori 0xD9048 / li 1; sw / jal; addu.
+             * The two barriers fence the arena load and the offset; the
+             * FMV_AFTER_STORE edge keeps the argument add after the store, so
+             * reorg puts it in the jal slot (and the branch above becomes the
+             * ROM's bnel). The $2 pin (RULING #8598) is the ROM's arena register.
+             * Removal probes (s136 screen, words off with the dli row's 2):
+             * first barrier 4, second 6, FMV_AFTER_STORE 7, the pin 7; all on 2. */
+            register u8 *arena EE_REG("$2") = g_pFmvArenaBase;
+            s32 off;
+            FMV_SCHED_BARRIER();
+            off = 0xD9048;
+            FMV_SCHED_BARRIER();
+            io.stopped = 1;
+            FMV_AFTER_STORE(arena, io.stopped);
+            FmvRequestStop(arena + off);
+        }
+        readable = func_003512F8(base, &io.readBuf);
+        if (toRead > 0 && readable > 0xFFFF) {
+            got = func_003513F8(addq, io.readBuf, 0x10000, 0);
+            toRead -= got;
+            func_00351328(base, got);
+        }
+        func_003504F0();
+        func_00350100();
+        avail = func_00351370(base, &io.decBuf);
+        if (avail > 0) {
+            got = func_0012EB30(ctx, io.decBuf, avail, base, *(s32 *)((u8 *)base + 0x50008));
+            remain -= got;
+            func_003513B8(base, got);
+        }
+        func_003504F0();
+        if (!started && func_00352BA0(g_pFmvArenaBase + 0xD9168) && func_00350120()) {
+            started = 1;
+            func_00350F28(1);
+            func_00350608(g_pFmvArenaBase + 0xD9100);
+        }
+    }
+    func_00132888(5, 0);
+    snd_Pump();
+    while (!func_003526A8(ctx)) { func_003504F0(); func_00350100(); }
+    while (!func_00352780(ctx) && func_00352620(ctx) != 3
+           && !func_00352C70(g_pFmvArenaBase + 0xD9168)) {
+        func_00350100();
+    }
+    func_00350F78();
+    func_00350660(g_pFmvArenaBase + 0xD9100);
+    func_00132888(5, g_listenerPosHistory.channelVolume[5]);
+    snd_Pump();
+    return io.stopped;
+}
+#endif

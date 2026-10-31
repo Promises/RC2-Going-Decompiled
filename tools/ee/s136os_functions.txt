@@ -747,3 +747,4 @@ usa text/178E88 func_00280EC8
 usa text/1DFF80 ComputeEmitterPan
 usa text/1DFF80 DrawSkyPiecesFormatA S136EXTRA=
 usa text/1DFF80 DrawSkyPiecesFormatB S136EXTRA=
+usa text/24D728 FmvStreamFeedLoop S136EXTRA=
