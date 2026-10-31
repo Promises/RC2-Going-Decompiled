@@ -3054,7 +3054,7 @@ selftest_jtbl() {
   local T="$1" b=0 rc m out f; m="$T/jtbl_bind_mut.sh"
   say "-- (30) JTBL_BIND (#2247): build.sh and objdiff_build.sh run $HERE/jtbl_bind.sh after s136os_splice.sh, and its --selftest; its --selftest in the container -> PASS, >= 10 arms, incl. the real ROM table read from the retail ELF; a copy with the per-entry compare deleted -> FAIL on exactly arms 5 and 10 (the seeded mismatches); an absent script -> FAIL"
   for f in "$HERE/build.sh" "$HERE/objdiff_build.sh"; do
-    if awk '/s136os_splice\.sh --selftest/ { st = 1 } /jtbl_bind\.sh --selftest/ && st { st = 2 } /s136os_splice\.sh [$]REGION|s136os_splice\.sh "[$]REGION"/ { sp = 1 } /jtbl_bind\.sh [$]REGION|jtbl_bind\.sh "[$]REGION"/ && sp { jb = 1 } END { exit !(st == 2 && jb) }' "$f"; then ok "wired (30): $f runs jtbl_bind.sh --selftest after the splice's, and jtbl_bind.sh after s136os_splice.sh"
+    if awk '/s136os_splice\.sh --selftest/ { st = 1 } /jtbl_bind\.sh --selftest/ && st { st = 2 } /s136os_splice\.sh [$]REGION|s136os_splice\.sh "[$]REGION"/ { sp = 1 } /jtbl_bind\.sh [$]REGION|jtbl_bind\.sh "[$]REGION"/ && sp { jb = 1 } END { exit !(st == 2 && jb) }' "$f" > /dev/null; then ok "wired (30): $f runs jtbl_bind.sh --selftest after the splice's, and jtbl_bind.sh after s136os_splice.sh"
     else say "SELFTEST-FAIL (30) $f does not run jtbl_bind.sh (its --selftest after the splice's, and the bind after s136os_splice.sh)"; b=1; fi
   done
   out=$(in_vm "sh $HERE/jtbl_bind.sh --selftest" 2>&1); rc=$?
