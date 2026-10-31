@@ -472,8 +472,8 @@ extern void func_00124630(s32 *arg0);
  * func_001246D0; C body adapted: verbatim apart from our callee and data
  * spellings (their r1_func_001209D8 = func_00124630, r1_D_00131414 =
  * D_001363D4, whose volatile is now on our declaration rather than an asm
- * alias) and the name at our split address (theirs is func_001246D0) (task
- * #2231).
+ * alias), the callee argument's `(int *)` cast written `(s32 *)`, and the
+ * name at our split address (theirs is func_001246D0) (task #2231).
  */
 void func_001246E0(int arg0) {
     CdRecv *p = (CdRecv *)(arg0 | 0x20000000);
@@ -723,7 +723,7 @@ extern char D_0013B268[];        /* the init bind error message */
 extern char D_0013B288[];        /* the SCECdEXIT message */
 
 /**
- * libcdvd's sceCdInit (cdvd000.o): unless an S-command is still in flight
+ * libcdvd's sceCdInit: unless an S-command is still in flight
  * (func_00124C28(1)), start SIF RPC, record the caller's thread id, reset every
  * RPC bind state to -1 and bump the init count; bind the 0x80000592 init server,
  * retrying (with a 0x100000-iteration delay, and a Kprintf when the debug level
@@ -743,7 +743,7 @@ extern char D_0013B288[];        /* the SCECdEXIT message */
  * The D_001363A4 and D_001363AC stores are volatile, as upstream declares them
  * (here a cast, since the unit declares both plain): with the copy of
  * GetThreadId's result folded into its store, sched1 then leaves the ROM's
- * register allocation in the init block (upstream's own note).
+ * register allocation in the init block.
  *
  * Source: OpenRAC/rac2-gc-decomp @96927f87 (GPL-3.0, adopted with the authors'
  * permission per RULING #10405), src/core/00124C98.c, func_00124E08 (author
@@ -753,9 +753,10 @@ extern char D_0013B288[];        /* the SCECdEXIT message */
  * sceSifBindRpc, r1_func_0011C820 = Kprintf, r1_func_0011CEC8 =
  * sceSifWriteBackDCache, r1_func_0011D620 = sceSifCallRpc, r1_func_00124818/
  * 00124780/001248F8 = ours, r1_D_<addr> = D_<addr>), `&D_00141A68` written as
- * the array D_00141A68, `(char *)` on D_00137580 (our u32[]), the two volatile
- * aliases (r1_D_001363A4, r1_D_001363AC_v) written as volatile casts, and the
- * signature in our s32 spelling (task #2231).
+ * the array D_00141A68, `(char *)` on D_00137580 (our u32[]), upstream's
+ * `extern volatile` r1_D_001363A4 and its asm alias r1_D_001363AC_v both
+ * written as volatile casts, and the signature in our s32 spelling (task
+ * #2231).
  */
 s32 sceCdInit(s32 init_mode) {
     int ret;
@@ -5696,8 +5697,8 @@ extern char D_0013BCC0[];         /* "CSC handler error\n" */
  * r1_func_001193F8 = DisableDmac, r1_func_00118AD0 = RemoveDmacHandler),
  * casts to our prototypes ((s32 *) on the callbacks word, (s32) on the
  * decoder pointer), the record typedef named CscRec (theirs CscRec_2A558),
- * and the signature in the unit's shared IpuDecoder * / u32 / s32 prototype
- * (task #2231).
+ * and the signature in the unit's shared IpuDecoder * / u32 / s32 prototype,
+ * with their parameters arg0/arg1/arg2 named dec/dst/mbCount (task #2231).
  */
 void func_0012E378(IpuDecoder *dec, u32 dst, s32 mbCount) {
     char *p = (char *)dec;
