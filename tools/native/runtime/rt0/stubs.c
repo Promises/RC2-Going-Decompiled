@@ -28,6 +28,7 @@ __attribute__((weak)) void D_1A8C64(void) { native_stub_hit("D_1A8C64"); }
 __attribute__((weak)) void D_1A9A60(void) { native_stub_hit("D_1A9A60"); }
 __attribute__((weak)) void D_1A9A90(void) { native_stub_hit("D_1A9A90"); }
 __attribute__((weak)) void DecompressWad(void) { native_stub_hit("DecompressWad"); }
+__attribute__((weak)) void DrawCenteredCaptureBackground(void) { native_stub_hit("DrawCenteredCaptureBackground"); }
 __attribute__((weak)) void DrawDebugString(void) { native_stub_hit("DrawDebugString"); }
 __attribute__((weak)) void DrawFont1CenteredLabel(void) { native_stub_hit("DrawFont1CenteredLabel"); }
 __attribute__((weak)) void DrawFont1RightJustifiedLabel(void) { native_stub_hit("DrawFont1RightJustifiedLabel"); }
@@ -108,7 +109,6 @@ __attribute__((weak)) void func_002833D8(void) { native_stub_hit("func_002833D8"
 __attribute__((weak)) void func_00283DA0(void) { native_stub_hit("func_00283DA0"); }
 __attribute__((weak)) void func_002859E0(void) { native_stub_hit("func_002859E0"); }
 __attribute__((weak)) void func_00285CE8(void) { native_stub_hit("func_00285CE8"); }
-__attribute__((weak)) void func_00285D48(void) { native_stub_hit("func_00285D48"); }
 __attribute__((weak)) void func_0028B0B0(void) { native_stub_hit("func_0028B0B0"); }
 __attribute__((weak)) void func_0028C390(void) { native_stub_hit("func_0028C390"); }
 __attribute__((weak)) void func_0028C728(void) { native_stub_hit("func_0028C728"); }

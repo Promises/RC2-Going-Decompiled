@@ -2291,7 +2291,7 @@ void func_002F85B8(void) {
  * caption sound (func_0029C488/func_0029C4C0); wire the render buffers from
  * g_memoryArenaTable + screen dims; play the open sound (PlayMobySound 3); enter game
  * state 5 (func_0026F750) and — when no camera override is parked (+0x60 == 0) —
- * position the preview camera (func_00283A48/Vec4AddVu0/WrapAnglePiSum/func_00336230/
+ * position the preview camera (func_00283A48/Vec4AddVu0/WrapAnglePiSum/SetCamera5Pose/
  * func_00336168/func_003361C0/UpdateCamera). Finally seed the directional-light
  * preview matrices (g_dirLightMatrices+0x380..+0x3B0).
  *
@@ -2347,7 +2347,7 @@ extern void  func_00283638(void *dst);
 extern void  Vec4AddVu0(void *dst, void *a, void *b);
 extern f32   WrapAnglePiSum(f32 angle, f32 modulus);
 extern void  func_00283A48(void *outXform, void *tmpl, void *origin);
-extern void  func_00336230(void *a, void *b, s32 c, s32 d, s32 e);
+extern void  SetCamera5Pose(void *a, void *b, s32 c, s32 d, s32 e);
 extern void  func_00336168(void *v);
 extern void  func_003361C0(void *v);
 extern void  UpdateCamera(void);
@@ -2573,7 +2573,7 @@ void EnterVendorMenu(s32 arg) {
         }
         Vec4AddVu0(ui + 0xD0, ui + 0xD0, pmoby + 0x10);
         *(f32 *)(ui + 0xE8) = WrapAnglePiSum(*(f32 *)(pmoby + 0xF8), PR_PI);
-        func_00336230(ui + 0xD0, ui + 0xE0, 1, 0, 0);
+        SetCamera5Pose(ui + 0xD0, ui + 0xE0, 1, 0, 0);
 
         memcpy(local, ui + 0xD0, 0x10);
         if (*(s32 *)(ui + 0x50) == 2) {

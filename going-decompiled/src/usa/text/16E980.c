@@ -221,7 +221,7 @@ typedef struct CameraSysState {
     /* 0x3E4 */ f32 fovMaxSpeed;
     /* 0x3E8 */ u8 fovMode;           /* 0 snap, 1 linear, 2 smooth, 3 spring */
     /* 0x3E9 */ u8 fovEnabled;        /* 1 = interpolation active */
-    /* 0x3EA */ s16 fovTimer;         /* countdown (func_00283328) */
+    /* 0x3EA */ s16 fovTimer;         /* countdown (FastDecTimer) */
     /* 0x3EC */ f32 fovRate;          /* timer -> 0..1 scale */
     /* 0x3F0 */ f32 fovFrom;          /* ease start FOV */
     /* 0x3F4 */ u8 pad3F4[0xC];
@@ -692,7 +692,14 @@ void func_0026F818(void) {
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/16E980", func_0026F820);
 
-/* func_0026F850: large boot/menu still-image build helper. The ROM has a
+/* func_0026F850: walks an 8-slot table (slti 8) and mixes each slot through a
+ * 6-way waveform switch (sltiu 6, jtbl_0026C4D0_text) using pi (0x40490FDB) and
+ * func_00283B30, clamps the result below 0x100 (slti 0x100) and stores it into
+ * two channels. OpenRAC rac2-gc-decomp @96927f87 names it ActuatorCalcPower (a
+ * pad-actuator power mixer), which the body fits, but the boot ELF has 0 jal, j
+ * or pointer references to it, so no caller confirms it and it keeps its splat
+ * name (task #2244; FACT #12086, NOTE #12088). The earlier "boot/menu
+ * still-image build helper" reading had no support in the body. The ROM has a
  * jump-table switch and eight callee-saves at 8-byte slot spacing (the
  * packed-save frame cc1 2.9 cannot produce; a cc1 2.9 property, not a wall on
  * the s136os arm: FACT #9873 / NOTE #9871). Left INCLUDE_ASM: it has no C
@@ -945,7 +952,7 @@ void func_0026FF18(s32 frames, s32 mode, f32 fov, f32 stiffness, f32 damping,
  * ease: 0 snaps fovLive (+0x3D8) to fovTarget and stops, 3 springs it
  * (func_002703C0) and stops once the spring velocity is below 1e-4, 1 lerps
  * from fovFrom toward fovTarget by the remaining timer fraction, 2 eases it
- * through func_002A8A68; 1 and 2 stop when func_00283328 runs the timer out.
+ * through func_002A8A68; 1 and 2 stop when FastDecTimer runs the timer out.
  * Then g_cameraProjScale = sin(fov/2) / cos(fov/2) and BuildCameraProjection.
  * No params, no return.
  * MATCHED on the s136os arm (task #1986). Each item priced by undoing it
@@ -965,7 +972,7 @@ void func_0026FF18(s32 frames, s32 mode, f32 fov, f32 stiffness, f32 damping,
 #if !defined(TARGET_NATIVE) && !defined(S136OS_StepCameraFovInterp)
 S136OS_SLOT(StepCameraFovInterp);
 #else
-extern s32 func_00283328(s16 *timer);
+extern s32 FastDecTimer(s16 *timer);
 extern f32 IntToFloat(s32 x);
 extern f32 func_002A8A68(f32 target, f32 from, f32 s);
 extern f32 func_002703C0(f32 cur, f32 target, f32 stiffness, f32 damping,
@@ -995,7 +1002,7 @@ void StepCameraFovInterp(void) {
         break;
     case 1: { /* linear from fovFrom toward fovTarget over the timer */
         f32 s;
-        if (func_00283328(&g_cameraState.fovTimer) != 0) {
+        if (FastDecTimer(&g_cameraState.fovTimer) != 0) {
             g_cameraState.fovEnabled = 0;
         }
         s = IntToFloat(g_cameraState.fovTimer) * g_cameraState.fovRate;
@@ -1004,7 +1011,7 @@ void StepCameraFovInterp(void) {
         break;
     }
     case 2: /* smooth-step ease */
-        if (func_00283328(&g_cameraState.fovTimer) != 0) {
+        if (FastDecTimer(&g_cameraState.fovTimer) != 0) {
             g_cameraState.fovEnabled = 0;
         }
         g_cameraState.fovLive = func_002A8A68(
@@ -2648,7 +2655,7 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/16E980", func_0
 /* func_00272560: spherical angles and distance of the offset from - to.
  *   out:  receives { out[0] = Atan2fPoly(d.x, d.y), out[1] =
  *         Atan2fPoly(|d.xy|, d.z), out[2] = |d| } for d = *from - *to.
- *   from, to: the two points (235FE8's func_00336230 passes the saved camera
+ *   from, to: the two points (235FE8's SetCamera5Pose passes the saved camera
  *         position and g_heroPos, writing into its transition block +0xFC).
  * Returns 0. The old out[0] is passed to WrapAnglePiDiff with the new angle
  * and the result is dropped (the ROM never reads that call's $f0), so out[0]
@@ -3219,7 +3226,7 @@ void func_00273988(f32 rate, void *moby, s32 mode, s32 index, void *srcPos,
  *  - state 0/2: seed the trail buffer (func_00274CA0 for state 0, else replay via
  *    func_002A0678), point block+0x30 at it, run the collision handler
  *    (func_00273D20), then — every 4th frame, or once the lifetime timer
- *    (func_00283328 @block+0x34) elapses — force the result to 1; clear block+0x30.
+ *    (FastDecTimer @block+0x34) elapses — force the result to 1; clear block+0x30.
  *  - state 1/3: run func_00273EA8, force result to 1 when the timer elapses.
  *  - state 4: func_00274128. state 5: func_00274130. state >= 6: no-op (result 0).
  *
@@ -3262,7 +3269,7 @@ s32 func_00273B80(void *moby) {
         if (*(u8 *)(block + 0x5c) == 0 && (g_gameTime & 3) != 0) {
             *(s32 *)(block + 0x30) = 0;
         } else {
-            if (func_00283328((s16 *)(block + 0x34)) != 0) {
+            if (FastDecTimer((s16 *)(block + 0x34)) != 0) {
                 result = 1;
             }
             *(s32 *)(block + 0x30) = 0;
@@ -3271,7 +3278,7 @@ s32 func_00273B80(void *moby) {
     case 1:
     case 3:
         result = func_00273EA8(moby);
-        if (func_00283328((s16 *)(block + 0x34)) != 0) {
+        if (FastDecTimer((s16 *)(block + 0x34)) != 0) {
             result = 1;
         }
         break;

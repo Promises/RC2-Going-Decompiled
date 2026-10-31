@@ -730,7 +730,7 @@ void func_00291CC0(u32 index) {
 #endif
 
 /*
- * func_00291D28 — per-frame refresh of the directional + point light set.
+ * UpdateLightingEnvironment — per-frame refresh of the directional + point light set.
  * Seeds the directional-light matrix at g_dirLightMatrices+0x340 from the default
  * D_1A9190, then derives its direction from the camera yaw: angle =
  * WrapAnglePiSum(g_cameraRot[2], -0.8); +0x350 = cos(angle)*0.866, +0x354 =
@@ -753,7 +753,7 @@ void func_00291CC0(u32 index) {
  * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
  * property and was measured false as the reason this member stays unmatched (FACT #9873).
  * Residual: the saved-register set; the rest UNMEASURED. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00291D28);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", UpdateLightingEnvironment);
 #else
 extern u8  g_dirLightMatrices[];       /* 0x1C26C0 - 0x40-stride light matrices */
 extern u8  g_pointLights[];            /* 0x1C2AC0 - stride 0x20 */
@@ -767,7 +767,7 @@ extern f32 GetFloatAbs(f32 x);         /* fabsf */
 extern void func_00291EB0(s32 index);
 extern void func_00291FC8(void *arg);
 
-void func_00291D28(void) {
+void UpdateLightingEnvironment(void) {
     u8 *dir = g_dirLightMatrices;
     f32 angle;
     s32 i;
@@ -831,6 +831,9 @@ extern u8 g_pointLights[];
 
 /**
  * func_00291EB0 — build a light-relight request record for point light `index`.
+ *
+ * Not CreatePointLight: OpenRAC rac2-gc-decomp @96927f87 uses that name, but the
+ * body reads an existing light and creates nothing (NOTE #12088, task #2244).
  *
  * Fills the request entry (g_pointLights+0x100, stride 0x30) by running three
  * geometry builders in sequence (func_002F5DF8, func_002E4000, func_002F19D0),
@@ -1028,7 +1031,7 @@ void func_00291FF8(s32 index) {
 #endif
 
 /*
- * func_002920C0(hdr, out) — build the GS texture registers for a mipmapped
+ * UploadMipTexture(hdr, out) — build the GS texture registers for a mipmapped
  * texture and upload its base + CLUT + mip levels to VRAM. Same u64
  * GS-register-descriptor class as func_002954F0/func_00293438 (TEX0/TEX1/MIPTBP1
  * packing), plus a pixel-format switch and a per-mip-level upload loop.
@@ -1068,7 +1071,7 @@ void func_00291FF8(s32 index) {
  * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
  * property and was measured false as the reason this member stays unmatched (FACT #9873).
  * Residual: the saved-register set; the rest UNMEASURED. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002920C0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", UploadMipTexture);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
@@ -1091,7 +1094,7 @@ extern void WaitGsPathsIdle(s32 arg);
 extern s32  g_vramAllocCursor;
 #endif
 
-s32 func_002920C0(void *hdrArg, u64 *out) {
+s32 UploadMipTexture(void *hdrArg, u64 *out) {
     u8 *hdr = (u8 *)hdrArg;
     s32 fmt = *(s32 *)(hdr + 0x10);
     /*
@@ -5690,7 +5693,7 @@ extern void  func_0028F8E0(u64 tex, s32 x, s32 y, s32 w, s32 h, s32 alpha, s32 r
 extern void  func_0028FC78(f32 x, f32 y, f32 w, f32 h, f32 angle, s32 a, s32 b, u64 tex); /* DrawHudSpriteRotated ($f16 = angle) */
 extern f32   WrapAnglePiSum(f32 angle, f32 sum);
 extern void  FormatMapBlipLabel(s32 blipIdx, u8 *dest);                          /* build blip label */
-extern s32   func_00297B48(f32 x, f32 z, void *outX, void *outY, s32 progress);  /* project hero pos */
+extern s32   GetSpecialMapCoordinates(f32 x, f32 z, void *outX, void *outY, s32 progress);  /* project hero pos */
 extern void  func_00298918(f32 x, f32 z, void *outX, void *outY, s32 progress);  /* project hero fallback */
 extern void  func_00298AA8(f32 a, f32 b, f32 c, f32 d, f32 e);                   /* extra player marker */
 extern s32   func_00301430(void);                                               /* planet/area index */
@@ -6212,7 +6215,7 @@ void MapDraw(int useHudPass, long applyScissor) {
                 }
             }
 
-            if (func_00297B48(g_flHeroPos[0], g_flHeroPos[1], &outUV[0], &outUV[1],
+            if (GetSpecialMapCoordinates(g_flHeroPos[0], g_flHeroPos[1], &outUV[0], &outUV[1],
                               g_playerProgress) == 0) {
                 func_00298918(g_flHeroPos[0], g_flHeroPos[1], &outUV[0], &outUV[1],
                               g_playerProgress);
@@ -6250,7 +6253,7 @@ void MapDraw(int useHudPass, long applyScissor) {
  * s136os body reaches 55/122 positional, and the residual is literal-pair
  * addressing (the ROM reads each pair's first word gp-relative and its second
  * absolute through $at), not the callee contract. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00297B48);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", GetSpecialMapCoordinates);
 
 /*
  * MapBuildBitmapFrom4bpp(dest, srcA, srcB) — convert a 256x256 4bpp map image
@@ -6931,7 +6934,7 @@ void *func_002988C8(s32 idx) {
  *   *outY = (block[2] + block[3] * fb) / 512
  *
  * Param order is floats-first (fa, fb, outX, outY, level) to match the callers,
- * the twin func_00297B48, and the .s ($f12=fa, $f13=fb, $4=outX, $5=outY,
+ * the twin GetSpecialMapCoordinates, and the .s ($f12=fa, $f13=fb, $4=outX, $5=outY,
  * $6=level). On the EE this is register-identical to any ordering (EABI keeps FP
  * and GPR banks separate); the order only matters for the native/#else build,
  * whose ABI is positional.

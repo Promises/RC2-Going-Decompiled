@@ -42,7 +42,7 @@
 #      listed as it stands. tools/ee/asm_unit_selftest.sh shows it firing.
 # An EU site is its own row with region `eu`, its own EU name and EU address.
 # RULING #8549's scope is USA, so no EU row exists yet. The EU bytes at the
-# twins of the sites below are the same words (FACT #8544; for func_0027DF80's
+# twins of the sites below are the same words (FACT #8544; for DrawLetterboxBars's
 # mask, the 4 words occur once per ROM: USA 0x27E094, EU 0x27DEFC).
 #
 # func_0027C020 compiles `dli $5,0x8000000044` twice, both in reorder mode and
@@ -50,7 +50,7 @@
 # operands) substitutes both. rom_addr names the first; the ROM carries the
 # same 3 words at the second, 0x0027C088 (task #1194).
 #
-# func_0027DF80 is still INCLUDE_ASM, so cc1 compiles no dli in it and its row
+# DrawLetterboxBars is still INCLUDE_ASM, so cc1 compiles no dli in it and its row
 # changes no byte of today's build. It applies once the function is promoted.
 # GNU as gives `lui 0xff; ori 0xfff3; dsll32` for this dli; the ROM has the
 # 4-word form below (task #1159).
@@ -81,7 +81,7 @@ usa      func_00290640  0x0029065C  $13,0x4400000000008001   340d8800 000d6bfc 3
 usa      func_002E0650  0x002E06AC  $13,0x1000000000000001   340d8000 000d6b7c 35ad0001
 usa      func_002E0650  0x002E06EC  $9,0x2400000000008001    34099000 00094bbc 35298001
 usa      func_0027C020  0x0027C068  $5,0x8000000044          34058000 00052e38 34a50044
-usa      func_0027DF80  0x0027E094  $7,0xfffff300000000       3407ffff 00073c38 34e7f300 00073e38
+usa      DrawLetterboxBars  0x0027E094  $7,0xfffff300000000       3407ffff 00073c38 34e7f300 00073e38
 usa      InitMobyFromClass  0x0029FF40  $7,0x40404000000000   34078080 00073c38 34e78000 00073df8
 #
 # DrawTexturedQuad2d (text/178E88) compiles three dli, all in reorder mode and

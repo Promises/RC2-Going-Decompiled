@@ -418,7 +418,7 @@ void func_003361C0(GuiQword *src) {
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336218);
 
-/* func_00336230(a, b, mode, arg3, arg4): allocate + switch to a camera (mode 5)
+/* SetCamera5Pose(a, b, mode, arg3, arg4): allocate + switch to a camera (mode 5)
  * and seed its transform block. Snapshots four qwords (*a, *b, g_cameraPos[0],
  * g_cameraPos[1]) to locals, then SwitchActiveCamera; sub = cam[+0x70]. Common:
  * cam[0x7D]=1; cam+0x30 = g_cameraPos = *a; cam+0x40 = *b; sub+0x80 = *a;
@@ -429,7 +429,7 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
  * mode 2 and 3 both stamp arg3 at sub+0xE0/+0xE4. Faithful TARGET_NATIVE
  * #else (engine 2.96 qword-copy regalloc = no byte-match). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336230);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", SetCamera5Pose);
 #else
 /* engine96 probe (task #466, cc1 2.96 via MATCH_func_00336230, unit objdiff): 0.00%,
    169/176 insns differ. Residual: UNKNOWN-addiu + lq/sq (first differing insn: 'addiu sp, sp, -0xa0' vs 'addiu sp, sp, -0x90').
@@ -444,7 +444,7 @@ extern s32  func_00272560(f32 *out, const void *from, const void *to);
  * pair as the ROM does. */
 typedef struct { u32 w0, w1, w2, w3; } __attribute__((aligned(16))) Qw128_235FE8;
 
-void func_00336230(void *a, void *b, s32 mode, s32 arg3, s32 arg4) {
+void SetCamera5Pose(void *a, void *b, s32 mode, s32 arg3, s32 arg4) {
     Qw128_235FE8 srcA, srcB, camPos0, camPos1;
     u8 *cam = (u8 *)func_00270290(5);
     u8 *sub;
@@ -651,7 +651,7 @@ void func_00336720(void *p, s32 flag) {
 }
 #endif
 
-/* func_00336768(arg0, out, t): sample the keyframe track at arg0->field_8 into a
+/* InterpolateTrackVector(arg0, out, t): sample the keyframe track at arg0->field_8 into a
  * Vec4 at out for time t. obj = arg0[+8]; count = obj[+0x10]; kf = obj[+0xC]
  * (linked keyframes: next@+0, time@+0x8, Vec4@+0xC). count 0 -> no-op; count 1 ->
  * copy kf[0]'s Vec4. Otherwise walk the list to the bracket [prev, cur] with
@@ -660,13 +660,13 @@ void func_00336720(void *p, s32 flag) {
  * — write the lerp (1-f)*prev.Vec4 + f*cur.Vec4. Faithful TARGET_NATIVE #else
  * (engine 2.96 FP scheduling/likely-branch = no byte-match). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336768);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", InterpolateTrackVector);
 #else
 /* engine96 probe (task #466, cc1 2.96 via MATCH_func_00336768, unit objdiff): 55.56%,
    78/106 insns differ. Residual: UNKNOWN-lw (first differing insn: 'lw a2, 0x8(a0)' vs 'lw a4, 0x8(a0)').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
    not byte-exact, so the arm stays #else. */
-void func_00336768(void *arg0, void *out, f32 t) {
+void InterpolateTrackVector(void *arg0, void *out, f32 t) {
     u8 *o   = (u8 *)out;
     u8 *obj = *(u8 **)((u8 *)arg0 + 8);
     s32 count = *(s32 *)(obj + 0x10);
@@ -3831,7 +3831,7 @@ s32 GuiLevelInfoPanelTick(void *w, s32 flags) {
 /* func_0033B428: draw the map-screen panel - only when the +0x490 "panel built"
  * flag is set. Draws the two background sprites (p+0x8, p+0x54), pushes two GS
  * register packets (TEST/0x42=0x44 then SCISSOR/0x47=0xB), renders the map layer
- * (MapDraw(0,1) + func_002DBC98(0)), draws the two foreground sprites (p+0xA0,
+ * (MapDraw(0,1) + DrawMenuPreviewImage(0)), draws the two foreground sprites (p+0xA0,
  * p+0xEC) and the nine text labels at +0x138 (stride 0x58). */
 /* GUARD (task #1273): on EE this C is the image's body, compiled alone by the s136os
  * arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810/#8830; tools/ee/s136os_functions.txt) and
@@ -3855,7 +3855,7 @@ extern void AppendGsRegPacket(s32 reg, u64 val);
 extern void AppendGsRegPacket(s32 reg, s32 val);
 #endif
 extern void MapDraw(s32 a, s32 b);
-extern s32  func_002DBC98(s32 a);
+extern s32  DrawMenuPreviewImage(s32 a);
 extern void GuiTextElementDraw(void *e);
 void func_0033B428(void *p) {
     if (*(s32 *)((char *)p + 0x490) != 0) {
@@ -3864,7 +3864,7 @@ void func_0033B428(void *p) {
         AppendGsRegPacket(0x42, 0x44);
         AppendGsRegPacket(0x47, 0xB);
         MapDraw(0, 1);
-        func_002DBC98(0);
+        DrawMenuPreviewImage(0);
         GuiSpriteElementDraw((char *)p + 0xA0);
         GuiSpriteElementDraw((char *)p + 0xEC);
         GuiTextElementDraw((char *)p + 0x138);
@@ -7124,7 +7124,7 @@ void func_0033FDD8(void *w) {
 #endif
 
 /* func_0033FEF8: draw one composite screen - run the body builder at p+0x8, blit
- * the menu backdrop (func_002DBC98(0)), draw its three header text rows, the
+ * the menu backdrop (DrawMenuPreviewImage(0)), draw its three header text rows, the
  * inner panel (func_00337630 at p+0x2DC), a sprite (p+0x420), two footer text
  * rows, then the trailing builder func_0033FDD8(p).
  * BYTE-EXACT under the ENGINE compiler (#259): ee-gcc 2.96 + the engine
@@ -7153,7 +7153,7 @@ S136OS_SLOT(func_0033FEF8);
 #else
 void func_0033FEF8(void *e) {
     func_0033BF90((char *)e + 0x8);
-    func_002DBC98(0);
+    DrawMenuPreviewImage(0);
     GuiTextElementDraw((char *)e + 0x318);
     GuiTextElementDraw((char *)e + 0x370);
     GuiTextElementDraw((char *)e + 0x3C8);
@@ -9507,7 +9507,7 @@ void *func_003436C0(void *p) {
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003436C8);
 
-/* func_003436D0: map four control floats to a clamped byte value (an interpolated
+/* ComputeListEntryAlpha: map four control floats to a clamped byte value (an interpolated
  * intensity/alpha, max `hi`). `a0` is passed by the sole caller (func_00343AF8) but
  * unused here. Runs the unnamed fixed-point helper cluster twice: reduce(x) =
  * func_001234F0(x, float->int) then func_00123028/func_00122A98 (int wrap: if the
@@ -9517,7 +9517,7 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
  * reduce(ratio) -> func_00123298 -> f. Result = (s32)((1.0 - f) * 255.0), clamped
  * so it never exceeds `hi`. Exact helper semantics untraced (kept as func_ names). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003436D0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", ComputeListEntryAlpha);
 #else
 /* engine96 probe (task #466, cc1 2.96 via MATCH_func_003436D0, unit objdiff): 75.32%,
    46/77 insns differ. Residual: UNKNOWN-addiu + movn/movz (first differing insn: 'addiu sp, sp, -0x40' vs 'addiu sp, sp, -0x30').
@@ -9529,7 +9529,7 @@ extern s32   func_00122A98(s32 a, s32 b);
 extern s32   func_00122B00(s32 a, s32 b);
 extern f32   func_00123298(s32 a);
 
-s32 func_003436D0(void *a0, s32 hi, f32 a, f32 b, f32 c, f32 d) {
+s32 ComputeListEntryAlpha(void *a0, s32 hi, f32 a, f32 b, f32 c, f32 d) {
     s32 n;
     f32 f, span;
     s32 result;
@@ -9838,7 +9838,7 @@ s32 func_00343F70(void *p) {
  * (0x60241700); the outer rect expands that by +/-D_1AE1E0 in x and +/-D_1AE1E4
  * in y and is drawn first in a pulsing highlight colour
  * (func_002AA3F0(0x60241700, 0x55F0C070, ...)). Both are submitted to the GS
- * rect primitive func_00285EF8 clipped to g_screenWidth x g_screenHeight. The
+ * rect primitive DrawFramebufferRect clipped to g_screenWidth x g_screenHeight. The
  * D_1AE1Dx/Ex offsets are stored as integers (cvt.s.w) and added as floats. */
 /* task #1522 (s136os arm, verify_match_unit vs ROM; not promoted): #else fixed to
  * convert the four border edges BEFORE fetching the pulse colour, and re-read
@@ -9855,7 +9855,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00343F78);
    not byte-exact, so the arm stays #else. */
 extern s32 g_screenWidth, g_screenHeight;
 extern s32 D_1AE1D0, D_1AE1D4, D_1AE1D8, D_1AE1DC, D_1AE1E0, D_1AE1E4;
-extern void func_00285EF8(s32 x0, s32 y0, s32 x1, s32 y1, s32 sw, s32 sh, u32 color);
+extern void DrawFramebufferRect(s32 x0, s32 y0, s32 x1, s32 y1, s32 sw, s32 sh, u32 color);
 void func_00343F78(void *w) {
     f32 *base = *(f32 **)((char *)w + 0x0);
     s32 x0, y0, x1, y1;
@@ -9866,12 +9866,12 @@ void func_00343F78(void *w) {
     y0 = (s32)(((f32)D_1AE1D4 + base[1]) - (f32)D_1AE1E4);
     x1 = (s32)(((f32)D_1AE1D8 + base[0]) + (f32)D_1AE1E0);
     y1 = (s32)(((f32)D_1AE1DC + base[1]) + (f32)D_1AE1E4);
-    func_00285EF8(x0, y0, x1, y1, g_screenWidth, g_screenHeight,
+    DrawFramebufferRect(x0, y0, x1, y1, g_screenWidth, g_screenHeight,
                   func_002AA3F0(0x60241700, 0x55F0C070, 0x14, 0, 0));
 
     /* inner fill rect, fixed colour (the base record is re-read) */
     base = *(f32 **)((char *)w + 0x0);
-    func_00285EF8((s32)((f32)D_1AE1D0 + base[0]),
+    DrawFramebufferRect((s32)((f32)D_1AE1D0 + base[0]),
                   (s32)((f32)D_1AE1D4 + base[1]),
                   (s32)((f32)D_1AE1D8 + base[0]),
                   (s32)((f32)D_1AE1DC + base[1]),

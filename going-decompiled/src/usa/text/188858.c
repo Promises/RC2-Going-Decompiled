@@ -4604,7 +4604,7 @@ extern f32 WrapAnglePiDiff(f32 a, f32 b);
 extern f32 AngleShortestDiff(f32 a, f32 b);
 extern f32 WrapAngleToPiRange(f32 a);
 extern void func_00288888(HudElement *w);
-extern s32 func_00283328(s32 p);
+extern s32 FastDecTimer(s32 p);
 extern void func_0034D8C8(s32 a, s32 b);
 extern s32 func_00290F98(void);
 extern s32 func_00290FA0(void);
@@ -4643,7 +4643,7 @@ void func_0028C840(void *wheel) {
 
     *(s32 *)(p + 0x7C) = 0xB4;
     *(s32 *)(p + 0x6C) = 0x18;
-    if (func_00283328(0x18C316) != 0 && D_1A7BBB == 0) {
+    if (FastDecTimer(0x18C316) != 0 && D_1A7BBB == 0) {
         D_13834C = 2;
     }
 
@@ -6812,7 +6812,7 @@ void UploadTextureToGs(s32 handle, s32 vramBlk, s32 fmt, s32 wLog, s32 hLog,
  * cc1 `dli` into those words only at the (region, function, operands) rows of
  * tools/ee/ps2eeas_dli_sites.txt (task #1105). These three functions are the
  * only ones promoted under that allowlist; 7 of its rows are exactly their 7
- * `dli` sites (3 + 3 + 1), the 8th is unpromoted func_0027DF80's (task #1159).
+ * `dli` sites (3 + 3 + 1), the 8th is unpromoted DrawLetterboxBars's (task #1159).
  * RULING #8549 rev 3 froze it until landing_gate checked every row (a919f3a9,
  * #1116) and asm_unit.sh refused a listed `dli` directly before a reorder-mode
  * branch (f6c2bae9, #1124); both landed, a new row needs `--ps2eeas` proof. No C

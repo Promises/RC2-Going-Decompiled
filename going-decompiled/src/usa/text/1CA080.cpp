@@ -323,7 +323,7 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_0
  * (FACT #9873), so the stride is not evidence that this member is walled. Residual: UNMEASURED. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CA138);
 
-/* func_002CA3E8: nearest ray/segment-vs-polygon-edge intersection. Indexes an
+/* SegmentCrossPolyline: nearest ray/segment-vs-polygon-edge intersection. Indexes an
  * edge-list table (D_001F0000 + 0x1680, arg0*4) whose header holds the edge
  * count, builds a normalized direction (Vec4SubVu0 + Vec3LengthVu0 +
  * Vec3RescaleToLenVu0), then loops the edges computing per-edge intersection
@@ -343,7 +343,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CA138);
  * of ours is shifted by one), cse path-following merging the inner block's 0.0 with the
  * loop-hoisted one, and a pre-header nop; the div.s nop pads and the bc1t/bc1f slot shape
  * are reproduced (RULING #8435 pads, an empty fence before the prev/cur copy). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CA3E8);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", SegmentCrossPolyline);
 
 /* func_002CA618: sample a piecewise-linear Vec4 path at distance `dist`.
  * The path is a leading s32 count followed by a Vec4 array at +0x10 (0x10
@@ -2227,7 +2227,7 @@ void func_002CDEB0(void) {
 
 extern u8 *g_pCurrentMenuScreen;
 extern s32 g_nLevelExitRequested;
-extern s32 func_002D6B28(void *item);
+extern s32 UpdateMenuListActions(void *item);
 extern u8 D_00259128[], D_00259178[], D_002591C8[], D_00259218[], D_00259268[], D_002592B8[];
 
 /* ADDRESSING-MODEL DEVICE for func_002CDF48 (RULING #8620 terms; bare asm-label alias,
@@ -2256,7 +2256,7 @@ S136OS_SLOT(func_002CDF48);
 /* Level-exit confirm handler for a menu widget.
  *
  * item: the widget record being confirmed. Returns 0 when the pick is consumed here,
- * otherwise func_002D6B28(item)'s result (the generic widget handler).
+ * otherwise UpdateMenuListActions(item)'s result (the generic widget handler).
  *
  * Acts only when `item` is the current screen's active widget (screen+0xE8), no exit is
  * already pending, and the widget's own table entry (item+0x34 [item+0x40], stride 0xC,
@@ -2336,7 +2336,7 @@ s32 func_002CDF48(void *item) {
         g_levelExitDestination = savedDest;
     return 0;
 forward:
-    return func_002D6B28(item);
+    return UpdateMenuListActions(item);
 }
 #endif
 

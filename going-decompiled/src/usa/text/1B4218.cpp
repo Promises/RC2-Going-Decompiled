@@ -1830,7 +1830,7 @@ void UpdateGameState(void) {
  * moby has no motion controller. Otherwise computes the heading to `target` from the
  * moby position (+0x10/+0x14) via Atan2fPoly (atan2), offsets it by `headingOffset`
  * (WrapAnglePiSum), and — if the controller is wandering (wanderAmplitude != 0) — adds
- * the wander offset and, when the wander timer expires (func_00283328), flips the
+ * the wander offset and, when the wander timer expires (FastDecTimer), flips the
  * wander sign and reseeds the timer from [wanderIntervalMin, wanderIntervalMax]. Drives
  * the motion with StepMobyMotion at that heading and returns its event flags.
  * Save layout: 3 callee-saves + $ra at 8-byte spacing, with fp temps.
@@ -1847,7 +1847,7 @@ S136OS_SLOT(DriveMobyTowardPoint);
 extern s32 GetMobyMotionController(Moby *moby);    /* defined below; forward decl */
 extern f32 WrapAnglePiSum(f32 a, f32 b);           /* 0x284548 wrap a+b into [-pi,pi] */
 extern f32 Atan2fPoly(f32 dx, f32 dy);          /* 0x283BF8 atan2-style heading from a planar delta */
-extern s32 func_00283328(s16 *timer);              /* 0x283328 tick a frame timer; nonzero when it expires */
+extern s32 FastDecTimer(s16 *timer);              /* 0x283328 tick a frame timer; nonzero when it expires */
 extern s32 RandRangeInclusive(s32 min, s32 max);   /* inclusive integer RNG */
 s32 DriveMobyTowardPoint(Moby *moby, Vec4 *target, f32 headingOffset) {
     MobyMotionController *ctrl = (MobyMotionController *)GetMobyMotionController(moby);
@@ -1864,7 +1864,7 @@ s32 DriveMobyTowardPoint(Moby *moby, Vec4 *target, f32 headingOffset) {
 
     if (ctrl->wanderAmplitude != 0.0f) {
         heading = WrapAnglePiSum(heading, ctrl->wanderAmplitude);
-        if (func_00283328(&ctrl->wanderTimer) != 0) {
+        if (FastDecTimer(&ctrl->wanderTimer) != 0) {
             ctrl->wanderAmplitude = -ctrl->wanderAmplitude;
             ctrl->wanderTimer = (s16)RandRangeInclusive(ctrl->wanderIntervalMin, ctrl->wanderIntervalMax);
         }
@@ -3940,7 +3940,7 @@ void SetDialogVoiceFadeTargets(s32 target) {
  *   - state 5: send cmd 0x15 (func_00132A70) and advance to state 6;
  *   - substate wants key-on (+0x0C bit 0x8000) and not yet latched: send cmd 0x2D
  *     (func_001333D0) + latch state bit 0x8000; when the frame timer (+0x0E)
- *     expires (func_00283328 == 2) mark the sub-phase finishing (+0x0C = 4);
+ *     expires (FastDecTimer == 2) mark the sub-phase finishing (+0x0C = 4);
  *   - key-on latched but sub-phase no longer wants it: send stop cmd 0x2E
  *     (func_00133400) + clear the latch;
  *   - state 2: install the voice-event callback (cmd 0x4F, func_00133460);
@@ -3969,7 +3969,7 @@ extern void func_002B8D18(s32 flag, long handleAddr);            /* below; voice
  *   +0x04 s16 slotId    channel slot id (set -1 = free once the voice resolves off)
  *   +0x0A s16 state     playback state (1/2/3/5/6/7/8/9; bit 0x8000 = key-on latched)
  *   +0x0C s16 substate  sub-phase (bit 0x8000 = wants key-on; 4 = finishing)
- *   +0x0E s16 timer     frame timer ticked by func_00283328
+ *   +0x0E s16 timer     frame timer ticked by FastDecTimer
  */
 void StepDialogVoiceChannel(u8 *ch) {
     s32 handle;
@@ -4004,7 +4004,7 @@ substate_check:
             func_001333D0(*(s32 *)(ch + 0x0));
             *(u16 *)(ch + 0xA) |= 0x8000;
         }
-        if (func_00283328((s16 *)(ch + 0xE)) == 2) {
+        if (FastDecTimer((s16 *)(ch + 0xE)) == 2) {
             *(s16 *)(ch + 0xC) = 4;
         }
     } else {

@@ -1453,6 +1453,10 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_0
 /**
  * func_002A9468 — begin iterating a moby group.
  *
+ * Identity: OpenRAC rac2-gc-decomp @96927f87 calls it GetFirstMobyInGroup; the
+ * ROM's g_mobyGroupLists / g_mobyTableBase reads and the slot & 0x7FFF agree
+ * (FACT #12086). Matched, so the splat name stays (task #2244).
+ *
  * Validates the group index against g_mobyGroupCount, points the iterator
  * globals (g_pMobyGroupIterCursor / g_mobyGroupIterSlot / g_pMobyGroupIterMoby)
  * at the group's slot list, fetches the first moby into *out, then applies the
@@ -4503,7 +4507,7 @@ void func_002AC668(void *src, u8 *obj) {
 }
 #endif
 
-extern s32 func_00283328(void *state); /* tick countdown: ret 0=counting, 1=already 0, 2=just hit 0; decrements state[0] */
+extern s32 FastDecTimer(void *state); /* tick countdown: ret 0=counting, 1=already 0, 2=just hit 0; decrements state[0] */
 
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 77.58%
    -> UNKNOWN-@0: ROM `addiu sp,sp,-64` vs `addiu sp,sp,-48` */
@@ -4534,7 +4538,7 @@ S136OS_SLOT(func_002AC728);
  * Per-frame RGB colour fade / ping-pong applied to a target object.
  *
  * `s` is the fade state block (byte offsets):
- *   s[0x0] (s16) frames remaining, ticked down each call via func_00283328
+ *   s[0x0] (s16) frames remaining, ticked down each call via FastDecTimer
  *   s[0x2] (s16) direction flag: 0 = fade current->dest, nonzero = dest->current
  *   s[0x4..0x6] (u8) current RGB
  *   s[0x7..0x9] (u8) per-channel destination RGB; a 0 byte leaves that channel
@@ -4558,7 +4562,7 @@ s32 func_002AC728(void *target, u8 *s)
     s32 result = *(s16 *)(s + 0x0);
 
     if (result != 0) {
-        if (func_00283328(s) != 0) {
+        if (FastDecTimer(s) != 0) {
             /* countdown expired this frame */
             if (*(s16 *)(s + 0x2) != 0) {
                 /* latch the destination colour and stop */
@@ -5270,7 +5274,9 @@ void func_002AD9B0(Vec4 *p, f32 amt) {
 #endif
 
 /* func_002ADA30: test whether `pos` falls inside segment `segIdx`'s unit-cube
- * bounds. Subtract the segment origin (table at *(g_deferredSegment2Tag+0xCC),
+ * bounds. OpenRAC rac2-gc-decomp @96927f87 calls it IsPointInCuboid, which the
+ * ROM's +-1.0 bounds and lone Vec4SubVu0 (no length call) agree with (FACT
+ * #12086); matched, so the splat name stays (task #2244). Subtract the segment origin (table at *(g_deferredSegment2Tag+0xCC),
  * 0x80-stride, origin at +0x30), rotate the offset into the segment's local
  * frame by the segment's 3x3 rotation matrix (at seg+0x40) via func_00283A48
  * (out = m * local), and return 1 only if all of x/y/z land in [-1, 1].
@@ -6359,7 +6365,7 @@ extern u32  D_001F0000[];              /* +0x1680 = nav-moby pointer table, inde
 
 extern void SpawnBoltDenominationPickup(u64 moby, Vec4 *vel, Vec4 *pos, u32 flags,
                                         s32 denom, u32 mode);
-extern void func_002CA3E8(s32 navTargetIdx, Vec4 *srcPos, Vec4 *dstPos, Vec4 *out);
+extern void SegmentCrossPolyline(s32 navTargetIdx, Vec4 *srcPos, Vec4 *dstPos, Vec4 *out);
 extern s32  func_001234F0(f32 x);      /* float-format helper for DebugPrintStub */
 extern void DebugPrintStub(s32 fmt, ...);
 
@@ -6591,7 +6597,7 @@ void SpawnBoltShower(f32 zStep1, u64 sourceMoby2, long minBolts3, long maxBolts4
             }
             Vec4ScaleVu0(&ballisticPos, flightTime, &step);
             Vec4AddVu0(&ballisticPos, &ballisticPos, (Vec4 *)((u8 *)moby + 0x10));
-            func_002CA3E8(navTargetIdx, (Vec4 *)((u8 *)moby + 0x10), &ballisticPos, &navWorldPos);
+            SegmentCrossPolyline(navTargetIdx, (Vec4 *)((u8 *)moby + 0x10), &ballisticPos, &navWorldPos);
             Vec4SubVu0(&ballisticPos, &navWorldPos, &vel);
             ballisticPos.z = 0.0f;   /* sw $0,0x48($sp): zero z of rescale source before the Vec3 rescale */
             Vec3RescaleToLenVu0(&navRescaled, 0.25f, &ballisticPos);   /* 0x3E800000 */
@@ -6727,7 +6733,7 @@ void func_002AF6A0(Vec4 *out, u32 *colorPtr) {
  * block `ctrl`. When the wander phase (ctrl+0x28) is idle, pick a fresh heading
  * jitter (ctrl+0x24) and a random dwell timer (ctrl+0x2A). Otherwise step the
  * heading toward the target (func_002AB668) and tick the dwell timer
- * (func_00283328), clearing the phase when it expires. Each frame: advance a
+ * (FastDecTimer), clearing the phase when it expires. Each frame: advance a
  * probe point from the moby position along the current yaw (ctrl+0xF8) by
  * ctrl+0x14, resolve it against the world (func_002A8D08 vertical sweep), snap
  * the moby ground height (ProbeGroundHeight). If unobstructed OR out of leash
@@ -6806,7 +6812,7 @@ void func_002AF728(Moby *moby, void *ctrlPtr, f32 stepZ, f32 snapEps) {
         *(s16 *)(c + 0x28) = 1;
     } else {
         func_002AB668(*(f32 *)(c + 0x24), *(f32 *)(c + 0x18), (f32 *)(m + 0xF8), 0);
-        if (func_00283328(c + 0x2A) != 0) {
+        if (FastDecTimer(c + 0x2A) != 0) {
             *(s16 *)(c + 0x28) = 0;
         }
     }
@@ -9058,7 +9064,7 @@ s32 CountSkillPointsCompleted(void) {
  *
  * Gated on the moby being damageable (flags+0x34 & 0x20) with a live stats block.
  * Resolves the attacker's armor/resist record (func_002AA4A8, dropped if the moby's
- * hit-countdown func_00283328 says inactive), applies the record's +0x2c damage
+ * hit-countdown FastDecTimer says inactive), applies the record's +0x2c damage
  * multiplier (matched class + optional param_3 scale), then deals the damage
  * (func_002AA508) to the stats health at stats[0], stamps the hit (+0xa8=0xff),
  * fires the threat flash/burst, and records the attacker's moby slot into hit+0x70.
@@ -9067,7 +9073,7 @@ s32 CountSkillPointsCompleted(void) {
  * tiers 1-3 to 6 when param_3 is set, spawns a knockback direction FX for the
  * '\n'-class stats (tiers >= 2), and finally — unless suppressed by hit state —
  * builds a reaction direction (record +0x10, or -Z of the moby's forward at +0xC0
- * with w=5627.9248) and drives the hit reaction (func_002B2268) + stagger anim
+ * with w=5627.9248) and drives the hit reaction (ApplyObjectReaction) + stagger anim
  * (func_002A85B8). Returns the damage tier (0 when any gate rejects the hit).
  *
  * Faithful #else transcription — the matching build uses the INCLUDE_ASM arm above.
@@ -9086,7 +9092,7 @@ extern f32 g_gameTime[];
 extern Vec4 g_heroPos;
 /* (end of this body's declarations) */
 /* callees with no file-scope decl above this point */
-extern long func_002B2268(void *moby, long hit, Vec4 *dir, u32 tier);
+extern long ApplyObjectReaction(void *moby, long hit, Vec4 *dir, u32 tier);
 extern s32  UpdateMobyThreatFlashAndBurst(void *moby, s32 threatIdx, f32 *stats);
 
 u32 func_002B1DF0(void *moby, long hit, long param_3) {
@@ -9115,7 +9121,7 @@ u32 func_002B1DF0(void *moby, long hit, long param_3) {
     func_002AC728(moby, h);
 
     armorRec = func_002AA4A8((Moby *)moby, 0x10000, 0);
-    if (func_00283328((u8 *)stats + 6) == 0) {
+    if (FastDecTimer((u8 *)stats + 6) == 0) {
         armorRec = 0;
     }
     r = (u8 *)armorRec;
@@ -9233,7 +9239,7 @@ u32 func_002B1DF0(void *moby, long hit, long param_3) {
             dir = *(Vec4 *)(r + 0x10);
         }
 
-        if (func_002B2268(moby, hit, &dir, result) != 0) {
+        if (ApplyObjectReaction(moby, hit, &dir, result) != 0) {
             *(s32 *)(h + 0x44) = *(s32 *)g_gameTime;
             if (*(s32 *)(h + 0x48) == -1) {
                 func_002A85B8((MobyAnim *)moby, h[0x10], -1);

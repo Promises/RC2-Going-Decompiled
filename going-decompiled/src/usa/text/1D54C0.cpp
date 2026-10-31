@@ -199,19 +199,19 @@ _Static_assert(__builtin_offsetof(MenuCmd, arg) == 0x4, "arg");
  *   +0x1C  s32  rect origin y        CONFIRMED
  *   +0x20  s32  rect width           CONFIRMED (many draw handlers)
  *   +0x24  s32  rect height          CONFIRMED
- *   +0x30  u32  subtype state/flags  CONFIRMED (func_002DB080 switch driver)
+ *   +0x30  u32  subtype state/flags  CONFIRMED (UpdateMenuResourceStream switch driver)
  *   +0x34  ptr  data/cmd/row table   CONFIRMED (cmd table for func_002D6AA0)
  *   +0x38  s32  selected-row/scroll  CONFIRMED (func_002DC0F0/378/520)
  *   +0x3C  s32  sub-cursor / uv x    CONFIRMED (func_002DAE70/DB080)
- *   +0x40  s32  cursor / selection   CONFIRMED (func_002D6AA0 row, func_002D87C8)
+ *   +0x40  s32  cursor / selection   CONFIRMED (func_002D6AA0 row, SoundOptionsMenuInput)
  *   +0x44  s32  subtype state / level-array base CONFIRMED
  *   +0x48  s32  map-slot id A        CONFIRMED (func_002DB028/DD7E8/DD858)
  *   +0x4C  s32  map-slot id B        CONFIRMED
  *   +0x50  s32  cached state / slot  CONFIRMED
  *   +0x54  s32  cached state / slot  CONFIRMED (func_002DC838/878/CCC8)
  *   +0x58  s32  cached state / uv    CONFIRMED (func_002DAE70/DB080)
- *   +0x5C  s32  stream frame counter CONFIRMED (TickStreamedImageWidget/func_002DB080)
- *   +0x60  s32  stream scroll offset CONFIRMED (func_002DA358/TickStreamedImageWidget/func_002DB080)
+ *   +0x5C  s32  stream frame counter CONFIRMED (TickStreamedImageWidget/UpdateMenuResourceStream)
+ *   +0x60  s32  stream scroll offset CONFIRMED (func_002DA358/TickStreamedImageWidget/UpdateMenuResourceStream)
  *   +0x44..0xA0  s32[24] level/objective id array (objectives subtype) CONFIRMED
  *   +0xA0  s32  active-objective count (func_002D8270)                  CONFIRMED
  *   +0xA4..0xBB  u8[24] per-level handled-flag array (func_002DA358)    CONFIRMED
@@ -1602,7 +1602,7 @@ s32 func_002D6B00(MenuCmd *cmd) {
 /* Galactic-map planet-list cursor/scroll + select input. Wall: ~190-instruction
  * branch graph with cross-screen link pointers (next/prev at +0x4C/+0x50/+0x54/
  * +0x58) and a divide-by-row-count trap. Bare INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D6B28);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", UpdateMenuListActions);
 
 /* Draw the galactic-map planet list (per-row labels, highlight, level-name
  * substitution). Wall: large draw loop + many leaf calls + pointer-compare
@@ -2014,7 +2014,7 @@ s32 func_002D87B0(void) {
  * Cancel(0x10) requests the parent. Returns 0/1/-1.
  * Wall: long branch ladder + clamp arithmetic. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D87C8);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", SoundOptionsMenuInput);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
@@ -2031,7 +2031,7 @@ extern void func_00132938(s32 flag);
  * the save-slot wall named above is a cc1 2.9 property and was measured false as the reason
  * this member stays unmatched (FACT #9873). Residual: UNMEASURED. */
     /* TODO(match): functional equivalent - not byte-exact. */
-s32 func_002D87C8(MenuWidget *obj) {
+s32 SoundOptionsMenuInput(MenuWidget *obj) {
     u8 *o = (u8 *)obj;
     s32 pressed = g_padButtonsPressed[0];
     s32 sel;
@@ -3214,10 +3214,14 @@ s32 func_002DB028(MenuWidget *obj) {
 }
 #endif
 
-/* On-screen help/hint/objective text selector + reveal state machine (reader of
- * g_skillPointFlags). Wall: ~350-instruction nested branch + switch state graph
- * over the partially-recovered slot table. Bare INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DB080);
+/* UpdateMenuResourceStream (named in task #2244 from OpenRAC rac2-gc-decomp
+ * @96927f87): double-buffered menu asset streamer (reader of g_skillPointFlags).
+ * Six StartFileLoad calls, one DecompressWad, g_globalWadBaseLbn and
+ * g_fileLoadState (FACT #12086, NOTE #5807). The earlier "help/hint/objective
+ * text selector" reading is contradicted by those callees. Wall: ~350-instruction
+ * nested branch + switch state graph over the partially-recovered slot table.
+ * Bare INCLUDE_ASM. */
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", UpdateMenuResourceStream);
 
 /* Draw the streamed help/preview image (loading/autosave overlay variants).
  * PARK (flag-not-guess): builds a text-box descriptor on the stack (sh fields at
@@ -3352,7 +3356,12 @@ s32 UploadMenuBgImagePair(void *obj) {
 }
 #endif
 
-/* Draw the animated galactic-map planet-cursor sprite at the active slot, with
+/* DrawMenuPreviewImage (named in task #2244 from OpenRAC rac2-gc-decomp
+ * @96927f87): the rect is large for a cursor, 0x1D..0xBF x 0x4D..0xB2 on the
+ * D_25E660 screen and 0x1E..0x99 x 0x4C..0x8C elsewhere, drawn from the two TEX0
+ * records at g_mapVertexData+0x268/+0x278 through func_0028FAE0, so "preview
+ * image" fits the ROM better than the cursor reading kept below.
+ * Draw the animated galactic-map planet-cursor sprite at the active slot, with
  * a pulsing scale driven by the global frame counter and a layout that differs
  * for the save-screen vs map-screen instances. Returns 4 when drawn, else 0.
  * WALL (empirically confirmed 2026-07-14, canonical-2.9 objdiff): engine-2.96
@@ -3369,7 +3378,7 @@ s32 UploadMenuBgImagePair(void *obj) {
  * property and was measured false as the reason this member stays unmatched (FACT #9873).
  * Residual: the saved-register set; the rest UNMEASURED. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DBC98);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", DrawMenuPreviewImage);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
@@ -3381,7 +3390,7 @@ extern void AppendGsRegPacket(s32 regId, u64 value);
  * insn: ROM `addiu sp,sp,-112` vs `addiu sp,sp,-160`. Not iterated in t495. */
 /* Matching arm stays INCLUDE_ASM; #else is the structure model (faithful vs asm,
  * cross-checked against the EU twin func_002DBC60). */
-s32 func_002DBC98(void) {
+s32 DrawMenuPreviewImage(void) {
     extern s32 D_00261978[];
     extern s32 D_001B1518;
     extern void *D_001C5188, *D_001C5198;
@@ -3599,7 +3608,7 @@ s32 func_002DC0F0(MenuWidget *obj) {
  * Up/Down move the selection (+0x38), X cycles the focused row's value pointer
  * (+0x4 byte, modulo the row's option count). Cancel requests the parent. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DC378);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", UpdateMenuChoiceList);
 #else
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 66.57% / engine96 52.82%; better arm sdk29; 81 differing
@@ -3611,7 +3620,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DC378);
  * property and was measured false as the reason this member stays unmatched (FACT #9873).
  * Residual: the saved-register set; the rest UNMEASURED. */
     /* TODO(match): functional equivalent - not byte-exact. */
-s32 func_002DC378(MenuWidget *obj) {
+s32 UpdateMenuChoiceList(MenuWidget *obj) {
     u8 *o = (u8 *)obj;
     s32 pressed = g_padButtonsPressed[0];
     if (*(s32 *)((u8 *)g_pCurrentMenuScreen[0] + 0xE8) != (s32)o) {
@@ -3666,7 +3675,11 @@ s32 func_002DC378(MenuWidget *obj) {
 }
 #endif
 
-/* Draw an options list (rows of stride 0x18): each row is a left label plus a
+/* func_002DC520 (OpenRAC rac2-gc-decomp @96927f87: DrawMenuChoiceList; the ROM's
+ * two GetLocalizedString calls inside Begin/End2dDrawBatch fit, but that check
+ * also passes at +0x1000, so it is weak, FACT #12086; matched, so the splat
+ * name stays, task #2244).
+ * Draw an options list (rows of stride 0x18): each row is a left label plus a
  * right-justified value picked by the row's current option byte. The selected
  * row (obj->0x38) is highlighted. Rows are spaced evenly. Returns 2.
  *

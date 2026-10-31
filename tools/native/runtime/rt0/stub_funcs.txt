@@ -23,6 +23,7 @@ D_1A8C64
 D_1A9A60
 D_1A9A90
 DecompressWad
+DrawCenteredCaptureBackground
 DrawDebugString
 DrawFont1CenteredLabel
 DrawFont1RightJustifiedLabel
@@ -103,7 +104,6 @@ func_002833D8
 func_00283DA0
 func_002859E0
 func_00285CE8
-func_00285D48
 func_0028B0B0
 func_0028C390
 func_0028C728

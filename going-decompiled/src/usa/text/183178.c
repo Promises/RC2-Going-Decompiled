@@ -130,14 +130,14 @@ s32 TickCountdownTimer(s32 *p) {
 }
 #endif
 
-/* func_00283328: hand-written s16 countdown step (pmaxw + addi). */
+/* FastDecTimer: hand-written s16 countdown step (pmaxw + addi). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183178", func_00283328);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183178", FastDecTimer);
 #else
 /* TODO(match): functional equivalent - not byte-exact; handwritten pmaxw +
  * `addi` countdown form. s16 twin of TickCountdownTimer: same idle/run/expire
  * return triple (1 idle, 0 running, 2 on expiry). */
-s32 func_00283328(s16 *p) {
+s32 FastDecTimer(s16 *p) {
     s32 v = *p;
     if (v == 0) {
         return 1;

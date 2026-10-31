@@ -130,7 +130,7 @@ extern void func_00280550(s32 a, s32 b, s32 c, s32 d, u64 tex0, u8 *glyphTable,
 /* GS depth-range / register-packet helpers. AppendGsRegPacket takes a 64-bit
  * value (so the constants need the ori/dsll/ori zero-extend) plus a reg id. */
 extern void func_002859E0(s32 zNearBits, s32 lo, s32 zScale, s32 enable);
-extern void func_00285D48(s32 a, s32 b);
+extern void DrawCenteredCaptureBackground(s32 a, s32 b);
 extern void AppendGsRegPacket(s32 regId, u64 value);
 
 /* Frame VIF1/GS DMA chain write cursor (0x1B2228). Declared as an incomplete
@@ -1446,7 +1446,7 @@ void func_0027BFA8(void) {
 /** func_0027C020 (SetupViewModelDepthRange, the name RenderHeldItemViewModel's
  *  note uses) - bind a (1 << log2Width) x (1 << log2Height) offscreen render
  *  target at the top of VRAM, then queue three GS register writes around
- *  func_00285D48(0x100, 0x100).
+ *  DrawCenteredCaptureBackground(0x100, 0x100).
  *  @param log2Width   log2 of the target width in pixels
  *  @param log2Height  log2 of the target height in pixels
  *  The target's VRAM byte address is 0x3FF000 minus its 32-bpp size
@@ -1454,7 +1454,7 @@ void func_0027BFA8(void) {
  *  to the 8 KiB FBP granule; func_002859E0's argument order is FACT #5662's,
  *  which contradicts the "depth range" reading this function was named for.
  *  GS writes: TEST_1 (0x47) = 0x30000, then ALPHA_1 (0x42) = 0x8000000044
- *  before and after func_00285D48. No return.
+ *  before and after DrawCenteredCaptureBackground. No return.
  *  Two build devices, neither a C phrasing:
  *  - the empty asm after the last call stops cc1 sibcalling it (`j
  *    AppendGsRegPacket`); the ROM keeps the call + return frame (RULING #8483);
@@ -1471,7 +1471,7 @@ void func_0027C020(s32 log2Width, s32 log2Height) {
     func_002859E0(log2Width, log2Height, ((0x3FF000 - (4 << shift)) >> 13) << 13, 1);
     AppendGsRegPacket(0x47, 0x30000);
     AppendGsRegPacket(0x42, 0x8000000044);
-    func_00285D48(0x100, 0x100);
+    DrawCenteredCaptureBackground(0x100, 0x100);
     AppendGsRegPacket(0x42, 0x8000000044);
     __asm__ __volatile__("");
 }
@@ -2159,7 +2159,7 @@ extern u8 D_1A7BB9;   /* fade-suppress flag byte */
 extern u8 D_1AC860[]; /* GIFtag template A (16 bytes) */
 extern u8 D_1AC870[]; /* GIFtag template B (16 bytes) */
 
-/** func_0027DF80 — advance and render the white screen-fade overlay. Steps the
+/** DrawLetterboxBars — advance and render the white screen-fade overlay. Steps the
  *  fade counter (g_screenFadeWhite[2], at +0x8): when the fade-in flag (+0x4) is
  *  set it ramps up to 0x34, otherwise it ramps down to 0. Nothing is drawn at 0
  *  or when D_1A7BB9 suppresses it. Otherwise builds a full-screen white-quad GS
@@ -2190,9 +2190,9 @@ extern u8 D_1AC870[]; /* GIFtag template B (16 bytes) */
  * class). D_1A7358/D_1A735C are the screen's far X/Y edges
  * (g_gsPixelOffsetX+8/+0xC); the #else below reads them as g_gsPixelOffsetY[1]/[2]. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027DF80);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", DrawLetterboxBars);
 #else
-void func_0027DF80(void) {
+void DrawLetterboxBars(void) {
     s32 counter;
     u8 *p;
     u64 mask = 0x00FFFFF300000000ULL;
@@ -3012,7 +3012,7 @@ void func_0027F348(int x, int y, int z, int w, int v)
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027F4D0);
 
-/* func_0027F4D8 (DrawTexturedRingSegments) — draw a textured ring/arc as 16 gouraud quads
+/* DrawTexturedArc (DrawTexturedRingSegments) — draw a textured ring/arc as 16 gouraud quads
  * (func_0027EFA0) sweeping from startAngle to endAngle about (centerX,centerY), between inner
  * and outer radius, with the given UI texture. Each quad spans one angular step
  * (step = (endAngle-startAngle)/segCount) between two edges; ALWAYS 16 segments are emitted
@@ -3047,7 +3047,7 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0
  * property and was measured false as the reason this member stays unmatched (FACT #9873).
  * Residual: the saved-register set; the rest UNMEASURED. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027F4D8);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", DrawTexturedArc);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
@@ -3059,7 +3059,7 @@ extern f32 WrapAnglePiSum(f32 a, f32 b);   /* 0x284548 */
 extern s32 FloatToInt(f32 x);              /* declared file-scope below, used before it here */
 extern u64 GetUiTextureTex0(s32 slot);     /* declared file-scope below, used before it here */
 
-void func_0027F4D8(f32 startAngle, f32 endAngle, s32 centerX, s32 centerY,
+void DrawTexturedArc(f32 startAngle, f32 endAngle, s32 centerX, s32 centerY,
                    s32 innerR, s32 outerR, const s32 *st, const s32 *uv,
                    u64 texId, s32 segCount) {
     const union { u32 u; f32 f; } kHalfPi = { 0x3FC90FDC };

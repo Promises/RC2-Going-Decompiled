@@ -116,7 +116,7 @@ INCLUDE_ASM_ALIAS(func_00115F28, malloc);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115F78);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115FC0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", _mbtowc_r);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00116300);
 
@@ -212,7 +212,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00116460);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001166C8);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00116E10);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", _free_r);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00117108);
 
@@ -248,6 +248,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001182B8);
 
 /**
  * func_00118460 - round an ASCII decimal digit string up at its last digit.
+ *
+ * Identity: OpenRAC rac2-gc-decomp @96927f87 calls it RoundDecimalDigits; the
+ * ROM's slti '5' threshold and '0'/'9' carry agree (FACT #12086). Matched, so
+ * the splat name stays (task #2244).
  *
  * @digits: decimal digits '0'..'9', most significant first.
  * @len:    number of digits; digits[len - 1] is the digit being rounded away.
@@ -298,7 +302,7 @@ s32 func_00118460(char *digits, s32 len) {
  * @s: the string; it is rewritten in place.
  *
  * Returns @s. Measures the string, then swaps characters from both ends
- * inward. Only caller: func_00118548 (0x1185D0), in the newlib float
+ * inward. Only caller: IntegerToAscii (0x1185D0), in the newlib float
  * formatter. Kept under its splat name: the body is the only evidence.
  *
  * Byte-exact on the s136os arm since task #2056 (SN 2.95.3 v1.36
@@ -343,17 +347,17 @@ char *func_001184D0(char *s) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00118548);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", IntegerToAscii);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001185E8);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00118BC0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", BufferedWrite128);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", VfprintfDispatch);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", VfprintfFloat);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00119AC0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", BufferedWrite128Secondary);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00119BC8);
 
@@ -830,7 +834,7 @@ extern s32 func_0011BE20(void);
 extern s32 func_0011BCD0(const char *buf, s32 len);
 
 /**
- * TTY write hook (called twice each by func_00118BC0 and func_00119AC0): for
+ * TTY write hook (called twice each by BufferedWrite128 and BufferedWrite128Secondary): for
  * fd 1 or 2, open the DECI2 TTY channel on first use (func_0011BE20; the flag
  * D_00134688 latches a successful open) and send len bytes of buf through
  * func_0011BCD0.

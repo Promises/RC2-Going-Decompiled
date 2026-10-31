@@ -415,14 +415,14 @@ void func_00300288(void) {
 /* Water-pool surface state machine: dispatches on the pool state word
  * (g_waterPool+0x30, range 0..7) through jtbl_0026DD50_text to advance the
  * splash/ripple/settle phases — each case runs its own VU0 vector math + helper
- * calls (func_00283328, ...) and writes back the pool's level/scale fields.
+ * calls (FastDecTimer, ...) and writes back the pool's level/scale fields.
  * TODO(hle): jump-table state machine over VU0 hardware math; tier-3, no
  * byte-exact path and no compact faithful C. Behaviour documented; stub no-op. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1FFBA0", func_003002E0);
 #else
 /* Step one tick of the pool's countdown timer at *t (g_waterPool+0x32). Inlined
- * from func_00283328 (a trap-stub in native): returns 1 when the timer is idle
+ * from FastDecTimer (a trap-stub in native): returns 1 when the timer is idle
  * (c==0), 0 while it is still counting down, 2 on the tick it reaches zero. */
 static s32 poolTimerStep(s16 *t) {
     s16 c = *t;
