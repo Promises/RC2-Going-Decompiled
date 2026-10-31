@@ -2037,8 +2037,8 @@ extern void HandleRpcBindRequest();
 extern s32 func_0011F5E0(void);
 extern s32 func_0011F628(void);
 extern void func_0011C8D8(void);
-extern u32 func_0011B020(u32 reg, u32 val);
-extern s32 func_0011B030(s32 arg0);
+extern u32 sceSifSetReg(u32 reg, u32 val);
+extern s32 sceSifGetReg(s32 arg0);
 
 /**
  * sceSifInitRpc: bring up the SIF RPC layer; a no-op after the first call
@@ -2062,9 +2062,8 @@ extern s32 func_0011B030(s32 arg0);
  * D_0013E900, DIntr -> func_0011F5E0, EnableInterrupts -> func_0011F628,
  * sceSifInitCmd -> func_0011C8D8, sceSifAddCmdHandler -> func_0011CB90,
  * _request_end -> func_0011D238, _request_bind -> HandleRpcBindRequest,
- * D_0011B138 -> func_0011D590, _request_rdata -> func_0011D2F0, sceSifGetReg
- * -> func_0011B030, sceSifSetReg -> func_0011B020, sceSifSendCmd ->
- * func_0011CD20, func_0011A458 -> func_0011C8B0; their SifRpcData is this
+ * D_0011B138 -> func_0011D590, _request_rdata -> func_0011D2F0,
+ * sceSifSendCmd -> func_0011CD20, func_0011A458 -> func_0011C8B0; their SifRpcData is this
  * unit's RpcPacketTable, fields pid/pkt_table/pkt_table_len/unk0C/unk10/
  * rdata_table/rdata_table_len/client_table/client_table_len/rdata_table_idx
  * -> lastId/packets/count/field0C/field10/rdataTable/rdataCount/clientTable/
@@ -2107,7 +2106,7 @@ void sceSifInitRpc(u32 mode) {
     func_0011CB90(0x8000000A, (s32)func_0011D590, (s32)&D_0013E900);
     func_0011CB90(0x8000000C, (s32)func_0011D2F0, (s32)&D_0013E900);
     func_0011F628();
-    if (func_0011B030(0x80000002)) {
+    if (sceSifGetReg(0x80000002)) {
         return;
     }
     packet = (s32 *)(D_0013D100 + 64);
@@ -2115,7 +2114,7 @@ void sceSifInitRpc(u32 mode) {
     func_0011CD20(0x80000002, (s32)packet, 16, 0, 0, 0);
     while (func_0011C8B0(0) == 0) {
     }
-    func_0011B020(0x80000002, 1);
+    sceSifSetReg(0x80000002, 1);
 }
 
 extern void func_0011CB58(void);
