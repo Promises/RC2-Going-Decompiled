@@ -326,11 +326,12 @@
 - **OpenRAC — `rac2-gc-decomp`, commit `96927f87`, text/1CA080 menu-input bodies** (GPL-3.0)
   <https://github.com/OpenRAC/rac2-gc-decomp> at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`
 
-  Four engine C bodies, adopted with the authors' permission (held by the
-  operator, RULING #10405) and re-checked byte-exact against our v2.00 ROM on
-  the s136os arm (task #2236). Contributors: bigbeno37 and Flavius. Each doc
-  comment carries the `Source:` line, which names every respelling. All four
-  are ADAPTED in the same way: our symbol names per the ROM's relocations,
+  Five engine C bodies, adopted with the authors' permission (held by the
+  operator, RULING #10405) and re-checked byte-exact against our v2.00 ROM,
+  four on the s136os arm (task #2236) and one on the 2.9 arm (task #2272).
+  Contributors: bigbeno37, Flavius and Louis-Philippe Le Sieur. Each doc
+  comment carries the `Source:` line, which names every respelling. The first
+  four are ADAPTED in the same way: our symbol names per the ROM's relocations,
   our `PlayGlobalSound` prototype, the menu-screen block read through a view
   of `g_menuScreenBlock`, upstream's `sda` attribute dropped, and its
   `MACRO_ADDR` spelled as the EE-only `.sdata` extern device (RULING #8620) or
@@ -351,6 +352,13 @@
   - **`func_002D2FC8`** (`0x002D2FC8`, the options sub-screen input), from
     `src/game/002D2018-g32.c` (`func_002D2018`, author commits `0eb05a7c` and
     `0f3403f8`, Flavius).
+  - **`func_002CC7D8`** (`0x002CC7D8`, a five-way menu action dispatcher), on
+    the plain 2.9 arm, not s136os, from `src/game/002C7748-g8.c`
+    (`func_002CB820`, author commit `4ce2e79b`, Louis-Philippe Le Sieur; two
+    externs from `455cde53`, Flavius). ADAPTED: our symbol names per the ROM's
+    relocations, this unit's `func_002D67A0` prototype, `sda` dropped. Its
+    switch table is bound to the ROM's `jtbl_0026CC80_text` by
+    `tools/ee/jtbl_bind.sh` (task #2272).
 
 - **OpenRAC — `rac2-gc-decomp`, commit `96927f87`, libcdvd/libgraph/libmpeg bodies** (GPL-3.0)
   <https://github.com/OpenRAC/rac2-gc-decomp> at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`

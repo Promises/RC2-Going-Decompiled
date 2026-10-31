@@ -98,11 +98,11 @@ The GPL-2.0-or-later note in the section above applies to these bodies too.
 
 ### OpenRAC rac2-gc-decomp at 96927f87 (GPL-3.0)
 
-Eighteen C function bodies are taken from OpenRAC's `rac2-gc-decomp`,
+Nineteen C function bodies are taken from OpenRAC's `rac2-gc-decomp`,
 <https://github.com/OpenRAC/rac2-gc-decomp> at commit
 `96927f872c709e13aaa0f32265bb81a5531bf7ed` (root `LICENSE`: GNU General Public
 License, version 3), with the authors' permission (RULING #10405), tasks #2230, #2232,
-#2234, #2235, #2236, #2248, #2251, #2252, #2261 and #2262. Each is adapted, with every respelling named in the
+#2234, #2235, #2236, #2248, #2251, #2252, #2261, #2262 and #2272. Each is adapted, with every respelling named in the
 function's `Source:` line.
 
 | Here | Upstream file | Upstream name |
@@ -117,6 +117,7 @@ function's `Source:` line.
 | `UpdateSkillPointsMenu` in `going-decompiled/src/usa/text/1CA080.cpp` (adapted) | `src/game/002CFBE8-g32.c` | `func_002CFBE8` (v1.01 address) |
 | `UpdateHelpTopicMenuInput` in `going-decompiled/src/usa/text/1CA080.cpp` (adapted) | `src/game/002D1D20-g32.c` | `func_002D1D20` (v1.01 address) |
 | `func_002D2FC8` in `going-decompiled/src/usa/text/1CA080.cpp` (adapted) | `src/game/002D2018-g32.c` | `func_002D2018` (v1.01 address) |
+| `func_002CC7D8` in `going-decompiled/src/usa/text/1CA080.cpp` (adapted: symbol spellings and callee prototype ours; its switch table bound to the ROM's by `tools/ee/jtbl_bind.sh`), task #2272 | `src/game/002C7748-g8.c` | `func_002CB820` (v1.01 address) |
 | `func_002D75D8` in `going-decompiled/src/usa/text/1D54C0.cpp` (adapted: menu block, pad block, tables and callee are our symbols; one test split through a local for the C++ front end) | `src/game/002D6970-g32.c` | `func_002D6970` (v1.01 address) |
 | `UpdateMobyMotionVelocity` in `going-decompiled/src/usa/text/1B4218.cpp` (adapted: callee spellings and signature are ours, `sda` attribute dropped, one callee in its definition's argument order, a native-only call order for another) | `src/game/002B52A0-g8.c` | `func_002B52A0` (v1.01 address) |
 | `StartTertiaryVoice` in `going-decompiled/src/usa/text/1B4218.cpp` (adapted: symbol spellings are ours, the sample start narrowed to `s32` at the call for our `s64` prototype, their `u8` typedef dropped) | `src/game/002B6120-keep-block-order.c` | `func_002B7088` (v1.01 address) |

@@ -1845,18 +1845,59 @@ s32 func_002CC788(s32 action) {
     return result;
 }
 
-/* menu helper: 5-way switch through the ROM table jtbl_0026CC80_text (data asm,
- * data/16CA20). Left as INCLUDE_ASM: the code is reproduced, the table's placement is not.
- * OpenRAC @96927f87 src/game/002C7748-g8.c func_002CB820 on the 2.9 arm builds the ROM's
- * 32 words (vmu with this unit's .rodata placed at 0x26CC80, unit objdiff 100.00%), but
- * cc1 emits its own table into 1CA080.o's .rodata, which the USA link script discards:
- * build.sh usa fails "`.rodata' referenced in section `.text' of .../1CA080.o: defined
- * in discarded section `.rodata'" (task #2236; same wall as FACT #9456 / FACT #12095).
- * The task #947 route (this unit's .rodata linked in place of the data asm, every
- * table owner in 0x26CC30..0x26CD3F in C at once) would admit it, and so would
- * tools/ee/jtbl_bind.sh (task #2247, FACT #12102), which binds the switch table to
- * the ROM's jtbl_ data. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CC7D8);
+/* Menu action dispatcher for `mode`: 0 returns 1; 1, 2 and 4 call the
+ * installed handler in D_1AA440 / D_1AA448 / D_1AA44C with 0 (each only when
+ * set) and return 1; 3 returns func_002D67A0(3, D_0025BA70); any other mode
+ * returns 0.
+ *
+ * The switch compiles to a 5-entry jump table. cc1 emits that table into this
+ * unit's .rodata, which the USA link script discards (task #2236 measured the
+ * link failure, FACT #12115); the ROM's copy is jtbl_0026CC80_text in
+ * data/16CA20. tools/ee/jtbl_bind.sh (task #2247, FACT #12102) checks every
+ * compiled entry against that ROM table, drops the copy and points the
+ * %hi/%lo pair at jtbl_0026CC80_text, on the 2.9 arm this function builds on.
+ *
+ * Source: OpenRAC/rac2-gc-decomp @96927f872c709e13aaa0f32265bb81a5531bf7ed
+ * (GPL-3.0, adopted with the authors' permission per RULING #10405),
+ * src/game/002C7748-g8.c, func_002CB820 (v1.01; author commit 4ce2e79b,
+ * Louis-Philippe Le Sieur; its D_0025BA90/func_002D5B38 externs from 455cde53,
+ * Flavius), C body ADAPTED: statements identical apart from symbol spelling,
+ * our names per the ROM's relocations (D_001AA420/428/42C = D_1AA440/D_1AA448/
+ * D_1AA44C, D_0025BA90 = D_0025BA70, func_002D5B38 = func_002D67A0 with this
+ * unit's prototype), upstream's `sda` attribute dropped (our cc1 ignores it;
+ * -G8 sizing gives the same $gp class) and our symbol name (task #2272). */
+extern void (*D_1AA440)(int);
+extern void (*D_1AA448)(int);
+extern void (*D_1AA44C)(int);
+int func_002CC7D8(int mode)
+{
+    int result = 0;
+
+    switch (mode) {
+    case 0:
+        result = 1;
+        break;
+    case 1:
+        if (D_1AA440)
+            D_1AA440(0);
+        result = 1;
+        break;
+    case 2:
+        if (D_1AA448)
+            D_1AA448(0);
+        result = 1;
+        break;
+    case 3:
+        result = func_002D67A0(3, D_0025BA70);
+        break;
+    case 4:
+        if (D_1AA44C)
+            D_1AA44C(0);
+        result = 1;
+        break;
+    }
+    return result;
+}
 
 /* func_002CC858: dispatch one of seven map-cell config descriptors (D_1AA6D8,
  * stride 0x18, selected by `q` in 0..6) through func_002D6AD8, returning its result
