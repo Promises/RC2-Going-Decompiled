@@ -40,6 +40,12 @@
 #ifndef S136OS_SLOT
 #define S136OS_SLOT(NAME) __asm__("#S136OS_SLOT " #NAME "\n")
 #endif
+/* The same for the sn2952 arm (held SN 2.95.2 cc1, selected in
+ * tools/ee/sn2952_functions.txt; RULING #12157): replaced by
+ * `tools/ee/s136os_splice.sh --arm sn2952`. No bytes either. */
+#ifndef SN2952_SLOT
+#define SN2952_SLOT(NAME) __asm__("#SN2952_SLOT " #NAME "\n")
+#endif
 
 #if INCLUDE_ASM_USE_MACRO_INC
 __asm__(".include \"include/macro.inc\"\n");
@@ -60,6 +66,9 @@ __asm__(".include \"include/labels.inc\"\n");
 #endif
 #ifndef S136OS_SLOT
 #define S136OS_SLOT(NAME)
+#endif
+#ifndef SN2952_SLOT
+#define SN2952_SLOT(NAME)
 #endif
 
 #endif /* !defined(M2CTX) && !defined(PERMUTER) */

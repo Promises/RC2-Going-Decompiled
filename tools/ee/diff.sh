@@ -34,10 +34,11 @@ CPPDEF="-D__GNUC__=2 -D__GNUC_MINOR__=9 -D__mips__ -D__mips=3 -D__R5900 -D__LANG
 # -fno-gcse reproduces (proven byte-exact on text/1907F0). Keep in sync with
 # objdiff_build.sh. S136EXTRA (the s136os splice compile's flags; RULING #9004)
 # is carried so flagdiff.py holds this table equal to build.sh's; diff.sh
-# itself runs no s136os splice.
+# itself runs no s136os splice. SN2952EXTRA (the sn2952 splice compile's
+# flags, task #2286) likewise: carried, CC1EXTRA, no sn2952 splice here.
 GFLAG="-G0"
 CC1EXTRA=""
-unset S136EXTRA
+unset S136EXTRA SN2952EXTRA
 case "$REGION/$UNIT" in
   usa/cod/0321A0) GFLAG="-G8";;
   eu/cod/0321A0) GFLAG="-G8";; # EU mirror of the 989snd sub-TU (same -G8 model)
@@ -83,6 +84,7 @@ case "$REGION/$UNIT" in
   eu/text/19FC78) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;    # USA 1A00F0 twin
 esac
 S136EXTRA="${S136EXTRA-$CC1EXTRA}"
+SN2952EXTRA="${SN2952EXTRA-$CC1EXTRA}"
 
 # Pre-filter the original asm so VU0 (COP2) macro-mode instructions assemble
 # with GNU as: spimdisasm emits the Q/ACC special registers as bare tokens,

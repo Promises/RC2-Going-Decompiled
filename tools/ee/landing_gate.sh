@@ -44,7 +44,9 @@
 #            S136EXTRA -fopt-stack`, as build.sh's flag table assigns them
 #            (derived from the table, not listed). It also asserts that every
 #            source has one sdk29 line and that each unit has as many s136
-#            lines as the selector has rows. On usa it adds RULING #9004's
+#            lines as the selector has rows, and as many sn2952 lines (`-O2
+#            GFLAG CC1EXTRA`, the held SN 2.95.2 arm, task #2286) as
+#            tools/ee/sn2952_functions.txt has rows. On usa it adds RULING #9004's
 #            floor: 1B4218's 2.9 compile keeps -fno-gcse, its s136 compiles carry
 #            none, and 1DFF80 keeps it on both arms. WHY a row: #1364 measured
 #            that unpinning BOTH 1B4218 arms leaves the unit object
@@ -1231,7 +1233,7 @@ do_build() {
   # verifies its read before the dli pass (task #1205, FACT #8713).
   # EE_CC1_ARGLOG: the CC1ARGS row's input, written fresh by this build only.
   rm -f "$OUT/cc1_args.tsv"
-  in_vm "B=$BUILD; rm -rf \$B/going-decompiled \$B/$BASENAME.elf \$B/$BASENAME.lma.elf \$B/$BASENAME.rom \$B/ld.log \$B/ld.lma.log \$B/$BASENAME.map \$B/all_addr_syms.ld;$sync ASM_UNIT_DLISITES_MD5=$(sh "$HERE/mount_sync.sh" md5 "$HERE/ps2eeas_dli_sites.txt") S136OS_FUNCS_MD5=$(sh "$HERE/mount_sync.sh" md5 "$HERE/s136os_functions.txt") EE_CC1_ARGLOG=/work/$OUT/cc1_args.tsv sh tools/ee/build.sh $REGION" > "$OUT/build.log" 2>&1
+  in_vm "B=$BUILD; rm -rf \$B/going-decompiled \$B/$BASENAME.elf \$B/$BASENAME.lma.elf \$B/$BASENAME.rom \$B/ld.log \$B/ld.lma.log \$B/$BASENAME.map \$B/all_addr_syms.ld;$sync ASM_UNIT_DLISITES_MD5=$(sh "$HERE/mount_sync.sh" md5 "$HERE/ps2eeas_dli_sites.txt") S136OS_FUNCS_MD5=$(sh "$HERE/mount_sync.sh" md5 "$HERE/s136os_functions.txt") SN2952_FUNCS_MD5=$(sh "$HERE/mount_sync.sh" md5 "$HERE/sn2952_functions.txt") EE_CC1_ARGLOG=/work/$OUT/cc1_args.tsv sh tools/ee/build.sh $REGION" > "$OUT/build.log" 2>&1
   say "     build.sh rc=$? ($(wc -l < "$OUT/build.log" | tr -d ' ') log lines -> $OUT/build.log)"
   tail -4 "$OUT/build.log" | sed 's/^/     /'
 }
@@ -1245,7 +1247,7 @@ do_build() {
 # --selftest arm (26) passes seeded copies.
 check_cc1args() {
   local log=${1:-$OUT/cc1_args.tsv} table=${2:-$HERE/build.sh} start=${3:-$(cat "$OUT/build_start" 2>/dev/null || echo 0)}
-  say "== CC1ARGS [$REGION]: every compile's cc1 flags == the flag table's ($table), sdk29 and s136; RULING #9004 floor on usa ($log)"
+  say "== CC1ARGS [$REGION]: every compile's cc1 flags == the flag table's ($table), sdk29, s136 and sn2952; RULING #9004 floor on usa ($log)"
   if [ -f "$log" ]; then
     local m; m=$(python3 -c 'import os,sys; print(int(os.path.getmtime(sys.argv[1])))' "$log")
     if [ "$m" -lt "$start" ]; then fail "CC1ARGS: $log mtime $m < build start $start — a STALE arg log, not this build's"; return; fi
@@ -1638,6 +1640,7 @@ selftest() {
   selftest_decldef "$T" || bad=1
   selftest_arena "$T" || bad=1
   selftest_jtbl "$T" || bad=1
+  selftest_sn2952 "$T" || bad=1
 
   say "-- (14) the real gate on this tree (--no-build, the build above) must PASS"
   STRICT=0
@@ -3072,6 +3075,68 @@ selftest_jtbl() {
   rm -f "$m"
   out=$(in_vm "sh $T/jtbl_bind_absent.sh --selftest" 2>&1); rc=$?
   if [ "$rc" != 0 ]; then ok "closed (30): an absent script -> rc $rc"; else say "SELFTEST-FAIL (30) an absent jtbl_bind.sh ran rc 0"; b=1; fi
+  return "$b"
+}
+
+# selftest_sn2952 — arm (31) (task #2286, RULING #12157): the per-function SN
+# 2.95.2 arm, `s136os_splice.sh --arm sn2952`. wired — build.sh and
+# objdiff_build.sh run it after the s136os splice and before jtbl_bind.sh (a
+# copy of build.sh with that line deleted must fail the same predicate, so the
+# predicate can fire), cc1_arglog_check.py counts its compiles, include_asm.h
+# defines SN2952_SLOT and run_splat.py emits its leaf; control — the fixture
+# tools/ee/sn2952_selftest (USA 0x00115E68, whose ROM saves $31 with sq/lq)
+# spliced by the real helper -> vmu rc 0, BYTE IDENTICAL 10/10; fired — the
+# same with a helper whose sn2952 arm compiles with the s136 cc1 (the member is
+# then NOT ROM-identical) -> vmu rc 1, exactly the two $31 save/restore words;
+# fired — the fixture with no splice (the arm unwired) -> vmu rc 3, the
+# function absent. USA only: the fixture is a USA ROM function.
+selftest_sn2952() {
+  local T="$1" b=0 rc out f m D="$1/sn2952"
+  say "-- (31) SN2952 ARM (#2286): build.sh and objdiff_build.sh run s136os_splice.sh --arm sn2952 between the s136os splice and jtbl_bind.sh (a copy with it deleted -> the predicate FAILs); the CC1ARGS checker, include_asm.h and run_splat.py know it; the fixture through the real arm -> vmu BYTE IDENTICAL 10/10; through an arm compiling with the s136 cc1 -> vmu rc 1 on exactly 0x00115e70/0x00115e7c; unwired (no splice) -> vmu rc 3"
+  if [ "$REGION" != usa ]; then ok "n/a (31) on $REGION: the fixture is USA 0x00115E68; run --selftest usa"; return 0; fi
+  sn2952_wired() { awk '/s136os_splice\.sh [$]REGION|s136os_splice\.sh "[$]REGION"/ { sp = 1 } /s136os_splice\.sh --arm sn2952 [$]REGION|s136os_splice\.sh --arm sn2952 "[$]REGION"/ && sp { sn = 1 } /jtbl_bind\.sh [$]REGION|jtbl_bind\.sh "[$]REGION"/ && sn { jb = 1 } END { exit !(jb) }' "$1" > /dev/null; }
+  for f in "$HERE/build.sh" "$HERE/objdiff_build.sh"; do
+    if sn2952_wired "$f"; then ok "wired (31): $f runs s136os_splice.sh --arm sn2952 after the s136os splice and before jtbl_bind.sh"
+    else say "SELFTEST-FAIL (31) $f does not run s136os_splice.sh --arm sn2952 between the s136os splice and jtbl_bind.sh"; b=1; fi
+  done
+  m="$T/build_no_sn2952.sh"; /usr/bin/grep -v 's136os_splice\.sh --arm sn2952' "$HERE/build.sh" > "$m"
+  if cmp -s "$m" "$HERE/build.sh"; then say "SELFTEST-BROKEN: (31) deleting the sn2952 line changed nothing in build.sh"; b=1
+  elif sn2952_wired "$m"; then say "SELFTEST-FAIL (31) a build.sh copy without the sn2952 splice still reads as wired: the predicate cannot fire"; b=1
+  else ok "fired (31): a build.sh copy with the sn2952 splice line deleted ($(( $(wc -l < "$HERE/build.sh") - $(wc -l < "$m") )) line) reads as unwired"; fi
+  unset -f sn2952_wired
+  if /usr/bin/grep -q 'arm == "sn2952"' "$HERE/cc1_arglog_check.py" && /usr/bin/grep -q '^#define SN2952_SLOT(NAME) __asm__' going-decompiled/include/include_asm.h \
+     && /usr/bin/grep -q '"SN2952_SLOT": (1, 0)' tools/splat_ext/run_splat.py; then ok "wired (31): cc1_arglog_check.py counts sn2952 compiles, include_asm.h defines SN2952_SLOT, run_splat.py emits its leaf"
+  else say "SELFTEST-FAIL (31) cc1_arglog_check.py, include_asm.h or run_splat.py does not know the sn2952 arm"; b=1; fi
+  # control: the real helper
+  out=$(in_vm "sh $HERE/sn2952_selftest/run.sh $D/real $HERE/s136os_splice.sh" 2>&1); rc=$?
+  if [ "$rc" = 0 ] && printf '%s\n' "$out" | /usr/bin/grep -q 'func_00115E68 length: built 10 words (assembled st_size 0x28) = ROM 10 words'; then
+    out=$(bash "$HERE/verify_match_unit.sh" func_00115E68 "$D/real/fx.o" "$D/real/tgt.o" usa 2>&1); rc=$?
+    if [ "$rc" = 0 ] && printf '%s\n' "$out" | /usr/bin/grep -q '^func_00115E68: BYTE IDENTICAL TO ROM .* (10/10 words'; then ok "control (31): the fixture through s136os_splice.sh --arm sn2952 -> vmu rc 0, $(printf '%s\n' "$out" | /usr/bin/grep -o 'BYTE IDENTICAL TO ROM .*')"
+    else say "SELFTEST-FAIL (31) the fixture through the real sn2952 arm is not BYTE IDENTICAL 10/10 (vmu rc $rc):"; show < <(printf '%s\n' "$out" | tail -4 | sed 's/^/  inner| /'); b=1; fi
+  else say "SELFTEST-FAIL (31) the fixture pipeline with the real helper did not run or splice 10 words (rc $rc):"; show < <(printf '%s\n' "$out" | tail -6 | sed 's/^/  inner| /'); b=1; fi
+  # fired: the arm compiling with the wrong cc1 (the s136 one, no -fopt-stack)
+  m="$T/s136os_splice_sn2952_as_s136.sh"
+  sed -e 's|CCARM=sn2952; GDIR=tools/ee/cc/lib/gcc-lib/ee/2\.95\.2|CCARM=s136; GDIR=tools/ee/cc/lib/gcc-lib/ee/2.95.3|' \
+      -e 's|CC1_SHA256=2aaf3d22ce5c3508ecba15f16b06737713263e6aee289ca1e43d3ff9c17d964f|CC1_SHA256=0393bcd31f91a6b9f0255db97f1cc99eba78ee8fc003e9a04dfabed1ae1d522e|' "$HERE/s136os_splice.sh" > "$m"
+  if [ "$(diff "$HERE/s136os_splice.sh" "$m" | /usr/bin/grep -c '^>' || true)" != 2 ]; then say "SELFTEST-BROKEN: (31) the wrong-compiler mutant did not rewrite exactly the sn2952 arm's 2 lines: re-aim the seed"; b=1
+  else
+    out=$(in_vm "sh $HERE/sn2952_selftest/run.sh $D/mut $m" 2>&1); rc=$?
+    if [ "$rc" = 0 ]; then
+      out=$(bash "$HERE/verify_match_unit.sh" func_00115E68 "$D/mut/fx.o" "$D/mut/tgt.o" usa 2>&1); rc=$?
+      if [ "$rc" = 1 ] && printf '%s\n' "$out" | /usr/bin/grep -q '^func_00115E68: DIFFERS .* 2/10 words differ' \
+         && [ "$(printf '%s\n' "$out" | /usr/bin/grep -oE '^  0x[0-9a-f]+: built' | sed 's/: built//; s/^ *//' | tr '\n' ' ')" = "0x00115e70 0x00115e7c " ]; then
+        ok "fired (31): the sn2952 arm compiling with the s136 cc1 -> vmu rc 1, 2/10 at 0x00115e70 0x00115e7c ($(printf '%s\n' "$out" | /usr/bin/grep -m1 '^  0x00115e70' | sed 's/^ *//'))"
+      else say "SELFTEST-FAIL (31) the wrong-compiler fixture did not DIFFER on exactly 0x00115e70/0x00115e7c (vmu rc $rc):"; show < <(printf '%s\n' "$out" | tail -4 | sed 's/^/  inner| /'); b=1; fi
+    else say "SELFTEST-FAIL (31) the wrong-compiler fixture pipeline did not run (rc $rc):"; show < <(printf '%s\n' "$out" | tail -6 | sed 's/^/  inner| /'); b=1; fi
+  fi
+  rm -f "$m"
+  # fired: unwired (the 2.9 compile alone; its SN2952_SLOT emits nothing)
+  out=$(in_vm "sh $HERE/sn2952_selftest/run.sh $D/unwired -" 2>&1); rc=$?
+  if [ "$rc" = 0 ]; then
+    out=$(bash "$HERE/verify_match_unit.sh" func_00115E68 "$D/unwired/fx.o" "$D/unwired/tgt.o" usa 2>&1); rc=$?
+    if [ "$rc" = 3 ] && printf '%s\n' "$out" | /usr/bin/grep -q '^func_00115E68: NOT FOUND in base.o'; then ok "fired (31): the fixture with the sn2952 splice skipped -> vmu rc 3, func_00115E68 NOT FOUND (the slot assembles to nothing)"
+    else say "SELFTEST-FAIL (31) the unwired fixture did not read NOT FOUND (vmu rc $rc):"; show < <(printf '%s\n' "$out" | tail -3 | sed 's/^/  inner| /'); b=1; fi
+  else say "SELFTEST-FAIL (31) the unwired fixture pipeline did not run (rc $rc):"; show < <(printf '%s\n' "$out" | tail -6 | sed 's/^/  inner| /'); b=1; fi
   return "$b"
 }
 

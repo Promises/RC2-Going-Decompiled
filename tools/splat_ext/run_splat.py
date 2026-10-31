@@ -13,13 +13,17 @@ of a leaf than that, all in include/include_asm.h:
                                       reads the ROM length of every selector row
                                       from asm/<region>/nonmatchings/<unit>/
                                       <NAME>.s (task #1531), so the leaf must
-                                      exist (FACT #9813, task #1882).
+                                      exist (FACT #9813, task #1882);
+  SN2952_SLOT(NAME)                   the same for the sn2952 arm
+                                      (tools/ee/sn2952_functions.txt, task
+                                      #2286): the splice reads its ROM length
+                                      from the same nonmatchings path.
 
-Neither substring contains `INCLUDE_ASM(`, so a plain `python -m splat split`
+None of these substrings contains `INCLUDE_ASM(`, so a plain `python -m splat split`
 never emits those leaves. The tree then builds only while stale copies of them
 are tracked, and a fresh split cannot build.
 
-S136OS_SLOT takes ONE argument, the name. Its leaf path is not read from the
+S136OS_SLOT and SN2952_SLOT take ONE argument, the name. Its leaf path is not read from the
 macro: splat writes every leaf of a segment to
 <nonmatchings_path>/<segment dir>/<segment name>/<NAME>.s, the same directory
 the unit's INCLUDE_ASM leaves are in. With this tree's yaml that is
@@ -52,6 +56,7 @@ LEAF_MACROS = {
     "INCLUDE_ASM": (2, 1),
     "INCLUDE_ASM_FRAGMENT": (2, 1),
     "S136OS_SLOT": (1, 0),
+    "SN2952_SLOT": (1, 0),
 }
 # Function-like macros of include_asm.h that are NOT function leaves.
 NOT_LEAF_MACROS = {

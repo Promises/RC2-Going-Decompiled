@@ -24,6 +24,10 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEST="$ROOT/tools/ee"
 URL="https://github.com/TheOnlyZac/compilers/releases/download/ee-gcc2.95.2-SN-v2.73a/ee-gcc2.95.2-SN-v2.73a.tar.gz"
 URL_SHA256=3e48e8d9b349b95aed476596d351bda439abebf7c4c5ad3318bedd81163253d7
+# The base tarball's own 2.95.2 cc1.exe is the sn2952 arm's compiler
+# (tools/ee/s136os_splice.sh --arm sn2952, RULING #12157, task #2286; FACT
+# #12152 measured it); re-verified installed on every run like the others.
+S2952_CC1_SHA256=2aaf3d22ce5c3508ecba15f16b06737713263e6aee289ca1e43d3ff9c17d964f
 PRODG="https://raw.githubusercontent.com/AngheloAlf/SN-Systems-ProDG_for_PS2_2.0/main/usr/local/sce/ee/gcc/lib/gcc-lib/ee/2.9-ee-991111"
 CC1_SHA256=124f7c6870b7facbaecbc51f0b87c0aad46db5f6ed491c21638e1da991e45be5
 CPP_SHA256=8f282abc89a6d2281e87617a7de7ebb0edbdc8dbb02d3e0a9ecc5d4825146a19
@@ -64,6 +68,7 @@ if [ ! -f "$DEST/cc/lib/gcc-lib/ee/2.95.2/cc1.exe" ]; then
   verify "$TMP/base.tar.gz" "$URL_SHA256" "base tarball (TheOnlyZac ee-gcc2.95.2-SN-v2.73a)"
   tar -xz -C "$DEST" -f "$TMP/base.tar.gz"
 fi
+verify "$DEST/cc/lib/gcc-lib/ee/2.95.2/cc1.exe" "$S2952_CC1_SHA256" "installed 2.95.2 cc1.exe (sn2952 arm)"
 
 # Overlay the correct cc1/cpp (2.9-ee-991111) — this is what the build scripts use.
 CC1DIR="$DEST/cc/lib/gcc-lib/ee/2.9-ee-991111"
@@ -156,5 +161,5 @@ for f in ld-2.3.6.so libc.so.6; do
 done
 chmod +x "$E96DIR/cc1" "$E96DIR/cc1plus" "$DEST/cc-296/ld-2.3.6.so"
 
-echo "Installed: 2.9-ee-991111 cc1/cpp/cc1plus (matching) + SN 2.95.3 v1.36 cc1/cc1plus (s136os arm) + 2.95.2 base under $DEST/cc; 2.96-ee-001003-1 cc1/cc1plus + glibc-2.3.6 loader under $DEST/cc-296"
+echo "Installed: 2.9-ee-991111 cc1/cpp/cc1plus (matching) + SN 2.95.3 v1.36 cc1/cc1plus (s136os arm) + 2.95.2 base (its cc1: the sn2952 arm) under $DEST/cc; 2.96-ee-001003-1 cc1/cc1plus + glibc-2.3.6 loader under $DEST/cc-296"
 ls "$CC1DIR" "$S136DIR" "$E96DIR"

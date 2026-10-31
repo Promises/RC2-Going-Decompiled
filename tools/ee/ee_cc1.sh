@@ -21,6 +21,11 @@
 #                     the caller adds -fopt-stack). 2.9 cpp, as the splice
 #                     always used. Its cc1plus is the sibling of the held cc1
 #                     (same ProDG 3.01 tree, cc1 sha-identical; task #1284).
+#            sn2952   the held SN 2.95.2 v2.73a cc1.exe under wibo (2.95.2/,
+#                     sha256 2aaf3d22..., FACT #12152; s136os_splice.sh --arm
+#                     sn2952, RULING #12157, task #2286). 2.9 cpp, as FACT
+#                     #12152 measured it. C ONLY: a `.cpp` source is refused,
+#                     because no 2.95.2 cc1plus has been measured on this tree.
 # <cpp args> and <cc1 args> are word-split on purpose (no flag holds a space).
 #
 # THE C++ ARM (FACT #8809: cc1plus 2.9-ee-991111b/r4 emits the same code as cc1
@@ -106,7 +111,7 @@ if [ "${1:-}" = "--resolve" ]; then
   exit 0
 fi
 
-[ $# -eq 6 ] || { echo "usage: ee_cc1.sh <sdk29|engine96|s136> <src.c|src.cpp> <out.i> <out.s> \"<cpp args>\" \"<cc1 args>\"" >&2; exit 2; }
+[ $# -eq 6 ] || { echo "usage: ee_cc1.sh <sdk29|engine96|s136|sn2952> <src.c|src.cpp> <out.i> <out.s> \"<cpp args>\" \"<cc1 args>\"" >&2; exit 2; }
 ARM="$1"; SRC="$2"; OUT_I="$3"; OUT_S="$4"; CPPARGS="$5"; CC1ARGS="$6"
 
 WIBO=/usr/local/bin/wibo
@@ -114,6 +119,7 @@ G=tools/ee/cc/lib/gcc-lib/ee/2.9-ee-991111
 CC296="${CC296:-tools/ee/cc-296}"
 B96="$CC296/lib/gcc-lib/ee/2.96-ee-001003-1"
 G136=tools/ee/cc/lib/gcc-lib/ee/2.95.3
+G2952=tools/ee/cc/lib/gcc-lib/ee/2.95.2
 
 [ -f "$SRC" ] || fail "no source $SRC"
 sibling_check "$SRC"
@@ -126,7 +132,9 @@ case "$ARM/$SRCLANG" in
   engine96/c++) CC="$CC296/ld-2.3.6.so --library-path $CC296 $B96/cc1plus" ;;
   s136/c)       CC="$WIBO $G136/cc1.exe" ;;
   s136/c++)     CC="$WIBO $G136/cc1plus.exe" ;;
-  *) echo "ee_cc1.sh: unknown arm '$ARM' (sdk29|engine96|s136)" >&2; exit 2 ;;
+  sn2952/c)     CC="$WIBO $G2952/cc1.exe" ;;
+  sn2952/c++)   fail "sn2952 arm: $SRC is a .cpp unit and no 2.95.2 cc1plus has been measured (task #2286); refusing, no other front end" ;;
+  *) echo "ee_cc1.sh: unknown arm '$ARM' (sdk29|engine96|s136|sn2952)" >&2; exit 2 ;;
 esac
 # the compiler binary is the last word of $CC
 for w in $CC; do bin="$w"; done

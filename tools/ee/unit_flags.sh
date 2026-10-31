@@ -21,8 +21,9 @@ unit_flags() {
   case "$1" in *.cpp) unit_flags_key="${1%.cpp}.c" ;; *) unit_flags_key="$1" ;; esac
   # S136EXTRA: the s136os splice compile's flags, CC1EXTRA unless an arm sets
   # it (RULING #9004). Carried for flagdiff.py parity; no caller of this file
-  # runs the s136os splice today.
-  GFLAG="-G0"; CC1EXTRA=""; unset S136EXTRA
+  # runs the s136os splice today. SN2952EXTRA: the sn2952 splice compile's
+  # flags (task #2286, RULING #12157), CC1EXTRA; carried the same way.
+  GFLAG="-G0"; CC1EXTRA=""; unset S136EXTRA SN2952EXTRA
   case "$unit_flags_key" in
     */cod/0321A0.c) GFLAG="-G8";;
     */usa/text/183178.c) GFLAG="-G8";;
@@ -64,4 +65,5 @@ unit_flags() {
     */eu/text/19FC78.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
   esac
   S136EXTRA="${S136EXTRA-$CC1EXTRA}"
+  SN2952EXTRA="${SN2952EXTRA-$CC1EXTRA}"
 }

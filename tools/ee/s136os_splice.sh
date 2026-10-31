@@ -104,7 +104,41 @@
 # may not be the one in force there in the s136os TU. verify_block refuses that
 # case (SelectSceneSubChunk's in-arm `.extern …Abs, 16` + cc1's `, 4`).
 #   sh tools/ee/s136os_splice.sh --selftest   host or container; rc 0 PASS
+#
+# ARMS (task #2286, RULING #12157). The helper splices for more than one
+# per-function compiler; `--arm <name>` before the region picks one, and the
+# default is s136os, so every pre-#2286 command line means what it did:
+#   s136os  tools/ee/s136os_functions.txt, S136OS_SLOT / -DS136OS_<fn>, SN
+#           2.95.3 v1.36 cc1 (0393bcd3...) or cc1plus (78a0df90...) at
+#           -O2 <GFLAG> <S136EXTRA> -fopt-stack (everything above).
+#   sn2952  tools/ee/sn2952_functions.txt, SN2952_SLOT / -DSN2952_<fn>, the
+#           held SN 2.95.2 v2.73a cc1 (tools/ee/cc/lib/gcc-lib/ee/2.95.2,
+#           sha256 2aaf3d22..., FACT #12152; NOT 124f7c68, the 2.9 cc1) at
+#           -O2 <GFLAG> <SN2952EXTRA>, no -fopt-stack (2.95.2 has no such
+#           option). `.c` units only: no 2.95.2 cc1plus has been measured, so
+#           a `.cpp` row is FATAL, never compiled by another front end.
+# Each arm has its own selector, slot spelling, label suffix and scratch
+# directory, so the two splices run one after the other on the same <unit.s>
+# (s136os first, then sn2952; build.sh and objdiff_build.sh) without seeing
+# each other's slots. Every check above applies to both arms unchanged.
 set -eu
+
+# arm_vars <arm>: set the arm's selector, slot token, ee_cc1.sh arm, compiler
+# dir + pinned sha256s, cc1 flag tail, label suffix and banner; rc 1 for an
+# arm this helper does not know (the caller names it and stops).
+arm_vars() {
+  case "$1" in
+    s136os) SEL=tools/ee/s136os_functions.txt; TOK=S136OS; CCARM=s136; GDIR=tools/ee/cc/lib/gcc-lib/ee/2.95.3
+            CC1_SHA256=0393bcd31f91a6b9f0255db97f1cc99eba78ee8fc003e9a04dfabed1ae1d522e
+            CC1PLUS_SHA256=78a0df900a396098986cbc97a8d3eab6dbbc587a343d4dbd22929a4112c003fb
+            FLAGTAIL=-fopt-stack; LSUF=s136; DESC="SN 2.95.3 v1.36 -fopt-stack"; TAG=s136os_splice ;;
+    sn2952) SEL=tools/ee/sn2952_functions.txt; TOK=SN2952; CCARM=sn2952; GDIR=tools/ee/cc/lib/gcc-lib/ee/2.95.2
+            CC1_SHA256=2aaf3d22ce5c3508ecba15f16b06737713263e6aee289ca1e43d3ff9c17d964f
+            CC1PLUS_SHA256=
+            FLAGTAIL=; LSUF=sn2952; DESC="SN 2.95.2 v2.73a"; TAG="s136os_splice[sn2952]" ;;
+    *) return 1 ;;
+  esac
+}
 
 # carry_externs <unit.s> <s136os.s>: print, tab-indented and sorted, the
 # s136os TU's .extern lines for symbols <unit.s> has no .extern for.
@@ -411,25 +445,50 @@ if [ "${1:-}" = "--selftest" ]; then
   case "$v" in *"section switch: "*".rdata"*) echo "  OK   arm 19: a table that never returns to .text -> refused: $(echo $v)" ;; *) echo "  FAIL arm 19: '$v'"; rc=1 ;; esac
   printf '\t.ent\tf\nf:\n\t.rdata\n\t.align\t2\n$LC0:\n\t.ascii\t"x\\000"\n\t.text\n\tla\t$2,$LC1\n\t.end\tf\n' > "$T/blk"; v="$(shape_check "$T/blk")"
   case "$v" in *"section switch: "*".rdata"*"label defined outside the block: \$LC1"*) echo "  OK   arm 20: a .rdata string literal + an outside \$LC1 -> refused: $(echo $v)" ;; *) echo "  FAIL arm 20: '$v'"; rc=1 ;; esac
+  # Arms 21-23 (task #2286): the arm table. 21: s136os is the pre-#2286
+  # configuration (its selector, S136OS slot, the 2.95.3 cc1 0393bcd3, the
+  # -fopt-stack tail, the _s136 labels). 22: sn2952 is its own selector, slot,
+  # the 2.95.2 cc1 2aaf3d22 (not the 2.9 cc1 124f7c68), no flag tail, no
+  # cc1plus. 23: an unknown arm is refused. A table that maps sn2952 onto any
+  # s136os value fails 22; one that admits any name fails 23.
+  if arm_vars s136os && [ "$SEL $TOK $CCARM $GDIR ${CC1_SHA256%"${CC1_SHA256#????????}"} ${CC1PLUS_SHA256%"${CC1PLUS_SHA256#????????}"} $FLAGTAIL $LSUF" = "tools/ee/s136os_functions.txt S136OS s136 tools/ee/cc/lib/gcc-lib/ee/2.95.3 0393bcd3 78a0df90 -fopt-stack s136" ]; then
+    echo "  OK   arm 21: --arm s136os (the default) = s136os_functions.txt, S136OS, 2.95.3 cc1 0393bcd3 / cc1plus 78a0df90, -fopt-stack, _s136"
+  else echo "  FAIL arm 21: s136os resolves to '$SEL $TOK $CCARM $GDIR $CC1_SHA256 $FLAGTAIL $LSUF'"; rc=1; fi
+  if arm_vars sn2952 && [ "$SEL $TOK $CCARM $GDIR ${CC1_SHA256%"${CC1_SHA256#????????}"} [$CC1PLUS_SHA256] [$FLAGTAIL] $LSUF" = "tools/ee/sn2952_functions.txt SN2952 sn2952 tools/ee/cc/lib/gcc-lib/ee/2.95.2 2aaf3d22 [] [] sn2952" ]; then
+    echo "  OK   arm 22: --arm sn2952 = sn2952_functions.txt, SN2952, 2.95.2 cc1 2aaf3d22, no cc1plus, no flag tail, _sn2952"
+  else echo "  FAIL arm 22: sn2952 resolves to '$SEL $TOK $CCARM $GDIR $CC1_SHA256 [$CC1PLUS_SHA256] [$FLAGTAIL] $LSUF'"; rc=1; fi
+  if arm_vars s29 || arm_vars ""; then echo "  FAIL arm 23: an unknown arm name resolved"; rc=1
+  else echo "  OK   arm 23: unknown arms 's29' and '' -> refused"; fi
   [ "$rc" = 0 ] && echo "#### s136os_splice --selftest: PASS" || echo "#### s136os_splice --selftest: FAIL"
   exit "$rc"
 fi
+ARM=s136os
+if [ "${1:-}" = "--arm" ]; then ARM="${2:-}"; shift 2 || { echo "s136os_splice: FATAL — --arm needs a name (s136os|sn2952)" >&2; exit 3; }; fi
+arm_vars "$ARM" || { echo "s136os_splice: FATAL — unknown arm '$ARM' (s136os|sn2952)" >&2; exit 3; }
 REGION="$1"; UNIT="$2"; SRC="$3"; UNIT_S="$4"; GFLAG="$5"; CC1EXTRA="${6:-}"
-SEL=tools/ee/s136os_functions.txt
-G136=tools/ee/cc/lib/gcc-lib/ee/2.95.3
-CC1_136_SHA256=0393bcd31f91a6b9f0255db97f1cc99eba78ee8fc003e9a04dfabed1ae1d522e
-CC1PLUS_136_SHA256=78a0df900a396098986cbc97a8d3eab6dbbc587a343d4dbd22929a4112c003fb
 INC="-Igoing-decompiled/include -Igoing-decompiled/include/rtl/ee -Igoing-decompiled/include/rtl/common"
 CPPDEF="-D__GNUC__=2 -D__GNUC_MINOR__=9 -D__mips__ -D__mips=3 -D__R5900 -D__LANGUAGE_C -D_LANGUAGE_C -D__EE__ -DINCLUDE_ASM_USE_MACRO_INC=1"
 
-fatal() { echo "s136os_splice: FATAL [$REGION/$UNIT] — $1" >&2; shift; for x in "$@"; do echo "    $x" >&2; done; exit 3; }
+fatal() { echo "$TAG: FATAL [$REGION/$UNIT] — $1" >&2; shift; for x in "$@"; do echo "    $x" >&2; done; exit 3; }
+
+# SPLICE_SEL_OVERRIDE=<file> (landing_gate.sh --selftest arm (31) only): read
+# the rows from <file> instead of the arm's selector, so a seeded fixture can
+# be spliced without editing the real one. Announced on stdout every time, so
+# a build log that carries it shows it; build.sh and objdiff_build.sh never
+# set it. The mount-sync digest belongs to the real selector and is skipped.
+if [ -n "${SPLICE_SEL_OVERRIDE:-}" ]; then
+  SEL="$SPLICE_SEL_OVERRIDE"; eval "${TOK}_FUNCS_MD5="
+  echo "$TAG: $REGION/$UNIT: selector OVERRIDDEN by SPLICE_SEL_OVERRIDE=$SEL (selftest only)"
+fi
 
 [ -f "$SEL" ] || fatal "selector $SEL missing"
 [ -f "$UNIT_S" ] || fatal "unit .s $UNIT_S missing"
 # MOUNT-SYNC (#542): the selector is host-written; a caller that took its host
-# md5 passes it here (objdiff_build.sh, landing_gate.sh). Every short read is
+# md5 passes it here (objdiff_build.sh, landing_gate.sh): S136OS_FUNCS_MD5 for
+# the s136os selector, SN2952_FUNCS_MD5 for the sn2952 one. Every short read is
 # loud anyway (a dropped row leaves a slot with no row), this only retries it.
-if [ -n "${S136OS_FUNCS_MD5:-}" ]; then sh tools/ee/mount_sync.sh check "$SEL" "$S136OS_FUNCS_MD5"; fi
+eval "SELMD5=\${${TOK}_FUNCS_MD5:-}"
+if [ -n "$SELMD5" ]; then sh tools/ee/mount_sync.sh check "$SEL" "$SELMD5"; fi
 
 BAD="$(awk '{ sub(/#.*/, "") } NF && (NF != 3 || $1 !~ /^(usa|eu)$/ || $3 !~ /^[A-Za-z_][A-Za-z0-9_]*$/) { print FILENAME ":" FNR ": " $0 }' "$SEL")"
 [ -z "$BAD" ] || fatal "malformed row(s) in $SEL (want: <usa|eu> <unit> <function>)" "$BAD"
@@ -437,23 +496,24 @@ DUP="$(awk '{ sub(/#.*/, "") } NF { k = $1 " " $2 " " $3; if (seen[k]++) print k
 [ -z "$DUP" ] || fatal "repeated row(s) in $SEL" "$DUP"
 
 ROWS="$(awk -v r="$REGION" -v u="$UNIT" '{ sub(/#.*/, "") } NF && $1 == r && $2 == u { print $3 }' "$SEL")"
-SLOTS="$(awk '{ sub(/\r$/, "") } $1 == "#S136OS_SLOT" { print $2 }' "$UNIT_S")"
+SLOTS="$(awk -v t="#${TOK}_SLOT" '{ sub(/\r$/, "") } $1 == t { print $2 }' "$UNIT_S")"
 [ -z "$ROWS" ] && [ -z "$SLOTS" ] && exit 0
 
 NOSLOT=""; for f in $ROWS; do printf '%s\n' "$SLOTS" | /usr/bin/grep -qx "$f" || NOSLOT="$NOSLOT $f"; done
 NOROW="";  for f in $SLOTS; do printf '%s\n' "$ROWS" | /usr/bin/grep -qx "$f" || NOROW="$NOROW $f"; done
-[ -z "$NOSLOT" ] || fatal "selector row(s) with no S136OS_SLOT in $UNIT_S — re-predicate the guard in $SRC to !defined(S136OS_<fn>) with S136OS_SLOT(<fn>):" $NOSLOT
-[ -z "$NOROW" ] || fatal "S136OS_SLOT(s) with no row in $SEL — the function would be absent from the object:" $NOROW
+[ -z "$NOSLOT" ] || fatal "selector row(s) with no ${TOK}_SLOT in $UNIT_S — re-predicate the guard in $SRC to !defined(${TOK}_<fn>) with ${TOK}_SLOT(<fn>):" $NOSLOT
+[ -z "$NOROW" ] || fatal "${TOK}_SLOT(s) with no row in $SEL — the function would be absent from the object:" $NOROW
 case "$SRC" in
-  *.c)   FE=cc1.exe;     FE_SHA256="$CC1_136_SHA256" ;;
-  *.cpp) FE=cc1plus.exe; FE_SHA256="$CC1PLUS_136_SHA256" ;;
-  *) fatal "$SRC is neither a .c nor a .cpp unit; its s136os rows cannot compile:" $ROWS ;;
+  *.c)   FE=cc1.exe;     FE_SHA256="$CC1_SHA256" ;;
+  *.cpp) FE=cc1plus.exe; FE_SHA256="$CC1PLUS_SHA256"
+         [ -n "$FE_SHA256" ] || fatal "$SRC is a .cpp unit and the $ARM arm has no measured cc1plus; its rows are not compiled by any other front end:" $ROWS ;;
+  *) fatal "$SRC is neither a .c nor a .cpp unit; its $ARM rows cannot compile:" $ROWS ;;
 esac
-[ -f "$G136/$FE" ] || fatal "$G136/$FE missing — $SRC needs the SN 2.95.3 v1.36 $FE for its s136os rows (run scripts/fetch_ee_toolchain.sh); no fallback to another front end:" $ROWS
-SHA="$(sha256sum "$G136/$FE" | awk '{print $1}')"
-[ "$SHA" = "$FE_SHA256" ] || fatal "$G136/$FE sha256 $SHA, not the s136 $FE $FE_SHA256"
+[ -f "$GDIR/$FE" ] || fatal "$GDIR/$FE missing — $SRC needs the $DESC $FE for its $ARM rows (run scripts/fetch_ee_toolchain.sh); no fallback to another front end:" $ROWS
+SHA="$(sha256sum "$GDIR/$FE" | awk '{print $1}')"
+[ "$SHA" = "$FE_SHA256" ] || fatal "$GDIR/$FE sha256 $SHA, not the $ARM $FE $FE_SHA256"
 
-TMP="${UNIT_S%.s}._s136"
+TMP="${UNIT_S%.s}._$LSUF"
 rm -rf "$TMP"; mkdir -p "$TMP"
 # The -G the unit is assembled at (asm_unit.sh takes the same GFLAG): the
 # threshold verify_block's addressing model compares sizes against.
@@ -463,17 +523,18 @@ case "$GNUM" in ''|*[!0-9]*) fatal "GFLAG '$GFLAG' is not -G<N>; the addressing 
 OUT="$TMP/work.s"
 cp "$UNIT_S" "$OUT"
 for f in $ROWS; do
-  sh tools/ee/ee_cc1.sh s136 "$SRC" "$TMP/$f.i" "$TMP/$f.s" "$CPPDEF $INC -DS136OS_$f" "-O2 $GFLAG $CC1EXTRA -fopt-stack" \
-    || fatal "s136 $FE compile failed for $f (ee_cc1.sh s136 $SRC)"
+  # (the s136os string is the pre-#2286 one, byte for byte: "-O2 G EXTRA -fopt-stack")
+  sh tools/ee/ee_cc1.sh "$CCARM" "$SRC" "$TMP/$f.i" "$TMP/$f.s" "$CPPDEF $INC -D${TOK}_$f" "-O2 $GFLAG $CC1EXTRA${FLAGTAIL:+ $FLAGTAIL}" \
+    || fatal "$CCARM $FE compile failed for $f (ee_cc1.sh $CCARM $SRC)"
   extract_block "$f" "$TMP/$f.s" "$TMP/$f.blk" > "$TMP/$f.why"
   [ ! -s "$TMP/$f.why" ] || fatal "no single .ent/.end block for $f in $TMP/$f.s ($(cat "$TMP/$f.why"))"
   # SHAPE (shape_check): a section switch other than a jump table, or a $L
   # label defined outside the block, refuses.
   SHAPE="$(shape_check "$TMP/$f.blk")"
-  [ -z "$SHAPE" ] || fatal "$f is outside the s136os arm's domain (its block needs data spliced from outside .ent..end):" "$SHAPE"
+  [ -z "$SHAPE" ] || fatal "$f is outside the $ARM arm's domain (its block needs data spliced from outside .ent..end):" "$SHAPE"
   # Rename the block's labels, carry the missing .extern lines, splice.
-  awk -v fn="$f" '{ o = ""; s = $0
-      while (match(s, /\$L[0-9]+/)) { o = o substr(s, 1, RSTART + RLENGTH - 1) "_s136_" fn; s = substr(s, RSTART + RLENGTH) }
+  awk -v fn="$f" -v sfx="$LSUF" '{ o = ""; s = $0
+      while (match(s, /\$L[0-9]+/)) { o = o substr(s, 1, RSTART + RLENGTH - 1) "_" sfx "_" fn; s = substr(s, RSTART + RLENGTH) }
       print o s }' "$TMP/$f.blk" > "$TMP/$f.blk2"
   awk '{ sub(/\r$/, "") } $1 == ".extern" { x = $0; gsub(/[ \t]+/, " ", x); sub(/^ /, "", x); print x }' "$OUT" | sort -u > "$TMP/$f.have"
   carry_externs "$OUT" "$TMP/$f.s" > "$TMP/$f.ext"
@@ -485,13 +546,13 @@ for f in $ROWS; do
     { x = $0; gsub(/[ \t]+/, " ", x); sub(/^ /, "", x); sym = $2; sub(/,.*/, "", sym) }
     file == 1 { have[sym] = 1; line[x] = 1; next }
     (sym in have) && !(x in line) && !seen[x]++ { printf "%s%s", (n++ ? " " : ""), x }' "$OUT" "$TMP/$f.s")"
-  awk -v fn="$f" -v blk="$TMP/$f.blk2" -v ext="$TMP/$f.ext" '
+  awk -v fn="$f" -v blk="$TMP/$f.blk2" -v ext="$TMP/$f.ext" -v tok="$TOK" -v desc="$DESC" '
     { k = $0; sub(/\r$/, "", k); split(k, F) }
-    F[1] == "#S136OS_SLOT" && F[2] == fn {
-      print "#S136OS_BEGIN " fn " (tools/ee/s136os_splice.sh: SN 2.95.3 v1.36 -fopt-stack)"
+    F[1] == "#" tok "_SLOT" && F[2] == fn {
+      print "#" tok "_BEGIN " fn " (tools/ee/s136os_splice.sh: " desc ")"
       while ((getline l < ext) > 0) print l
       while ((getline l < blk) > 0) print l
-      print "#S136OS_END " fn
+      print "#" tok "_END " fn
       n++; next }
     { print }
     END { if (n != 1) exit 1 }' "$OUT" > "$TMP/unit.s" || fatal "slot for $f not replaced exactly once"
@@ -499,9 +560,9 @@ for f in $ROWS; do
   # (No line count here: cc1's text lines are macro instructions, not words.
   # #1509's 23-word and 24-word bodies both printed "22 insn lines". The body
   # length is the `length:` line below, from the assembled unit, task #1531.)
-  echo "s136os_splice: $REGION/$UNIT: $f spliced ($(wc -l < "$TMP/$f.ext" | tr -d ' ') .extern carried; not carried, the unit declares the name: ${KEPT:-none})"
+  echo "$TAG: $REGION/$UNIT: $f spliced ($(wc -l < "$TMP/$f.ext" | tr -d ' ') .extern carried; not carried, the unit declares the name: ${KEPT:-none})"
 done
-LEFT="$(awk '{ sub(/\r$/, "") } $1 == "#S136OS_SLOT" { print $2 }' "$OUT")"
+LEFT="$(awk -v t="#${TOK}_SLOT" '{ sub(/\r$/, "") } $1 == t { print $2 }' "$OUT")"
 [ -z "$LEFT" ] || fatal "slot(s) still present after the splice:" $LEFT
 # VERIFY (task #1326): every block against the FINAL unit, so a line carried for
 # one member is seen by every other (FACT #8842 point 1). Fails closed: rc 3,
@@ -514,7 +575,7 @@ for f in $ROWS; do
 done
 BADV="$(printf '%s' "$BADV" | sed '/^$/d')"
 if [ -n "$BADV" ]; then
-  echo "s136os_splice: FATAL [$REGION/$UNIT] — REFUSED (task #1326): a spliced block would not assemble as it did in the s136os TU it was measured in. ADDRESSING = the unit's .extern sizes flip a bare-symbol access between gp-relative and absolute; DEFINITION = the block needs a symbol the s136os TU defines outside .ent..end (e.g. an asm equate inside the member's own guard arm) and the 2.9 TU does not. Move the device or equate where both TUs see it, identically. Nothing was written to $UNIT_S." >&2
+  echo "$TAG: FATAL [$REGION/$UNIT] — REFUSED (task #1326): a spliced block would not assemble as it did in the $ARM TU it was measured in. ADDRESSING = the unit's .extern sizes flip a bare-symbol access between gp-relative and absolute; DEFINITION = the block needs a symbol the s136os TU defines outside .ent..end (e.g. an asm equate inside the member's own guard arm) and the 2.9 TU does not. Move the device or equate where both TUs see it, identically. Nothing was written to $UNIT_S." >&2
   printf '%s\n' "$BADV" | sed 's/^/    /' >&2
   exit 3
 fi
@@ -532,23 +593,23 @@ fi
 ROMSZ="$TMP/rom_sizes"; : > "$ROMSZ"; BADO=""
 # A missing .s is tested first: under `set -eu` a bare `v="$(rom_size …)"`
 # exits with awk's rc 2 before the case below can name the file (FACT #9814).
-# splat emits the leaf from the unit's S136OS_SLOT (tools/splat_ext/run_splat.py,
+# splat emits the leaf from the unit's S136OS_SLOT / SN2952_SLOT (tools/splat_ext/run_splat.py,
 # task #1882); a tree without it was split without that spelling.
 for f in $ROWS; do
   p="going-decompiled/asm/$REGION/nonmatchings/$UNIT/$f.s"
-  if [ ! -f "$p" ]; then v="no ROM .s at $p (splat emits it from S136OS_SLOT($f) via tools/splat_ext/run_splat.py; re-split with scripts/configure.py --region $REGION)"
+  if [ ! -f "$p" ]; then v="no ROM .s at $p (splat emits it from ${TOK}_SLOT($f) via tools/splat_ext/run_splat.py; re-split with scripts/configure.py --region $REGION)"
   else v="$(rom_size "$p" "$f" 2>&1)" || v="ORACLE rom_size failed on $p: $v"; fi
   case "$v" in ''|*[!0-9]*) BADO="$BADO
 $f: ${v:-no ROM length read from $p}" ;; *) echo "$f $v" >> "$ROMSZ" ;; esac
 done
 BADO="$(printf '%s' "$BADO" | sed '/^$/d')"
-[ -z "$BADO" ] || { echo "s136os_splice: FATAL [$REGION/$UNIT] — the ROM length of a row cannot be read from its splat .s, so its spliced length cannot be checked (task #1531). Nothing was written to $UNIT_S." >&2; printf '%s\n' "$BADO" | sed 's/^/    /' >&2; exit 3; }
+[ -z "$BADO" ] || { echo "$TAG: FATAL [$REGION/$UNIT] — the ROM length of a row cannot be read from its splat .s, so its spliced length cannot be checked (task #1531). Nothing was written to $UNIT_S." >&2; printf '%s\n' "$BADO" | sed 's/^/    /' >&2; exit 3; }
 case "$TMP" in /*) ATMP="$TMP" ;; *) ATMP="$(pwd)/$TMP" ;; esac
 # asm_unit.sh cds into its mirror, so its paths are absolute. ASM_UNIT_S_MD5
 # is a caller's md5 of ITS input; it is not this copy's, so it is cleared.
 if ! ASM_UNIT_S_MD5= sh tools/ee/asm_unit.sh "$REGION" "$ATMP/work.s" "$ATMP/len.o" "$GFLAG" > "$TMP/len.asm.log" 2>&1 \
    || [ ! -s "$TMP/len.o" ]; then
-  echo "s136os_splice: FATAL [$REGION/$UNIT] — the spliced unit did not assemble for the length check (task #1531); asm_unit.sh said:" >&2
+  echo "$TAG: FATAL [$REGION/$UNIT] — the spliced unit did not assemble for the length check (task #1531); asm_unit.sh said:" >&2
   sed 's/^/    | /' "$TMP/len.asm.log" >&2
   exit 3
 fi
@@ -556,9 +617,9 @@ rm -rf "$TMP/.asmfix-$REGION-len"
 mips-linux-gnu-nm -S --defined-only "$TMP/len.o" > "$TMP/len.nm"
 BADL="$(length_check "$TMP/len.nm" "$ROMSZ")"
 if [ -n "$BADL" ]; then
-  echo "s136os_splice: FATAL [$REGION/$UNIT] — LENGTH (task #1531): a spliced body is not as long as the ROM function it replaces, so every later byte of the unit would shift. Nothing was written to $UNIT_S." >&2
+  echo "$TAG: FATAL [$REGION/$UNIT] — LENGTH (task #1531): a spliced body is not as long as the ROM function it replaces, so every later byte of the unit would shift. Nothing was written to $UNIT_S." >&2
   printf '%s\n' "$BADL" | sed 's/^/    /' >&2
   exit 3
 fi
-length_lines "$TMP/len.nm" "$ROMSZ" | sed "s|^|s136os_splice: $REGION/$UNIT: |; s|\$|; ROM = nonmatching header = glabel..endlabel words|"
+length_lines "$TMP/len.nm" "$ROMSZ" | sed "s|^|$TAG: $REGION/$UNIT: |; s|\$|; ROM = nonmatching header = glabel..endlabel words|"
 cp "$OUT" "$UNIT_S"

@@ -4,6 +4,7 @@ the per-unit flag table assigns it (task #1377, RULING #9004).
 
     tools/ee/cc1_arglog_check.py <region> <arglog> [--table tools/ee/build.sh]
                                  [--selector tools/ee/s136os_functions.txt]
+                                 [--selector-sn2952 tools/ee/sn2952_functions.txt]
 
 <arglog> is the file tools/ee/ee_cc1.sh appends to when EE_CC1_ARGLOG is set:
 one `<arm> TAB <src> TAB <cc1 args>` line per compile. landing_gate.sh sets it
@@ -21,6 +22,9 @@ table copies equal with); a unit the table does not name gets build.sh's
 defaults (-G0, no extra flags). Then, for each line:
     sdk29  args == -O2 <GFLAG> <CC1EXTRA>
     s136   args == -O2 <GFLAG> <S136EXTRA> -fopt-stack
+    sn2952 args == -O2 <GFLAG> <CC1EXTRA>   (task #2286: the scripts'
+           `${SN2952EXTRA-$CC1EXTRA}`; no unit sets SN2952EXTRA, so a unit that
+           starts to is a mismatch here until this rule learns its column)
 where S136EXTRA is the arm's own value if it sets one, else CC1EXTRA (the
 scripts' `${S136EXTRA-$CC1EXTRA}`). Compared as word lists, order included.
 
@@ -28,8 +32,9 @@ POPULATION (a check over the lines present cannot see a compile that never
 logged): every .c/.cpp under going-decompiled/src/<region> — build.sh's own
 find — has exactly ONE sdk29 line, and no line names a source outside it; each
 unit has exactly as many s136 lines as the selector has rows for it
-(s136os_splice.sh compiles every row of the unit, or fails the build). Any
-other arm in the log is a FAIL.
+(s136os_splice.sh compiles every row of the unit, or fails the build), and
+as many sn2952 lines as the sn2952 selector has rows for it (the same helper,
+`--arm sn2952`). Any other arm in the log is a FAIL.
 
 RULING #9004 FLOOR (usa only; the owner's explicit minimum, independent of the
 table, because a consistent edit of all four table copies passes both FLAGS and
@@ -93,6 +98,7 @@ def selector_rows(path, region):
 def main(argv):
     args = argv[1:]
     table_path, sel_path = "tools/ee/build.sh", "tools/ee/s136os_functions.txt"
+    sel2952_path = "tools/ee/sn2952_functions.txt"
     pos = []
     while args:
         a = args.pop(0)
@@ -100,10 +106,12 @@ def main(argv):
             table_path = args.pop(0)
         elif a == "--selector":
             sel_path = args.pop(0)
+        elif a == "--selector-sn2952":
+            sel2952_path = args.pop(0)
         else:
             pos.append(a)
     if len(pos) != 2 or pos[0] not in ("usa", "eu"):
-        print("usage: cc1_arglog_check.py <usa|eu> <arglog> [--table F] [--selector F]", file=sys.stderr)
+        print("usage: cc1_arglog_check.py <usa|eu> <arglog> [--table F] [--selector F] [--selector-sn2952 F]", file=sys.stderr)
         return 2
     region, log = pos
     if not os.path.isfile(log):
@@ -121,6 +129,7 @@ def main(argv):
     fails = []
     sdk = {}       # unit -> [args...]
     s136 = {}      # unit -> [args...]
+    sn2952 = {}    # unit -> [args...]
     for i, l in enumerate(lines, 1):
         parts = l.split("\t")
         if len(parts) != 3:
@@ -139,8 +148,11 @@ def main(argv):
         elif arm == "s136":
             want = ["-O2", g] + s.split() + ["-fopt-stack"]
             s136.setdefault(u, []).append(got)
+        elif arm == "sn2952":
+            want = ["-O2", g] + c.split()
+            sn2952.setdefault(u, []).append(got)
         else:
-            fails.append(f"line {i}: unexpected arm '{arm}' for {r}/{u} (a build compiles sdk29 and s136 only)")
+            fails.append(f"line {i}: unexpected arm '{arm}' for {r}/{u} (a build compiles sdk29, s136 and sn2952 only)")
             continue
         if got != want:
             fails.append(f"{r}/{u} {arm}: {' '.join(got)} != table {' '.join(want)}")
@@ -158,6 +170,11 @@ def main(argv):
         n, w = len(s136.get(u, [])), rows.get(u, 0)
         if n != w:
             fails.append(f"{region}/{u} s136: {n} compile line(s), selector has {w} row(s)")
+    rows2952 = selector_rows(sel2952_path, region)
+    for u in sorted(set(rows2952) | set(sn2952)):
+        n, w = len(sn2952.get(u, [])), rows2952.get(u, 0)
+        if n != w:
+            fails.append(f"{region}/{u} sn2952: {n} compile line(s), sn2952 selector has {w} row(s)")
 
     # RULING #9004 floor
     floor = []
@@ -186,7 +203,8 @@ def main(argv):
         print(f"FAIL {f}")
     pinned = sorted(u for u, v in sdk.items() if any(FLOOR_PIN in a for a in v))
     print(f"# {len(lines)} lines: sdk29 {sum(map(len, sdk.values()))} over {len(sdk)} units (sources {len(srcs)}), "
-          f"s136 {sum(map(len, s136.values()))} over {len(s136)} units (selector rows {sum(rows.values())}); "
+          f"s136 {sum(map(len, s136.values()))} over {len(s136)} units (selector rows {sum(rows.values())}), "
+          f"sn2952 {sum(map(len, sn2952.values()))} over {len(sn2952)} units (sn2952 selector rows {sum(rows2952.values())}); "
           f"table {table_path} {len(table)} units")
     print(f"# sdk29 {FLOOR_PIN}: {len(pinned)} units: {' '.join(pinned)}")
     s136_unpinned = sorted(u for u in s136 if u in pinned and not any(FLOOR_PIN in a for a in s136[u]))

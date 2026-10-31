@@ -1,0 +1,19 @@
+# sn2952_functions.txt — the functions whose EE body is compiled ALONE by the
+# held SN 2.95.2 v2.73a cc1 (tools/ee/cc/lib/gcc-lib/ee/2.95.2/cc1.exe, sha256
+# 2aaf3d22...; FACT #12152 — NOT 124f7c68, which is the 2.9 cc1) at
+# -O2 <unit -G> <unit SN2952EXTRA> and spliced into the unit's cc1 2.9 output by
+# tools/ee/s136os_splice.sh --arm sn2952 (build.sh and objdiff_build.sh, after
+# the s136os splice and before jtbl_bind.sh). SN2952EXTRA is the unit's
+# CC1EXTRA; no unit gives this arm its own value yet. `.c` units only.
+# RULING #12157 (task #2286): a function goes here only when it closes
+# byte-exact under this compiler and on NO build arm; never to hide a
+# near-miss. Newlib-identity reconstructions stay out pending the operator.
+#
+# One row per function:  <region> <unit> <function>
+#   unit = the path under going-decompiled/src/<region>/ without extension.
+# A row needs its guard re-predicated in the unit source, from
+# `#ifndef TARGET_NATIVE / INCLUDE_ASM(...)` to
+# `#if !defined(TARGET_NATIVE) && !defined(SN2952_<fn>) / SN2952_SLOT(<fn>);`
+# — the helper refuses a row without that slot and a slot without a row.
+# Add a row only with its own Source line, a base-seeded vmu in extent, a
+# NON_MATCHING control and the image cmp 0 that prove it (RULING #12157 term 2).

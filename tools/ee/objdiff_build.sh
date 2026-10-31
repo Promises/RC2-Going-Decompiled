@@ -54,6 +54,10 @@
 #              tools/ee/s136os_splice.sh, the helper build.sh runs at the same
 #              point, so obj/<unit>.o carries the image's bytes for them and
 #              their rows are scored from it (task #1257, FACT #8810).
+#              The sn2952 arm (task #2286, RULING #12157) is the same helper
+#              run a second time, `--arm sn2952`, right after it: the
+#              tools/ee/sn2952_functions.txt rows, compiled alone by the held
+#              SN 2.95.2 cc1 and spliced over their SN2952_SLOT lines.
 #              The splice's --selftest runs first, in the same step-(1)
 #              container as the splice, as build.sh runs it: its refusal check
 #              once passed on the host's awk and refused every member in the
@@ -127,7 +131,8 @@
 # (2b) post-passes, and GROWN by every nop mtc1_fixup.py inserts — before the
 # (2c) assemble (asm_unit.sh, via ASM_UNIT_S_MD5), and the dli allowlist at
 # every assemble (asm_unit.sh, via ASM_UNIT_DLISITES_MD5), and the s136os
-# selector before the splice (s136os_splice.sh, via S136OS_FUNCS_MD5). NOT guarded: the include
+# selector before the splice (s136os_splice.sh, via S136OS_FUNCS_MD5), and the
+# sn2952 selector likewise (via SN2952_FUNCS_MD5). NOT guarded: the include
 # tree and the frozen asm .s files (git-written, read through the stamped
 # mirror), and the container-write -> host-read edge of (2a)->(2b), which
 # sshfs flushes on close before `docker run` returns.
@@ -175,7 +180,7 @@ CPPDEF="-D__GNUC_MINOR__=9 $CPPDEF_COMMON"
 # compilers need different flags names it (RULING #9004: 1B4218; RULING #9070: 191238; RULING #9450: 188858).
 GFLAG="-G0"
 CC1EXTRA=""
-unset S136EXTRA
+unset S136EXTRA SN2952EXTRA
 case "$REGION/$UNIT" in
   usa/cod/0321A0) GFLAG="-G8";;
   eu/cod/0321A0) GFLAG="-G8";; # EU mirror of the 989snd sub-TU (same -G8 model)
@@ -225,6 +230,8 @@ case "$REGION/$UNIT" in
   eu/text/19FC78) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;    # USA 1A00F0 twin
 esac
 S136EXTRA="${S136EXTRA-$CC1EXTRA}"
+# SN2952EXTRA: the sn2952 splice compile's flags (task #2286), CC1EXTRA as in build.sh.
+SN2952EXTRA="${SN2952EXTRA-$CC1EXTRA}"
 
 # Generate a PRISTINE all-INCLUDE_ASM unit C for the TARGET, straight from the
 # asm tree — one INCLUDE_ASM per <func>.s, emitted in ASCENDING VRAM-ADDRESS order
@@ -362,6 +369,7 @@ BASE_MD5="$(sh tools/ee/mount_sync.sh md5 "$BASECFILE")"
 DLISITES_MD5="$(sh tools/ee/mount_sync.sh md5 tools/ee/ps2eeas_dli_sites.txt)"
 # The s136os selector is host-written too; s136os_splice.sh verifies it (task #1257).
 S136OS_MD5="$(sh tools/ee/mount_sync.sh md5 tools/ee/s136os_functions.txt)"
+SN2952_MD5="$(sh tools/ee/mount_sync.sh md5 tools/ee/sn2952_functions.txt)"
 # RULING #8915 (task #1308): ee_cc1.sh holds a .cpp unit to
 # tools/ee/cpp96_allowlist.txt on the engine96 arm, and a MATCH_-guarded .cpp on
 # every arm. The unit is named here (EE_CC1_UNIT), not read from $BASECFILE,
@@ -370,7 +378,7 @@ ALLOW96_MD5="$(sh tools/ee/mount_sync.sh md5 tools/ee/cpp96_allowlist.txt)"
 # $OBJ and $EXPECTED are deleted in the container first, like $OBJ96 (see the
 # header for why in the container): a run that stops early must not leave the
 # previous run's object for the report to read (ledger-29550 left a stale obj).
-docker --context "$EE_CTX" run --rm --user="$(id -u):$(id -g)" -e HOME=/tmp -e ASMFIX_SHARED -e ASM_UNIT_DLISITES_MD5="$DLISITES_MD5" -e S136OS_FUNCS_MD5="$S136OS_MD5" -v "$ROOT":/work ee-build sh -c "
+docker --context "$EE_CTX" run --rm --user="$(id -u):$(id -g)" -e HOME=/tmp -e ASMFIX_SHARED -e ASM_UNIT_DLISITES_MD5="$DLISITES_MD5" -e S136OS_FUNCS_MD5="$S136OS_MD5" -e SN2952_FUNCS_MD5="$SN2952_MD5" -v "$ROOT":/work ee-build sh -c "
   set -e; cd /work; WIBO=/usr/local/bin/wibo; G=tools/ee/cc/lib/gcc-lib/ee/2.9-ee-991111
   export EE_CC1_UNIT='$REGION $UNIT' CPP96_ALLOWLIST_MD5=$ALLOW96_MD5
   sh tools/ee/mount_sync.sh check $TGTC $TGTC_MD5
@@ -388,6 +396,7 @@ docker --context "$EE_CTX" run --rm --user="$(id -u):$(id -g)" -e HOME=/tmp -e A
   sh tools/ee/asm_unit.sh $REGION /work/$W/target.s /work/$EXPECTED
   sh tools/ee/ee_cc1.sh sdk29 $BASECFILE $W/base.i $W/base.s '$CPPDEF $INC' '-O2 $GFLAG $CC1EXTRA'
   sh tools/ee/s136os_splice.sh $REGION $UNIT $BASECFILE $W/base.s $GFLAG '$S136EXTRA'
+  sh tools/ee/s136os_splice.sh --arm sn2952 $REGION $UNIT $BASECFILE $W/base.s $GFLAG '$SN2952EXTRA'
   sh tools/ee/jtbl_bind.sh $REGION $UNIT $W/base.s $GFLAG
   sh tools/ee/asm_unit.sh $REGION /work/$W/base.s /work/$OBJ $GFLAG
   mips-linux-gnu-nm $EXPECTED | awk '/\\.NON_MATCHING\$/{print \"-N\", \$3}' > $W/nmstrip.txt

@@ -96,7 +96,7 @@ if [ -d "$SRC" ]; then
     # compilers need different flags names it (RULING #9004: 1B4218; RULING #9070: 191238; RULING #9450: 188858).
     GFLAG="-G0"
     CC1EXTRA=""
-    unset S136EXTRA
+    unset S136EXTRA SN2952EXTRA
     case "$ukey" in
       */cod/0321A0.c) GFLAG="-G8";;
       */usa/text/183178.c) GFLAG="-G8";; # scale/round accessor sub-TU
@@ -141,6 +141,9 @@ if [ -d "$SRC" ]; then
       */eu/text/19FC78.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;    # USA 1A00F0 twin
     esac
     S136EXTRA="${S136EXTRA-$CC1EXTRA}"
+    # SN2952EXTRA = the cc1 flags for the unit's sn2952 splice compile (held SN
+    # 2.95.2, RULING #12157, task #2286): CC1EXTRA, as no unit sets its own.
+    SN2952EXTRA="${SN2952EXTRA-$CC1EXTRA}"
     # PER-UNIT intermediates (next to the object), NOT a shared $BUILD/_unit.s:
     # under qemu virtio-9p a rewritten same-PATH scratch file can serve STALE
     # cached content to the subsequent `as` read, so a shared _unit.s let one
@@ -161,7 +164,12 @@ if [ -d "$SRC" ]; then
     u="${c#$SRC/}"
     sh tools/ee/s136os_splice.sh "$REGION" "${u%.*}" "$c" "$us" "$GFLAG" "$S136EXTRA" \
       || { echo "BUILD FAIL (s136os splice): $c" >&2; exit 1; }
-    # A switch's compiled jump table (2.9 or spliced s136os) is verified against
+    # sn2952 arm (task #2286, RULING #12157): the same helper, its own selector
+    # tools/ee/sn2952_functions.txt and SN2952_SLOT lines, compiled alone by the
+    # held SN 2.95.2 cc1; after the s136os splice, before the jump-table bind.
+    sh tools/ee/s136os_splice.sh --arm sn2952 "$REGION" "${u%.*}" "$c" "$us" "$GFLAG" "$SN2952EXTRA" \
+      || { echo "BUILD FAIL (sn2952 splice): $c" >&2; exit 1; }
+    # A switch's compiled jump table (2.9 or spliced s136os/sn2952) is verified against
     # the ROM's jtbl_ data and bound to it, its copy dropped (task #2247).
     sh tools/ee/jtbl_bind.sh "$REGION" "${u%.*}" "$us" "$GFLAG" \
       || { echo "BUILD FAIL (jtbl bind): $c" >&2; exit 1; }
