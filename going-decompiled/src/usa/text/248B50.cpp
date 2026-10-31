@@ -2211,7 +2211,15 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0
  * fixed batch of list/row inits (func_0034A9F8 / func_0034A1D8 / func_0034A658)
  * across ~20 offsets, installs two vtable pointers (&D_1AD908 at +0x1464,
  * &D_1AD8E8 at +0x1468, each after func_003368D0), and two more func_0034A1D8.
- * Matching arm stays asm (0x90 frame, 10+ callee saves — frame-layout wall). */
+ * The row-init callees follow the ROM's call sequence (0x34BF1C..0x34BF94):
+ * func_0034A1D8 at +0xC0C..+0xEB4 (six, stride 0x88) and +0x10F8, func_0034A658
+ * at +0xF3C/+0xFD0/+0x1064 and +0x1180..+0x13D0. Until task #2334 this arm
+ * called the wrong one of the two at +0xEB4, +0x1064 and +0x10F8.
+ * Matching arm stays asm. On the s136os arm (gcse on) the best body (store,
+ * task #2334) builds 150 = 150 words and differs only in the stack slots of the
+ * 15 element pointers gcse PRE spills; their order follows gcse's expression
+ * hash table size, which needs 59 buckets (an RTL insn count of 116..119) where
+ * this C gives 63 (127 insns). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034BDB0);
 #else
@@ -2268,11 +2276,11 @@ void *func_0034BDB0(void *widget) {
     func_0034A1D8((GuiWidget *)(w + 0xD1C));
     func_0034A1D8((GuiWidget *)(w + 0xDA4));
     func_0034A1D8((GuiWidget *)(w + 0xE2C));
-    func_0034A658((GuiWidget *)(w + 0xEB4));
+    func_0034A1D8((GuiWidget *)(w + 0xEB4));
     func_0034A658((GuiWidget *)(w + 0xF3C));
     func_0034A658((GuiWidget *)(w + 0xFD0));
-    func_0034A1D8((GuiWidget *)(w + 0x1064));
-    func_0034A658((GuiWidget *)(w + 0x10F8));
+    func_0034A658((GuiWidget *)(w + 0x1064));
+    func_0034A1D8((GuiWidget *)(w + 0x10F8));
     func_0034A658((GuiWidget *)(w + 0x1180));
     func_0034A658((GuiWidget *)(w + 0x1214));
     func_0034A658((GuiWidget *)(w + 0x12A8));
