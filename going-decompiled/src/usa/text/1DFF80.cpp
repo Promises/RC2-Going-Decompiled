@@ -610,11 +610,13 @@ void func_002E0650(void) {
  *   - two RULING #8549 sites in tools/ee/ps2eeas_dli_sites.txt for this
  *     function, `dli $14,0x1000000000000001` (0x2E0858) and
  *     `dli $11,0x2400000000000001` (0x2E087C): 4/115 words without the rows;
- *   - DEVICE (RULING #8620): g_frameDmaCursorWords, below;
- *   - the cursor declared volatile, as upstream does: the ROM re-loads
- *     g_frameDmaCursor before every header store and after every advance. A
- *     CODEGEN DEVICE in RULING #8404's sense (it forces those re-loads), not a
- *     claim that the cursor changes asynchronously;
+ *   - g_frameDmaCursorWords, below, kept in upstream's spelling: a
+ *     section(".sdata") view of the cursor, declared volatile as upstream does.
+ *     Validator #2388 (FACT #12348) measured NEITHER as load-bearing: the
+ *     object is sha-identical without the .sdata attribute, without the
+ *     volatile, and without both. Only the section(".data") spelling hurts
+ *     (LEN 106/115). They are not claimed as devices here, and the volatile
+ *     makes no claim that the cursor changes asynchronously;
  *   - upstream's statement shapes: the `zero` local indexing the GIFtag store
  *     and seeding i, `step` set inside the loop, the corner pointer formed from
  *     the header pointer `tag` rather than from the advanced cursor.
@@ -642,8 +644,9 @@ typedef struct GsScreenDims {
  * the unit's `.extern g_frameDmaCursor, 16` above still makes gas expand it
  * absolute (lui; lw) with HI16/LO16 relocations against g_frameDmaCursor. With
  * section(".data") instead, cc1 splits %hi/%lo itself and reschedules (LEN 106/115,
- * NOTE #12173). An ADDRESSING-MODEL DEVICE (RULING #8620): it moves no data
- * and emits nothing of its own. On native both are views of our declarations. */
+ * NOTE #12173). It moves no data and emits nothing of its own, and per FACT
+ * #12348 it does not change this function's bytes. On native both are views of
+ * our declarations. */
 #ifndef TARGET_NATIVE
 extern GsScreenDims g_gsScreenDims __asm__("g_gsScreenContext");
 extern s32 *volatile g_frameDmaCursorWords __asm__("g_frameDmaCursor") __attribute__((section(".sdata")));
