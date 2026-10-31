@@ -253,16 +253,19 @@ GPL-3.0 relicence at `a1379f5`. The GPL-2.0-or-later note in the section
 
 ### Forja contributors (MIT), via OpenRAC rac2-gc-decomp at 96927f87
 
-The C body of `func_001248B8` in `going-decompiled/src/usa/cod/022FA8.c`
-(adapted: name at our split address, upstream's `NULL` fallback dropped) is
-taken from OpenRAC's `rac2-gc-decomp` at commit
-`96927f872c709e13aaa0f32265bb81a5531bf7ed`, `src/core/001248B0-rc2.c`
-(`func_001248B0`), added there by commit
-`fe9859d7961703d78264e8475922636440266093` ("carry over 129 verified RC2 fork
-functions"). That file carries a fork's MIT notice, not OpenRAC's GPL-3.0;
+Two C function bodies are taken from OpenRAC's `rac2-gc-decomp` at commit
+`96927f872c709e13aaa0f32265bb81a5531bf7ed`, from `-rc2.c` files added there by
+commit `fe9859d7961703d78264e8475922636440266093` ("carry over 129 verified RC2
+fork functions"). Those files carry a fork's MIT notice, not OpenRAC's GPL-3.0;
 upstream does not name the fork, its URL or a commit. Adopted with the
-operator's 2026-10-31 "adopt all" (RULING #12108, task #2237) and under this notice, reproduced
-verbatim:
+operator's 2026-10-31 "adopt all" (RULING #12108):
+
+| Here | Upstream file | Upstream name |
+|---|---|---|
+| `func_001248B8` in `going-decompiled/src/usa/cod/022FA8.c` (adapted: name at our split address, upstream's `NULL` fallback dropped), task #2237 | `src/core/001248B0-rc2.c` | `func_001248B0` |
+| `func_002CC858` in `going-decompiled/src/usa/text/1CA080.cpp`, EE arm (adapted: upstream's computed `goto` through the resident table written as the `switch` it emulates, whose table `tools/ee/jtbl_bind.sh` binds to the ROM's; signature and symbol spellings ours), task #2272 | `src/game/002CB8A0-rc2.c` | `func_002CB8A0` (v1.01 address) |
+
+Both files carry this notice, reproduced verbatim:
 
     SPDX-License-Identifier: MIT
     MIT License

@@ -405,14 +405,21 @@
 
   OpenRAC commit `fe9859d7` (Sergio Rodmauser) carried 129 functions over from
   an RC2 fork it does not name, each `-rc2.c` file under that fork's MIT
-  notice. One is adopted, with the operator's 2026-10-31 "adopt all" (RULING #12108, task #2237);
-  the notice is reproduced in [THIRD-PARTY.md](THIRD-PARTY.md) and in the
+  notice. Two are adopted, with the operator's 2026-10-31 "adopt all" (RULING #12108, tasks #2237 and #2272);
+  the notice is reproduced in [THIRD-PARTY.md](THIRD-PARTY.md) and in each
   function's doc comment.
 
   Used so far:
   - **`func_001248B8`** (`0x001248B8`, libcdvd's SIF command 0x80000012
     handler) in `going-decompiled/src/usa/cod/022FA8.c`, adapted (name at
     our split address), from `src/core/001248B0-rc2.c` (`func_001248B0`).
+  - **`func_002CC858`** (`0x002CC858`, the seven-way map-cell descriptor
+    dispatch) in `going-decompiled/src/usa/text/1CA080.cpp`, EE arm, from
+    `src/game/002CB8A0-rc2.c` (`func_002CB8A0`, v1.01 address), adapted:
+    upstream's computed `goto` through the resident jump table is written as
+    the `switch` it emulates (the verbatim form does not compile in this C++
+    unit), whose table `tools/ee/jtbl_bind.sh` binds to the ROM's
+    `jtbl_0026CCA0_text`; signature and symbol spellings are ours (task #2272).
 
 - **Lombyte** (MIT, © 2026 Mateusz Kłysz)
   <https://github.com/mateuszklysz/Lombyte> at commit `2c4452dd03f5f7ebb2868dbe073ccdb1afb27f61`

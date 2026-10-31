@@ -1899,18 +1899,128 @@ int func_002CC7D8(int mode)
     return result;
 }
 
-/* func_002CC858: dispatch one of seven map-cell config descriptors (D_1AA6D8,
- * stride 0x18, selected by `q` in 0..6) through func_002D6AD8, returning its result
- * into a scratch buffer; out-of-range `q` returns 0. Selecting descriptor 0 also
- * snapshots the sound-bank handle (g_soundBankHandlesBlk +0x1248 -> +0x22C8).
- * (matching arm left INCLUDE_ASM: cc1 jump-table layout not reproduced.) */
+/* func_002CC858: dispatch one of seven map-cell config descriptors (D_1AA6D8 ..
+ * D_1AA768, stride 0x18, selected by `arg0` in 0..6) through func_002D6AD8, which
+ * fills a one-word scratch result; returns func_002D6AD8's result, or 0 for an
+ * out-of-range `arg0`. Selecting descriptor 0 also snapshots the sound-bank
+ * handle (g_soundBankHandlesBlk +0x1248 -> +0x22C8).
+ *
+ * The switch compiles to a 7-entry jump table; tools/ee/jtbl_bind.sh (task #2247,
+ * FACT #12102) checks every compiled entry against the ROM's jtbl_0026CCA0_text
+ * (data/16CA20), drops cc1's .rodata copy (which the USA link script discards)
+ * and points the %hi/%lo pair at the ROM table. The redundant `(u32)arg0 < 7`
+ * test does not cost a second range check: cc1 folds the switch's own into it.
+ * EE arm only: `void *` carries the s32 result, which a 64-bit native build
+ * cannot narrow back, so native keeps the plain C below.
+ *
+ * Source: OpenRAC/rac2-gc-decomp @96927f872c709e13aaa0f32265bb81a5531bf7ed,
+ * src/game/002CB8A0-rc2.c, func_002CB8A0 (v1.01 name; at our 0x2CC858; file
+ * blob 2087a51f, unchanged since it was added), author commit
+ * fe9859d7961703d78264e8475922636440266093 (Sergio Rodmauser, "carry over 129
+ * verified RC2 fork functions"), which carries the file from an unnamed fork
+ * under the MIT notice below; adopted under RULINGs #10405 and #12108 (the
+ * operator's 2026-10-31 "adopt all", which covers the Forja fork's files with
+ * their notices kept) (task #2272). ADAPTED:
+ *  - DISPATCH: upstream jumps through the resident table itself
+ *    (`goto *D_0026CCC0[rc2_selector]`, with a `static void *volatile
+ *    rc2_labels[]` array that only keeps the seven `&&rc2_case_N` labels alive
+ *    and a second `rc2_selector > 6U` bound); here that is the `switch` it
+ *    emulates, `goto rc2_switch_end` written `break`. Measured: the verbatim
+ *    body does not compile in this C++ unit (cc1plus: "jump to label
+ *    `rc2_case_0' ... crosses initialization of `u32 rc2_selector'").
+ *  - signature: our `s32 func_002CC858(s32)`, the unit's caller prototype
+ *    further down, for upstream's `u32 arg0`; the range test is written
+ *    `(u32)arg0 < 7` to keep upstream's unsigned compare (the ROM's sltiu).
+ *  - symbols per the ROM's relocations: D_001AA6B8/6D0/6E8/700/718/730/748 =
+ *    D_1AA6D8/D_1AA6F0/D_1AA708/D_1AA720/D_1AA738/D_1AA750/D_1AA768,
+ *    D_00189E20 = g_soundBankHandlesBlk (so `s8 *t` is `u8 *t`, our element
+ *    type), func_002D5E70 = func_002D6AD8; upstream's `sda` attribute dropped
+ *    (our cc1 ignores it; -G8 sizing gives the same $gp class) and its file
+ *    comment about the resident table dropped with the computed goto.
+ * The case statements are otherwise upstream's.
+ *
+ * The notice upstream's file carries, verbatim:
+ *
+ *   SPDX-License-Identifier: MIT
+ *   MIT License
+ *
+ *   Copyright (c) 2026 Forja contributors
+ *
+ *   Permission is hereby granted, free of charge, to any person obtaining a copy
+ *   of this software and associated documentation files (the "Software"), to deal
+ *   in the Software without restriction, including without limitation the rights
+ *   to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ *   copies of the Software, and to permit persons to whom the Software is
+ *   furnished to do so, subject to the following conditions:
+ *
+ *   The above copyright notice and this permission notice shall be included in all
+ *   copies or substantial portions of the Software.
+ *
+ *   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ *   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ *   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ *   AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ *   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ *   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ *   SOFTWARE.
+ */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CC858);
+extern u8 g_soundBankHandlesBlk[];
+extern s32 D_1AA6D8;
+extern s32 D_1AA6F0;
+extern s32 D_1AA708;
+extern s32 D_1AA720;
+extern s32 D_1AA738;
+extern s32 D_1AA750;
+extern s32 D_1AA768;
+extern s32 func_002D6AD8(void *config, void *result);
+s32 func_002CC858(s32 arg0) {
+    void *p;
+    void *q;
+    s32 local = 0;
+    u8 *t;
+
+    q = 0;
+    if ((u32)arg0 < 7) {
+        switch (arg0) {
+        case 0:
+            q = &local;
+            t = g_soundBankHandlesBlk;
+            (*(s32 *)((char *)(t) + (0x22C8))) = (*(s32 *)((char *)(t) + (0x1248)));
+            p = &D_1AA6D8;
+            break;
+        case 1:
+            q = &local;
+            p = &D_1AA6F0;
+            break;
+        case 2:
+            q = &local;
+            p = &D_1AA708;
+            break;
+        case 3:
+            q = &local;
+            p = &D_1AA720;
+            break;
+        case 4:
+            q = &local;
+            p = &D_1AA738;
+            break;
+        case 5:
+            q = &local;
+            p = &D_1AA750;
+            break;
+        case 6:
+            q = &local;
+            p = &D_1AA768;
+            break;
+        }
+        q = (void *) func_002D6AD8(p, q);
+    }
+    return (s32) q;
+}
 #else
-/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 24.55% -> STRUCTURAL,
- * first differing row @0: ROM `(none)` vs `daddu a1,a0,zero`;
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 0.00% -> STRUCTURAL, first differing row @1: ROM `daddu a1,zero,zero` vs `daddu a1,a0,zero`. */
+/* Native arm: the same dispatch as plain C, the seven descriptors indexed from
+ * D_1AA6D8 by their 0x18 stride. */
 extern s32 func_002D6AD8(void *config, void *buf);
 extern u8 D_1AA6D8[];
 extern u8 g_soundBankHandlesBlk[];
