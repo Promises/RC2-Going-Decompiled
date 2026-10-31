@@ -3161,11 +3161,12 @@ selftest_sn2952() {
 #            FAIL, naming that row's override (the build compiled it pinned,
 #            i.e. as if the override were ignored); the same selector with
 #            that one log line unpinned (what an honoured override logs) ->
-#            rc 0, so neither the 1DFF80 floor nor the per-row mapping fires on
+#            rc 0 with the checker counting the live override rows + 1, so
+#            neither the 1DFF80 floor nor the per-row mapping fires on
 #            the override row and on no other. USA only: the fixture is a USA
 #            ROM function and the seeds are USA rows.
 selftest_s136extra() {
-  local T="$1" b=0 rc out m k ns D="$1/s136extra" L="$OUT/cc1_args.tsv" S="$1/s136extra_sel.txt" F="$1/s136extra_log.tsv"
+  local T="$1" b=0 rc out m k ns lo D="$1/s136extra" L="$OUT/cc1_args.tsv" S="$1/s136extra_sel.txt" F="$1/s136extra_log.tsv"
   say "-- (32) S136EXTRA OVERRIDE (#2307): the fixture func_002E6D98 (unit flags empty, row override -fno-gcse) through the real s136os_splice.sh -> vmu BYTE IDENTICAL 30/30; through a helper that ignores the override -> vmu rc 1 on exactly 5 words; CC1ARGS: an override the build's log does not carry -> 1 FAIL naming it; the log carrying it -> PASS"
   if [ "$REGION" != usa ]; then ok "n/a (32) on $REGION: the fixture is USA func_002E6D98; run --selftest usa"; return 0; fi
   # control: the real helper
@@ -3203,9 +3204,14 @@ selftest_s136extra() {
     ok "fired (32): CC1ARGS with func_002E6D98 given S136EXTRA= and the build's pinned line -> 1 FAIL: $(printf '%s\n' "$out" | /usr/bin/grep '^FAIL ' | sed 's/^FAIL //')"
   else say "SELFTEST-FAIL (32) CC1ARGS did not name exactly the ignored override (rc $rc):"; show < <(printf '%s\n' "$out" | /usr/bin/grep -E '^FAIL|^# failures' | head -6 | sed 's/^/  inner| /'); b=1; fi
   awk -F'\t' -v OFS='\t' -v k="$k" '$1 == "s136" && $2 ~ /\/usa\/text\/1DFF80\.(c|cpp)$/ && ++n == k { sub(/ -fno-gcse/, "", $3) } { print }' "$L" > "$F"
+  # the seed adds ONE override to whatever the live selector already carries
+  # (task #2407: a literal 1 broke on #2338's first real rows), so the
+  # checker must count exactly the live usa override rows + 1; counted with
+  # the checker's own row rule (3 or 4 fields, a 4th only as S136EXTRA=)
+  lo=$(awk '{ sub(/#.*/, "") } $1 == "usa" && NF == 4 && $4 ~ /^S136EXTRA=/ { n++ } END { print n + 0 }' "$HERE/s136os_functions.txt")
   out=$(python3 "$HERE/cc1_arglog_check.py" usa "$F" --table "$HERE/build.sh" --selector "$S" 2>&1); rc=$?
-  if [ "$rc" = 0 ] && [ "$(diff "$L" "$F" | /usr/bin/grep -c '^>' || true)" = 1 ] && printf '%s\n' "$out" | /usr/bin/grep -q 'per-function S136EXTRA overrides 1)'; then
-    ok "control (32): the same selector with row $k of $ns 1DFF80 s136 lines unpinned in the log -> rc 0 ($(printf '%s\n' "$out" | /usr/bin/grep -o 'per-function S136EXTRA overrides 1'); the 1DFF80 floor holds on the other $((ns - 1)))"
+  if [ "$rc" = 0 ] && [ "$(diff "$L" "$F" | /usr/bin/grep -c '^>' || true)" = 1 ] && printf '%s\n' "$out" | /usr/bin/grep -q "per-function S136EXTRA overrides $((lo + 1)))"; then
+    ok "control (32): the same selector with row $k of $ns 1DFF80 s136 lines unpinned in the log -> rc 0 ($(printf '%s\n' "$out" | /usr/bin/grep -o 'per-function S136EXTRA overrides [0-9]*') = $lo live + the seeded 1; the 1DFF80 floor holds on the other $((ns - 1)))"
   else say "SELFTEST-FAIL (32) CC1ARGS refused a log carrying the override (rc $rc):"; show < <(printf '%s\n' "$out" | /usr/bin/grep -E '^FAIL|^# ' | head -8 | sed 's/^/  inner| /'); b=1; fi
   return "$b"
 }
