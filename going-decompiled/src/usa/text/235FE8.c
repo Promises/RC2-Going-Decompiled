@@ -9205,72 +9205,92 @@ S136OS_SLOT(func_00342FD8);
  * glyphs to 1.0, assign glyphs 0xCD/0xCE/0x95 from the atlas, scale the label
  * 1.0x1.05, texture the sprite (0xEA9D) scaled 32x32. Finally write the descriptor
  * (+0x174=0xEAA6, +0x178=&D_1AE110, +0x17C=4) after clearing +0x16C, and hand the
- * sub-block its value via func_00348E50. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiIconScreenInit2);
+ * sub-block its value via func_00348E50.
+ *
+ * object  the screen being built (0x188 + the sub-block's size bytes).
+ * pool    the GUI pool its pieces come from; may be 0 (no placement record is
+ *         allocated then, and +0x180 must already hold one). No return.
+ *
+ * MATCHED on the s136os arm (task #2304) under the unit's current flags
+ * (-fno-gcse -fno-strict-aliasing, the FACT #10233 pin kept; no per-function
+ * S136EXTRA). Our earlier #else (engine96 probe 54.75%, task #466; standalone
+ * s136 142/154, NOTE #12089) lacked two shapes this body has: the record
+ * pointer is re-read from +0x180 for each seed float, and the record is zeroed
+ * [1],[2],[3],[0].
+ * memset is called through GuiIconScreenClearIndex, an asm-label alias of
+ * memset (upstream calls it by its splat name func_00115484). Called as the
+ * builtin memset, cc1 shares the constant 4 with the +0x17C store and keeps it
+ * in a saved register: 156 words against the ROM's 154 (measured, task #2304).
+ * The alias emits nothing; the jal still names memset.
+ * g_guiInstance needs no device here. The unit's file-scope
+ * `.extern g_guiInstance, 12` keeps the three loads absolute, as the ROM has
+ * them. NOTE #12173's unsized-array .sdata alias builds a sha-identical unit
+ * object (task #2304).
+ * GUARD: compiled alone by SN 2.95.3 v1.36 -fopt-stack and spliced over the
+ * S136OS_SLOT line (tools/ee/s136os_splice.sh); plain C on native.
+ * Source: OpenRAC/rac2-gc-decomp @96927f872c709e13aaa0f32265bb81a5531bf7ed,
+ * src/game/00341C20-g8.c, func_00342118 (v1.01 address; author commit
+ * 19fe7638, ThorpenCodes, "feat(src): match func_00342118"; GPL-3.0, with the
+ * authors' permission, RULINGs #10405 and #12108). ADAPTED: (1) callees by our
+ * names and prototypes: their func_00336DA8/func_00336E40/func_003361E0/
+ * func_00336710/func_00347EC8/func_00335E20/func_003363C0/func_00336390/
+ * func_00335F88/func_00336920/func_00115484/func_00348118 are our
+ * GuiPlacementNew/GuiPoolAlloc/GuiElementInit/GuiSpriteElementInit/
+ * func_00348BF8/GuiElementGetColor/GuiElementSetAlpha/GuiElementSetGlyph/
+ * GuiElementSetScale/GuiSpriteSetTexture/memset/func_00348E50, so element
+ * pointers are cast to GuiElement * and the tag/atlas pointers to s32; (2)
+ * data by our v2.00 names: their D_001ADC10/D_001ADC20/D_001ADFC0/D_001AE0C0
+ * are our D_1ADBE8/D_1ADBF8/D_1ADF98/D_1AE098, their D_001AE138 our D_1AE110
+ * (kept as our u8[8] declaration, gp-relative as in the ROM), and their
+ * `char *D_001A8CFC[] __attribute__((sda))` our plain `char *g_guiInstance`
+ * (D_001A8CFC[0] read as g_guiInstance); (3) memset through the alias above;
+ * (4) our name, parameter names and signature (GuiPool *pool).
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_GuiIconScreenInit2)
+S136OS_SLOT(GuiIconScreenInit2);
 #else
-/* Declarations this body needs whose only other declarations sit in other
- * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
-extern char *g_guiInstance;
-/* (end of this body's declarations) */
-/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiIconScreenInit2, unit objdiff): 54.75%,
-   133/182 insns differ. Residual: UNKNOWN-sd + gp/abs-mixed symbol (first differing insn: 'sd s5, 0x28(sp)' vs 'sd s0, 0x0(sp)').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
 extern void func_00348BF8(void *w, void *pool);
 extern void func_00348E50(void *w, s32 v);
 extern u8 D_1ADBE8[], D_1ADBF8[], D_1ADF98[], D_1AE098[], D_1AE110[8];
-void GuiIconScreenInit2(void *w, GuiPool *pool) {
-    GuiElement *e0 = (GuiElement *)((char *)w + 0x0);
-    GuiElement *e1 = (GuiElement *)((char *)w + 0x4C);
-    GuiElement *e2 = (GuiElement *)((char *)w + 0xE4);
-    GuiElement *sprite = (GuiElement *)((char *)w + 0x130);
-    void *sub = (char *)w + 0x188;
-    void *rec;
+extern char *g_guiInstance;
+extern void GuiIconScreenClearIndex(void *dst, s32 value, s32 size) __asm__("memset");
+void GuiIconScreenInit2(char *object, GuiPool *pool) {
+    s32 *record;
 
-    /* +0x184 = pool is stored unconditionally (beqz delay slot). */
-    *(GuiPool **)((char *)w + 0x184) = pool;
+    *(GuiPool **)(object + 0x184) = pool;
     if (pool != 0) {
-        rec = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
-        *(void **)((char *)w + 0x180) = rec;
-        *(s32 *)((char *)rec + 0x0) = 0;
-        *(s32 *)((char *)rec + 0x4) = 0;
-        *(s32 *)((char *)rec + 0x8) = 0;
-        *(s32 *)((char *)rec + 0xC) = 0;
+        record = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
+        *(s32 **)(object + 0x180) = record;
+        record[1] = 0;
+        record[2] = 0;
+        record[3] = 0;
+        record[0] = 0;
     }
-
-    *(s32 *)((char *)w + 0x170) = 1;
-    rec = *(void **)((char *)w + 0x180);
-    *(f32 *)((char *)rec + 0x0) = 253.0f;
-    *(f32 *)((char *)rec + 0x4) = 200.0f;
-
-    GuiElementInit(e0, (s32)D_1ADBE8, pool);
-    GuiElementInit(e1, (s32)D_1ADBF8, pool);
-    GuiElementInit(e2, (s32)D_1ADF98, pool);
-    GuiSpriteElementInit(sprite, (s32)D_1AE098, pool);
-    func_00348BF8(sub, pool);
-
-    *GuiElementGetColor(e0) = 0x60442D00;
-    *GuiElementGetColor(e1) = 0x55F0C070;
-    *GuiElementGetColor(e2) = 0x70FFFEED;
-    *GuiElementGetColor(sprite) = 0x60F0F0B0;
-
-    GuiElementSetAlpha(e0, 1.0f);
-    GuiElementSetAlpha(e1, 1.0f);
-
-    GuiElementSetGlyph(e0, (s32)(g_guiInstance + 0x8710), 0xCD);
-    GuiElementSetGlyph(e1, (s32)(g_guiInstance + 0x8710), 0xCE);
-    GuiElementSetGlyph(e2, (s32)(g_guiInstance + 0x8710), 0x95);
-
-    GuiElementSetScale(e2, 1.0f, 1.05f, 0.0f, 0.0f);
-    GuiSpriteSetTexture(sprite, 0xEA9D, 0);
-    memset((char *)w + 0x16C, 0, 4);
-    GuiElementSetScale(sprite, 32.0f, 32.0f, 0.0f, 0.0f);
-
-    *(s32 *)((char *)w + 0x174) = 0xEAA6;
-    *(void **)((char *)w + 0x178) = D_1AE110;
-    *(s32 *)((char *)w + 0x17C) = 4;
-    func_00348E50(sub, *(s32 *)((char *)w + 0x16C));
+    *(s32 *)(object + 0x170) = 1;
+    (*(f32 **)(object + 0x180))[0] = 253.0f;
+    (*(f32 **)(object + 0x180))[1] = 200.0f;
+    GuiElementInit((GuiElement *)object, (s32)D_1ADBE8, pool);
+    GuiElementInit((GuiElement *)(object + 0x4C), (s32)D_1ADBF8, pool);
+    GuiElementInit((GuiElement *)(object + 0xE4), (s32)D_1ADF98, pool);
+    GuiSpriteElementInit((GuiElement *)(object + 0x130), (s32)D_1AE098, pool);
+    func_00348BF8(object + 0x188, pool);
+    *GuiElementGetColor((GuiElement *)object) = 0x60442D00;
+    *GuiElementGetColor((GuiElement *)(object + 0x4C)) = 0x55F0C070;
+    *GuiElementGetColor((GuiElement *)(object + 0xE4)) = 0x70FFFEED;
+    *GuiElementGetColor((GuiElement *)(object + 0x130)) = 0x60F0F0B0;
+    GuiElementSetAlpha((GuiElement *)object, 1.0f);
+    GuiElementSetAlpha((GuiElement *)(object + 0x4C), 1.0f);
+    GuiElementSetGlyph((GuiElement *)object, (s32)(g_guiInstance + 0x8710), 0xCD);
+    GuiElementSetGlyph((GuiElement *)(object + 0x4C), (s32)(g_guiInstance + 0x8710), 0xCE);
+    GuiElementSetGlyph((GuiElement *)(object + 0xE4), (s32)(g_guiInstance + 0x8710), 0x95);
+    GuiElementSetScale((GuiElement *)(object + 0xE4), 1.0f, 1.05f, 0.0f, 0.0f);
+    GuiSpriteSetTexture((GuiElement *)(object + 0x130), 0xEA9D, 0);
+    GuiIconScreenClearIndex(object + 0x16C, 0, 4);
+    GuiElementSetScale((GuiElement *)(object + 0x130), 32.0f, 32.0f, 0.0f, 0.0f);
+    *(s32 *)(object + 0x174) = 0xEAA6;
+    *(void **)(object + 0x178) = D_1AE110;
+    *(s32 *)(object + 0x17C) = 4;
+    func_00348E50(object + 0x188, *(s32 *)(object + 0x16C));
 }
 #endif
 

@@ -98,10 +98,10 @@ The GPL-2.0-or-later note in the section above applies to these bodies too.
 
 ### OpenRAC rac2-gc-decomp at 96927f87 (GPL-3.0)
 
-Twenty-eight C function bodies are taken from OpenRAC's `rac2-gc-decomp`,
+Twenty-nine C function bodies are taken from OpenRAC's `rac2-gc-decomp`,
 <https://github.com/OpenRAC/rac2-gc-decomp> at commit
 `96927f872c709e13aaa0f32265bb81a5531bf7ed` (root `LICENSE`: GNU General Public
-License, version 3), with the authors' permission (RULING #10405), tasks #2230, #2232, #2234, #2235, #2236, #2248, #2251, #2252, #2261, #2262, #2272, #2294, #2295 and #2308. Each is adapted, with every respelling named in the
+License, version 3), with the authors' permission (RULING #10405), tasks #2230, #2232, #2234, #2235, #2236, #2248, #2251, #2252, #2261, #2262, #2272, #2294, #2295, #2304 and #2308. Each is adapted, with every respelling named in the
 function's `Source:` line.
 
 | Here | Upstream file | Upstream name |
@@ -134,6 +134,7 @@ function's `Source:` line.
 | `func_002DCCC8` in `going-decompiled/src/usa/text/1D54C0.cpp` (adapted: as `func_002DCBF0`), task #2295 | `src/game/002D5E98.c` | `func_002DBF98` (v1.01 address) |
 | `snd_QueueCommandToRing` in `going-decompiled/src/usa/cod/0321A0.c` (adapted: `s32` return for their void, callee and descriptor spellings ours, their `sda` declarations dropped for the unit's `.extern ,16` ones), task #2294 | `src/core/00132DF0-g8.c` | `func_00132DF0` |
 | `OnVblankInterrupt` in `going-decompiled/src/usa/cod/0321A0.c` (adapted: our symbol names; their `NOT_SDA`/`MACRO_ADDR` declarations replaced by `.extern ,16` lines), task #2294 | `src/core/001339B0.c` (their note: from rac1-decomp `src/core/permcb.c` `func_0012F308`) | `func_001339B0` |
+| `GuiIconScreenInit2` in `going-decompiled/src/usa/text/235FE8.c` (adapted: our callee names and prototypes with `GuiElement *`/`s32` casts, our v2.00 data names, a plain `g_guiInstance` for their `sda` array, memset through an asm-label alias; signature ours), task #2304 | `src/game/00341C20-g8.c` | `func_00342118` (v1.01 address) |
 
 The GPL-2.0-or-later note in the section "OpenRAC rac2-gc-decomp (GPL-3.0)" above applies to these bodies too.
 

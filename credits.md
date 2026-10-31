@@ -150,14 +150,14 @@
 - **OpenRAC — `rac2-gc-decomp`, commit `96927f87`, s136os bodies** (GPL-3.0)
   <https://github.com/OpenRAC/rac2-gc-decomp> at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`
 
-  Thirteen engine C bodies, two in text/16E980, one in text/1A00F0, one in
+  Fourteen engine C bodies, two in text/16E980, one in text/1A00F0, one in
   text/1A8180, three in text/1B4218, one in text/1D54C0, one in text/1DFF80,
-  two in text/188858 and two in cod/0321A0, adopted with the authors'
-  permission (held by the operator, RULING #10405) and re-checked byte-exact
-  against our v2.00 ROM on the s136os arm (tasks #2232, #2234, #2235, #2248,
-  #2251, #2252, #2262 and #2294, from audit NOTE #12089 rows 3, 4, 5, 6, 8
-  and 9 and NOTE #12161).
-  Contributors: bigbeno37, Flavius and Louis-Philippe Le Sieur. Each doc comment carries the `Source:`
+  two in text/188858, two in cod/0321A0 and one in text/235FE8, adopted with
+  the authors' permission (held by the operator, RULING #10405) and re-checked
+  byte-exact against our v2.00 ROM on the s136os arm (tasks #2232, #2234,
+  #2235, #2248, #2251, #2252, #2262, #2294 and #2304, from audit NOTE #12089
+  rows 3, 4, 5, 6, 8 and 9, NOTE #12161 and NOTE #12173).
+  Contributors: bigbeno37, Flavius, Louis-Philippe Le Sieur and ThorpenCodes. Each doc comment carries the `Source:`
   line, which names every change beyond extern spellings.
 
   Used so far:
@@ -261,6 +261,17 @@
     task #2294 (audit NOTE #12161). ADAPTED: our names (`g_vblankCount`,
     `g_hblankTicksAccum`), their `NOT_SDA` declarations replaced by
     `.extern ,16` lines and their `MACRO_ADDR` dropped (RULING #8620).
+  - **`GuiIconScreenInit2`** (`0x00343028`) in
+    `going-decompiled/src/usa/text/235FE8.c`, from `src/game/00341C20-g8.c`
+    (`func_00342118`, v1.01 address, author commit `19fe7638`,
+    ThorpenCodes), task #2304 (audit NOTE #12173, FACT #12175). It closes
+    under the unit's current s136os flags, the `-fno-gcse` pin kept.
+    ADAPTED: our callee names and prototypes (element pointers cast to
+    `GuiElement *`, tag and atlas pointers to `s32`), our v2.00 data names
+    (`D_1ADBE8`, `D_1ADBF8`, `D_1ADF98`, `D_1AE098`, `D_1AE110`, and a plain
+    `g_guiInstance` for their `sda` array `D_001A8CFC`), memset called
+    through an asm-label alias so cc1 does not treat it as the builtin, and
+    our name and signature.
 
 - **RC2 decomp contributions — `src/game/002E4528-rc2.c` in OpenRAC `rac2-gc-decomp`, commit `96927f87`** (MIT, © 2026 RC2 decomp contributions)
   <https://github.com/OpenRAC/rac2-gc-decomp> at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`
