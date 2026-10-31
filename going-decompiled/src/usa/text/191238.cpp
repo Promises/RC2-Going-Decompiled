@@ -6801,71 +6801,124 @@ void func_00298308(void *dst, u8 *src) {
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/191238", func_002984D8);
 
+/* The C body of func_002984E0 below is adapted from a file that carries this
+ * notice, reproduced verbatim:
+ *
+ * SPDX-License-Identifier: MIT
+ * MIT License
+ *
+ * Copyright (c) 2026 RC2 decomp contributions
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+/* func_002984E0(dst): downsample the loaded 4bpp map source at
+ * g_mapBitmapBuffer[+4] into the 1bpp discovered-area bitmap `dst`. It is the
+ * inverse of func_00298308's expand.
+ *   dst: output bitmap, 128 * 16 = 2 KB written.
+ * The input is read in bands of four 64-byte rows (512 rows, 32 KB). For each
+ * byte, both nibbles index a 16-entry weight table (copied whole from D_1A9718
+ * as one 64-byte struct) and add into a 128-column sum buffer, which
+ * FillMemory32 clears at the start of each band. On a band's fourth row, each
+ * column at or above 8 becomes the bit 1 << (column % 8), and every 8 columns
+ * are ORed into one output byte (sixteen bytes per band). At the end, bit 0 of
+ * dst[0] is cleared. No return value.
+ * MATCHED on the s136os arm (task #2299, from audit NOTE #12169 / FACT #12166),
+ * with the unit's S136EXTRA "" (gcse on). One device: g_mapBitmapBuffer is
+ * declared in section(".data") on the EE arm, an ADDRESSING-MODEL device
+ * (RULING #8620) that moves no data and emits nothing. Without it the -G8 unit
+ * reads the 4-byte scalar gp-relative, where the ROM has lui/lw of
+ * %hi/%lo(g_mapBitmapBuffer + 4). Upstream's file is a -G0 file, which is why
+ * the -G8 screen missed it (NOTE #11286, 45/147).
+ * GUARD: compiled alone by SN 2.95.3 v1.36 -fopt-stack and spliced over the
+ * S136OS_SLOT line (tools/ee/s136os_splice.sh, row in
+ * tools/ee/s136os_functions.txt); plain C on native.
+ * Source: OpenRAC/rac2-gc-decomp @96927f872c709e13aaa0f32265bb81a5531bf7ed,
+ * src/game/00297BB0-rc2.c, func_00297BB0 (v1.01 address; author commit
+ * bc1dd02f, atlasbez-dot, "feat(src): carry over func_00297BB0"), under the
+ * MIT notice above and adopted with permission per RULING #10405 and RULING
+ * #12108 (the MIT-fork call). ADAPTED: (1) our callee and data spellings:
+ * func_00282A60 = FillMemory32 (our (void *, u32, s32) prototype, as at the
+ * unit's other declarations), D_001A9720 = D_1A9718 (theirs is the v1.01
+ * address), and their `D_001C4FAC` scalar is read as
+ * `(&g_mapBitmapBuffer)[1]`, the word after g_mapBitmapBuffer; (2) the RULING
+ * #8620 section(".data") device on that extern declaration, EE arm only; (3)
+ * the name is func_002984E0, the parameter `arg0` is `dst` and the row
+ * counter `s0` is `row`. The Tab32 typedef and the rest of the body are theirs.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002984E0)
+S136OS_SLOT(func_002984E0);
+#else
 #ifndef TARGET_NATIVE
-/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
- * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 55.24% PACKED-SAVE /
- * engine96 46.14% IDIOM-LIKELY; best arm sdk29, first differing insn there: 'addiu sp, sp,
- * -0x270' vs 'addiu sp, sp, -0x290'
- * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
- * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
- * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
- * property and was measured false as the reason this member stays unmatched (FACT #9873).
- * Residual: the saved-register set; the rest UNMEASURED. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002984E0);
+extern u8   *g_mapBitmapBuffer __attribute__((section(".data")));  /* #8620 device */
 #else
 extern u8   *g_mapBitmapBuffer;
-extern u8    D_1A9718[];  /* 64-byte per-nibble accumulation weight LUT */
+#endif
+extern s32   D_1A9718[];  /* 16-entry per-nibble accumulation weight table */
 extern void  FillMemory32(void *dst, u32 val, s32 len);
-/*
- * func_002984E0(out) — downsample the loaded 4bpp map source at
- * g_mapBitmapBuffer[+4] into the 1bpp discovered-area bitmap `out` (the inverse
- * of func_00298308's expand). Works in bands of four 64-byte input rows: for
- * each byte both nibbles index a 16-entry weight LUT (copied from D_1A9718) and
- * accumulate into a 128-column sum buffer; every fourth row that buffer is
- * thresholded (>=8 -> set) and bit-packed 8 columns/byte to sixteen output
- * bytes. Consumes 512*64 = 32 KB, emits 128*16 = 2 KB, then clears bit0 of
- * out[0].
- */
-void func_002984E0(u8 *out) {
-    s32 acc[128];   /* per-column accumulator (sp[0..0x200)) */
-    s32 lut[16];    /* nibble weight table (sp+0x200) */
-    u8 *lb = (u8 *)lut;
-    u8 *in = *((u8 **)&g_mapBitmapBuffer + 1);  /* g_mapBitmapBuffer[+4] */
-    u8 *outp = out;
+
+typedef struct { s32 w[16]; } Tab32;
+
+void func_002984E0(u8 *dst)
+{
+    s32 buf[128];
+    s32 tb[16];
+    u8 *in;
+    u8 *out;
+    s32 row;
+    s32 k;
     s32 i;
-    s32 j;
+    s32 q;
 
-    for (j = 0; j < 0x40; j++) {
-        lb[j] = D_1A9718[j];
-    }
-
-    for (i = 0; i < 0x200; i++) {
-        s32 n;
-        if ((i & 3) == 0) {
-            FillMemory32(acc, 0, 0x200);
+    out = dst;
+    in = (&g_mapBitmapBuffer)[1];
+    *(Tab32 *)tb = *(Tab32 *)D_1A9718;
+    for (row = 0; row < 0x200; row++) {
+        if (row % 4 == 0) {
+            FillMemory32(buf, 0, 0x200);
         }
-        for (n = 0; n < 64; n++) {
+        for (k = 0; k < 128; k += 2) {
             u8 b = *in++;
-            acc[2 * n]     += lut[b & 0xF];
-            acc[2 * n + 1] += lut[b >> 4];
+            buf[k] += tb[b & 0xF];
+            buf[k + 1] += tb[b >> 4];
         }
-        if ((i & 3) == 3) {
-            s32 k;
-            for (k = 0; k < 128; k++) {
-                if (acc[k] < 8) {
-                    acc[k] = 0;
+        if (row % 4 == 3) {
+            for (i = 0; i < 128; i++) {
+                if (buf[i] < 8) {
+                    buf[i] = 0;
                 } else {
-                    acc[k] = 1 << (k & 7);
+                    buf[i] = 1 << (i % 8);
                 }
             }
-            for (k = 0; k < 16; k++) {
-                u8 *a = (u8 *)&acc[8 * k];
-                *outp++ = a[0] | a[4] | a[8] | a[12] | a[16] | a[20] | a[24] | a[28];
+            for (q = 0; q < 128; q += 8) {
+                u8 *bp = (u8 *)&buf[q];
+                s32 t1 = bp[0] | bp[4];
+                s32 t2 = bp[8] | t1;
+                s32 t3 = bp[12] | t2;
+                s32 t4 = bp[16] | t3;
+                s32 t5 = bp[20] | t4;
+                s32 t6 = bp[24] | t5;
+                s32 t7 = bp[28] | t6;
+                *out++ = t7;
             }
         }
     }
-
-    out[0] &= 0xFE;
+    *dst &= 0xFE;
 }
 #endif
 

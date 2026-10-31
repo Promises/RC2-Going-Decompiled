@@ -191,11 +191,11 @@ a URL for it. The notice, which the doc comment also carries verbatim:
 
 ### RC2 decomp contributions, via OpenRAC rac2-gc-decomp (MIT)
 
-Two C bodies are adapted from OpenRAC's `rac2-gc-decomp`,
+Three C bodies are adapted from OpenRAC's `rac2-gc-decomp`,
 <https://github.com/OpenRAC/rac2-gc-decomp> at commit
 `96927f872c709e13aaa0f32265bb81a5531bf7ed`, from files that carry their own
 MIT notice, not the repository's GPL-3.0. The notice is the same, word for
-word, in both files. It is reproduced verbatim here and in each function's doc
+word, in all three files. It is reproduced verbatim here and in each function's doc
 comment (RULINGs #10405 and #12108):
 
 - `CastEmitterOcclusionRay` in `going-decompiled/src/usa/text/1DFF80.cpp`,
@@ -207,6 +207,12 @@ comment (RULINGs #10405 and #12108):
   from `src/game/002B7380-rc2.c`, `func_002B7380` (v1.01 address). That file
   came in with upstream commit `fe9859d7` (Sergio Rodmauser, "carry over 129
   verified RC2 fork functions"), task #2296.
+- `func_002984E0` in `going-decompiled/src/usa/text/191238.cpp`,
+  from `src/game/00297BB0-rc2.c`, `func_00297BB0` (v1.01 address; adapted:
+  callee and data spellings ours, the word after `g_mapBitmapBuffer` for their
+  `D_001C4FAC`, the RULING #8620 `section(".data")` device on that extern,
+  parameter and row-counter names). That file was carried over by
+  atlasbez-dot (upstream commit `bc1dd02f`), task #2299.
 
     SPDX-License-Identifier: MIT
     MIT License

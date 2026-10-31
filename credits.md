@@ -300,17 +300,17 @@
     `D_1AE818` with a `section(".data")` addressing device, and their `sda`
     arena word as the unit's `g_pFmvArenaBase`.
 
-- **RC2 decomp contributions — `src/game/002E4528-rc2.c` and `src/game/002B7380-rc2.c` in OpenRAC `rac2-gc-decomp`, commit `96927f87`** (MIT, © 2026 RC2 decomp contributions)
+- **RC2 decomp contributions — `src/game/002E4528-rc2.c`, `src/game/002B7380-rc2.c` and `src/game/00297BB0-rc2.c` in OpenRAC `rac2-gc-decomp`, commit `96927f87`** (MIT, © 2026 RC2 decomp contributions)
   <https://github.com/OpenRAC/rac2-gc-decomp> at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`
 
-  Two engine C bodies, adopted with permission (held by the operator, RULINGs
+  Three engine C bodies, adopted with permission (held by the operator, RULINGs
   #10405 and #12108) and re-checked byte-exact against our v2.00 ROM on the
   s136os arm. `002E4528-rc2.c` was carried into rac2-gc-decomp by atlasbez-dot
-  (commit `ebf90a4c`, from atlasbez-dot/rac2-gc-decomp at `921a4dee`);
-  `002B7380-rc2.c` came in with commit `fe9859d7` (Sergio Rodmauser). Both
-  files carry the same MIT notice, which is kept in each doc comment and in
-  `THIRD-PARTY.md`. Each doc comment carries the `Source:` line, which names
-  every change beyond extern spellings.
+  (commit `ebf90a4c`, from atlasbez-dot/rac2-gc-decomp at `921a4dee`), as was
+  `00297BB0-rc2.c` (commit `bc1dd02f`); `002B7380-rc2.c` came in with commit
+  `fe9859d7` (Sergio Rodmauser). All three files carry the same MIT notice,
+  which is kept in each doc comment and in `THIRD-PARTY.md`. Each doc comment
+  carries the `Source:` line, which names every change beyond extern spellings.
 
   Used so far:
   - **`CastEmitterOcclusionRay`** (`0x002E5340`) in
@@ -328,6 +328,14 @@
     the unit's prototypes; and their `long long` u64/s64 as our 64-bit
     `long`, which the s136 compiler requires. Task #2296, from audit NOTE
     #12163 row 17.
+  - **`func_002984E0`** (`0x002984E0`) in
+    `going-decompiled/src/usa/text/191238.cpp`, from `src/game/00297BB0-rc2.c`
+    (`func_00297BB0`, v1.01 address, author commit `bc1dd02f`,
+    atlasbez-dot), task #2299. ADAPTED: `FillMemory32` and `D_1A9718` for
+    their `func_00282A60` / `D_001A9720`, `(&g_mapBitmapBuffer)[1]` for their
+    `D_001C4FAC`, and the RULING #8620 `section(".data")` device on the
+    `g_mapBitmapBuffer` extern (EE arm only). Without that device the -G8 unit
+    reads the scalar gp-relative, where the ROM uses lui/lw.
 - **OpenRAC — `rac2-gc-decomp`, commit `96927f87`, core bodies** (GPL-3.0)
   <https://github.com/OpenRAC/rac2-gc-decomp> at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`
 
