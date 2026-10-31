@@ -591,9 +591,9 @@ extern s32 D_001363A4;    /* suppresses func_001248B8's callback while non-zero 
  * src/core/001248B0-rc2.c, func_001248B0 (v1.01 name; at our 0x1248B8),
  * author commit fe9859d7961703d78264e8475922636440266093 (Sergio Rodmauser,
  * "carry over 129 verified RC2 fork functions"), which carries the file from
- * an unnamed fork under the MIT notice below; adopted under RULING #10405
- * and the operator's 2026-10-31 call to adopt it with its notice (task
- * #2237). ADAPTED: body statements verbatim; the function takes the name at
+ * an unnamed fork under the MIT notice below; adopted under RULINGs #10405
+ * and #12108 (the operator's 2026-10-31 "adopt all", which covers the Forja
+ * fork's files with their notices kept) (task #2237). ADAPTED: body statements verbatim; the function takes the name at
  * our split address (func_001248B8); the file's `#ifndef NULL` fallback is
  * dropped (common.h defines NULL); its three externs are this file's
  * declarations above, with the same types. Relocations as the ROM decodes
@@ -6347,8 +6347,9 @@ extern s32 ParsePesPacketHeader();
  * PAL by OpenRAC's tools/port.py: src/sdk/dma/sce_mpeg_demux_pss_ring.c,
  * sceMpegDemuxPssRing" (Lombyte, github.com/mateuszklysz/Lombyte; the file is
  * present at 2c4452dd, MIT, and after the a1379f5 GPL-3.0 relicence; upstream
- * names no Lombyte sha). Adopted under RULING #10405 and the operator's
- * 2026-10-31 call (task #2237). ADAPTED: body statements verbatim apart from
+ * names no Lombyte sha). Adopted under RULINGs #10405 and #12108 (the
+ * operator's 2026-10-31 "adopt all", which covers Lombyte-origin bodies with
+ * Lombyte cited as upstream) (task #2237). ADAPTED: body statements verbatim apart from
  * the callee spellings, which are ours as the ROM decodes the jal targets
  * (their r1_func_0012AA70 = func_0012E890, r1_func_0012AAA8 = func_0012E8C8,
  * r1_func_0012B100 = func_0012EF20, r1_func_0012AC50 = func_0012EA70,

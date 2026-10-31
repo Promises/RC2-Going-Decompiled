@@ -230,7 +230,7 @@ above applies to these bodies too.
 One more C function body is taken from OpenRAC's `rac2-gc-decomp` at commit
 `96927f872c709e13aaa0f32265bb81a5531bf7ed` (root `LICENSE`: GNU General Public
 License, version 3), with the authors' permission (RULING #10405) and the
-operator's 2026-10-31 call to adopt it, task #2237:
+operator's 2026-10-31 "adopt all" (RULING #12108), task #2237:
 
 | Here | Upstream file | Upstream name |
 |---|---|---|
@@ -251,7 +251,7 @@ taken from OpenRAC's `rac2-gc-decomp` at commit
 `fe9859d7961703d78264e8475922636440266093` ("carry over 129 verified RC2 fork
 functions"). That file carries a fork's MIT notice, not OpenRAC's GPL-3.0;
 upstream does not name the fork, its URL or a commit. Adopted with the
-operator's 2026-10-31 call (task #2237) and under this notice, reproduced
+operator's 2026-10-31 "adopt all" (RULING #12108, task #2237) and under this notice, reproduced
 verbatim:
 
     SPDX-License-Identifier: MIT

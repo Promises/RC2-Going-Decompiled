@@ -334,7 +334,7 @@
 
   OpenRAC commit `fe9859d7` (Sergio Rodmauser) carried 129 functions over from
   an RC2 fork it does not name, each `-rc2.c` file under that fork's MIT
-  notice. One is adopted, with the operator's 2026-10-31 call (task #2237);
+  notice. One is adopted, with the operator's 2026-10-31 "adopt all" (RULING #12108, task #2237);
   the notice is reproduced in [THIRD-PARTY.md](THIRD-PARTY.md) and in the
   function's doc comment.
 
