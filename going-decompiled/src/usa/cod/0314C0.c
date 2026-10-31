@@ -574,29 +574,27 @@ s32 InstallLoadedOverlay(void) {
 extern void LoadLevelAndInitHealth(void);
 extern s32 InstallLoadedOverlay(void);
 
-/* main (0x131D98): the game's top-level loop. Runs the one-shot init
- * func_0011FC48 once, then loops forever: call the current stage routine
- * (initially the level loader LoadLevelAndInitHealth), install the overlay
- * segment it loaded (InstallLoadedOverlay) and adopt that call's returned id as
- * the next stage routine to run, then pump the frame twice via func_0011AEA0
- * (modes 0 and 2). Never returns.
+/* main (0x131D98): the game's top-level loop. Never returns.
  *
- * NEAR-MISS, kept as INCLUDE_ASM for the matching build (#ifndef TARGET_NATIVE).
- * The body is otherwise byte-exact (the asm-label trick below suppresses the
- * `jal __main` ctor hook ee-gcc injects into any function literally named
- * `main`), but the original fills the first func_0011AEA0(0) call's delay slot
- * with the InstallLoadedOverlay-return capture (`move s0,v0`) and emits the
- * `a0=0` arg setup standalone, whereas ee-gcc unconditionally fills that delay
- * slot with the closest arg setup (`a0=0`) and emits the capture standalone.
- * That is a delay-slot filler tie-break — `move a0,0` is always RTL-emitted last
- * (it is part of the following call), so no C statement ordering can place the
- * capture after it. 98.8% byte-match; the portable #else below is the C entry. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0314C0", main);
-#else
-/* The C entry routine compiles to the symbol `main` via an asm label rather than
+ * Runs the one-shot init func_0011FC48 (gcc's __main ctor guard) once, then
+ * loops forever: call the current stage routine (initially the level loader
+ * LoadLevelAndInitHealth), install the overlay segment it loaded
+ * (InstallLoadedOverlay) and adopt that call's return value as the next stage
+ * routine, then flush the caches via func_0011AEA0 (the FlushCache syscall
+ * stub) with modes 0 and 2.
+ *
+ * Compiled on the s136os arm (SN 2.95.3 v1.36 -fopt-stack, s136os_functions.txt
+ * row): that compiler puts the InstallLoadedOverlay-return capture (`move s0,v0`)
+ * in the first func_0011AEA0 call's delay slot and emits the `a0=0` setup
+ * standalone, and lays out the 16-byte frame, as the ROM does. cc1 2.9 fills the
+ * slot with the arg setup and builds a 32-byte frame (the earlier near-miss).
+ *
+ * The C entry routine compiles to the symbol `main` via an asm label rather than
  * being literally named `main` so cc1 does not inject the `jal __main` ctor hook
  * (the original is built freestanding and has no such call). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_main)
+S136OS_SLOT(main);
+#else
 void GameMain(void) __asm__("main");
 void GameMain(void) {
     void (*stage)(void);
