@@ -826,7 +826,53 @@ void func_0011B0A0(void) {
     D_00134688 = 0;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", WaitVblankStartIntc);
+extern s32 func_0011F5E0(void);
+extern s32 func_0011F628(void);
+
+/**
+ * Wait for the next VBLANK_START interrupt by polling INTC_STAT (0x1000F000)
+ * rather than taking the interrupt. Writing 4 to INTC_STAT acknowledges a
+ * pending VBLANK_START (bit 2), so the function first clears any stale one,
+ * spins until bit 2 is set again, then acknowledges that one too.
+ *
+ * Each acknowledge runs with interrupts disabled: func_0011F5E0 disables them
+ * and returns whether they were on, and func_0011F628 re-enables them only in
+ * that case. The final re-enable is a tail call in the ROM.
+ *
+ * Source: OpenRAC/rac2-gc-decomp @96927f87 (GPL-3.0, adopted with the authors'
+ * permission per RULING #10405), nonmatching/core/func_0011B0B0.c,
+ * func_0011B0B0 (its only commit, df6a5a10, author "agent-core-04", which
+ * filed it as a near miss for its two barriers). C body adapted: our name
+ * (func_0011B0B0 = WaitVblankStartIntc), and each `__sync_synchronize()`,
+ * which this cc1 compiles to a call, written as the RULING #12168 inline
+ * `sync` behind `#ifndef TARGET_NATIVE` (task #2308).
+ */
+void WaitVblankStartIntc(void) {
+    s32 enabled;
+
+    enabled = func_0011F5E0();
+    *(volatile u32 *)0x1000F000 = 4;
+#ifndef TARGET_NATIVE
+    /* HARDWARE BARRIER (RULING #12168): the ROM's `sync` at 0x11B0D0, after
+     * the INTC_STAT acknowledge; ee-gcc has no C spelling for it. */
+    __asm__ __volatile__("sync");
+#endif
+    if (enabled != 0) {
+        func_0011F628();
+    }
+    while ((*(volatile u32 *)0x1000F000 & 4) == 0) {
+    }
+    enabled = func_0011F5E0();
+    *(volatile u32 *)0x1000F000 = 4;
+#ifndef TARGET_NATIVE
+    /* HARDWARE BARRIER (RULING #12168): the ROM's `sync` at 0x11B124, after
+     * the INTC_STAT acknowledge; ee-gcc has no C spelling for it. */
+    __asm__ __volatile__("sync");
+#endif
+    if (enabled != 0) {
+        func_0011F628();
+    }
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B140);
 

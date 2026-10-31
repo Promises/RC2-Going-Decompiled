@@ -283,11 +283,11 @@
 - **OpenRAC — `rac2-gc-decomp`, commit `96927f87`, core bodies** (GPL-3.0)
   <https://github.com/OpenRAC/rac2-gc-decomp> at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`
 
-  Three core C bodies, adopted with the authors' permission (held by the
+  Four core C bodies, adopted with the authors' permission (held by the
   operator, RULING #10405) and re-checked byte-exact against our v2.00 ROM on
-  the plain sdk29 arm (tasks #2230 and #2261). Contributor: Flavius. The doc
-  comment carries the `Source:` line, which names every change beyond extern
-  spellings.
+  the plain sdk29 arm (tasks #2230, #2261 and #2308). Contributors: Flavius,
+  and the OpenRAC commit authored as "agent-core-04". The doc comment carries
+  the `Source:` line, which names every change beyond extern spellings.
 
   Used so far:
   - **`func_0011DE08`** (`0x0011DE08`, the file-I/O RPC library init) in
@@ -313,6 +313,14 @@
     `volatile s32[]` semaphore table spelled through a `(volatile s32 *)`
     cast on this unit's `s32 D_001346A8[32]`. Its switch's jump table is bound
     to the ROM's `jtbl_0013AB20` by `tools/ee/jtbl_bind.sh` (task #2261).
+  - **`WaitVblankStartIntc`** (`0x0011B0B0`, polls INTC_STAT for the next
+    VBLANK_START) in `going-decompiled/src/usa/cod/015180.c`, from the draft
+    `nonmatching/core/func_0011B0B0.c` (`func_0011B0B0`; its only commit
+    `df6a5a10`, author "agent-core-04", filed it as a near miss for its two
+    barriers). ADAPTED: our name, and each `__sync_synchronize()` (a call on
+    this cc1) written as an inline `sync` behind `#ifndef TARGET_NATIVE`.
+    Admitted because it is byte-exact on our ROM; its two `sync` are the
+    hardware barriers RULING #12168 allows (task #2308).
 
 - **OpenRAC — `rac2-gc-decomp`, commit `96927f87`, boundary-split bodies** (GPL-3.0, and MIT for one carried file)
   <https://github.com/OpenRAC/rac2-gc-decomp> at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`
