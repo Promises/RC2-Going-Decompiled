@@ -1870,52 +1870,84 @@ finish:
 #undef gridOwned
 #endif
 
-/* Galactic-map streaming-slot teardown. When no CD read is in flight
- * (g_fileLoadState == 0) it unlocks the currently locked map-cache slot: toggles
- * that slot's 0x1000 (loaded) bit in slotLevelId[], clears the transition-mode
- * side flag, and releases lockedSlot. Otherwise, if a menu-driven load is in
- * progress (g_menuScreenBlock[0xDB]) it aborts the CD read and invalidates the
- * locked slot outright (slotLevelId[idx] = lockedSlot = -1). Returns 0.
- * MapCache fields per symbol_addrs: slotLevelId[5] @+0x29C, lockedSlot @+0x2B0. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D7AE0);
+/* Galactic-map streaming-slot teardown. When no CD read is in flight (the
+ * file-load mode halfword at g_fileLoadVoiceState+4, i.e. g_fileLoadState, is
+ * 0) it unlocks the locked map-cache slot: clears the menu block's load-active
+ * byte (g_menuScreenBlock+0xDB), toggles the slot's 0x1000 (loaded) bit in
+ * slotLevelId[] and releases lockedSlot. Otherwise, if a menu-driven load is in
+ * progress (that byte nonzero) it aborts the CD read (StopFileLoad), clears the
+ * byte and invalidates the locked slot outright (slotLevelId[idx] = lockedSlot
+ * = -1). No params; returns 0.
+ * MapCache fields per symbol_addrs: slotLevelId[5] @+0x29C, lockedSlot @+0x2B0.
+ *
+ * MATCHED on the s136os arm (SN 2.95.3 v1.36 cc1plus -fopt-stack at this
+ * unit's -G8 and S136EXTRA "", so gcse on; row in tools/ee/s136os_functions.txt),
+ * spliced over S136OS_SLOT by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice drops the function. On native it is
+ * plain C. Upstream compiles this file at -G0; at our -G8 the same addressing
+ * comes from the unit's own model (NOTE #12163): the ROM reads the mode
+ * halfword with a compiler-split lui / lh %lo(g_fileLoadVoiceState+4), hence
+ * ROM_SPLIT on that view (RULING #8620: an extern declaration, no data moved),
+ * and the map cache and menu block are aggregates, never small data. Without
+ * ROM_SPLIT it builds 42 words, not 47 (FACT #12162). Task #2295.
+ *
+ * Source: OpenRAC/rac2-gc-decomp @96927f872c709e13aaa0f32265bb81a5531bf7ed
+ * (GPL-3.0, adopted with the authors' permission per RULING #10405),
+ * src/game/002D5E98.c, func_002D6E78 (v1.01 address; author commit 66978bb7,
+ * ThorpenCodes). ADAPTED: (1) our symbols, as label aliases of their struct
+ * views: D_001A63A8 = g_fileLoadVoiceState, D_001C4FA0 = g_mapVertexData,
+ * D_001F2840 = g_menuScreenBlock; func_002B7AD0 = StopFileLoad; (2) their
+ * separate byte D_001F291B is written as the menu view's `active` field, the
+ * same address (g_menuScreenBlock+0xDB; the EE link has no symbol at 0x1F289B);
+ * (3) ROM_SPLIT on the g_fileLoadVoiceState view; (4) their struct types and
+ * fields renamed. Statements and control flow are theirs. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002D7AE0)
+S136OS_SLOT(func_002D7AE0);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern void StopFileLoad(void);
 /* (end of this body's declarations) */
-/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
- * objdiff): sdk29 73.15% / engine96 70.40%; better arm sdk29; 37 differing
- * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
- * insn: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. Not iterated in t495.
- * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): this member's prologue - the
- * ROM's save set at its 8-byte stride, and its frame - is reproduced exactly (NOTE #9871), so
- * the save-slot wall named above is a cc1 2.9 property and was measured false as the reason
- * this member stays unmatched (FACT #9873). Residual: UNMEASURED. */
-s32 func_002D7AE0(void) {
-    extern u8  g_mapVertexData[];       /* MapCache base */
-    extern s16 g_fileLoadState;         /* 0x1A63AC: 0 idle / nonzero CD-read busy */
-    extern u8  g_menuTransitionMode[];  /* +0xBF side flag cleared on unlock */
-    s32 idx;
+typedef struct FileLoadModeView {
+    char pad[4];
+    short mode;          /* 0x4 - g_fileLoadState: 0 idle, nonzero CD read busy */
+} FileLoadModeView;
+typedef struct MapSlotLockView {
+    char pad[0x29C];
+    int slotLevelId[5];  /* 0x29C */
+    int lockedSlot;      /* 0x2B0 */
+} MapSlotLockView;
+typedef struct MenuLoadView {
+    char pad[0xDB];
+    unsigned char active;  /* 0xDB - a menu-driven load is in progress */
+    char padDC[0x118 - 0xDC];
+    char *loaded;
+    unsigned int limit;
+} MenuLoadView;
+extern FileLoadModeView g_fileLoadModeView __asm__("g_fileLoadVoiceState") ROM_SPLIT;
+extern MapSlotLockView g_mapSlotLockView __asm__("g_mapVertexData");
+extern MenuLoadView g_menuLoadView __asm__("g_menuScreenBlock");
 
-    if (g_fileLoadState == 0) {
-        idx = *(s32 *)(g_mapVertexData + 0x2B0);           /* lockedSlot */
-        if (idx != -1) {
-            s32 *slot = (s32 *)(g_mapVertexData + 0x29C + idx * 4);  /* slotLevelId[idx] */
-            g_menuTransitionMode[0xBF] = 0;
-            *slot ^= 0x1000;
-            *(s32 *)(g_mapVertexData + 0x2B0) = -1;
+int func_002D7AE0(void)
+{
+    if (g_fileLoadModeView.mode == 0) {
+        MapSlotLockView *map = &g_mapSlotLockView;
+        int index = map->lockedSlot;
+        if (index != -1) {
+            g_menuLoadView.active = 0;
+            map->slotLevelId[index] ^= 0x1000;
+            map->lockedSlot = -1;
         }
     }
-
-    if (g_fileLoadState != 0) {
-        u8 *blk = (u8 *)g_menuScreenBlock;
-        if (blk[0xDB] != 0) {
+    if (g_fileLoadModeView.mode != 0) {
+        MenuLoadView *state = &g_menuLoadView;
+        if (state->active != 0) {
+            MapSlotLockView *map;
             StopFileLoad();
-            blk[0xDB] = 0;
-            idx = *(s32 *)(g_mapVertexData + 0x2B0);        /* lockedSlot */
-            *(s32 *)(g_mapVertexData + 0x29C + idx * 4) = -1;
-            *(s32 *)(g_mapVertexData + 0x2B0) = -1;
+            state->active = 0;
+            map = &g_mapSlotLockView;
+            map->slotLevelId[map->lockedSlot] = -1;
+            map->lockedSlot = -1;
         }
     }
     return 0;
@@ -2200,34 +2232,48 @@ s32 func_002D8A68(u8 *screen) {
 #endif
 
 /* Rebuild the galactic-map planet display rows: for each of the D_1A7C0C
- * active rows, mark it active (flag=1) and set its icon from D_254E48 indexed
- * by the (reversed) source-order byte in D_18D0E8; then clear the icon of the
- * row just past the last. Returns 0.
- * Near-miss: our cc1 strength-reduces the reversed D_18D0E8 index into a
- * decrementing pointer; the original recomputes &D_18D0E8[n-1-i] each pass. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D8DD0);
+ * active rows, mark it active (flag = 1) and set its icon from the D_254E48
+ * record indexed by the (reversed) source-order byte in D_18D0E8; then clear
+ * the icon of the row just past the last. No params; returns 0.
+ *
+ * MATCHED on the s136os arm (SN 2.95.3 v1.36 cc1plus -fopt-stack at this
+ * unit's -G8 and S136EXTRA "", so gcse on; row in tools/ee/s136os_functions.txt),
+ * spliced over S136OS_SLOT by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice drops the function. On native it is
+ * plain C. The earlier near-miss (63.09% on the 2.9 arm, a strength-reduced
+ * reverse index) was gcse, not loop phrasing (FACT #9427), and this arm has
+ * gcse on. D_1A7C0C keeps the unit's `.extern D_1A7C0C, 16`, which gives the
+ * ROM's adjacent lui/lw macro form, the form upstream's MACRO_ADDR gives at
+ * -G0 (NOTE #12163). Task #2295.
+ *
+ * Source: OpenRAC/rac2-gc-decomp @96927f872c709e13aaa0f32265bb81a5531bf7ed
+ * (GPL-3.0, adopted with the authors' permission per RULING #10405),
+ * src/game/002D8120.c, func_002D8120 (v1.01 address; author commit 8daa0d46,
+ * Flavius). ADAPTED: our symbols: D_001A7C04 = D_1A7C0C (their MACRO_ADDR
+ * section attribute dropped for the unit's `.extern , 16`), D_0018D0E8 =
+ * D_18D0E8, and D_00254EC8 / D_0025ADB0 = D_254E48 / D_0025AD90 as label
+ * aliases with their types (the unit declares both under other types); their
+ * slot struct renamed. Statements and control flow are theirs. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002D8DD0)
+S136OS_SLOT(func_002D8DD0);
 #else
-/* TODO(match): t495 — sdk29 arm 63.09% / engine96 arm 55.29% (unit objdiff,
- * objdiff_build.sh + unit_report.sh; committed body measured on the 2.9 arm).
- * Residual LOOP-GIV: cc1 2.9 strength-reduces the D_18D0E8[n - i] index into a
- * decrementing pointer (addiu a1,a1,-1) where the original recomputes
- * subu/addu per pass, and hoists la D_25AD90 above the blez (first differing
- * insn: lui v0,%hi(D_25AD90) vs ROM lui t0,%hi(D_1A7C0C)). Levers RUN: .extern
- * D_1A7C0C,16 (macro shape now equal), 2 loop phrasings. */
-s32 func_002D8DD0(void) {
-    s32 n = D_1A7C0C;
-    MapPlanetRow *row = D_25AD90;
-    s32 i = 0;
-    if (n > 0) {
-        do {
-            row->flag = 1;
-            i++;
-            row->icon = (u16)D_254E48[D_18D0E8[n - i]];
-            row++;
-        } while (i < n);
+typedef struct PlanetRowSlot {
+    short id;
+    short active;
+    char pad[8];
+} PlanetRowSlot;
+extern short g_planetIconRecords[][2] __asm__("D_254E48");
+extern PlanetRowSlot g_planetRowSlots[] __asm__("D_0025AD90");
+
+int func_002D8DD0(void)
+{
+    int i;
+
+    for (i = 0; i < D_1A7C0C; i++) {
+        g_planetRowSlots[i].active = 1;
+        g_planetRowSlots[i].id = *g_planetIconRecords[D_18D0E8[D_1A7C0C - 1 - i]];
     }
-    D_25AD90[D_1A7C0C].icon = 0;
+    g_planetRowSlots[D_1A7C0C].id = 0;
     return 0;
 }
 #endif
@@ -2531,56 +2577,87 @@ s32 func_002DA330(MenuWidget *obj) {
     return 0;
 }
 
-/* Per-frame scan of the 24 galactic-map level entries (obj +0x44 stride 4):
- * for each populated, not-yet-handled level whose level-order word (D_00261900)
- * is set, advance its save accumulator via func_002DFF68 — skipping a small set
- * of indices when a 0x9999-tagged level id falls in [0x4D,0x92). Returns 4.
- * Wall: jump-table switch on the row index. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DA358);
+/* Per-frame scan of the 24 galactic-map level entries of the widget `o`
+ * (entries[] at +0x44, handled bytes used[] at +0xA4). Each populated,
+ * not-yet-handled entry whose level-order word D_261900[i] is set has its save
+ * accumulator advanced by func_002DFF68(entry, 1), except: entry 7 is skipped
+ * while its record's +0xAA halfword is 0x4A and entry 0's bytes +0x42/+0x43
+ * differ; and entries 1-3, 5, 6 and 10-12 are skipped when entry 0's +0x40
+ * word is 0x9999-tagged with a low byte in [0x4D, 0x92). Returns 4.
+ *
+ * MATCHED on the s136os arm (SN 2.95.3 v1.36 cc1plus -fopt-stack at this
+ * unit's -G8 and S136EXTRA "", so gcse on; row in tools/ee/s136os_functions.txt),
+ * spliced over S136OS_SLOT by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice drops the function. On native it is
+ * plain C. The switch on i - 1 compiles to a 12-entry jump table, which
+ * tools/ee/jtbl_bind.sh (task #2247, FACT #12102) checks entry by entry
+ * against the ROM's jtbl_0026CDA0_text and binds to it, so no copy of the
+ * table is linked. Task #2295.
+ *
+ * Source: OpenRAC/rac2-gc-decomp @96927f872c709e13aaa0f32265bb81a5531bf7ed
+ * (GPL-3.0, adopted with the authors' permission per RULING #10405),
+ * src/game/002D5E98.c, func_002D9600 (v1.01 address; author commit e54ed6d5,
+ * Louis-Philippe Le Sieur). ADAPTED: (1) `unsigned long long` / `ULL` written
+ * `unsigned long` / `UL`: both mean 64 bits on the EE, and SN 1.36 cc1 makes
+ * `long long` 128-bit and refuses the wide mask ("unsupported wide integer
+ * operation"; FACT #11295's respelling); (2) our symbols: D_00261920 =
+ * D_261900, func_002DF158 = func_002DFF68 under this unit's (s32, s32)
+ * prototype, so the entry is passed as `(s32)`. Statements and control flow
+ * are theirs. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002DA358)
+S136OS_SLOT(func_002DA358);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern void func_002DFF68(s32 handle, s32 amount);
 /* (end of this body's declarations) */
-/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
- * objdiff): sdk29 70.59% / engine96 64.00%; better arm sdk29; 49 differing
- * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
- * insn: ROM `addiu sp,sp,-32` vs `addiu sp,sp,-48`. Not iterated in t495.
- * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): this member's prologue - the
- * ROM's save set at its 8-byte stride, and its frame - is reproduced exactly (NOTE #9871), so
- * the save-slot wall named above is a cc1 2.9 property and was measured false as the reason
- * this member stays unmatched (FACT #9873). Residual: UNMEASURED. */
-    /* TODO(match): functional equivalent - not byte-exact. */
-s32 func_002DA358(MenuWidget *obj) {
-    extern s32 D_00261900[];
-    u8 *o = (u8 *)obj;
-    s32 i;
+typedef struct LevelEntrySlots {
+    char pad00[0x44];
+    char *entries[0x18];         /* 0x44 */
+    unsigned char used[0x18];    /* 0xA4 - entry already handled */
+} LevelEntrySlots;
+extern s32 D_261900[];           /* per-entry level-order word */
+
+int func_002DA358(LevelEntrySlots *o)
+{
+    int i;
+
     for (i = 0; i < 0x18; i++) {
-        s32 *row = (s32 *)(o + 0x44 + i * 4);
-        if (*row != 0 && *(s8 *)(o + 0xA4 + i) == 0 && D_00261900[i] != 0) {
-            s32 base = *(s32 *)(o + 0x44);
-            if (i == 7 && *(s16 *)(*(s32 *)(o + 0x60) + 0xAA) == 0x4A &&
-                *(s8 *)(base + 0x42) != *(s8 *)(base + 0x43)) {
+        char *entry;
+        unsigned char id;
+
+        if (o->entries[i] == 0)
+            continue;
+        if (o->used[i] != 0)
+            continue;
+        if (D_261900[i] == 0)
+            continue;
+        if (i == 7
+            && *(short *)(o->entries[7] + 0xAA) == 0x4A
+            && *(unsigned char *)(o->entries[0] + 0x42)
+                   != *(unsigned char *)(o->entries[0] + 0x43))
+            continue;
+        switch (i - 1) {
+        case 0:
+        case 1:
+        case 2:
+        case 4:
+        case 5:
+        case 9:
+        case 10:
+        case 11:
+            entry = o->entries[0];
+            if ((*(unsigned long *)(entry + 0x40) & 0xFFFF0000UL) != 0x99990000UL)
+                goto call;
+            id = *(unsigned char *)(entry + 0x40);
+            if (id < 0x4D)
+                goto call;
+            if (id < 0x92)
                 continue;
-            }
-            switch (i) {
-            case 1: case 2: case 3: case 5: case 6:
-            case 10: case 11: case 12: {
-                u32 hdr = *(u32 *)(base + 0x40);
-                if ((hdr & 0xFFFF0000) == 0x99990000) {
-                    u8 lo = (u8)hdr;
-                    if (lo > 0x4C) {
-                        if (lo < 0x92) continue;  /* skip: locked range */
-                    }
-                }
-                break;
-            }
-            default:
-                break;
-            }
-            func_002DFF68(*row, 1);
+            break;
         }
+    call:
+        func_002DFF68((s32)o->entries[i], 1);
     }
     return 4;
 }
@@ -3083,62 +3160,83 @@ s32 TickStreamedImageWidget(MenuWidget *widget) {
 #undef STREAM_SLOT
 #endif
 
-/* Draw the streamed full-screen image widget once it has loaded (state >= 2 and
- * +0x58 not negative): blit the decoded glyph quad over the whole screen
- * (g_gsScreenContext +0x160/+0x162) at the configured uv (+0x38/+0x3C) with the
- * texture word at g_mapTextureWidth+0x28. With flag 0x40000 set in +0x34 the
- * quad fades: alpha = counter(+0x5C)*32 capped at 0x80 in state 2 (fade in),
- * else (4 - counter)*32 floored at 0 (fade out); otherwise it is drawn with the
- * fixed colour 0x80808080. Returns 0x10 when drawn, else 0.
- * Not matched: the ROM saves no s-register (ra-only 32-byte frame with two
- * outgoing 64-bit stack args, which 2.9 lays out the same), so sdk29 is the arm.
- * The two paths are NOT equal (an earlier "redundant branch" note was wrong).
- * Best measured body 77.61% (unit objdiff, solo, sdk29 -O2 -G8 -fno-gcse, 26 of
- * 72 rows): a cc1-small/gas-absolute alias for g_gsScreenContext bound to $2,
- * a u8 * parameter and an empty asm after the first call; the residual is the
- * object pointer's register ($10 vs the ROM's $9). Bodies and levers: NOTE #8228. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DAE70);
-#else
-/* Declarations this body needs whose only other declarations sit in other
- * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+/* Draw the streamed full-screen image widget `object` once it has loaded
+ * (state +0x44 >= 2 and count +0x58 not negative): blit the decoded glyph quad
+ * at the screen size in g_gsScreenContext (+0x160/+0x162), sized by the
+ * widget's width/height (+0x38/+0x3C), with the texture word at
+ * g_mapTextureWidth+0x28. With flag 0x40000 set in +0x34 the quad fades: alpha
+ * = value(+0x5C) * 32 capped at 0x80 in state 2 (fade in), else (4 - value) * 32
+ * floored at 0 (fade out); otherwise it is drawn with the fixed colour
+ * 0x80808080. Returns 0x10 when drawn, else 0.
+ *
+ * MATCHED on this unit's plain 2.9 arm (cc1 2.9-ee-991111 -O2 -G8 -fno-gcse;
+ * no selector row). The two DrawGlyphQuad calls stay separate, as the ROM has
+ * them. The screen context and the texture word are aggregates, so -G8 never
+ * makes them small data and cc1 splits their addresses as upstream's -G0 build
+ * does (NOTE #12163). Task #2295.
+ *
+ * Source: OpenRAC/rac2-gc-decomp @96927f872c709e13aaa0f32265bb81a5531bf7ed
+ * (GPL-3.0, adopted with the authors' permission per RULING #10405),
+ * src/game/002D5E98.c, func_002DA118 (v1.01 address; author commit b413de09,
+ * Flavius). ADAPTED: (1) `unsigned long long` / `ULL` written u64 / `UL`
+ * (64-bit either way on the EE); (2) our symbols: func_0027E018 =
+ * DrawGlyphQuad under this unit's prototype (s32 x 8, u64, u64), D_001A6480 =
+ * g_gsScreenContext as a label alias of their view, and D_001C5208 =
+ * g_mapTextureWidth+0x28, element 5 of a u64 label alias; (3) their struct
+ * types renamed. Statements and control flow are theirs. */
+/* The unit-wide DrawGlyphQuad prototype is native-only; the EE compile needs it here. */
 extern void DrawGlyphQuad(s32 x, s32 y, s32 w, s32 h, s32 u, s32 v, s32 uw, s32 uh, u64 color, u64 tex0);
-/* (end of this body's declarations) */
-/* Portable body (the previous one dropped the fade path and both 64-bit stack
- * arguments). DrawGlyphQuad reads its two trailing args as 64-bit, hence the
- * s64 colour and texture word. */
-s32 func_002DAE70(MenuWidget *obj) {
-    extern u8  g_gsScreenContext[];
-    extern s32 g_mapTextureWidth[];
-    u8 *o = (u8 *)obj;
-    s32 state = *(s32 *)(o + 0x44);
-    s64 color = (s64)0x80808080U;
-    s32 alpha;
+typedef struct GlyphScreenSize {
+    char pad[0x160];
+    short x;   /* 0x160 */
+    short y;   /* 0x162 */
+} GlyphScreenSize;
+typedef struct StreamImageWidget {
+    char pad[0x34];
+    int flags;    /* 0x34 */
+    int width;    /* 0x38 */
+    int height;   /* 0x3C */
+    char pad2[4];
+    int state;    /* 0x44 */
+    char pad3[0x10];
+    int count;    /* 0x58 */
+    int value;    /* 0x5C */
+} StreamImageWidget;
+extern GlyphScreenSize g_glyphScreenSize __asm__("g_gsScreenContext");
+extern u64 g_mapTextureWords[] __asm__("g_mapTextureWidth");
 
-    if (state < 2 || *(s32 *)(o + 0x58) < 0) {
+int func_002DAE70(StreamImageWidget *object)
+{
+    int state = object->state;
+    int shade;
+    u64 color;
+
+    if (state < 2) {
         return 0;
     }
-    if (*(s32 *)(o + 0x34) & 0x40000) {
+    if (object->count < 0) {
+        return 0;
+    }
+    if ((object->flags & 0x40000) != 0) {
         if (state == 2) {
-            alpha = *(s32 *)(o + 0x5C) << 5;
-            if (alpha > 0x80) {
-                alpha = 0x80;
+            shade = object->value << 5;
+            if (shade > 0x80) {
+                shade = 0x80;
             }
         } else {
-            alpha = (4 - *(s32 *)(o + 0x5C)) << 5;
-            if (alpha < 0) {
-                alpha = 0;
+            shade = (4 - object->value) << 5;
+            if (shade < 0) {
+                shade = 0;
             }
         }
-        color = (s64)((alpha << 24) | 0x808080);
+        color = (shade << 24) | 0x808080;
+        DrawGlyphQuad(0, 0, g_glyphScreenSize.x, g_glyphScreenSize.y, 0, 0, object->width, object->height, color, g_mapTextureWords[5]);
+    } else {
+        color = 0x80808080UL;
+        DrawGlyphQuad(0, 0, g_glyphScreenSize.x, g_glyphScreenSize.y, 0, 0, object->width, object->height, color, g_mapTextureWords[5]);
     }
-    DrawGlyphQuad(0, 0, *(s16 *)(g_gsScreenContext + 0x160),
-                  *(s16 *)(g_gsScreenContext + 0x162), 0, 0,
-                  *(s32 *)(o + 0x38), *(s32 *)(o + 0x3C), color,
-                  *(s64 *)((u8 *)g_mapTextureWidth + 0x28));
     return 0x10;
 }
-#endif
 
 /**
  * Allocate / initialise the menu background-image double buffers of the widget
@@ -4021,78 +4119,150 @@ s32 func_002DCBB0(MenuWidget *obj) {
     return 0;
 }
 
-/* 30-entry wrap-around selector input. L1/R1 (0x900) blocks unless override.
- * Cancel(0x10) requests the parent screen. X(0x40) advances, square(0x20)
- * retreats, both modulo 30 (+0x40 field); a sound plays on change. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DCBF0);
+/* 30-entry wrap-around selector input for the widget `object` (+0x40 field).
+ * With L1/R1 (0x900) pressed it returns 1 unless the override at
+ * g_menuScreenBlock+0x134 is set. Cancel (0x10) requests the current page's
+ * back page (page +0xE0) as the next page and returns 0; with no back page it
+ * returns -1 (leave the menu) unless the override is set, then 0. Otherwise X
+ * (0x40) advances and square (0x20) retreats, both modulo 30, and a menu
+ * sound (func_002DFFA0(1, 17)) plays when the value changed. Returns 0.
+ *
+ * MATCHED on the s136os arm (SN 2.95.3 v1.36 cc1plus -fopt-stack at this
+ * unit's -G8 and S136EXTRA "", so gcse on; row in tools/ee/s136os_functions.txt),
+ * spliced over S136OS_SLOT by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice drops the function. On native it is
+ * plain C. The ROM shares one %hi(D_138180) and recomputes the %lo at each
+ * pad read, which the two separate `state` blocks reproduce; the pad block
+ * and the menu block are aggregates, never -G8 small data, so cc1 splits
+ * their addresses as upstream's -G0 build does (NOTE #12163). Task #2295.
+ *
+ * Source: OpenRAC/rac2-gc-decomp @96927f872c709e13aaa0f32265bb81a5531bf7ed
+ * (GPL-3.0, adopted with the authors' permission per RULING #10405),
+ * src/game/002D5E98.c, func_002DBEC0 (v1.01 address; author commit 7cb06451,
+ * ThorpenCodes). ADAPTED: our symbols: D_00138180 = D_138180 as an int label
+ * alias (the unit declares it u8[]), D_001F2840 = g_menuScreenBlock, their
+ * D_001F2974 = g_menuScreenBlock+0x134 read through it (the EE link has no
+ * symbol at 0x1F28F4), func_002DF190 = func_002DFFA0. Statements and control flow
+ * are theirs. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002DCBF0)
+S136OS_SLOT(func_002DCBF0);
 #else
-/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
- * objdiff): sdk29 60.17% / engine96 59.54%; better arm sdk29; 31 differing
- * rows on it, class STRUCTURAL; first differing insn: ROM `lui v1,0x0  [HI16
- * D_138180]` vs `lui v1,0x0  [HI16 0x00138344]`. Not iterated in t495. */
-    /* TODO(match): functional equivalent - not byte-exact. */
-s32 func_002DCBF0(MenuWidget *obj) {
-    u8 *o = (u8 *)obj;
-    s32 pressed = g_padButtonsPressed[0];
-    s32 prev;
-    if ((pressed & 0x900) && D_001F28F4 == 0) {
-        return 1;
+extern int g_padPortWords[] __asm__("D_138180");   /* pad port 0; +0x1C4 = pressed mask */
+
+int func_002DCBF0(char *object)
+{
+    int flags;
+    {
+        int *state = g_padPortWords;
+        if (!(state[0x1C4 / 4] & 0x900))
+            goto proceed;
+        if (*(int *)(g_menuScreenBlock + 0x134) == 0)
+            return 1;
     }
-    if (pressed & 0x10) {
-        void *nxt = *(void **)((u8 *)g_pCurrentMenuScreen[0] + 0xE0);
-        if (nxt == 0 && D_001F28F4 == 0) {
-            return -1;
+proceed:
+    {
+        int *state = g_padPortWords;
+        flags = state[0x1C4 / 4];
+    }
+    if (flags & 0x10) {
+        char *root = (char *)g_menuScreenBlock;
+        int value = *(int *)(*(char **)(root + 0x14) + 0xE0);
+        int status;
+        if (value != 0) {
+            *(int *)(root + 0x18) = value;
+        } else {
+            switch (*(int *)(root + 0x134)) {
+            case 0:
+                status = -1;
+                goto finish;
+            default:
+                break;
+            }
         }
-        if (nxt == 0) nxt = g_pNextMenuScreen[0];
-        g_pNextMenuScreen[0] = nxt;
-        return 0;
+        status = 0;
+finish:
+        return status;
     }
-    prev = *(s32 *)(o + 0x40);
-    if (pressed & 0x40) {
-        *(s32 *)(o + 0x40) = (prev + 1) % 0x1e;
-    } else if (pressed & 0x20) {
-        *(s32 *)(o + 0x40) = (prev + 0x1d) % 0x1e;
-    }
-    if (*(s32 *)(o + 0x40) != prev) {
-        func_002DFFA0(1, 0x11);
+    {
+        int old = *(int *)(object + 0x40);
+        if (flags & 0x40)
+            *(int *)(object + 0x40) = (old + 1) % 30;
+        else if (flags & 0x20)
+            *(int *)(object + 0x40) = (old + 29) % 30;
+        if (*(int *)(object + 0x40) != old)
+            func_002DFFA0(1, 17);
     }
     return 0;
 }
 #endif
 
-/* 12-entry wrap-around selector (+0x54 field). L1/R1 gates; cancel requests the
- * parent; up/down d-pad (0x2040 forward, 0x8020 back) cycle mod 12 with a
- * sound on each step. Returns 0/1/-1 like the sibling selectors. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DCCC8);
+/* 12-entry wrap-around selector input for the widget `object` (+0x54 field).
+ * L1/R1 (0x900) and cancel (0x10) behave as in func_002DCBF0 (returns 1, or
+ * 0 / -1). Otherwise 0x2040 steps forward and 0x8020 back, modulo 12, each
+ * with the menu sound func_002DFFA0(1, 17). Returns 0.
+ *
+ * MATCHED on the s136os arm (SN 2.95.3 v1.36 cc1plus -fopt-stack at this
+ * unit's -G8 and S136EXTRA "", so gcse on; row in tools/ee/s136os_functions.txt),
+ * spliced over S136OS_SLOT by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice drops the function. On native it is
+ * plain C. The ROM shares one %hi(D_138180) and recomputes the %lo at each
+ * pad read, which the two separate `state` blocks reproduce; the pad block
+ * and the menu block are aggregates, never -G8 small data, so cc1 splits
+ * their addresses as upstream's -G0 build does (NOTE #12163). Task #2295.
+ *
+ * Source: OpenRAC/rac2-gc-decomp @96927f872c709e13aaa0f32265bb81a5531bf7ed
+ * (GPL-3.0, adopted with the authors' permission per RULING #10405),
+ * src/game/002D5E98.c, func_002DBF98 (v1.01 address; author commit 331fbb0a,
+ * ThorpenCodes). ADAPTED: our symbols: D_00138180 = D_138180 as an int label
+ * alias (the unit declares it u8[]), D_001F2840 = g_menuScreenBlock, their
+ * D_001F2974 = g_menuScreenBlock+0x134 read through it (the EE link has no
+ * symbol at 0x1F28F4), func_002DF190 = func_002DFFA0. Statements and control flow
+ * are theirs. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002DCCC8)
+S136OS_SLOT(func_002DCCC8);
 #else
-/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
- * objdiff): sdk29 65.31% / engine96 49.56%; better arm sdk29; 31 differing
- * rows on it, class STRUCTURAL; first differing insn: ROM `lui v1,0x0  [HI16
- * D_138180]` vs `lui v1,0x0  [HI16 0x00138344]`. Not iterated in t495. */
-    /* TODO(match): functional equivalent - not byte-exact. */
-s32 func_002DCCC8(MenuWidget *obj) {
-    u8 *o = (u8 *)obj;
-    s32 pressed = g_padButtonsPressed[0];
-    if ((pressed & 0x900) && D_001F28F4 == 0) {
-        return 1;
+extern int g_padPortWords[] __asm__("D_138180");   /* pad port 0; +0x1C4 = pressed mask */
+
+int func_002DCCC8(char *object)
+{
+    int flags;
+    {
+        int *state = g_padPortWords;
+        if (!(state[0x1C4 / 4] & 0x900))
+            goto proceed;
+        if (*(int *)(g_menuScreenBlock + 0x134) == 0)
+            return 1;
     }
-    if (pressed & 0x10) {
-        void *nxt = *(void **)((u8 *)g_pCurrentMenuScreen[0] + 0xE0);
-        if (nxt == 0 && D_001F28F4 == 0) {
-            return -1;
+proceed:
+    {
+        int *state = g_padPortWords;
+        flags = state[0x1C4 / 4];
+    }
+    if (flags & 0x10) {
+        char *root = (char *)g_menuScreenBlock;
+        int value = *(int *)(*(char **)(root + 0x14) + 0xE0);
+        int status;
+        if (value != 0) {
+            *(int *)(root + 0x18) = value;
+        } else {
+            switch (*(int *)(root + 0x134)) {
+            case 0:
+                status = -1;
+                goto finish;
+            default:
+                break;
+            }
         }
-        if (nxt == 0) nxt = g_pNextMenuScreen[0];
-        g_pNextMenuScreen[0] = nxt;
-        return 0;
+        status = 0;
+finish:
+        return status;
     }
-    if (pressed & 0x2040) {
-        *(s32 *)(o + 0x54) = (*(s32 *)(o + 0x54) + 1) % 0xc;
-        func_002DFFA0(1, 0x11);
-    } else if (pressed & 0x8020) {
-        *(s32 *)(o + 0x54) = (*(s32 *)(o + 0x54) + 0xb) % 0xc;
-        func_002DFFA0(1, 0x11);
+    if (flags & 0x2040) {
+        *(int *)(object + 0x54) = (*(int *)(object + 0x54) + 1) % 12;
+        func_002DFFA0(1, 17);
+    } else if (flags & 0x8020) {
+        *(int *)(object + 0x54) = (*(int *)(object + 0x54) + 11) % 12;
+        func_002DFFA0(1, 17);
     }
     return 0;
 }

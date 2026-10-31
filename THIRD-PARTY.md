@@ -98,11 +98,11 @@ The GPL-2.0-or-later note in the section above applies to these bodies too.
 
 ### OpenRAC rac2-gc-decomp at 96927f87 (GPL-3.0)
 
-Nineteen C function bodies are taken from OpenRAC's `rac2-gc-decomp`,
+Twenty-five C function bodies are taken from OpenRAC's `rac2-gc-decomp`,
 <https://github.com/OpenRAC/rac2-gc-decomp> at commit
 `96927f872c709e13aaa0f32265bb81a5531bf7ed` (root `LICENSE`: GNU General Public
 License, version 3), with the authors' permission (RULING #10405), tasks #2230, #2232,
-#2234, #2235, #2236, #2248, #2251, #2252, #2261, #2262 and #2272. Each is adapted, with every respelling named in the
+#2234, #2235, #2236, #2248, #2251, #2252, #2261, #2262, #2272 and #2295. Each is adapted, with every respelling named in the
 function's `Source:` line.
 
 | Here | Upstream file | Upstream name |
@@ -126,6 +126,12 @@ function's `Source:` line.
 | `func_002E0010` in `going-decompiled/src/usa/text/1DFF80.cpp` (adapted: symbol spellings ours, their element struct named `LevelSelectEntry`), task #2262 | `src/game/002DF1B8-g8.c` | `func_002DF1F8` (v1.01 address) |
 | `UpgradeWeaponToMax` in `going-decompiled/src/usa/text/188858.c` (adapted: signature, local names, symbol spellings and types ours; control flow theirs), task #2248 | `src/game/002887B0.c` | `func_002887B0` (v1.01 address) |
 | `func_002897B8` in `going-decompiled/src/usa/text/188858.c` (adapted: the subtitle-state symbol, struct and field names are ours), task #2248 | `src/game/00288D88.c` | `func_00288D90` (v1.01 address) |
+| `func_002D7AE0` in `going-decompiled/src/usa/text/1D54C0.cpp` (adapted: our symbols as label aliases of their struct views, their byte `D_001F291B` written as the menu view's field at the same address, `ROM_SPLIT` on the file-load view), task #2295 | `src/game/002D5E98.c` | `func_002D6E78` (v1.01 address) |
+| `func_002D8DD0` in `going-decompiled/src/usa/text/1D54C0.cpp` (adapted: our symbols, two as label aliases with their types; `MACRO_ADDR` dropped for the unit's `.extern , 16`), task #2295 | `src/game/002D8120.c` | `func_002D8120` (v1.01 address) |
+| `func_002DA358` in `going-decompiled/src/usa/text/1D54C0.cpp` (adapted: `unsigned long long` written `unsigned long`, 64-bit on the EE; our symbols and callee prototype; its switch table bound to the ROM's by `tools/ee/jtbl_bind.sh`), task #2295 | `src/game/002D5E98.c` | `func_002D9600` (v1.01 address) |
+| `func_002DAE70` in `going-decompiled/src/usa/text/1D54C0.cpp` (adapted: `unsigned long long` written `u64`; our symbols, two as label aliases, and our `DrawGlyphQuad` prototype), task #2295 | `src/game/002D5E98.c` | `func_002DA118` (v1.01 address) |
+| `func_002DCBF0` in `going-decompiled/src/usa/text/1D54C0.cpp` (adapted: our symbols, the pad block as an `int` label alias, their `D_001F2974` read as `g_menuScreenBlock+0x134`), task #2295 | `src/game/002D5E98.c` | `func_002DBEC0` (v1.01 address) |
+| `func_002DCCC8` in `going-decompiled/src/usa/text/1D54C0.cpp` (adapted: as `func_002DCBF0`), task #2295 | `src/game/002D5E98.c` | `func_002DBF98` (v1.01 address) |
 
 The GPL-2.0-or-later note in the section "OpenRAC rac2-gc-decomp (GPL-3.0)" above applies to these bodies too.
 

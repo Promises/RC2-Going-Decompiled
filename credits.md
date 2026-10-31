@@ -360,6 +360,53 @@
     switch table is bound to the ROM's `jtbl_0026CC80_text` by
     `tools/ee/jtbl_bind.sh` (task #2272).
 
+- **OpenRAC — `rac2-gc-decomp`, commit `96927f87`, text/1D54C0 Window W bodies** (GPL-3.0)
+  <https://github.com/OpenRAC/rac2-gc-decomp> at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`
+
+  Six engine C bodies in text/1D54C0, adopted with the authors' permission
+  (held by the operator, RULING #10405) and re-checked byte-exact against our
+  v2.00 ROM, five on the s136os arm and one on the plain 2.9 arm (task #2295,
+  from re-audit NOTE #12163 / FACT #12162). Upstream compiles these files at
+  -G0; in our -G8 unit the same addressing comes from aggregate views,
+  `ROM_SPLIT` and the unit's `.extern , 16` model. Contributors:
+  ThorpenCodes, Flavius and Louis-Philippe Le Sieur. Each doc comment carries
+  the `Source:` line, which names every change beyond extern spellings.
+
+  Used so far:
+  - **`func_002D7AE0`** (`0x002D7AE0`, galactic-map streaming-slot teardown)
+    in `going-decompiled/src/usa/text/1D54C0.cpp`, on the s136os arm, from
+    `src/game/002D5E98.c` (`func_002D6E78`, v1.01 address, author commit
+    `66978bb7`, ThorpenCodes). ADAPTED: our symbols as label aliases of their
+    struct views (`g_fileLoadVoiceState`, `g_mapVertexData`,
+    `g_menuScreenBlock`, `StopFileLoad`), their byte `D_001F291B` written as
+    the menu view's field at the same address, and `ROM_SPLIT` (RULING #8620)
+    on the file-load view.
+  - **`func_002D8DD0`** (`0x002D8DD0`, the planet-row rebuild), on the s136os
+    arm, from `src/game/002D8120.c` (`func_002D8120`, v1.01 address, author
+    commit `8daa0d46`, Flavius). ADAPTED: our symbols (`D_1A7C0C`,
+    `D_18D0E8`, and `D_254E48` / `D_0025AD90` as label aliases with their
+    types); `MACRO_ADDR` dropped for the unit's `.extern D_1A7C0C, 16`.
+  - **`func_002DA358`** (`0x002DA358`, the per-frame level-entry scan), on the
+    s136os arm, from `src/game/002D5E98.c` (`func_002D9600`, v1.01 address,
+    author commit `e54ed6d5`, Louis-Philippe Le Sieur). Its switch table is
+    bound to the ROM's `jtbl_0026CDA0_text` by `tools/ee/jtbl_bind.sh`.
+    ADAPTED: `unsigned long long` / `ULL` written `unsigned long` / `UL`
+    (64-bit on the EE; SN 1.36 cc1 makes `long long` 128-bit), our
+    `D_261900`, and `func_002DFF68` under this unit's prototype.
+  - **`func_002DAE70`** (`0x002DAE70`, the streamed full-screen image draw),
+    on the plain 2.9 arm, not s136os, from `src/game/002D5E98.c`
+    (`func_002DA118`, v1.01 address, author commit `b413de09`, Flavius).
+    ADAPTED: `unsigned long long` written `u64`, our `DrawGlyphQuad`
+    prototype, `g_gsScreenContext` and `g_mapTextureWidth` (its `+0x28`
+    word) as label aliases.
+  - **`func_002DCBF0`** (`0x002DCBF0`, a 30-entry selector input) and
+    **`func_002DCCC8`** (`0x002DCCC8`, a 12-entry selector input), on the
+    s136os arm, from `src/game/002D5E98.c` (`func_002DBEC0` and
+    `func_002DBF98`, v1.01 addresses, author commits `7cb06451` and
+    `331fbb0a`, ThorpenCodes). ADAPTED: the pad block `D_138180` as an `int`
+    label alias, their `D_001F2974` read as `g_menuScreenBlock+0x134`, and
+    `func_002DFFA0`.
+
 - **OpenRAC — `rac2-gc-decomp`, commit `96927f87`, libcdvd/libgraph/libmpeg bodies** (GPL-3.0)
   <https://github.com/OpenRAC/rac2-gc-decomp> at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`
 
