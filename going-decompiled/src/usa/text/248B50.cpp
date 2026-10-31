@@ -36,7 +36,10 @@
  *
  * The matcher builds THIS unit at -O2 -G8 -fno-gcse (per-unit GFLAG/CC1EXTRA
  * override in tools/ee/objdiff_build.sh / diff.sh / build.sh) — the later-SN-
- * cc1 TU model shared by the other gameplay-text units.
+ * cc1 TU model shared by the other gameplay-text units. The s136os arm (rows in
+ * tools/ee/s136os_functions.txt) compiles at the -O2 default instead
+ * (S136EXTRA="", gcse on; RULING #9491 shape, task #2306, FACT #12175): every
+ * row it held when unpinned was measured byte- and reloc-identical either way.
  *
  * SAVE-LAYOUT WALL: the larger methods here save two or more callee GPRs at
  * 8-byte slot spacing (the pinned cc1 reserves 16 bytes/save) and stay

@@ -109,7 +109,7 @@ if [ -d "$SRC" ]; then
       */usa/text/1A8180.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse -fno-strict-aliasing"; S136EXTRA="-fno-strict-aliasing";; # game-state cluster sub-TU. S136EXTRA: the s136os arm drops -fno-gcse only and keeps -fno-strict-aliasing (RULING #9336, FACTs #9333/#9334); the 2.9 compile keeps both
       */usa/text/250080.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse"; S136EXTRA="";; # segment-tail FMV/debug-stub sub-TU. S136EXTRA: the s136os arm compiles at the -O2 default (RULING #9491 shape, task #2218, FACT #11295); the 2.9 compile keeps -fno-gcse
       */usa/text/16E980.c) GFLAG="-G8";; # 16E980 head camera/screen-FX unit (carve pick #6; plain -G8, original keeps the %hi CSE)
-      */usa/text/248B50.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # GUI sub-chunk 1 (carve pick #3a)
+      */usa/text/248B50.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse"; S136EXTRA="";; # GUI sub-chunk 1 (carve pick #3a). S136EXTRA: the s136os arm compiles at the -O2 default (RULING #9491 shape, task #2306, FACT #12175); the 2.9 compile keeps -fno-gcse
       */usa/text/235FE8.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse -fno-strict-aliasing";; # GUI widget-method band (carve pick #3b)
       */usa/text/1CA080.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse"; S136EXTRA="-fstrict-aliasing";; # menu-screens A (carve pick #5). S136EXTRA: RULING #9235 (task #1540) — the s136os arm adds -fstrict-aliasing (func_002D33A8's store/lui order); the 2.9 compile is unchanged; RULING #9491 (task #1685) drops -fno-gcse from the s136os arm
       */usa/text/1D54C0.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse"; S136EXTRA="";; # menu-screens B (carve pick #5). S136EXTRA: the s136os arm compiles at the -O2 default (RULING #9491 shape, task #2252, FACT #10232); the 2.9 compile keeps -fno-gcse
