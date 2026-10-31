@@ -729,3 +729,5 @@ usa text/1DFF80 func_002E07F8
 usa text/250080 func_00350F88
 usa text/250080 func_003522C0
 usa text/16E980 TestCameraTakeover
+usa text/1CA080 DrawExtrasMenu
+usa text/1CA080 DrawPlanetWarpMenu

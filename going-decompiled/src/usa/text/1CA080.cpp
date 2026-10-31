@@ -70,6 +70,10 @@ __asm__(".extern D_1ABA90, 16");
 __asm__(".extern D_138180, 16");
 /* DrawInsomniacMuseumMenu: cc1-small D_1ABDA8[2], assembler-absolute (task #2288). */
 __asm__(".extern D_1ABDA8, 16");
+/* DrawExtrasMenu / DrawPlanetWarpMenu: cc1-small D_1ABD80[2] / D_1ABD98[4],
+ * assembler-absolute (task #2402). */
+__asm__(".extern D_1ABD80, 16");
+__asm__(".extern D_1ABD98, 16");
 /* func_002CDEB0 cheat-flag mirror: source byte flags + s16 menu mirrors. */
 __asm__(".extern D_1A7BD1, 16");
 __asm__(".extern D_1A7BD2, 16");
@@ -4400,98 +4404,126 @@ s32 UpdateExtrasMenuInput(void) {
 }
 #endif
 
-/* DrawExtrasMenu: renders the Extras (5-item) menu screen — same chrome as
- * DrawPlanetWarpMenu. Opens a 2D batch, blits four title glyphs (atlas
- * g_guiInstance+0x8710, codepoints 0xD7/0xD8/0xD9/0xDD, colors 0x60442D00/0x60241700/
- * 0x55F0C070/0x55F0C070, centred at row D_1ABA5C, scale 1.0, y-fudge, v38 0.0); draws
- * three header strings (0x3095 @0xB3,0x1B; 0x2BE5 @0x161,0x177; 0x2C0B @0xB5,0x177;
- * color 0x80F0F0F0); draws the paging chrome; then a five-slot cursor-relative
- * carousel (cursor g_extrasMenuCursor, 5 items). Each slot i shows item at wrapped
- * index (i + cursor - 2) mod 5, labelled with the localized D_1ABD80[idx] (stride 4,
- * low halfword) when enabled (D_1ABA48[idx] != 0) else 0x2C56; slot color fades by
- * distance from centre (edges 0x10/mid 0x50/centre 0x70 F0F0F0), and the centre slot
- * gets a text-width selection box.
- * (func_003017F8 takes 2 ints + 5 floats; it reads no $a2/$a3 — FACT #8918.)
- * Wall (cc1 2.9 arm): 8-byte-packed-save (6 GPRs) + FP-arg scheduling — later cc1 save-slot packing
- * not reproduced. Preserved as portable C.
- * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
- * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
- * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
- * property and was measured false as the reason this member stays unmatched (FACT #9873).
- * Residual: the saved-register set; the rest UNMEASURED. */
-/* s136os arm, measured by task #2117 (SN 1.36 -O2 -G8 -fstrict-aliasing -fopt-stack, gcse on):
- * this #else body builds 206 words against the ROM's 216 (SHORTER), so the splice refuses it on
- * LENGTH. Residual class: length/structure, not yet attributed. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawExtrasMenu);
+/* DrawExtrasMenu: renders the Extras (5-item) menu screen, the same chrome as
+ * DrawPlanetWarpMenu. Opens a 2D batch and blits four title glyphs (atlas
+ * g_guiInstance+0x8710, codepoints 0xD7/0xD8/0xD9/0xDD, colours 0x60442D00/
+ * 0x60241700/0x55F0C070/0x55F0C070, centred at row D_1ABA5C, scale 1.0, the
+ * global y-fudge, last argument 0.0). Draws three header strings (0x3095
+ * @0xB3,0x1B; 0x2BE5 @0x161,0x177; 0x2C0B @0xB5,0x177; colour 0x80F0F0F0) and
+ * the paging chrome, then a five-slot carousel around g_extrasMenuCursor. Slot
+ * i shows item (i + cursor - 2) mod 5, labelled with the localized low halfword
+ * of D_1ABD80[idx] when the item is enabled (D_1ABA48[idx] != 0), else 0x2C56.
+ * The slot colour fades with distance from the centre (edges 0x10, middle 0x50,
+ * centre 0x70, each over F0F0F0), and the centre slot also gets a text-width
+ * selection box. Takes nothing; returns 0.
+ * func_003017F8 takes 2 ints + 5 floats and reads no $a2/$a3 (FACT #8918).
+ *
+ * Compiled ALONE by the s136os arm (tools/ee/s136os_functions.txt), on the
+ * glyph template of DrawInsomniacMuseumMenu (g_guiInstance re-read per glyph,
+ * the 0.0 last argument as a `tilt` local held in $f20). Devices, each
+ * load-bearing on the solo s136 probe (task #2402; words differing out of 216
+ * when the device alone is removed):
+ *  - EE_REG("$f14") on the per-glyph 1.0 `scale` (RULING #8598): the ROM
+ *    rematerialises 1.0 into $f14 for every call (121 without).
+ *  - D_1ABA48 and D_1ABD80 declared cc1-small (`[2]`, an undersized EE-only
+ *    extern; the native arm declares the true five entries, RULING #12316),
+ *    D_1ABD80 with the unit-level `.extern D_1ABD80, 16`: the ROM forms the
+ *    enabled table as `addiu $20,$28,%gp_rel(D_1ABA48)` and rebuilds the label
+ *    table address in the loop with the assembler's one-register `la`
+ *    (209 / 212 without the sizes, 59 without the .extern).
+ *  - the `idx >= 5` wrap written as `dn` pinned to $3 and `lt` to $5 (RULING
+ *    #8598) with an EMPTY operand-tied fence ordering lt after dn (RULING
+ *    #8483): the ROM's `addiu $3,$2,-5; slti $5,$2,5; movz $2,$3,$5` (15
+ *    without the lt pin, 2 without the dn pin or without the fence).
+ *  - the loop test as a statement expression whose result is pinned to $3
+ *    (RULING #8598): the ROM's `slti $3,$18,5` (2 without).
+ * Without the loop-level devices loop.c's rerun pass hoists the -1 call flag and
+ * the wrap constants into callee-saved registers (NOTE #12181). These levers
+ * are insn-count fragile in the sense of RULING #12316: any change in the loop
+ * body can move the allocation they steer. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_DrawExtrasMenu)
+S136OS_SLOT(DrawExtrasMenu);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern void DrawMenuItemSelectionBox(s32 width, s32 color);
 extern s32 g_screenWidth;
-/* (end of this body's declarations) */
-/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 36.23% -> STRUCTURAL,
- * first differing row @0: ROM `addiu sp,sp,-64` vs `lui v0,0x0  [HI16 0x001A7340]`;
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 36.41% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-64` vs `addiu sp,sp,-208`. */
 extern void func_003017F8(s32 handle, s32 color0, f32 px, f32 py, f32 sx, f32 syg, f32 v38);
 extern s32 GuiFontAtlasLookupGlyph(void *atlas, s32 codepoint);
 extern void DrawMenuPagingChrome(void);
 extern s32 func_001157AC(const char *s);          /* SDK strlen */
 extern s32 func_0027F818(const char *str, s32 len); /* menu text pixel width */
 extern void func_00280250(s32 x, s32 y, u32 color, const char *str, s32 flag);
-extern s32 g_extrasMenuCursor;   /* extras carousel cursor 0..4 */
-extern s32 D_1ABA48[];           /* per-item enabled flags */
-extern u8 D_1ABD80[];            /* per-item label string ids (stride 4) */
-extern s32 D_1ABA5C;             /* title glyph row (int, converted to float) */
 extern s32 g_swapGadgetItemIndex; /* +0x8E holds the global sprite y-fudge (f32) */
+/* (end of this body's declarations) */
+extern s32 g_extrasMenuCursor;   /* extras carousel cursor 0..4 */
+#ifndef TARGET_NATIVE
+extern s32 D_1ABA48[2];          /* per-item enabled flags; cc1-small (see above) */
+extern s32 D_1ABD80[2];          /* per-item label string ids; cc1-small (see above) */
+#else
+extern s32 D_1ABA48[5];          /* true size: five per-item enabled flags (RULING #12316) */
+extern s32 D_1ABD80[5];          /* true size: five label words, string id in the low halfword */
+#endif
+extern s32 D_1ABA5C;             /* title glyph row (int, converted to float) */
 s32 DrawExtrasMenu(void) {
-    void *atlas = g_guiInstance + 0x8710;
-    f32 centerX = (f32)(g_screenWidth / 2);
-    f32 row = (f32)D_1ABA5C;
-    f32 yfudge = *(f32 *)((u8 *)&g_swapGadgetItemIndex + 0x8E);
-    s32 cursor;
+    f32 tilt;
+    register f32 scale EE_REG("$f14");
+    s32 glyph;
     s32 i;
     s32 y;
 
     Begin2dDrawBatch(0);
-    /* four title glyphs (v38 = 0.0) */
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xD7), 0x60442D00,
-                  centerX, row, 1.0f, yfudge, 0.0f);
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xD8), 0x60241700,
-                  centerX, row, 1.0f, yfudge, 0.0f);
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xD9), 0x55F0C070,
-                  centerX, row, 1.0f, yfudge, 0.0f);
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xDD), 0x55F0C070,
-                  centerX, row, 1.0f, yfudge, 0.0f);
+    tilt = 0.0f;
+    glyph = GuiFontAtlasLookupGlyph(g_guiInstance + 0x8710, 0xD7);
+    scale = 1.0f;
+    func_003017F8(glyph, 0x60442D00, (f32)(g_screenWidth / 2), (f32)D_1ABA5C, scale,
+                  *(f32 *)((u8 *)&g_swapGadgetItemIndex + 0x8E), tilt);
+    glyph = GuiFontAtlasLookupGlyph(g_guiInstance + 0x8710, 0xD8);
+    scale = 1.0f;
+    func_003017F8(glyph, 0x60241700, (f32)(g_screenWidth / 2), (f32)D_1ABA5C, scale,
+                  *(f32 *)((u8 *)&g_swapGadgetItemIndex + 0x8E), tilt);
+    glyph = GuiFontAtlasLookupGlyph(g_guiInstance + 0x8710, 0xD9);
+    scale = 1.0f;
+    func_003017F8(glyph, 0x55F0C070, (f32)(g_screenWidth / 2), (f32)D_1ABA5C, scale,
+                  *(f32 *)((u8 *)&g_swapGadgetItemIndex + 0x8E), tilt);
+    glyph = GuiFontAtlasLookupGlyph(g_guiInstance + 0x8710, 0xDD);
+    scale = 1.0f;
+    func_003017F8(glyph, 0x55F0C070, (f32)(g_screenWidth / 2), (f32)D_1ABA5C, scale,
+                  *(f32 *)((u8 *)&g_swapGadgetItemIndex + 0x8E), tilt);
     /* three header strings */
     func_002801B8(0xB3, 0x1B, 0x80F0F0F0, GetLocalizedString(0x3095), -1);
     func_002801B8(0x161, 0x177, 0x80F0F0F0, GetLocalizedString(0x2BE5), -1);
     func_002801B8(0xB5, 0x177, 0x80F0F0F0, GetLocalizedString(0x2C0B), -1);
     DrawMenuPagingChrome();
     /* five cursor-relative carousel slots */
-    cursor = g_extrasMenuCursor;
     y = 0x112;
-    for (i = 0; i < 5; i++) {
-        s32 idx = i + cursor - 2;
+    i = 0;
+    do {
+        s32 idx = i + g_extrasMenuCursor - 2;
         s32 strId;
         char *str;
         u32 color;
         if (idx < 0) idx += 5;
-        if (idx >= 5) idx -= 5;
-        strId = (D_1ABA48[idx] == 0) ? 0x2C56 : *(s16 *)(D_1ABD80 + idx * 4);
+        {   /* if (idx >= 5) idx -= 5; with the ROM's registers (see above) */
+            register s32 dn EE_REG("$3") = idx - 5;
+            register s32 lt EE_REG("$5") = idx < 5;
+            __asm__("" : "+r"(lt) : "r"(dn));
+            if (lt == 0) idx = dn;
+        }
+        strId = (D_1ABA48[idx] == 0) ? 0x2C56 : *(s16 *)((u8 *)D_1ABD80 + idx * 4);
         str = GetLocalizedString(strId);
         if (i == 0 || i == 4) {
             color = 0x10F0F0F0;
         } else if (i == 1 || i == 3) {
             color = 0x50F0F0F0;
-        } else {  /* i == 2: focused slot gets a text-width selection box */
+        } else {  /* i == 2: the focused slot gets a text-width selection box */
             color = 0x70F0F0F0;
             DrawMenuItemSelectionBox(func_0027F818(str, func_001157AC(str)), 0x70F0F0F0);
         }
         func_00280250(g_screenWidth / 2, y, color, str, -1);
         y += 0x14;
-    }
+        i++;
+    } while (({ register s32 more EE_REG("$3") = i < 5; more; }));  /* see above */
     End2dDrawBatch();
     return 0;
 }
@@ -4886,78 +4918,95 @@ done:
 }
 #endif
 
-/* DrawPlanetWarpMenu: renders the planet-warp menu screen. Opens a 2D batch, blits
- * four title glyphs (atlas g_guiInstance+0x8710, codepoints 0xD7/0xD8/0xD9/0xDD,
- * colors 0x60442D00/0x60241700/0x55F0C070/0x55F0C070, centred at row D_1ABA78, scale
- * 1.0, y-fudge, v38 0.0); draws three header strings (0x3098 @0xB3,0x1B; 0x2BE5
- * @0x161,0x177; 0x2C0B @0xB5,0x177; color 0x80F0F0F0); draws the L1/R1 paging chrome;
- * then draws a five-slot cursor-relative carousel. Each visible slot i shows the
- * planet at wrapped index (i + g_planetWarpCursor - 2) mod 8, labelled with the
- * localized D_1ABD98[idx] when enabled (g_planetWarpEnabled[idx] != 0) else 0x2C56;
- * slot color fades by distance from centre (edges 0x10F0F0F0, mid 0x50F0F0F0, centre
- * 0x70F0F0F0), and the centre slot also gets a text-width-sized selection box.
- * (func_003017F8 takes 2 ints + 5 floats; it reads no $a2/$a3 — FACT #8918.)
- * Wall (cc1 2.9 arm): 8-byte-packed-save (6 GPRs) + FP-arg scheduling — later cc1 save-slot packing
- * not reproduced. Preserved as portable C.
- * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
- * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
- * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
- * property and was measured false as the reason this member stays unmatched (FACT #9873).
- * Residual: the saved-register set; the rest UNMEASURED. */
-/* s136os arm, measured by task #2117 (SN 1.36 -O2 -G8 -fstrict-aliasing -fopt-stack, gcse on):
- * this #else body builds 204 words against the ROM's 217 (SHORTER), so the splice refuses it on
- * LENGTH. Residual class: length/structure, not yet attributed. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawPlanetWarpMenu);
+/* DrawPlanetWarpMenu: renders the planet-warp menu screen. Opens a 2D batch and
+ * blits four title glyphs (atlas g_guiInstance+0x8710, codepoints 0xD7/0xD8/
+ * 0xD9/0xDD, colours 0x60442D00/0x60241700/0x55F0C070/0x55F0C070, centred at
+ * row D_1ABA78, scale 1.0, the global y-fudge, last argument 0.0). Draws three
+ * header strings (0x3098 @0xB3,0x1B; 0x2BE5 @0x161,0x177; 0x2C0B @0xB5,0x177;
+ * colour 0x80F0F0F0) and the L1/R1 paging chrome, then a five-slot carousel
+ * around g_planetWarpCursor. Slot i shows planet (i + cursor - 2) mod 8,
+ * labelled with the localized D_1ABD98[idx] when enabled
+ * (g_planetWarpEnabled[idx] != 0), else 0x2C56. The slot colour fades with
+ * distance from the centre (edges 0x10F0F0F0, middle 0x50F0F0F0, centre
+ * 0x70F0F0F0), and the centre slot also gets a text-width selection box.
+ * Takes nothing; returns 0.
+ * func_003017F8 takes 2 ints + 5 floats and reads no $a2/$a3 (FACT #8918).
+ *
+ * Compiled ALONE by the s136os arm (tools/ee/s136os_functions.txt), on
+ * DrawExtrasMenu's template. Devices, each load-bearing on the solo s136 probe
+ * (task #2402; words differing out of 217 when the device alone is removed):
+ *  - EE_REG("$f14") on the per-glyph 1.0 `scale` (RULING #8598; 121 without).
+ *  - D_1ABD98 declared cc1-small (`[4]`, an undersized EE-only extern; the
+ *    native arm declares the true eight entries, RULING #12316) with the
+ *    unit-level `.extern D_1ABD98, 16`: the ROM rebuilds the label table
+ *    address in the loop with the assembler's one-register `la` (61 without
+ *    the .extern; NOTE #12331 measured 212 with `[]`).
+ *  - an EMPTY untied volatile fence before the item draw (RULING #8483): it
+ *    keeps loop.c from hoisting the call's -1 flag and puts `y += 0x14` in the
+ *    call's delay slot, so the loop-closing branch steals the cursor load as
+ *    the ROM's does (208 without).
+ *  - the loop test as a statement expression whose result is pinned to $3
+ *    (RULING #8598): the ROM's `slti $3,$18,5` (208 without).
+ * These levers are insn-count fragile in the sense of RULING #12316: any
+ * change in the loop body can move the allocation they steer. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_DrawPlanetWarpMenu)
+S136OS_SLOT(DrawPlanetWarpMenu);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern void DrawMenuItemSelectionBox(s32 width, s32 color);
 extern s32 g_screenWidth;
-extern u8 g_planetWarpEnabled;
-/* (end of this body's declarations) */
-/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 33.46% -> STRUCTURAL,
- * first differing row @0: ROM `addiu sp,sp,-64` vs `lui v0,0x0  [HI16 0x001A7340]`;
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 38.55% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-64` vs `addiu sp,sp,-208`. */
 extern void func_003017F8(s32 handle, s32 color0, f32 px, f32 py, f32 sx, f32 syg, f32 v38);
 extern s32 GuiFontAtlasLookupGlyph(void *atlas, s32 codepoint);
 extern void DrawMenuPagingChrome(void);
 extern s32 func_001157AC(const char *s);          /* SDK strlen */
 extern s32 func_0027F818(const char *str, s32 len); /* menu text pixel width */
 extern void func_00280250(s32 x, s32 y, u32 color, const char *str, s32 flag);
-extern s16 D_1ABD98[];           /* per-planet label string ids */
-extern s32 D_1ABA78;             /* title glyph row (int, converted to float) */
 extern s32 g_swapGadgetItemIndex; /* +0x8E holds the global sprite y-fudge (f32) */
+extern u8 g_planetWarpEnabled;
+/* (end of this body's declarations) */
+extern s32 g_planetWarpCursor;   /* planet-warp carousel cursor 0..7 */
+#ifndef TARGET_NATIVE
+extern s16 D_1ABD98[4];          /* per-planet label string ids; cc1-small (see above) */
+#else
+extern s16 D_1ABD98[8];          /* true size: eight per-planet label string ids (RULING #12316) */
+#endif
+extern s32 D_1ABA78;             /* title glyph row (int, converted to float) */
 s32 DrawPlanetWarpMenu(void) {
-    void *atlas = g_guiInstance + 0x8710;
-    f32 centerX = (f32)(g_screenWidth / 2);
-    f32 row = (f32)D_1ABA78;
-    f32 yfudge = *(f32 *)((u8 *)&g_swapGadgetItemIndex + 0x8E);
-    s32 cursor;
+    f32 tilt;
+    register f32 scale EE_REG("$f14");
+    s32 glyph;
     s32 i;
     s32 y;
 
     Begin2dDrawBatch(0);
-    /* four title glyphs (v38 = 0.0) */
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xD7), 0x60442D00,
-                  centerX, row, 1.0f, yfudge, 0.0f);
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xD8), 0x60241700,
-                  centerX, row, 1.0f, yfudge, 0.0f);
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xD9), 0x55F0C070,
-                  centerX, row, 1.0f, yfudge, 0.0f);
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xDD), 0x55F0C070,
-                  centerX, row, 1.0f, yfudge, 0.0f);
+    tilt = 0.0f;
+    glyph = GuiFontAtlasLookupGlyph(g_guiInstance + 0x8710, 0xD7);
+    scale = 1.0f;
+    func_003017F8(glyph, 0x60442D00, (f32)(g_screenWidth / 2), (f32)D_1ABA78, scale,
+                  *(f32 *)((u8 *)&g_swapGadgetItemIndex + 0x8E), tilt);
+    glyph = GuiFontAtlasLookupGlyph(g_guiInstance + 0x8710, 0xD8);
+    scale = 1.0f;
+    func_003017F8(glyph, 0x60241700, (f32)(g_screenWidth / 2), (f32)D_1ABA78, scale,
+                  *(f32 *)((u8 *)&g_swapGadgetItemIndex + 0x8E), tilt);
+    glyph = GuiFontAtlasLookupGlyph(g_guiInstance + 0x8710, 0xD9);
+    scale = 1.0f;
+    func_003017F8(glyph, 0x55F0C070, (f32)(g_screenWidth / 2), (f32)D_1ABA78, scale,
+                  *(f32 *)((u8 *)&g_swapGadgetItemIndex + 0x8E), tilt);
+    glyph = GuiFontAtlasLookupGlyph(g_guiInstance + 0x8710, 0xDD);
+    scale = 1.0f;
+    func_003017F8(glyph, 0x55F0C070, (f32)(g_screenWidth / 2), (f32)D_1ABA78, scale,
+                  *(f32 *)((u8 *)&g_swapGadgetItemIndex + 0x8E), tilt);
     /* three header strings */
     func_002801B8(0xB3, 0x1B, 0x80F0F0F0, GetLocalizedString(0x3098), -1);
     func_002801B8(0x161, 0x177, 0x80F0F0F0, GetLocalizedString(0x2BE5), -1);
     func_002801B8(0xB5, 0x177, 0x80F0F0F0, GetLocalizedString(0x2C0B), -1);
     DrawMenuPagingChrome();
     /* five cursor-relative carousel slots */
-    cursor = g_planetWarpCursor;
     y = 0x112;
-    for (i = 0; i < 5; i++) {
-        s32 idx = i + cursor - 2;
+    i = 0;
+    do {
+        s32 idx = i + g_planetWarpCursor - 2;
         s32 strId;
         char *str;
         u32 color;
@@ -4973,9 +5022,11 @@ s32 DrawPlanetWarpMenu(void) {
             color = 0x70F0F0F0;
             DrawMenuItemSelectionBox(func_0027F818(str, func_001157AC(str)), 0x70F0F0F0);
         }
+        __asm__ __volatile__("");   /* anti-hoist / scheduling fence (see above) */
         func_00280250(g_screenWidth / 2, y, color, str, -1);
         y += 0x14;
-    }
+        i++;
+    } while (({ register s32 more EE_REG("$3") = i < 5; more; }));  /* see above */
     End2dDrawBatch();
     return 0;
 }
