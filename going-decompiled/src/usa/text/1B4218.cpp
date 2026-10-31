@@ -447,7 +447,18 @@ s32 UpdateMobyThreatFlashAndBurst(Moby *moby, MobyThreatState *ts, MobyThreatGau
  * D_001F0000 (0x1F0000) is the per-level effect/zone data-segment base (also
  * referenced raw by the EU effect-def code); the target-zone pointer table lives
  * at +0x1680. */
-extern Moby *g_pHeroMoby;        /* 0x18C0B0 hero (Ratchet) moby — lock-on anchor */
+/* Addressing-model devices (no code or data; RULING #8620 / RULING #12316 Q1),
+ * set by ClassifyTargetProximity's match (task #2389). Every ROM access to these
+ * two in this unit is absolute, but in two different forms:
+ *   - g_pHeroMoby: cc1 splits the address itself (`lui $2,%hi; lw $5,%lo($2)`
+ *     at 0x2B45D0, 0x2B4870), so the extern carries ABSOLUTE_GLOBAL;
+ *   - g_nGameState: the assembler-macro form (`lui $2; lw $2` at 0x2B45DC,
+ *     `sw $3,%lo(g_nGameState)($1)` at 0x2B5EF4), so it is sized out of small
+ *     data with `.extern g_nGameState, 16`. Spelled with ABSOLUTE_GLOBAL as
+ *     well, cc1 hoists its lui into $3 above the hero store at 0x2B45D8
+ *     (4 words differ in ClassifyTargetProximity, the NOTE #12163 shape). */
+__asm__(".extern g_nGameState, 16");
+extern Moby *g_pHeroMoby ABSOLUTE_GLOBAL; /* 0x18C0B0 hero (Ratchet) moby — lock-on anchor */
 extern s32   g_nGameState;       /* 0x1A8BB0 current top-level game/screen state id */
 extern s32   g_altGravityEnabled; /* 0x1A8CA0 alternate-gravity flag (see above) */
 extern u8    D_001F0000[];       /* 0x1F0000 per-level effect/zone data segment */
@@ -487,29 +498,50 @@ extern s32 func_002A9958(Vec4 *probePos, Vec4 *polyPoints, s32 count);
  * @param midRadius   mid-band radius (used when midZoneId == -1)
  * @return proximity band 0/1/2
  *
- * NATIVE SHIM (no byte target; matching build uses INCLUDE_ASM above). Derived
- * register-exact from ClassifyTargetProximity.s @0x2B4588.
+ * The hero is read once from g_pHeroMoby into a local; the zone tests re-read it
+ * through *outHero (ROM `lw $4,0($16)` at 0x2B4610 / 0x2B4660), not from the
+ * local. The probe position is a whole 128-bit copy (`lq`/`sq` into the frame,
+ * 0x2B45C4..0x2B45CC), and the band compares are strict `<`.
  *
- * WALL (matching build): save-layout — 3 callee-saves + $ra at 8-byte spacing,
- * with fp temps. cmp-oracle validated. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", ClassifyTargetProximity);
+ * MATCHED on the s136os arm (task #2389), not by cc1 2.9 (save layout: 3
+ * callee-saves + $ra at 8-byte spacing, the old WALL note's mechanism). GUARD:
+ * compiled alone by SN 2.95.3 v1.36 -fopt-stack (cc1plus, this unit's
+ * S136EXTRA="") and spliced over the S136OS_SLOT line
+ * (tools/ee/s136os_splice.sh); plain C on native. The addressing of
+ * g_pHeroMoby / g_nGameState comes from the two extern devices above their
+ * declarations. Written from the ROM, not adopted: OpenRAC's func_002B3670
+ * (NOTE #12163 row 2) was not read for this body.
+ * ProximityProbe128 is the 128-bit copy type: TImode on the EE arm (cc1 copies
+ * it with lq/sq, as the ROM does; a Vec4 copy is ldl/ldr pairs), a 16-byte
+ * aligned struct on native (no mode(TI) under gcc -m32), the
+ * ApplyMobyLocalTransformDelta PoseVector128 precedent. */
+#ifdef TARGET_NATIVE
+typedef struct { unsigned long long q[2]; } __attribute__((aligned(16))) ProximityProbe128;
+#else
+typedef int ProximityProbe128 __attribute__((mode(TI)));
+#endif
+#if !defined(TARGET_NATIVE) && !defined(S136OS_ClassifyTargetProximity)
+S136OS_SLOT(ClassifyTargetProximity);
 #else
 s32 ClassifyTargetProximity(Moby *candidate, Moby **outHero, s32 nearZoneId,
                             s32 midZoneId, Vec4 *posOverride,
                             f32 nearRadius, f32 midRadius) {
-    Vec4 probePos;
+    ProximityProbe128 probePos;
     Moby *hero;
     f32 dist;
 
-    probePos = posOverride ? *posOverride : candidate->facingTarget;
+    if (posOverride != NULL) {
+        probePos = *(ProximityProbe128 *)posOverride;
+    } else {
+        probePos = *(ProximityProbe128 *)&candidate->facingTarget;
+    }
     hero = g_pHeroMoby;
     *outHero = hero;
     if (g_nGameState != 0) {
         return 0;
     }
 
-    dist = DistXYVu0(&probePos, &hero->facingTarget);
+    dist = DistXYVu0((Vec4 *)&probePos, &hero->facingTarget);
 
     if (nearZoneId != -1) {
         void *zone = g_targetZoneTable[nearZoneId];
