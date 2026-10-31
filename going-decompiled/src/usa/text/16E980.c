@@ -37,12 +37,13 @@
  * 05_all29_report.txt, 07_all96_report.txt, classes 08/09_classify*.txt). None
  * reached 100 on either arm; sdk29 >= engine96 on 31 of 40, but 32 of those are
  * PACKED-SAVE-walled there. The wall is a property of the 2.9 arm only: the
- * s136os arm (SN 1.36 -fopt-stack) has the ROM's 8-byte slots, and twenty-six of
+ * s136os arm (SN 1.36 -fopt-stack) has the ROM's 8-byte slots, and twenty-seven of
  * these arms are matched there (FACTs #8830, #9658, #9707, #9856, #10000,
  * #10023, UpdateScreenFadeBlack from its former MATCH_ guard (task #2092),
  * func_00273D20 (task #2101), func_00271140 (task #2116) and
  * BuildAttractReelPlaylist (OpenRAC's C, task #2207), ApplyCameraShakeAxis and
- * SampleCameraFogZone (OpenRAC's C, task #2232), UpdateCamera (task #2322); the s136os
+ * SampleCameraFogZone (OpenRAC's C, task #2232), UpdateCamera (task #2322),
+ * TestCameraTakeover (task #2394); the s136os
  * re-screen of the remaining arms is NOTE #9857, with func_00270D60 and
  * func_00270B68 taken further in NOTEs #9994 and #10024, func_00273D20's NOTE
  * #9998 ladder closed by task #2101 and func_00271140's NOTE #10031 ladder by
@@ -62,7 +63,7 @@
  *   func_002702D8               94.07  49.89  2g/2f   PACKED-SAVE,-
  *   func_002703C0               99.65  68.85  2g/5f   PACKED-SAVE,-
  *   func_00270500               53.92  73.92  2g/0f   PACKED-SAVE,GPREL
- *   TestCameraTakeover          81.03  59.97  4g/0f   PACKED-SAVE,GPREL
+ *   TestCameraTakeover          81.03  59.97  4g/0f   PACKED-SAVE,GPREL (s136os: matched, task #2394)
  *   DispatchCameraMode          79.93  54.15  6g/0f   PACKED-SAVE,-
  *   func_00270B68               88.16  76.58  8g/4f   PACKED-SAVE,LIKELY+
  *   func_00270D60               31.69  56.55  5g/1f   PACKED-SAVE,-
@@ -1287,28 +1288,73 @@ typedef struct CamTakeRow {
     /* 0x1C */ CamTrigObj *obj;
 } CamTakeRow; /* 0x20 stride */
 
-/* TestCameraTakeover: decide whether a candidate camera slot should take over
- * the active camera (mode-vtbl takeover handler + a per-type priority switch).
- * The ROM has a jump-table switch (jtbl_0026C4F0_text) and three callee-saves
- * at 8-byte slot spacing (the packed-save frame cc1 2.9 cannot produce).
- * Unmatched; the save layout is a cc1 2.9 property and not the reason on the
- * s136os arm (FACT #9873 / NOTE #9871). The s136os arm was screened as written
- * (NOTE #9857 at 75e6b6c1: 112 built vs 113 ROM words, a ranking screen) and
- * retried in task #2322 (NEAR, 112/113 words, ~34 aligned word differences):
- * the ROM keeps every `return 1` / `return 0` as branches into shared
- * cross-jumped tails, where SN 1.36 cc1 emits store-flag sltu/sltiu, and the
- * block layout differs around the kind-7 type test. Its best body and ladder
- * are in the store at this address. */
-#ifdef TARGET_NATIVE
+/* TestCameraTakeover: decide whether candidate camera slot `cand` should take
+ * over from the active slot `cur` (DispatchCameraMode's arbitration scan).
+ *   cand  the candidate slot; a zero priority byte (+0x7C) never takes over.
+ *   cur   the active slot. Kinds 0/1/2/4 accept NULL (no active camera = take
+ *         over); kind 7 dereferences it with NO null check, as the ROM does.
+ * Returns 1 to take over, 0 to keep `cur`.
+ * Order: the camera mode's vtbl takeover handler, if the level installed one,
+ * decides first (-1 forbid, 1 force, anything else falls through to the rule).
+ * Then the rule at +0x74, a jump table (jtbl_0026C4F0_text):
+ *   0     take over unless `cur` is settled (+0x7E == 0) and has priority >= ours;
+ *   1, 2  as 0, but only once the trigger flag (+0x7D) is set;
+ *   4     the hero must be inside the trigger row's volume (func_002ADA30 vs
+ *         g_heroPos), plus the kind-0 priority test when `cur` is settled;
+ *   7     the slot's type (+0x86) must equal g_cameraZoneType (sb+0x24A0), plus
+ *         the priority test; type 3 also needs its trigger's link row key to
+ *         equal the word at sb+0x630 (0x18A450), and the word at sb+0x640
+ *         (0x18A460) to be ZERO (0x2709E8 `beqz` with 1 in the delay slot);
+ *   3, 5, 6 and out of range never take over.
+ *
+ * MATCHED on the s136os arm (task #2394; NEAR at 112/113 words in #2322 and
+ * #2361). Every shape below is a CODEGEN DEVICE for SN 1.36's jump pass and
+ * register allocator, not a semantic claim. Each was removed ALONE in a solo
+ * s136 compile (word differences against the ROM, relocations masked):
+ *   - kinds 0 and 4 end `if (test) return 1; break;`, so the false arm jumps
+ *     to the switch's shared `return 0`. A multi-use label there stops jump.c
+ *     converting `return 1 / return 0` to a store-flag `sltu`, and the two
+ *     `return 1` tails cross-jump into the ROM's shared 0x270958 block.
+ *     `return 0` instead costs 1 word (kind 0) and 74 (kind 4). Kind 7's
+ *     final `break` is inert (0);
+ *   - kind 7's last test jumps to the `take` label on its link-index
+ *     `return 1`. A plain `return 1` there lets jump.c hoist `v0 = 1` above
+ *     the branch, which moves the sb+0x640 load from $2 to $3 (2 words);
+ *   - kind 7 forms the trigger row address as `(char *)table + (idx << 5)`
+ *     (2 words as `table[idx]`), and indexes the link table as CamLinkRow
+ *     rows (4 words as char arithmetic); both are operand order in an addu;
+ *   - the rule fields are read through `ti` = cand + 0x74, the ROM's $18 base
+ *     (110 positional words when read as Camera fields).
+ * GUARD: on EE this C is compiled alone by SN 2.95.3 v1.36 -fopt-stack
+ * (tools/ee/s136os_functions.txt) and spliced over the S136OS_SLOT line by
+ * tools/ee/s136os_splice.sh; native compiles the same body. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_TestCameraTakeover)
+S136OS_SLOT(TestCameraTakeover);
+#else
 extern s32 g_cameraCallbackCount;
 extern char g_soundBankHandlesBlk[]; /* g_soundBankHandles + 0x20 */
 extern s32 func_002ADA30(void *pos, void *volume);
 extern void *D_001B1300; /* base pointer of the 32-byte-row link table */
 extern Vec4 g_heroPos;   /* 0x189EA0 hero world position */
+/* Camera + 0x74 seen as the takeover rule (fields mirror Camera's takeKind,
+ * priority and unk7D) */
+typedef struct CamTakeInfo {
+    /* 0x0 */ s32 kind;
+    /* 0x4 */ u8 pad4[4];
+    /* 0x8 */ u8 priority;
+    /* 0x9 */ u8 armed;
+} CamTakeInfo;
+/* D_001B1300 link-table row: +0x10 = key compared with sb+0x630 */
+typedef struct CamLinkRow {
+    /* 0x00 */ u8 pad0[0x10];
+    /* 0x10 */ s32 key;
+    /* 0x14 */ u8 pad14[0xC];
+} CamLinkRow;
 s32 TestCameraTakeover(Camera *cand, Camera *cur) {
     /* the trigger-row table lives in the word AFTER g_cameraCallbackCount
      * (0x1B1484, unnamed - deferred Track-B pin) */
-    CamTakeRow *rows;
+    CamTakeInfo *ti = (CamTakeInfo *)&cand->takeKind;
+    CamTrigObj *obj;
     s32 (*handler)();
     s32 r;
 
@@ -1325,10 +1371,10 @@ s32 TestCameraTakeover(Camera *cand, Camera *cur) {
             return 1;
         }
     }
-    switch (cand->takeKind) {
+    switch (ti->kind) {
     case 1:
     case 2:
-        if (cand->unk7D == 0) {
+        if (ti->armed == 0) {
             return 0;
         }
         /* fall through */
@@ -1339,51 +1385,56 @@ s32 TestCameraTakeover(Camera *cand, Camera *cur) {
         if (cur->unk7E != 0) {
             return 1;
         }
-        return cur->priority < cand->priority;
+        if (ti->priority > cur->priority) {
+            return 1;
+        }
+        break;
     case 4: {
-        CamTrigObj *obj;
-        rows = ((CamTakeRow **)&g_cameraCallbackCount)[1];
+        CamTakeRow *rows = ((CamTakeRow **)&g_cameraCallbackCount)[1];
+
         obj = rows[cand->configIndex].obj;
         if (cur != 0 && cur->unk7E == 0) {
-            if (!(cur->priority < cand->priority)) {
+            if (!(ti->priority > cur->priority)) {
                 return 0;
             }
         }
-        return func_002ADA30(&g_heroPos, obj->volume) != 0;
+        if (func_002ADA30(&g_heroPos, obj->volume) != 0) {
+            return 1;
+        }
+        break;
     }
     case 7: {
-        CamTrigObj *obj;
-        if (cand->type != *(s32 *)(g_soundBankHandlesBlk + 0x24A0)) {
+        char *sb = g_soundBankHandlesBlk;
+        s32 type = cand->type;
+
+        if (type != *(s32 *)(sb + 0x24A0)) { /* g_cameraZoneType */
             return 0;
         }
-        /* NOTE: the original dereferences cur with NO null check here */
         if (cur->unk7E == 0) {
-            if (!(cur->priority < cand->priority)) {
+            if (!(ti->priority > cur->priority)) {
                 return 0;
             }
         }
-        if (cand->type != 3) {
+        if (type != 3) {
             return 1;
         }
-        rows = ((CamTakeRow **)&g_cameraCallbackCount)[1];
-        obj = rows[cand->configIndex].obj;
+        obj = ((CamTakeRow *)((char *)((CamTakeRow **)&g_cameraCallbackCount)[1]
+                              + (cand->configIndex << 5)))->obj;
         if (obj->linkIdx < 0) {
+        take:
             return 1;
         }
-        if (*(s32 *)(g_soundBankHandlesBlk + 0x630) !=
-            *(s32 *)((char *)D_001B1300 + (obj->linkIdx << 5) + 0x10)) {
+        if (*(s32 *)(sb + 0x630) != ((CamLinkRow *)D_001B1300)[obj->linkIdx].key) {
             return 0;
         }
-        /* == 0, from the ROM (0x2709E4: `beqz` to the epilogue with 1 in its
-         * delay slot, 0 on fall-through); this arm read `!= 0` until task #2322 */
-        return *(s32 *)(g_soundBankHandlesBlk + 0x640) == 0;
+        if (*(s32 *)(sb + 0x640) == 0) {
+            goto take;
+        }
+        break;
     }
-    default: /* kinds 3, 5, 6 */
-        return 0;
     }
+    return 0; /* kinds 3, 5, 6, out of range, and every failed final test */
 }
-#else
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", TestCameraTakeover);
 #endif
 
 /* CallCameraPollHandler: invoke the camera-mode vtbl `poll` handler
