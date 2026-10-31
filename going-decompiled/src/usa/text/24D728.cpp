@@ -114,7 +114,8 @@ _Static_assert(sizeof(GuiInstance) == 0x2238, "GuiInstance occupies game-state[0
  *  - Sibling-call guards on the 8 arms whose tail call cc1 2.96 turns into a
  *    `j <callee>` the ROM never has (#7343): func_0034D828, func_0034DB68,
  *    func_0034D8C8, func_0034DAB0, GuiManagerInitHudLists, func_0034F240,
- *    func_0034F928, func_0034F9F8. func_0034D828 83.50 -> 95.00 and
+ *    func_0034F928, func_0034F9F8 (GuiManagerInitHudLists's guard went with
+ *    its s136os match, task #2392). func_0034D828 83.50 -> 95.00 and
  *    func_0034DB68 76.46 -> 91.67 (engine96) on the guard alone.
  *  - Six float literals respelled to the ROM's exact bits. cc1 2.96 converts a
  *    decimal 1 ULP low (#7342), so the plain spelling is wrong in the bytes:
@@ -554,12 +555,61 @@ extern f32 *GuiSpriteGetTextureVec(GuiElement *e);
 extern void func_00338AB8(void *listHead, void *pool);
 #endif
 
-/* TODO(match) GuiManagerInitHudLists - task #566 (round 4), measured on the COMMITTED tree (this file,
- * both arms promoted whole-unit; instrument: tools/ee/unit_report.sh over
- * tools/ee/objdiff_build.sh, clean): sdk29 67.93%, engine96 66.73%. Eligible arm: e96.
- * Residual: ORDER + const-materialisation regalloc (at vs v1) */
+/* EE_REG: pin a live local to a register on the EE arm only (RULING #8598,
+ * REGISTER-PIN DEVICE); empty on native. Used by GuiManagerInitHudLists. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", GuiManagerInitHudLists);
+#define EE_REG(r) __asm__(r)
+#else
+#define EE_REG(r)
+#endif
+
+/* ADDRESSING DEVICE (RULING #8620 terms, #8036 offset-0 alias; EE only, emits
+ * nothing): GuiManagerInitHudLists reads g_guiInstance twice with the absolute
+ * `lui; lw %lo` pair (0x34EDBC, 0x34EDFC). The `, 16` size keeps GNU as from
+ * making those reads gp-relative under -G8; the relocations name g_guiInstance
+ * and no alias reaches nm. At file scope because the s136os splice refuses an
+ * `.extern ,16` inside a member's arm (FACT #9057). Without it: 5 words differ
+ * (task #2392 removal probe). Native reads the real symbol. It is the same
+ * device as func_0034F240's g_guiInstanceAbs, which is declared further down
+ * the file than this function. */
+#ifndef TARGET_NATIVE
+__asm__(".extern g_guiInstanceHudAbs, 16\n\tg_guiInstanceHudAbs = g_guiInstance");
+extern void *g_guiInstanceHudAbs;
+#define GUI_INSTANCE_HUD_ABS g_guiInstanceHudAbs
+#else
+#define GUI_INSTANCE_HUD_ABS g_guiInstance
+#endif
+
+/* GuiManagerInitHudLists(inst, gui, pool): build the HUD manager's list widgets.
+ * Caches the two selector glyphs ('W' and 'X' from the GUI font atlas at
+ * g_guiInstance+0x8710) at inst+0x222C/+0x2230; configures the 26 scrollable list
+ * rows (0x48-byte GuiElements from inst to inst+0x750: width 0x20, template
+ * D_1AE6C8, 5 visible rows, 100 items, scroll 0, two colour pairs, +0x44 =
+ * 0x80000000, +0x38 = 1); then sets up the frame-list sub-object at +0x7A0 (it
+ * receives `gui`), the frame sprite at +0x1D50 (template D_1AE6D8, colour float
+ * 2155905024.0f = 0x4F008080, texture vec {60008.0f, 0}), records `pool` at
+ * +0x798, and inits the two trailing list heads at +0x1D8C/+0x1FDC.
+ * Params: inst = the HUD manager (GuiSystemInit passes gui+0x36F28); gui = the
+ * GuiInstance; pool = the GUI element pool. No return value.
+ *
+ * MATCHED on the s136os arm (task #2392), unit flags (-fno-gcse; gcse on gives
+ * identical text). Instrument: solo s136 probe + difflib word screen 0/105, then
+ * the unit gate (objdiff_build + unit_report, vmu, image cmp). Devices, each
+ * priced by removing it alone from the closing body (aligned words differing):
+ *  - REGISTER-PIN DEVICE (RULING #8598): `off` (the 0x8710 atlas offset) and
+ *    `row` both pinned to $16. The hard-register anti-dependency stops sched1
+ *    issuing the row-cursor copy before the offset's last use (the 7th saved
+ *    register of FACT #9552) without NOTE #9550's full asm barrier, which had
+ *    also pinned %hi(D_1AE6C8) and the copy below the 'X' lookup. Unpinning
+ *    `off`: 37; unpinning `row`: 43 (both 108 built words).
+ *  - SCHEDULING DEVICE (RULING #8483, empty, emits nothing): the operand-tied
+ *    fence before func_00337B88 orders `lui a1,0x8000` before `move a0,s0`, so
+ *    cc1 fills the jal slot with the move, as the ROM does (the precedent is
+ *    GuiScrollListScreenInit, 235FE8). Without it: 4.
+ *  - the g_guiInstanceHudAbs addressing alias above: 5.
+ * Not needed: NOTE #12306's $20 pin on `gui` (0 without it, so dropped). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_GuiManagerInitHudLists)
+S136OS_SLOT(GuiManagerInitHudLists);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
@@ -579,52 +629,49 @@ extern void *g_guiInstance;
 extern u8 D_1AE6C8[];
 extern u8 D_1AE6D8[];
 /* (end of this body's declarations) */
-/* Structure-exact model (cmp-oracle blocked, same abs GUI-vtable --gc-sections
-   wall as GuiManagerInitListRows; matching arm stays asm).
-   Build the HUD manager's list widgets: cache the two selector glyphs ('W','X'
-   at +0x222C/+0x2230), configure the 26 scrollable list rows (visible=5,
-   items=100, two color pairs, per-row finalizers), then set up the frame-list
-   sub-object (+0x7A0), the frame sprite (+0x1D50: two texture-vec constants),
-   record the pool at +0x798, and init the two trailing list heads
-   (+0x1D8C/+0x1FDC). `pool` is the GUI element pool/context. */
+typedef struct GuiHudLists {
+    u8 _pad0[0x222C];
+    s32 glyphW;     /* +0x222C: font glyph for 'W' */
+    s32 glyphX;     /* +0x2230: font glyph for 'X' */
+} GuiHudLists;
 void GuiManagerInitHudLists(void *inst, void *gui, void *pool) {
-    u8 *row = (u8 *)inst;
-    u8 *rowEnd = (u8 *)inst + 0x750;
+    register u8 *row EE_REG("$16");
+    u8 *rowEnd;
     GuiElement *sprite;
-    f32 *vec;
+    register s32 atlasOffset EE_REG("$16") = 0x8710;
 
-    *(s32 *)((u8 *)inst + 0x222C) =
-        GuiFontAtlasLookupGlyph((char *)g_guiInstance + 0x8710, 0x57);
-    *(s32 *)((u8 *)inst + 0x2230) =
-        GuiFontAtlasLookupGlyph((char *)g_guiInstance + 0x8710, 0x58);
-
+    ((GuiHudLists *)inst)->glyphW =
+        GuiFontAtlasLookupGlyph((u8 *)GUI_INSTANCE_HUD_ABS + atlasOffset, 0x57);
+    rowEnd = (u8 *)inst + 0x750;
+    ((GuiHudLists *)inst)->glyphX =
+        GuiFontAtlasLookupGlyph((u8 *)GUI_INSTANCE_HUD_ABS + atlasOffset, 0x58);
+    row = (u8 *)inst;
     do {
-        GuiElement *e = (GuiElement *)row;
-        GuiListElementInit(e, 0x20, 1, D_1AE6C8, pool);
-        GuiListSetVisibleRows(e, 5);
-        GuiListSetItemCount(e, 0x64);
-        GuiListSetScrollPos(e, 0);
-        GuiListSetColorPair0(e, 0x8049C1FF, 0x80001EFF);
-        GuiListSetColorPair1(e, 0x50F0C070, 0x50F0C070);
-        func_00337B88(e, (s32)0x80000000);
-        func_00337B68(e, 1);
+        GuiListElementInit((GuiElement *)row, 0x20, 1, D_1AE6C8, pool);
+        GuiListSetVisibleRows((GuiElement *)row, 5);
+        GuiListSetItemCount((GuiElement *)row, 100);
+        GuiListSetScrollPos((GuiElement *)row, 0);
+        GuiListSetColorPair0((GuiElement *)row, 0x8049C1FF, 0x80001EFF);
+        GuiListSetColorPair1((GuiElement *)row, 0x50F0C070, 0x50F0C070);
+        {
+            s32 highBit = (s32)0x80000000;
+            /* SCHEDULING DEVICE (RULING #8483, empty, emits nothing): orders
+             * the lui before the move so cc1 fills the jal slot with the move. */
+            __asm__("" : "+r"(highBit), "+r"(row));
+            func_00337B88((GuiElement *)row, highBit);
+        }
+        func_00337B68((GuiElement *)row, 1);
         row += 0x48;
     } while (row < rowEnd);
-
     func_0034C008((u8 *)inst + 0x7A0, gui, pool);
-
     sprite = (GuiElement *)((u8 *)inst + 0x1D50);
     GuiSpriteElementInit(sprite, D_1AE6D8, pool);
-    GuiElementGetColor(sprite)[0] = 0x4F008080;   /* packed float const */
-    vec = GuiSpriteGetTextureVec(sprite);
-    *(s32 *)vec = 0x476A6800;                      /* packed float const */
-    vec = GuiSpriteGetTextureVec(sprite);
-    ((s32 *)vec)[1] = 0;
-
+    *(f32 *)GuiElementGetColor(sprite) = 2155905024.0f;
+    GuiSpriteGetTextureVec(sprite)[0] = 60008.0f;
+    ((s32 *)GuiSpriteGetTextureVec(sprite))[1] = 0;
     *(void **)((u8 *)inst + 0x798) = pool;
     func_00338AB8((u8 *)inst + 0x1D8C, pool);
     func_00338AB8((u8 *)inst + 0x1FDC, pool);
-    __asm__ __volatile__("");
 }
 #endif
 
