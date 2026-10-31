@@ -417,12 +417,12 @@ GuiElementInit = 0x00336FE8; // PARTIAL - base GUI element init (two 0x10 pool s
 GuiScreenWithPlanetNameInit = 0x003493E0; // PARTIAL - a GUI screen ctor (7 named children) - planet-select id UNCONFIRMED
 
 // === Track-B MAP/minimap subsystem (in-binary cluster ~0x295778..0x298xxx - map.cpp via __FILE__ @0x1a95b8 in MapInit). ===
-g_mapCurrentLevel = 0x001C5150; // CONFIRMED - current map level id (clamped 0..0x1b), set by MapSetCurrentLevel. alias g_nMapCurrentLevel (native #else name, sw v1,0x5150(0x1c) in func_002D65D8, lw 0x230(0x1c4f20) in func_002DBC98)
+g_mapCurrentLevel = 0x001C5150; // CONFIRMED - current map level id (clamped 0..0x1b), set by MapSetCurrentLevel. alias g_nMapCurrentLevel (native #else name, sw v1,0x5150(0x1c) in func_002D65D8, lw 0x230(0x1c4f20) in DrawMenuPreviewImage, was func_002DBC98)
 g_mapTextureHandle = 0x001C5158; // CONFIRMED - GS texture handle for uploaded map image (-1 none), set in MapInit
 g_mapTextureWidth = 0x001C5160; // CONFIRMED - width in texels of uploaded map texture, set in MapInit
 g_mapAvailable = 0x001C4F44; // CONFIRMED - flag a map is available/uploaded for current level
 g_mapHasData = 0x001C4F48; // CONFIRMED - flag this level has map data loaded, gates MapBuildBitmap
-g_mapActiveSlot = 0x001C5154; // CONFIRMED - active map cache slot index (0..4, -2 while uploading). alias g_nMapActiveSlot (native #else name, lw 0x234(0x1c4f20) in func_002DBC98)
+g_mapActiveSlot = 0x001C5154; // CONFIRMED - active map cache slot index (0..4, -2 while uploading). alias g_nMapActiveSlot (native #else name, lw 0x234(0x1c4f20) in DrawMenuPreviewImage, was func_002DBC98)
 g_mapBlipList = 0x001C4F40; // CONFIRMED - ptr to map blips/icons list (0x28-byte records), drawn by MapDraw - alias g_pMapBlipList (the MapDraw #else spelling - same word, ROM 0x296EA4/0x296EA8 addiu $4,0x1C4F20 then lw $3,0x20($4), task #1446)
 g_mapBitmapBuffer = 0x001C4F28; // CONFIRMED - ptr to 0x1000-byte 1bpp discovered-area bitmap (8 rows of 0x200) - alias g_pMapBitmapBuffer (the MapDraw #else spelling - same word, ROM 0x296DCC lw $2,0x8($23) with $23 = 0x1C4F20, task #1446)
 g_mapVertexData = 0x001C4F20; // CONFIRMED - ptr to map outline vertex data copied from level asset in MapInit. Also the MapCache struct base (+0x00 field) - the native #else bodies overlay struct MapCache here (fields available+0x24, currentLevel+0x230, activeSlot+0x234, slotState[5]+0x288, slotLevelId[5]+0x29C, lockedSlot+0x2B0)

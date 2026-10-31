@@ -420,7 +420,7 @@ segments:
       #     all live inside). Boundaries are real, consecutive function starts
       #     verified in the disassembly: func_002A7AA8 ends exactly at 0x2A8200
       #     (jr/delay at 0x2A81F8/FC, no pad); func_002B1DF0 ends at 0x2B2264
-      #     (+1 pad nop) and 0x2B2268 is func_002B2268's real prologue.
+      #     (+1 pad nop) and 0x2B2268 is ApplyObjectReaction's real prologue.
       #   text/250080 (vaddr 0x350100..0x352D07, ~80 fns): the "segment tail" -
       #     FMV playback engine + trivial debug-stub/return-wrappers
       #     (InitFmvPlaybackEngine/OnFmvVblankFlip/OnFmvGifDmaInterrupt named).
