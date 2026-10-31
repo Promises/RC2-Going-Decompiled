@@ -229,8 +229,12 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1FFBA0", func_0
  * keyed on the current gadget id (0x1B2298) — picks the gadget moby either from
  * the equipped-weapon table (g_weaponTable, 0xE0-stride) or by spawning a fresh
  * one (func_00300190), recording the result + a "spawned?" flag.
- * TODO(match): heavy scattered-global state block + id dispatch the cc1 won't
- * lay out byte-identically here; the C is functionally faithful. */
+ * The #else below is NOT the ROM's logic. The ROM reads g_fileLoadVoiceState
+ * +0x24/+0x28/+0x68, g_weaponTable[].mobyClass (+0x14) and
+ * g_soundBankHandlesBlk[equipMode*0x50 + 0x1220]. A from-ROM body in NOTE #12215
+ * reaches 104 of 107 words on the s136os arm (task #2321). The residual is that
+ * cc1 cross-jumps the 0x1F and 0x2D lookup tails (mult/addu/lw), which the ROM
+ * keeps separate. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1FFBA0", func_002FFF68);
 #else
@@ -414,10 +418,11 @@ void func_00300288(void) {
 
 /* Water-pool surface state machine: dispatches on the pool state word
  * (g_waterPool+0x30, range 0..7) through jtbl_0026DD50_text to advance the
- * splash/ripple/settle phases — each case runs its own VU0 vector math + helper
- * calls (FastDecTimer, ...) and writes back the pool's level/scale fields.
- * TODO(hle): jump-table state machine over VU0 hardware math; tier-3, no
- * byte-exact path and no compact faithful C. Behaviour documented; stub no-op. */
+ * splash/ripple/settle phases. Each case makes its own vector and helper calls
+ * (FastDecTimer, ...) and writes back the pool's level/scale fields.
+ * Not VU0 code: it has no COP2 opcode, only calls (task #2321). Not attempted.
+ * It carries four of the macro-before-jal sites in FACT #12214, so on today's
+ * asm_unit.sh it cannot close as func_00300B88 cannot. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1FFBA0", func_003002E0);
 #else
@@ -753,9 +758,13 @@ void *func_003009F8(Moby *moby) {
 
 /* Emit one water-surface fade quad: append GS reg 0x42 (value 0x44), then draw a
  * full-screen sprite whose alpha = (1 - depthScale * level)*255 (white).
- * Near-miss (objdiff ~71%): cc1 CSEs the g_waterPool base into a callee-saved
- * register (extra s0 save) where the original re-derives it per access; the C
- * is faithful. */
+ * NOT byte-matched (task #2321, NOTE #12215). The old "cc1 CSEs the base into s0"
+ * note was false. On the s136os arm, with a func_00300E70-style .sdata alias of
+ * g_gadgetDisplay, the body is 30 of the ROM's 31 words and every other word is
+ * as the ROM has it. The missing word is the nop after `jal IntToFloat`: GNU as
+ * 2.40 moves the %lo half of the `lh $4,g_gadgetDisplay+2` macro into that slot,
+ * and the SN assembler did not (FACT #12214). That is an asm_unit.sh gap, not a C
+ * wall. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1FFBA0", func_00300B88);
 #else
@@ -774,8 +783,10 @@ void func_00300B88(void) {
  * three SpawnParticleType55 sparks (two red, one white at half size) with hue
  * cycled by an incrementing counter (g_waterPool+0x..C4), patching each spark's
  * texture + brightness bytes.
- * TODO(hle): VU0 vector math + particle hardware emit — tier-3, no byte-exact
- * path. Behaviour documented; stub no-op. */
+ * Not VU0 code: it has no COP2 opcode, and every vector step is a call (task #2321).
+ * Not attempted. It carries one of the macro-before-jal sites in FACT #12214
+ * (`lui $4; lh $4,%lo(g_gadgetDisplay+2)($4); jal IntToFloat; nop` at 0x300C9C),
+ * so on today's asm_unit.sh it cannot close as func_00300B88 cannot. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1FFBA0", func_00300C08);
 #else
