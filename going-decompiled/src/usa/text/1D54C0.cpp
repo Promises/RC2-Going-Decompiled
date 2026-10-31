@@ -4106,51 +4106,156 @@ s32 func_002DC8A8(void) {
     return 0;
 }
 
-/* Draw the memory-card system-message text box three times (shadow / shadow /
- * face) plus a flat backing rect, choosing the message string from the current
- * card status code (D_001F28A4). Returns 2. Wall: stack text-box struct built
- * with 128-bit packing + gp-relative cached colours.
- * Byte-match: engine-2.96 SAVE-SLOT wall (prologue packs $16/$17/$31 at 8-byte
- * spacing 0x40/0x48/0x50; 2.9 reserves 16-byte slots) → no match on 2.9, #else
- * is correct. Not "TODO(match)".
- * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
- * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
- * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
- * property and was measured false as the reason this member stays unmatched (FACT #9873).
- * Residual: the saved-register set; the rest UNMEASURED. */
+/* func_002DC940: draw the memory-card system-message box. Picks the message
+ * from the card status word at g_menuTransitionMode+0xC8 (= D_001F28A4):
+ * 0..2 string 0x2C8F, 3 string 0x2C92, anything else the pre-localized
+ * fallback buffer D_1ABBE0. Builds a text-box layout from the widget rect,
+ * draws the string twice in black (the second pass vertically centred, with
+ * the vertical-align bit flipped), fills the flat backing rect D_1ABBE8..F4
+ * with a cached four-corner colour, then draws the face pass one pixel up
+ * and left in 0x80F0F0F0. Returns 2.
+ *
+ * widget: +0x18 x, +0x1C y, +0x20 width, +0x24 height (s32; the clip box
+ * reads their low halves). The colour cache (four copies of the %gp word
+ * D_1AA45C) is filled on the first call only; its flag and block sit in
+ * .sbss at g_rainFallAccel+0x50 / +0x40, read gp-relatively.
+ *
+ * MATCHED on the s136os arm (SN 2.95.3 v1.36 cc1plus -fopt-stack, this unit's
+ * -G8 and S136EXTRA "" so gcse on; row in tools/ee/s136os_functions.txt),
+ * task #2424. Bodies before this one: NOTE #12323 (task #2383, 22 lines) and
+ * NOTE #12350 (task #2398, 15). What each device is worth, measured by
+ * removing it alone (solo s136 compile of the unit, positional word compare
+ * against the ROM .s with relocated fields masked, of 156 words):
+ *   - the switch with grouped `case 0: case 1: case 2:` is the ROM's bnezl
+ *     cross-jump to one GetLocalizedString call (NOTE #12323: 138 -> 47).
+ *   - `layout` in an inner block: cc1 then reuses its stack slot for the
+ *     colour temp at sp+0x20, as the ROM does (NOTE #12323).
+ *   - DC940_RECT_X2, the OFFSET-VIEW device (below): 39/156 without it.
+ *   - DC940_COLOR_PIN, the EE_REG("$2") pin on the colour value: 7/156.
+ *   - one empty volatile barrier between the c1 and c2 colour stores gives
+ *     the ROM's store order c3,c0,c1,c2: 4/156 with no barrier (the pin
+ *     kept), 2/156 with the barrier between c0 and c1 instead. It is a
+ *     scheduling fence (RULING #8483: empty, emits nothing, both arms) and
+ *     depends on this block's RTL, so any later edit of the block must
+ *     re-gate it. The C order of the four stores is inert (seven orders and
+ *     a loop measured; only the loop changes, to 83/156).
+ * Removal figures are ranking probes, not the gate. */
+/* ADDRESSING-MODEL DEVICE (RULING #12316 Q1; directive-only, emits nothing):
+ * the ROM reads the rect's y1 and y2 words with gas's absolute same-register
+ * macro (`lui $5; lw $5,%lo(D_1ABBEC)($5)`), never gp-relatively; x1
+ * (D_1ABBE8) is a true -G8 small-data word. At FILE SCOPE, outside the guard,
+ * so the unit's 2.9 TU sees them before the spliced block too. D_1ABBEC's
+ * size also covers DC940_RECT_X2's read of D_1ABBEC+4. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DC940);
+__asm__(".extern D_1ABBEC, 16");
+__asm__(".extern D_1ABBF4, 16");
+#endif
+/* GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+ * (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; tools/ee/s136os_functions.txt) and
+ * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002DC940)
+S136OS_SLOT(func_002DC940);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern s32 GetLocalizedString(s32 id);
+extern void *memset(void *s, s32 c, u32 n);
+extern void func_00280BB8(s32 box, s64 tint, s32 str, s32 mode);
+extern void func_0027F168(s32 x1, s32 y1, s32 x2, s32 y2, s64 z, const s32 *colors);
 /* (end of this body's declarations) */
-/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
- * objdiff): sdk29 25.99% / engine96 27.69%; better arm engine96; 136 differing
- * rows on it, class STRUCTURAL; first differing insn: ROM `addiu sp,sp,-96` vs
- * `addiu sp,sp,-32`. Not iterated in t495. */
-/* Matching arm stays INCLUDE_ASM; #else is the structure model — faithful at the
- * call level (cross-checked vs EU twin func_002DC908); the exact stack text-box
- * rect packing + flat backing-rect pass are abstracted (see note below). */
-s32 func_002DC940(MenuWidget *obj) {
-    extern void DrawFont2TextBox(void *box, s64 tint, s32 str, s32 mode);
-    u8 *o = (u8 *)obj;
-    s32 str = 0x1abbe0;   /* default: pre-localized fallback buffer */
+/* The status word, read as %lo(g_menuTransitionMode+0xC8) as the ROM does
+ * (an unsized view of the real symbol: no alias reaches the symtab). */
+extern u8 g_menuTransitionModeBlk[] __asm__("g_menuTransitionMode");
+extern char D_1ABBE0[];                 /* fallback message buffer */
+extern s32 D_1ABBE8, D_1ABBEC, D_1ABBF0, D_1ABBF4; /* backing rect x1, y1, x2, y2 */
+extern s32 D_1AA45C;                    /* backing-rect colour */
+typedef struct CardMsgTextBox {
+    s16 clip[4];   /* 0x00 top, bottom, left, right */
+    s16 x;         /* 0x08 */
+    s16 y;         /* 0x0A */
+    s16 width;     /* 0x0C */
+    s16 height;    /* 0x0E written back by func_00280BB8 */
+    s16 size;      /* 0x10 */
+    s16 align;     /* 0x12 bit 2: vertical centring */
+    s16 _14[2];
+} CardMsgTextBox;
+typedef struct CardMsgBoxColors { s32 c[4]; } CardMsgBoxColors;
+#ifndef TARGET_NATIVE
+/* The colour cache lives in .sbss right after g_rainFallAccel (+0x40 block,
+ * +0x50 flag; the ROM's %gp_rel(g_rainFallAccel+0x40/+0x50)). No symbol of
+ * its own exists in the EE link, so it is read through g_rainFallAccel,
+ * whose -G8 size-4 declaration keeps every access gp-relative. */
+extern s32 g_rainFallAccel;
+#define s_cardMsgColorsInit (*(s32 *)((u8 *)&g_rainFallAccel + 0x50))
+#define s_cardMsgColors (*(CardMsgBoxColors *)((u8 *)&g_rainFallAccel + 0x40))
+/* OFFSET-VIEW DEVICE (EE only; NOT yet ruled, see task #2424's report): the
+ * x2 word D_1ABBF0 is read as element 1 of D_1ABBEC, i.e. `lw $6,D_1ABBEC+4`.
+ * cc1 2.95 costs a symbol+offset load at 2 insns even when the symbol is
+ * small (simple_memory_operand never accepts a CONST address), so reorg does
+ * not take it for func_0027F168's jal slot and takes the gp-relative
+ * D_1ABBE8 load instead, as the ROM does. Spelled D_1ABBF0, cc1 costs it at
+ * one insn, puts it in the slot, and asm_unit hoists the 2-insn macro back
+ * out, leaving a nop: 39/156. The bytes and the address are D_1ABBF0's; the
+ * relocation names D_1ABBEC with addend 4 where splat's .s names D_1ABBF0. */
+#define DC940_RECT_X2 ((&D_1ABBEC)[1])
+/* REGISTER-PIN DEVICE (RULING #8598): the ROM loads the colour into $2 and
+ * the cache flag's 1 into $3; cc1 colours them the other way round. */
+#define DC940_COLOR_PIN EE_REG("$2")
+#else
+static s32 s_cardMsgColorsInit;
+static CardMsgBoxColors s_cardMsgColors;
+#define DC940_RECT_X2 D_1ABBF0
+#define DC940_COLOR_PIN
+#endif
+s32 func_002DC940(MenuWidget *widget) {
+    u8 *w = (u8 *)widget;
+    CardMsgTextBox box;
+    s32 str;
+    s32 status;
+
+    AppendGsRegPacket(0x42, 0x44);
+    AppendGsRegPacket(0x47, 0x2004B);
     Begin2dDrawBatch(0);
-    if (D_001F28A4 >= 0) {
-        if (D_001F28A4 < 3) {
-            str = GetLocalizedString(0x2c8f);
-        } else if (D_001F28A4 == 3) {
-            str = GetLocalizedString(0x2c92);
-        }
+    str = (s32)D_1ABBE0;
+    status = *(s32 *)(g_menuTransitionModeBlk + 0xC8);
+    switch (status) {
+    case 0: case 1: case 2: str = GetLocalizedString(0x2C8F); break;
+    case 3: str = GetLocalizedString(0x2C92); break;
     }
-    /* The original builds a stack text-box rect from obj->0x18..0x24 and draws
-     * the string in three passes with a flat backing rect; reproduced at the
-     * call level (exact rect packing omitted in this functional model). */
-    (void)o;
-    DrawFont2TextBox(o, 0x80000000, str, -1);
-    DrawFont2TextBox(o, 0x80000000, str, -1);
-    DrawFont2TextBox(o, 0x80f0f0f0, str, -1);
+    {
+        CardMsgTextBox layout;
+        memset(&layout, 0, sizeof(layout));
+        layout.clip[0] = *(s16 *)(w + 0x1C);
+        layout.clip[1] = *(s16 *)(w + 0x1C) + *(s16 *)(w + 0x24) + 1;
+        layout.clip[2] = *(s16 *)(w + 0x18);
+        layout.clip[3] = *(s16 *)(w + 0x18) + *(s16 *)(w + 0x20) + 1;
+        layout.x = (*(s32 *)(w + 0x18) + *(s32 *)(w + 0x20)) >> 1;
+        layout.y = *(s16 *)(w + 0x1C) + 5;
+        layout.width = *(s16 *)(w + 0x20) - 5;
+        layout.height = *(s16 *)(w + 0x24) - 5;
+        layout.size = 0x10;
+        layout.align = 5;
+        box = layout;
+    }
+    if (!s_cardMsgColorsInit) {
+        CardMsgBoxColors colors;
+        register s32 color DC940_COLOR_PIN = D_1AA45C;
+        s_cardMsgColorsInit = 1;
+        colors.c[3] = color;
+        colors.c[0] = color;
+        colors.c[1] = color;
+        __asm__ __volatile__("");   /* scheduling fence, see the doc comment */
+        colors.c[2] = color;
+        s_cardMsgColors = colors;
+    }
+    func_00280BB8((s32)&box, 0x80000000, str, -1);
+    box.y = (*(s32 *)(w + 0x24) - box.height) >> 1;
+    box.align ^= 4;
+    func_00280BB8((s32)&box, 0x80000000, str, -1);
+    func_0027F168(D_1ABBE8, D_1ABBEC, DC940_RECT_X2, D_1ABBF4, 0, s_cardMsgColors.c);
+    box.clip[0]--; box.clip[1]--; box.clip[2]--; box.clip[3]--; box.x--; box.y--;
+    func_00280BB8((s32)&box, 0x80F0F0F0, str, -1);
     End2dDrawBatch();
     return 2;
 }

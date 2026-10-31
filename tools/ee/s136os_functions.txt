@@ -742,3 +742,4 @@ usa text/235FE8 func_00346878 S136EXTRA=-fno-strict-aliasing
 usa text/1CA080 BuildCheatMenuItemList
 usa text/235FE8 GuiConfirmPopupTick S136EXTRA=-fno-strict-aliasing
 usa text/235FE8 func_0033CEE0 S136EXTRA=-fno-strict-aliasing
+usa text/1D54C0 func_002DC940
