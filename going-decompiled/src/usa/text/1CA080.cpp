@@ -5850,29 +5850,28 @@ s32 func_002D37E8(void) {
 }
 #endif
 
-/* Summary/confirmation screen draw: inside a 2D batch, draws three header glyphs
- * (0x8B/0x8C/0x8D, centred at row D_1ABAB0), three centred lines (localized 0x30D5,
- * 0x2BE4, 0x2BE5), then two composed lines built with the SDK sprintf
- * (func_00115DA8): the left line formats D_1AB9F8 with the localized 0x30D5 string
- * (drawn at 0x86,0xBA via func_0027FBA8) and the right line formats D_1ABA38 with a
- * localized string chosen by the cinematic-active latch D_1A790C (0x2C5C when set,
- * else 0x2C5D; drawn at 0x15D,0xBA via func_002801B8). Both composed draws pass the
- * string length (func_001157AC = strlen) as the clip arg. Returns 0.
- * (func_003017F8 takes 2 ints + 5 floats; it reads no $a2/$a3 — FACT #8918.)
- * Wall (cc1 2.9 arm): 8-byte-packed-save + FP-arg scheduling — later cc1 save-slot packing not
- * reproduced. Preserved as portable C.
- * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): the ROM's save set at its
- * 8-byte stride is reproduced; only the frame size differs (NOTE #9871). So the save-slot wall
- * named above is a cc1 2.9 property and was measured false as the reason this member stays
- * unmatched (FACT #9873). Residual: the frame size; the rest UNMEASURED. */
+/* func_002D38C8: summary/confirmation screen draw. Inside a 2D batch it draws
+ * three header glyphs (0x8B/0x8C/0x8D from the GUI font atlas, centred at row
+ * D_1ABAB0, last argument 0.56), three centred lines (localized 0x30D5, 0x2BE4,
+ * 0x2BE5), then two lines composed with the SDK sprintf (func_00115DA8): the left
+ * formats D_1AB9F8 with the localized 0x30D5 string (drawn at 0x86,0xBA through
+ * func_0027FBA8), the right formats D_1ABA38 with the string chosen by the
+ * cinematic-active latch D_1A790C (0x2C5C when set, else 0x2C5D; drawn at
+ * 0x15D,0xBA through func_002801B8). Both composed draws pass the string length
+ * (func_001157AC = strlen) as the clip argument. Takes nothing; returns 0.
+ * func_003017F8 takes 2 ints + 5 floats and reads no $a2/$a3 (FACT #8918).
+ *
+ * Compiled ALONE by the s136os arm (tools/ee/s136os_functions.txt), on the same
+ * glyph template as func_002D34E8 (task #2382): g_guiInstance re-read per glyph,
+ * the 0.56 last argument as a `tilt` local held in $f20, one device
+ * EE_REG("$f14") on the per-glyph 1.0 scale (RULING #8598), each screen-centre x
+ * and each format pointer formed before the string fetch so it lives in $16
+ * across the call. */
 extern s32 D_1ABAB0;     /* glyph row (int, converted to float) */
 extern char D_1AB9F8[];  /* sprintf format string (left composed line) */
 extern char D_1ABA38[];  /* sprintf format string (right composed line) */
-/* s136os arm, measured by task #2117 (SN 1.36 -O2 -G8 -fstrict-aliasing -fopt-stack, gcse on):
- * this #else body builds 162 words against the ROM's 175 (SHORTER), so the splice refuses it on
- * LENGTH. Residual class: length/structure, not yet attributed. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D38C8);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002D38C8)
+S136OS_SLOT(func_002D38C8);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
@@ -5883,39 +5882,54 @@ extern s32 func_001157AC(const char *s);
 extern s32 g_screenWidth;
 extern s32 g_swapGadgetItemIndex;
 /* (end of this body's declarations) */
-/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 25.33% -> STRUCTURAL,
- * first differing row @0: ROM `addiu sp,sp,-96` vs `lui v0,0x0  [HI16 0x001A7340]`;
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 31.36% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-96` vs `addiu sp,sp,-144`. */
 s32 func_002D38C8(void) {
-    void *atlas = g_guiInstance + 0x8710;
-    f32 centerX = (f32)(g_screenWidth / 2);
-    f32 row = (f32)D_1ABAB0;
-    f32 yfudge = *(f32 *)((u8 *)&g_swapGadgetItemIndex + 0x8E);
+    f32 tilt;
+    register f32 scale EE_REG("$f14");
+    s32 glyph;
     char buf[0x40];
     char *text;
 
     Begin2dDrawBatch(0);
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0x8B), 0x60442D00,
-                  centerX, row, 1.0f, yfudge, 0.56f);
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0x8C), 0x55F0C070,
-                  centerX, row, 1.0f, yfudge, 0.56f);
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0x8D), 0x55F0C070,
-                  centerX, row, 1.0f, yfudge, 0.56f);
-
-    text = GetLocalizedString(0x30D5);
-    func_002801B8(g_screenWidth / 2, 0x41, 0x80F0F0F0, text, -1);
-    text = GetLocalizedString(0x2BE4);
-    func_002801B8(g_screenWidth / 2, 0x141, 0x80F0F0F0, text, -1);
-    text = GetLocalizedString(0x2BE5);
-    func_002801B8(g_screenWidth / 2, 0x15A, 0x80F0F0F0, text, -1);
-
-    func_00115DA8(buf, D_1AB9F8, GetLocalizedString(0x30D5));
+    tilt = 0.56f;
+    glyph = GuiFontAtlasLookupGlyph(g_guiInstance + 0x8710, 0x8B);
+    scale = 1.0f;
+    func_003017F8(glyph, 0x60442D00, (f32)(g_screenWidth / 2), (f32)D_1ABAB0, scale,
+                  *(f32 *)((u8 *)&g_swapGadgetItemIndex + 0x8E), tilt);
+    glyph = GuiFontAtlasLookupGlyph(g_guiInstance + 0x8710, 0x8C);
+    scale = 1.0f;
+    func_003017F8(glyph, 0x55F0C070, (f32)(g_screenWidth / 2), (f32)D_1ABAB0, scale,
+                  *(f32 *)((u8 *)&g_swapGadgetItemIndex + 0x8E), tilt);
+    glyph = GuiFontAtlasLookupGlyph(g_guiInstance + 0x8710, 0x8D);
+    scale = 1.0f;
+    func_003017F8(glyph, 0x55F0C070, (f32)(g_screenWidth / 2), (f32)D_1ABAB0, scale,
+                  *(f32 *)((u8 *)&g_swapGadgetItemIndex + 0x8E), tilt);
+    {
+        s32 x = g_screenWidth / 2;
+        text = GetLocalizedString(0x30D5);
+        func_002801B8(x, 0x41, 0x80F0F0F0, text, -1);
+    }
+    {
+        s32 x = g_screenWidth / 2;
+        text = GetLocalizedString(0x2BE4);
+        func_002801B8(x, 0x141, 0x80F0F0F0, text, -1);
+    }
+    {
+        s32 x = g_screenWidth / 2;
+        text = GetLocalizedString(0x2BE5);
+        func_002801B8(x, 0x15A, 0x80F0F0F0, text, -1);
+    }
+    {
+        char *fmt = D_1AB9F8;
+        text = GetLocalizedString(0x30D5);
+        func_00115DA8(buf, fmt, text);
+    }
     func_0027FBA8(0x86, 0xBA, 0x80F0F0F0, buf, func_001157AC(buf));
-
-    func_00115DA8(buf, D_1ABA38, GetLocalizedString(D_1A790C != 0 ? 0x2C5C : 0x2C5D));
+    {
+        char *fmt = D_1ABA38;
+        text = GetLocalizedString(D_1A790C != 0 ? 0x2C5C : 0x2C5D);
+        func_00115DA8(buf, fmt, text);
+    }
     func_002801B8(0x15D, 0xBA, 0x80F0F0F0, buf, func_001157AC(buf));
-
     End2dDrawBatch();
     return 0;
 }
