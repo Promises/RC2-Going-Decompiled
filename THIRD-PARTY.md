@@ -209,10 +209,11 @@ here and in the function's doc comment (task #2239, RULING #10405):
 
 ### OpenRAC rac2-gc-decomp at 96927f87, cod/022FA8 core bodies (GPL-3.0)
 
-Seven C function bodies are taken from OpenRAC's `rac2-gc-decomp`,
+Eight C function bodies are taken from OpenRAC's `rac2-gc-decomp`,
 <https://github.com/OpenRAC/rac2-gc-decomp> at commit
 `96927f872c709e13aaa0f32265bb81a5531bf7ed` (root `LICENSE`: GNU General Public
-License, version 3), with the authors' permission (RULING #10405), task #2231.
+License, version 3), with the authors' permission (RULING #10405), tasks #2231
+and #2273.
 All are in `going-decompiled/src/usa/cod/022FA8.c`:
 
 | Here | Upstream file | Upstream name |
@@ -224,6 +225,7 @@ All are in `going-decompiled/src/usa/cod/022FA8.c`:
 | `func_0012E378` (adapted: extern spellings, our shared prototype) | `src/core/0012E110.c` (from rac1-decomp `src/core/0012A2F0.c`) | `func_0012E378` |
 | `func_001306D0` | `src/core/00130288.c` (from rac1-decomp `src/core/0012AC80.c`) | `func_001306D0` |
 | `func_00130A90` (adapted: callee spelling, name at our split address) | `src/core/00130890.c` | `func_00130A8C` |
+| `func_0012FBF0` (adapted: callee spellings with casts to our prototypes, our MpegCtx/IpuDecoder fields for their raw offsets; its switch table bound to the ROM's `jtbl_0013BDB0` by `tools/ee/jtbl_bind.sh`), task #2273 | `src/core/0012FB80.c` (from rac1-decomp `src/core/0012AC80.c`) | `func_0012FBF0` |
 
 The GPL-2.0-or-later note in the section "OpenRAC rac2-gc-decomp (GPL-3.0)"
 above applies to these bodies too.

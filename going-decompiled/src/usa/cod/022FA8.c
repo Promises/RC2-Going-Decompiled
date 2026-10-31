@@ -3475,10 +3475,13 @@ typedef struct {
     s32 _pad84;
     u64 field88;               /* 0x088: D_00137F38[bits 5..8 of owner field 0x20] */
     s32 field90;
-    s32 field94;               /* 0x094..0x09C: -1 after IpuInitDecoder */
+    s32 field94;               /* 0x094..0x09C: -1 after IpuInitDecoder; the
+                                  I/P/B decode limits func_0012FBF0 passes */
     s32 field98;
     s32 field9C;
-    u8  _padA0[0xAC - 0xA0];
+    s32 iFrameNo;              /* 0x0A0: I pictures seen, func_0012FBF0 */
+    s32 pFrameNo;              /* 0x0A4: P pictures since the last I */
+    s32 bFrameNo;              /* 0x0A8: B pictures since the last I */
     s32 fieldAC;
     s32 fieldB0;               /* 0x0B0: non-zero picks func_0012E608 over func_0012D808 */
     s32 pictureParams[6];      /* 0x0B4: copied from IpuPictureSize.params */
@@ -3538,7 +3541,9 @@ typedef struct {
     s32 _pad814;
     s32 lastCmdFlag;           /* 0x818: D_00137F10[opcode] of the last IPU command */
     void *field81C;            /* 0x81C: scratchpad 0x70003600 after IpuInitDecoder */
-    u8  _pad820[0x828 - 0x820];
+    s32 field820;              /* 0x820: cleared by func_0012FBF0, which returns
+                                  once it is set */
+    s32 _pad824;
     s64 pictureInfo[2];        /* 0x828: the two values callback request 5
                                   returns for each picture */
     s32 bitBuffer;             /* 0x838: the 32 stream bits FDEC last returned */
@@ -7109,8 +7114,6 @@ s32 func_0012FB80(s32 arg0, struct AllocRegion *region, s32 size, u32 align) {
     return 0;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012FBF0);
-
 /* The libmpeg player object (the sceMpeg the IPU decoder's callbacks field
  * points back at): field8 is the decoded-picture count relative to the first
  * picture, decoder the IpuDecoder it drives. */
@@ -7121,7 +7124,101 @@ typedef struct {
     IpuDecoder *decoder;
 } MpegCtx;
 
+extern char D_0013BD68[];
 extern s32 func_00130020(s32 *arg0);
+extern s32 func_0012FE78(s32 *obj, s32 arg1, s32 arg2);
+
+/**
+ * func_0012FBF0(arg0): libmpeg's _getpic -- fetch and start decoding one
+ * picture. arg0 is the player (MpegCtx); dec is its IpuDecoder.
+ *
+ * Clears dec->field00, then refuses an output buffer (outputAddr) that is not
+ * 64-byte aligned: reports it through func_00130250 (_errMessage) with
+ * D_0013BD68 and the address, and returns -1. Otherwise clears field820 and
+ * loops. Unless the last decode returned -1, it parses headers
+ * (IpuParseVideoStartCodes) until one returns 0, pictureStructure equals
+ * firstPictureStructure, or mpeg2 is clear -- so an MPEG-2 field pair is read
+ * as one picture. It then switches on that result:
+ *   0     end of stream: func_00130020 flushes, field00 = 1;
+ *   1 (I) the three frame numbers are zeroed, decode with 0 against field94;
+ *   2 (P) decode with pFrameNo against field98;
+ *   3, 4  (B; one handler in the ROM's table) decode with bFrameNo against
+ *         field9C;
+ *   above 4 nothing.
+ * Each decode goes through func_0012FE78 and bumps its frame number. Returns
+ * 1 once field820 or field00 is set.
+ *
+ * The switch is the ROM's jump table jtbl_0013BDB0 (03ACD8.rodata.s, 5 words,
+ * 3 and 4 sharing a target). cc1 2.9 emits its own copy in this unit's
+ * .rodata, which the linker script DISCARDs (FACT #12121);
+ * tools/ee/jtbl_bind.sh checks that copy word for word against the retail
+ * ELF, drops it and binds the %hi/%lo to jtbl_0013BDB0.
+ *
+ * Source: OpenRAC/rac2-gc-decomp @96927f87 (GPL-3.0, adopted with the authors'
+ * permission per RULING #10405), src/core/0012FB80.c, func_0012FBF0 (author
+ * commit c8887184, Flavius); upstream rac1-decomp src/core/0012AC80.c
+ * func_0012FBF0. C body adapted; the statements and control flow are theirs.
+ * Edits: their r1_func_00128C90 / r1_func_0012C200 / r1_func_0012C058 /
+ * r1_func_0012C430 / r1_D_00153B58 are our IpuParseVideoStartCodes /
+ * func_00130020 / func_0012FE78 / func_00130250 / D_0013BD68, and the first
+ * three take an (s32 *) cast for our prototypes; their `char *` locals with
+ * `*(int *)(p + off)` accesses are our MpegCtx and IpuDecoder fields (iFrameNo,
+ * pFrameNo, bFrameNo and field820 named here, in what was padding); their `x =
+ * x + 1` is written `x++`; `int` is written `s32` (task #2273).
+ */
+s32 func_0012FBF0(void *arg0) {
+    s32 pictureType = 1;
+    s32 lastResult = 0;
+    MpegCtx *player = (MpegCtx *)arg0;
+    IpuDecoder *dec = player->decoder;
+
+    dec->field00 = 0;
+    if ((dec->outputAddr & 0x3F) != 0) {
+        func_00130250(dec, D_0013BD68, dec->outputAddr);
+        return -1;
+    }
+    dec->field820 = 0;
+
+    do {
+        if (lastResult != -1) {
+            for (;;) {
+                pictureType = IpuParseVideoStartCodes((s32 *)dec);
+                if (pictureType == 0) break;
+                if (dec->pictureStructure == dec->firstPictureStructure) break;
+                if (dec->mpeg2 == 0) break;
+            }
+        }
+
+        switch (pictureType) {
+        case 0:
+            func_00130020((s32 *)player);
+            dec->field00 = 1;
+            break;
+        case 1:
+            dec->bFrameNo = 0;
+            dec->pFrameNo = 0;
+            dec->iFrameNo = 0;
+            lastResult = func_0012FE78((s32 *)player, 0, dec->field94);
+            dec->iFrameNo++;
+            break;
+        case 2:
+            lastResult = func_0012FE78((s32 *)player, dec->pFrameNo, dec->field98);
+            dec->pFrameNo++;
+            break;
+        case 3:
+        case 4:
+            lastResult = func_0012FE78((s32 *)player, dec->bFrameNo, dec->field9C);
+            dec->bFrameNo++;
+            break;
+        }
+
+        if (dec->field820 != 0) {
+            return 1;
+        }
+    } while (dec->field00 == 0);
+
+    return 1;
+}
 
 /**
  * func_0012FD60: decode, or skip, one FRAME picture (the decoder's

@@ -323,10 +323,10 @@
 - **OpenRAC — `rac2-gc-decomp`, commit `96927f87`, libcdvd/libgraph/libmpeg bodies** (GPL-3.0)
   <https://github.com/OpenRAC/rac2-gc-decomp> at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`
 
-  Seven core C bodies, adopted with the authors' permission (held by the
+  Nine core C bodies, adopted with the authors' permission (held by the
   operator, RULING #10405) and re-checked byte-exact against our v2.00 ROM on
-  the plain sdk29 arm (task #2231). Contributors: Flavius and bigbeno37. Five
-  are rac1-decomp's C carried into rac2-gc-decomp; `sceCdInit` and
+  the plain sdk29 arm (tasks #2231, #2237 and #2273). Contributors: Flavius and
+  bigbeno37. Seven are rac1-decomp's C carried into rac2-gc-decomp; `sceCdInit` and
   `func_00130A90` are OpenRAC's own. Each doc comment carries the `Source:`
   line, which names every change beyond extern spellings.
 
@@ -348,6 +348,11 @@
     (author commit `c8887184`, Flavius); rac1-decomp `src/core/0012AC80.c`.
   - **`func_00130A90`** (`0x00130A90`), adapted, from `src/core/00130890.c`
     (`func_00130A8C`, author commit `d9e7028d`, Flavius).
+  - **`func_0012FBF0`** (`0x0012FBF0`, libmpeg's _getpic), adapted (callee
+    spellings with casts to our prototypes, our MpegCtx/IpuDecoder fields for
+    their raw offsets), from `src/core/0012FB80.c` (author commit `c8887184`,
+    Flavius); rac1-decomp `src/core/0012AC80.c`. Its switch's jump table is
+    bound to the ROM's `jtbl_0013BDB0` by `tools/ee/jtbl_bind.sh` (task #2273).
   - **`func_0012EB30`** (`0x0012EB30`, libmpeg's sceMpegDemuxPssRing),
     adapted (callee spellings, with casts to our prototypes), from
     `src/core/0012EAA0.c` (`func_0012EB28`, author commit `c8887184`,
