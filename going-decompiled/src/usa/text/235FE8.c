@@ -2834,56 +2834,92 @@ void func_00338F88(void *a1, void *layout, u32 color, s32 val, s32 font,
 #endif
 
 /* func_00339398(x0, y0, x1, y1, base, packByte, color): draw a 6-quad rounded
- * frame (corner + edge textures) around the rect (x0,y0)-(x1,y1). Overrides the
- * camera projection scale to 0.62 (BuildCameraProjection) for the duration, packs
- * packByte into the top byte of `color`, and emits 6 textured quads via
- * func_003017F8: two corner columns (texture base+0x222C, half-height
- * ((y0-x0... see below))) and four edge pieces (texture base+0x2230), with the
- * sx/syg sign pair (+/-1) selecting each quad's mirror orientation.
+ * frame (corner + edge textures) around the box whose edges are x0/y0 (passed
+ * as each quad's py) and x1/y1 (each quad's px).
+ *   x0, y0, x1, y1  frame edges ($f12-$f15)
+ *   base            GUI resource block; its +0x222C word is the corner texture
+ *                   handle and +0x2230 the edge texture handle, both re-read at
+ *                   every call as the ROM does
+ *   packByte        alpha byte, packed into the top byte of `color`
+ *   color           RGB colour word
+ * No return value. Does nothing while g_guiInstance is null. Otherwise it
+ * overrides the camera projection scale (g_sceneActorMobys + 0x674 + 0xB0) to
+ * 0.62, rebuilds the projection, emits two corner quads (height
+ * ((y0 - x0) - 26) * 0.008928572 * 0.311 + 0.0375, sx -1/+1, y sign 0.9 when
+ * func_00336C10() == 1, else 1) and four edge quads (height
+ * ((y1 - x1) - 150) * 0.003267974 * 0.433 + 0.102, px inset by 16, sx and the y
+ * sign +/-1 for each mirror), then restores the scale and rebuilds again.
+ * The two heights share one variable, each computed in two statements, as the
+ * ROM keeps both in $f24.
  *
- * func_003017F8 consumes only $a0/$a1 and $f12-$f16 (FACT #8918), so the native
- * declaration above GuiSpriteElementDraw is the 7-param form and this caller calls
- * it directly. (It used to cast to a 7-arg pointer type because that declaration
- * carried two dead pointer params; task #1311 removed them.)
- * Faithful TARGET_NATIVE #else (engine 2.96 = no byte-match). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00339398);
+ * MATCHED byte-exact on the s136os arm (task #2290; SN 2.95.3 v1.36
+ * -fopt-stack, FACT #8810, row in tools/ee/s136os_functions.txt). The 2.9 arm
+ * builds 165 words against the ROM's 150. Levers, against the earlier #else:
+ * the `saved` scale read and the camera block are inside the g_guiInstance
+ * test; the alpha is shifted in place (`packByte <<= 24; packByte |= color`),
+ * which leaves the ROM's `bne; nop` slot empty; the heights share $f24; and
+ * g_guiInstance reads absolute through the unit's `.extern g_guiInstance, 12`
+ * pin. ARGUMENT-ORDER CAST (EE arm only): the quads are emitted through
+ * FrameQuadFn, the 7-param form with `color` after `py`. Under EABI the int and
+ * float arguments go to $a0/$a1 and $f12-$f16 whichever order they are
+ * declared in, so the call is the same call; what moves is the order cc1 sets
+ * the argument registers up in, and only `color` after `py` gives the ROM's
+ * `move $a1` after the $f12/$f13 moves at all six sites (the declared order
+ * leaves 32 words in that issue order). The unit's EE declaration of
+ * func_003017F8 is the 9-param form GuiSpriteElementDraw is matched against,
+ * so this caller casts rather than redeclare it. Native calls the 7-param
+ * declaration directly. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00339398)
+S136OS_SLOT(func_00339398);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00339398, unit objdiff): 61.12%,
-   134/174 insns differ. Residual: UNKNOWN-addiu + gp/abs-mixed symbol (first differing insn: 'addiu sp, sp, -0x80' vs 'addiu sp, sp, -0x70').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
 extern char *g_guiInstance;
 extern u8 g_sceneActorMobys[];
 extern void BuildCameraProjection(void);
+/* The camera block at g_sceneActorMobys + 0x674, as far as this reads it. */
+typedef struct {
+    u8  _pad[0xB0];
+    f32 projScale;          /* +0xB0: projection scale BuildCameraProjection reads */
+} FrameCameraBlock;
+#ifndef TARGET_NATIVE
+typedef void (*FrameQuadFn)(s32 handle, f32 px, f32 py, s32 color, f32 sx,
+                            f32 syg, f32 v38);
+#define FRAME_QUAD(h, c, px, py, sx, sy, v) \
+    ((FrameQuadFn)func_003017F8)((h), (px), (py), (c), (sx), (sy), (v))
+#else
+#define FRAME_QUAD(h, c, px, py, sx, sy, v) \
+    func_003017F8((h), (c), (px), (py), (sx), (sy), (v))
+#endif
 void func_00339398(f32 x0, f32 y0, f32 x1, f32 y1, s32 base, s32 packByte,
                    u32 color) {
-    f32 *projScale = (f32 *)(g_sceneActorMobys + 0x674 + 0xB0);
-    f32  saved = *projScale;
-    if (g_guiInstance != 0) {
-        f32 syg = 1.0f;                 /* 0.9f when func_00336C10() == 1 */
-        f32 hCorner, hEdge;
-        s32 texCorner, texEdge;
-        *projScale = 0.62f;
-        BuildCameraProjection();
-        hCorner = ((y0 - x0) - 26.0f) * 0.008928572f * 0.31100002f + 0.0375f;
-        if (func_00336C10() == 1) {
-            syg = 0.9f;
-        }
-        color = ((s32)((u32)packByte << 0x18)) | color;
-        texCorner = *(s32 *)(base + 0x222C);
-        func_003017F8(texCorner, color, x1, x0, -1.0f, syg, hCorner);
-        func_003017F8(texCorner, color, y1, x0,  1.0f, syg, hCorner);
-        hEdge = ((y1 - x1) - 150.0f) * 0.003267974f * 0.43300003f + 0.102f;
-        texEdge = *(s32 *)(base + 0x2230);
-        func_003017F8(texEdge, color, x1 + 16.0f, x0, -1.0f, 1.0f, hEdge);
-        func_003017F8(texEdge, color, y1 - 16.0f, x0,  1.0f, 1.0f, hEdge);
-        func_003017F8(texEdge, color, x1 + 16.0f, y0, -1.0f, -1.0f, hEdge);
-        func_003017F8(texEdge, color, y1 - 16.0f, y0,  1.0f, -1.0f, hEdge);
-        *projScale = saved;
-        BuildCameraProjection();
+    FrameCameraBlock *cam;
+    f32 saved, syg, h;
+    if (g_guiInstance == 0) {
+        return;
     }
+    cam = (FrameCameraBlock *)(g_sceneActorMobys + 0x674);
+    syg = 1.0f;
+    saved = cam->projScale;
+    cam->projScale = 0.62f;
+    BuildCameraProjection();
+    h = ((y0 - x0) - 26.0f) * 0.008928572f;
+    h = h * 0.31100002f + 0.0375f;
+    if (func_00336C10() == 1) {
+        syg = 0.9f;
+    }
+    packByte <<= 24;
+    packByte |= color;
+    FRAME_QUAD(*(s32 *)(base + 0x222C), packByte, x1, x0, -1.0f, syg, h);
+    FRAME_QUAD(*(s32 *)(base + 0x222C), packByte, y1, x0, 1.0f, syg, h);
+    h = ((y1 - x1) - 150.0f) * 0.003267974f;
+    h = h * 0.43300003f + 0.102f;
+    FRAME_QUAD(*(s32 *)(base + 0x2230), packByte, x1 + 16.0f, x0, -1.0f, 1.0f, h);
+    FRAME_QUAD(*(s32 *)(base + 0x2230), packByte, y1 - 16.0f, x0, 1.0f, 1.0f, h);
+    FRAME_QUAD(*(s32 *)(base + 0x2230), packByte, x1 + 16.0f, y0, -1.0f, -1.0f, h);
+    FRAME_QUAD(*(s32 *)(base + 0x2230), packByte, y1 - 16.0f, y0, 1.0f, -1.0f, h);
+    cam->projScale = saved;
+    BuildCameraProjection();
 }
+#undef FRAME_QUAD
 #endif
 
 /* Format a localized caption into a widget sub-block: sprintf the text of

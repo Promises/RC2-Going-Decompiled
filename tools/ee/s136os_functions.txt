@@ -306,6 +306,7 @@ usa text/1A00F0 func_002A0480
 usa text/248B50 func_0034A6B0
 usa text/248B50 func_0034B950
 usa text/235FE8 func_003395F0
+usa text/235FE8 func_00339398
 usa text/191238 MapUpdateLevelAvailability
 usa text/191238 MapEvictCacheSlot
 usa text/191238 RegisterMobyClass
