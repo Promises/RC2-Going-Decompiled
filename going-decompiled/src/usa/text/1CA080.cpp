@@ -2039,9 +2039,70 @@ s32 func_002CC858(s32 q) {
 }
 #endif
 
-/* menu helper: switch/jump-table dispatch (splat jtbl reloc gap) — left as
- * INCLUDE_ASM (cc1 jtbl layout not reproduced). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CC908);
+/* func_002CC908: menu action dispatcher for `mode` 0..4, returning 1 when the
+ * action was taken and 0 otherwise (out-of-range modes included):
+ *   0     re-arm the s16 state word at g_nNanotechBonusHealTimer+4 to 0xA;
+ *   1, 2  the same, then, when the D_1AA440 / D_1AA448 handler is installed,
+ *         call it with 0 bracketed by SwapMobyTableContext(0) / (1);
+ *   3     return func_002D67A0(3, D_0025BA70);
+ *   4     RequestGameStateChange(4, 2, 8, 4, 0); only when that is refused
+ *         (returns 0): SetGameStateTransitionDelay(3), set the screen-state
+ *         word at g_pTextTableLoadBuf+0xDC and return 1.
+ * The sibling of func_002CC7D8 one function up, with the moby-table swap.
+ *
+ * s136os arm (SN 1.36 -fopt-stack: the ROM's 8-byte s0/ra save slots; the 2.9
+ * arm gives a 0x20 frame). The switch compiles to a 5-entry jump table, which
+ * tools/ee/jtbl_bind.sh checks entry by entry against the ROM's
+ * jtbl_0026CCC0_text (data/16CA20) and binds to it. In case 4 `result = 1`
+ * comes after the store: written first, cse feeds the store from the result
+ * register and the function is one word short (the ROM materialises its own
+ * `li v0,1` for the store and fills the call's delay slot with `li s0,1`). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002CC908)
+S136OS_SLOT(func_002CC908);
+#else
+extern u8 g_nNanotechBonusHealTimer[];
+extern void SetGameStateTransitionDelay(s32 frames);
+extern void SwapMobyTableContext(s32 tableId);
+s32 func_002CC908(s32 mode) {
+    s32 result = 0;
+
+    switch (mode) {
+    case 0:
+        *(s16 *)(g_nNanotechBonusHealTimer + 4) = 0xA;
+        result = 1;
+        break;
+    case 1:
+        *(s16 *)(g_nNanotechBonusHealTimer + 4) = 0xA;
+        result = 1;
+        if (D_1AA440) {
+            SwapMobyTableContext(0);
+            D_1AA440(0);
+            SwapMobyTableContext(1);
+        }
+        break;
+    case 2:
+        *(s16 *)(g_nNanotechBonusHealTimer + 4) = 0xA;
+        result = 1;
+        if (D_1AA448) {
+            SwapMobyTableContext(0);
+            D_1AA448(0);
+            SwapMobyTableContext(1);
+        }
+        break;
+    case 3:
+        result = func_002D67A0(3, D_0025BA70);
+        break;
+    case 4:
+        if (RequestGameStateChange(4, 2, 8, 4, 0) == 0) {
+            SetGameStateTransitionDelay(3);
+            *(s32 *)(g_pTextTableLoadBuf + 0xDC) = 1;
+            result = 1;
+        }
+        break;
+    }
+    return result;
+}
+#endif
 
 /* 3-case menu action dispatch via switch, result merged to one tail return:
  *   action==0: arm g_nNanotechBonusHealTimer mirror (s16 at +4 = 0xA), result 1
