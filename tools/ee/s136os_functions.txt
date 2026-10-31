@@ -711,3 +711,4 @@ usa text/191238 func_00297FA0
 usa text/191238 BindSkyData
 usa text/1FFBA0 func_003007F8
 usa text/1CA080 func_002CC908
+usa text/1CA080 UpdatePlanetWarpMenuInput

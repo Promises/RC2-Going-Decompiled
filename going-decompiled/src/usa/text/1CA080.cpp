@@ -109,6 +109,9 @@ __asm__(".extern g_frameCounter, 16");
 __asm__(".extern g_cinematicExitPending, 16");
 __asm__(".extern g_swapGadgetItemIndex, 16");
 __asm__(".extern D_1A7908, 16");
+/* size-12 class (FACT #9597): gp-relative in delay slots, absolute elsewhere
+ * (UpdatePlanetWarpMenuInput, task #2288). */
+__asm__(".extern g_playerProgress, 12");
 __asm__(".extern D_1A790C, 16");
 __asm__(".extern D_1ABA71, 16");
 __asm__(".extern D_1ABA72, 16");
@@ -4759,99 +4762,87 @@ void func_002D1E88(void) {
  * cursor is unchanged, the file-load is idle, and the present record shows this
  * cursor already presented (offsets 0x50/0x54 == cursor and state 0x44 in {2,4}).
  * Cursor jump table is jtbl_0026CD00_text (in cursor order).
- * Wall: switch/jump-table dispatch (splat jtbl reloc gap) + branch-likely present-
- * record fence — cc1 jtbl layout not reproduced. Preserved as portable C. */
+ *
+ * Byte-exact on the s136os arm (task #2288), from NOTE #9493's pw_f4 skeleton:
+ *  - the confirm dispatch is a plain `switch`; tools/ee/jtbl_bind.sh checks its
+ *    8 compiled entries against jtbl_0026CD00_text (data/16CA20) and binds the
+ *    %hi/%lo pair to it, so no computed goto is needed;
+ *  - the confirm test reads D_138180 through a BLOCK-SCOPED `in` pointer: a
+ *    re-assigned `input` (or a `flags` re-read) puts the re-formed address in the
+ *    load's own register, where the ROM uses $3 for it (0x2D2008);
+ *  - g_playerProgress takes the unit-level `.extern g_playerProgress, 12` model
+ *    (asm_unit.sh's size-12 class, FACT #9597): the ROM reads it gp-relative in
+ *    delay slots (func_002D2538, RequestMenuScreenChange, func_002CD670) and
+ *    through the load macro elsewhere (`lui $4; lw $4,%lo($4)` at 0x2D20D8 here,
+ *    func_002D3C98); a ROM_SPLIT alias gives a separate %hi register instead;
+ *  - one `return result` behind `done:`, and the disabled-item sound in the
+ *    `else` after the case bodies (NOTE #9493 steps 2-3). */
 extern s32 g_planetWarpCursor;   /* 0x1ABA68 - planet-warp cursor 0..7 */
 extern s32 D_1A7904;             /* warp-mode selector written before the exit */
 extern s32 D_1A7908;             /* stashed prior progress slot (cursor-7 case) */
 extern u8 D_0025C560[];          /* per-screen present record */
 extern u8 *D_25C520;             /* pointer to the live menu object */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", UpdatePlanetWarpMenuInput);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_UpdatePlanetWarpMenuInput)
+S136OS_SLOT(UpdatePlanetWarpMenuInput);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern void RequestLevelExit(s32 destination, s32 commitSave);
 /* (end of this body's declarations) */
-/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 36.04% -> STRUCTURAL,
- * first differing row @1: ROM `lui v0,0x0  [HI16 D_138180]` vs `(none)`;
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 51.21% -> STRUCTURAL, first differing row @0: ROM `(none)` vs `lui v1,0x0  [HI16 D_138180]`. */
 extern s32 PlayGlobalSound(s32 id, s32 a, s32 b);
 extern u8 g_planetWarpEnabled;   /* 0x1ABA70 - per-item enabled flags (indexed) */
 extern s32 g_playerProgress;     /* 0x1A79F8 - current save progress slot */
 s32 UpdatePlanetWarpMenuInput(void) {
-    s32 flags = *(s32 *)(D_138180 + 0x1C4);
-    s32 cursor0 = g_planetWarpCursor;   /* cursor at entry, for the fence check */
+    u8 *input = D_138180;
+    s32 flags = *(s32 *)(input + 0x1C4);
+    s32 cursor0 = g_planetWarpCursor;
     s32 result = 0;
+    u8 *record;
     s32 cursor;
+    s32 item;
 
-    if (flags & 0x10) {                 /* back */
-        s32 e0 = *(s32 *)(*(u8 **)(g_menuScreenBlock + 0x14) + 0xE0);
-        g_planetWarpCursor = 0;
-        if (e0 != 0) {
-            *(s32 *)(g_menuScreenBlock + 0x18) = e0;
-            return 0;
-        }
-        return (*(s32 *)(g_menuScreenBlock + 0x134) == 0) ? -1 : 0;
-    }
-
-    if (flags & 0x900) {                /* cancel */
-        g_planetWarpCursor = 0;
-        return 1;
-    } else if (flags & 0x1000) {        /* up */
-        s32 v;
-        PlayGlobalSound(3, 0, 0);
-        v = g_planetWarpCursor - 1;
-        g_planetWarpCursor = (v >= 0) ? v : 7;
-    } else if (flags & 0x4000) {        /* down */
-        s32 v;
-        PlayGlobalSound(3, 0, 0);
-        v = g_planetWarpCursor + 1;
-        g_planetWarpCursor = (v < 8) ? v : 0;
-    }
-
-    flags = *(s32 *)(D_138180 + 0x1C4);
-    if (flags & 0x40) {                 /* confirm */
-        cursor = g_planetWarpCursor;
-        if ((&g_planetWarpEnabled)[cursor] == 0) {
-            PlayGlobalSound(5, 0, 0);   /* disabled item */
-        } else {
+    if (flags & 0x10) { g_planetWarpCursor = 0; return MenuPollConfirm(); }
+    if (flags & 0x900) { g_planetWarpCursor = 0; result = 1; goto done; }
+    else if (flags & 0x1000) { PlayGlobalSound(3, 0, 0); if (--g_planetWarpCursor < 0) g_planetWarpCursor = 7; }
+    else if (flags & 0x4000) { PlayGlobalSound(3, 0, 0); if (++g_planetWarpCursor >= 8) g_planetWarpCursor = 0; }
+    {
+    u8 *in = D_138180;
+    if (*(s32 *)(in + 0x1C4) & 0x40) {
+        if ((&g_planetWarpEnabled)[g_planetWarpCursor] != 0) {
             PlayGlobalSound(4, 0, 0);
-            cursor = g_planetWarpCursor;
-            if ((u32)cursor < 8) {
-                switch (cursor) {
-                case 0: D_1A7904 = 2; RequestLevelExit(0x2, 1); break;
-                case 1: D_1A7904 = 3; RequestLevelExit(0x4, 1); break;
-                case 2: D_1A7904 = 3; RequestLevelExit(0xB, 1); break;
-                case 3: D_1A7904 = 2; RequestLevelExit(0xB, 1); break;
-                case 4: D_1A7904 = 1; RequestLevelExit(0x1A, 1); break;
-                case 5: D_1A7904 = 1; RequestLevelExit(0x16, 1); break;
-                case 6: D_1A7904 = 1; RequestLevelExit(0x17, 1); break;
-                case 7:
-                    D_1A7904 = 1;
-                    if (g_playerProgress != 0x15) {
-                        D_1A7908 = g_playerProgress;
-                    }
-                    RequestLevelExit(0x15, 1);
-                    break;
-                }
+            item = g_planetWarpCursor;
+            switch (item) {
+            case 0: D_1A7904 = 2; RequestLevelExit(0x2, 1); break;
+            case 1: D_1A7904 = 3; RequestLevelExit(0x4, 1); break;
+            case 2: D_1A7904 = 3; RequestLevelExit(0xB, 1); break;
+            case 3: D_1A7904 = 2; RequestLevelExit(0xB, 1); break;
+            case 4: D_1A7904 = 1; RequestLevelExit(0x1A, 1); break;
+            case 5: D_1A7904 = 1; RequestLevelExit(0x16, 1); break;
+            case 6: D_1A7904 = 1; RequestLevelExit(0x17, 1); break;
+            case 7:
+                D_1A7904 = 1;
+                if (g_playerProgress != 0x15) D_1A7908 = g_playerProgress;
+                RequestLevelExit(0x15, 1);
+                break;
             }
+        } else {
+            PlayGlobalSound(5, 0, 0);
         }
     }
-
-    /* present-record redraw fence */
+    }
     cursor = g_planetWarpCursor;
-    *(s32 *)(D_0025C560 + 0x58) = cursor;
-    if ((&g_planetWarpEnabled)[cursor] == 0) {
-        *(s32 *)(D_25C520 + 0x10) |= 0x4;
-    } else if (cursor0 == cursor && g_fileLoadState == 0) {
-        s32 mode = *(s32 *)(D_0025C560 + 0x44);
-        if ((*(s32 *)(D_0025C560 + 0x50) == cursor0 && mode == 2) ||
-            (*(s32 *)(D_0025C560 + 0x54) == cursor0 && mode == 4)) {
+    record = D_0025C560;
+    *(s32 *)(record + 0x58) = cursor;
+    if ((&g_planetWarpEnabled)[cursor] != 0) {
+        if (cursor0 == cursor && g_fileLoadState == 0 &&
+            ((*(s32 *)(record + 0x50) == cursor0 && *(s32 *)(record + 0x44) == 2) ||
+             (*(s32 *)(record + 0x54) == cursor0 && *(s32 *)(record + 0x44) == 4))) {
             *(s32 *)(D_25C520 + 0x10) &= ~0x4;
         }
+    } else {
+        *(s32 *)(D_25C520 + 0x10) |= 0x4;
     }
+done:
     return result;
 }
 #endif
