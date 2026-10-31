@@ -573,6 +573,10 @@ s32 InstallLoadedOverlay(void) {
 
 extern void LoadLevelAndInitHealth(void);
 extern s32 InstallLoadedOverlay(void);
+/* void prototypes for main's callees: left implicit (int-returning), the s136
+ * compile forms the LoadLevelAndInitHealth address in $3 instead of the ROM's $2. */
+extern void func_0011FC48(void);
+extern void func_0011AEA0(s32 mode);
 
 /* main (0x131D98): the game's top-level loop. Never returns.
  *
