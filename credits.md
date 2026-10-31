@@ -150,15 +150,15 @@
 - **OpenRAC — `rac2-gc-decomp`, commit `96927f87`, s136os bodies** (GPL-3.0)
   <https://github.com/OpenRAC/rac2-gc-decomp> at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`
 
-  Fifteen engine C bodies, two in text/16E980, one in text/1A00F0, one in
+  Seventeen engine C bodies, two in text/16E980, one in text/1A00F0, one in
   text/1A8180, three in text/1B4218, one in text/1D54C0, one in text/1DFF80,
-  two in text/188858, two in cod/0321A0, one in text/235FE8 and one in
-  text/248B50, adopted with the authors' permission (held by the operator,
-  RULING #10405) and re-checked byte-exact against our v2.00 ROM on the s136os
-  arm (tasks #2232, #2234, #2235, #2248, #2251, #2252, #2262, #2294, #2304 and
-  #2306, from audit NOTE #12089 rows 3, 4, 5, 6, 8 and 9, NOTE #12161 and NOTE
-  #12173).
-  Contributors: bigbeno37, Flavius, Louis-Philippe Le Sieur and ThorpenCodes. Each doc comment carries the `Source:`
+  two in text/188858, two in cod/0321A0, one in text/235FE8, one in
+  text/248B50 and two in text/250080, adopted with the authors' permission
+  (held by the operator, RULING #10405) and re-checked byte-exact against our
+  v2.00 ROM on the s136os arm (tasks #2232, #2234, #2235, #2248, #2251, #2252,
+  #2262, #2294, #2304, #2306 and #2320, from audit NOTE #12089 rows 3, 4, 5,
+  6, 8 and 9, NOTE #12161, NOTE #12173 and NOTE #12202).
+  Contributors: bigbeno37, Flavius, Louis-Philippe Le Sieur, ThorpenCodes and Lynder063. Each doc comment carries the `Source:`
   line, which names every change beyond extern spellings.
 
   Used so far:
@@ -283,6 +283,22 @@
     188858.c), and their `section(".sdata")` on the GUI instance pointer
     dropped for the unit's `.extern g_guiInstance, 16`; the control flow and
     expressions are theirs.
+  - **`func_00350910`** (`0x00350910`) in
+    `going-decompiled/src/usa/text/250080.cpp`, from `src/game/0034CEA0.c`
+    (`func_0034FBC8`, v1.01 address, author commit `3f207b09`, Lynder063),
+    task #2320 (NOTE #12202). ADAPTED: our callee names and prototypes
+    (`func_00350868` takes the decode buffer as `u8 *`), their `.sdata`
+    decode-buffer word read as our `u8 *D_001B2354`, and an `(s32 *)` cast
+    for the C++ front end. The EE forward declaration func_00350840 forwards
+    through stays `(void)` on the 2.9 arm only.
+  - **`func_003526A8`** (`0x003526A8`) in
+    `going-decompiled/src/usa/text/250080.cpp`, from `src/game/003512B8.c`
+    (`func_00351960`, v1.01 address, author commit `455cde53`, Flavius), with
+    its `Header_351960`/`Packet_351960` typedefs, task #2320 (NOTE #12202).
+    ADAPTED: our callee names and prototypes, two of them called through
+    void-returning casts as upstream declares them, their `D_001AE860` as our
+    `D_1AE818` with a `section(".data")` addressing device, and their `sda`
+    arena word as the unit's `g_pFmvArenaBase`.
 
 - **RC2 decomp contributions — `src/game/002E4528-rc2.c` and `src/game/002B7380-rc2.c` in OpenRAC `rac2-gc-decomp`, commit `96927f87`** (MIT, © 2026 RC2 decomp contributions)
   <https://github.com/OpenRAC/rac2-gc-decomp> at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`

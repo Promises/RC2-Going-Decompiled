@@ -703,3 +703,5 @@ usa text/248B50 GuiScreenWithPlanetNameInit
 usa text/1B4218 StepDialogVoiceChannel
 usa text/1B4218 BeginFrameDrawList
 usa text/1B4218 StepMobyMotion
+usa text/250080 func_00350910
+usa text/250080 func_003526A8

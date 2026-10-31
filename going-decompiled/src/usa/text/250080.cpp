@@ -183,13 +183,16 @@ extern s32 func_00351910(void *dmaq);
 extern s32 func_00350830(FmvPtsQueue *q);
 extern s32 func_00350840(FmvPtsQueue *q);
 /* func_00350910 reads $a0 as the stream-state ptr and returns nothing (void).
-   The matching build keeps the original `(void)`-shaped forward decl so the
+   The unit's 2.9 compile keeps the original `(void)`-shaped forward decl so the
    byte-exact forwarder func_00350840 below (`return func_00350910()`) compiles
-   identically; the native build uses the real `void(s32*)` signature. */
-#ifndef TARGET_NATIVE
+   identically. The s136os compile of func_00350910 itself (-DS136OS_func_00350910)
+   and the native build see the real `void(void *)` signature, which its
+   definition needs; that compile takes func_00350840's native arm, and only
+   func_00350910's block is spliced from it (task #2320, NOTE #9836's route). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00350910)
 extern s32 func_00350910(void);
 #else
-void func_00350910(s32 *st);
+void func_00350910(void *object);
 #endif
 extern s32 func_001338C8(void);
 extern s32 func_0012EE28(void); /* DECL-LEVER(#2011): defined (obj, index, value, a3, a4) in cod/022FA8; func_00352570 below forwards its own incoming argument registers through a bare `jal` (the ROM sets none), which this argument-less declaration reproduces */
@@ -725,7 +728,7 @@ s32 func_00350830(FmvPtsQueue *q) {
  * its undefined result, which also keeps cc1 from sibling-call optimising
  * the forwarding tails.)
  */
-#ifndef TARGET_NATIVE
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00350910)
 s32 func_00350840(FmvPtsQueue *q) {
     if (q->started != 0) {
         return func_00350910();   /* byte-exact: jal then jr $31 forwarding $2 */
@@ -733,11 +736,12 @@ s32 func_00350840(FmvPtsQueue *q) {
 }
 #else
 s32 func_00350840(FmvPtsQueue *q) {
-    /* Native: func_00350910 is void and takes the stream-state ptr; pass q
+    /* Native (and func_00350910's s136os compile, which splices only that
+       function): func_00350910 is void and takes the stream-state ptr; pass q
        (the asm forwards its own $a0 unchanged). The original forwards the
        leftover $2; here that result is undefined, so return 0. */
     if (q->started != 0) {
-        func_00350910((s32 *)q);
+        func_00350910(q);
     }
     return 0;
 }
@@ -808,8 +812,52 @@ void func_00350868(u8 *obj, u8 *src, s32 len, s32 dstOfs) {
 }
 #endif
 
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00350910);
+/**
+ * func_00350910 — drain the elementary stream to the IOP in 0x400-byte units
+ * (the pts-queue pump that func_00350840 forwards to).
+ * @param object  the pts-queue / stream-state block, read as words: o[0] the
+ *                FSM state, o[6] macroblock columns, o[7] bytes per row,
+ *                o[13] ring base, o[14] write cursor, o[15] bytes queued,
+ *                o[16] ring size, o[20] bytes fed, o[24] position mod 0x1000.
+ *
+ * Decides how many bytes are ready from the state word (1: 0x1000 - fed, once
+ * 0x1000 are queued; 2: the tick counter func_00133960 minus o[24], mod
+ * 0x1000; 3: nothing), then while a full unit is ready and enough is queued,
+ * for each column de-interleaves rows of o[7] bytes out of the payload ring
+ * into the decode scratch buffer (D_001B2354's target), patches marker bytes
+ * at the 0xC00 and 0 positions, and bounces the block to the IOP through
+ * func_00350868. Returns nothing: the ROM's $v0 is whatever the last callee
+ * left, which func_00350840's EE arm forwards (FACT #5605).
+ *
+ * MATCHED on the s136os arm (SN 2.95.3 v1.36 cc1plus -fopt-stack, the unit's
+ * S136EXTRA "" = gcse ON; with -fno-gcse the splice refuses it at 153 words
+ * against the ROM's 147, measured in-unit by task #2320; FACT #12200 reads 153
+ * on the 2.9 arm too). Row in tools/ee/s136os_functions.txt,
+ * spliced over S136OS_SLOT by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice drops the function. On native it is
+ * plain C. Device-free: the decode-buffer pointer is read through the unit's
+ * file-scope `.extern D_001B2354, 16` above FmvPtsQueueInit (no section
+ * attribute here). The call to func_00350868 must see a prototype: as an
+ * implicit `int f()` call, cc1 colours the loop test into $3 where the ROM has
+ * $2 (3/147, FACT #12200 / NOTE #12202). Retires the earlier #else (sdk29
+ * 30.39%, task #513; "far" on s136, NOTE #9836).
+ *
+ * Source: OpenRAC/rac2-gc-decomp @96927f872c709e13aaa0f32265bb81a5531bf7ed
+ * (GPL-3.0, adopted with the authors' permission per RULINGs #10405 and
+ * #12108), src/game/0034CEA0.c, func_0034FBC8 (v1.01 address; author commit
+ * 3f207b09, Lynder063; the identity comment above it upstream,
+ * `sendADPCM(_AudioDec *)`, is 4b91368, bigbeno37, and is not adopted), C body
+ * ADAPTED: our symbol name and the callees by their v2.00 names with our
+ * prototypes (their func_0034FB20 is our func_00350868, `(u8 *, u8 *, s32,
+ * s32)` where theirs takes an s32 second argument, so the buffer is passed as
+ * the `u8 *` it is; func_00133960 unchanged); their decode-buffer word
+ * `extern s32 D_001B23D4 __attribute__((section(".sdata")))`, cast to `u8 *` at
+ * each use, is our `u8 *D_001B2354` (D_1B2354 on native) read directly, without
+ * the section attribute; and `s32 *o = object` gains the `(s32 *)` the C++
+ * front end needs. Every statement and its order are theirs. Task #2320.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00350910)
+S136OS_SLOT(func_00350910);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
@@ -817,100 +865,64 @@ extern s32 func_00133960(void);
 extern void func_00350868(u8 *stream, u8 *src, s32 len, s32 dstOfs);
 extern u8 *D_1B2354;
 /* (end of this body's declarations) */
-/* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 30.39% / engine96 34.69%. Residual: PACKED-SAVE (4 callee saves) + 152 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs).
- * Save stride NOT re-measured for this member on the s136os arm: its C arm does not compile
- * solo there (NOTE #9871). Of the 111 labeled members that were, 0 reproduce the 16-byte save
- * stride there (FACT #9873), so the stride is not evidence that this member is walled.
- * Residual: UNMEASURED. */
-/* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
-   saves (s0..s2/ra) plus several branch-likely div-by-zero guards. Revisit
-   with the gameplay-TU compiler.
+#ifndef TARGET_NATIVE
+extern u8 *D_001B2354;
+#define FMV_DRAIN_DECODE_BUF D_001B2354
+#else
+#define FMV_DRAIN_DECODE_BUF D_1B2354
+#endif
+void func_00350910(void *object) {
+    s32 *o = (s32 *)object;
+    s32 t = 0;
+    s32 next, i, count;
+    u8 *src;
+    u8 *dst;
 
-   Drain the elementary stream in 0x400-byte units: depending on the stream
-   FSM state word (st[0]) decide how many ready bytes there are, then for each
-   unit de-interleave st[6] macroblock rows of st[7] bytes out of the payload
-   ring into the decode scratch (D_1B2354), inject the SCD/sequence markers at
-   the 0xC00 boundary, and bounce each completed 0x400 block to IOP via
-   func_00350868. Procedure (void): the asm reads $a0 as the stream-state ptr
-   (daddu $16,$4,$0; lw 0x0($16)); its caller func_00350840 forwards its own
-   $a0 unchanged and returns the leftover $2 (the "undefined result"). */
-void func_00350910(s32 *st) {
-    u32 avail = 0;
-    s32 state = st[0];
-    s32 rdy;
-
-    if (state == 2) {
-        avail = (func_00133960() - st[0x18]) & 0xFFF;
-        rdy = (s32)avail < 0x400;
-    } else if (state > 2) {
-        if (state == 3) {
+    switch (o[0]) {
+    case 1:
+        if (o[15] < 0x1000)
             return;
-        }
-        rdy = 1;   /* avail stays 0 here, so (s32)avail < 0x400 == 1 -> skips the drain */
-    } else if (state == 1) {
-        if (st[0xF] < 0x1000) {
-            return;
-        }
-        avail = 0x1000 - st[0x14];
-        rdy = (s32)avail < 0x400;
-    } else {
-        rdy = 1;   /* avail stays 0 here, so (s32)avail < 0x400 == 1 -> skips the drain */
+        t = 0x1000 - o[20];
+        break;
+    case 2:
+        t = (func_00133960() - o[24]) & 0xFFF;
+        break;
+    case 3:
+        return;
+    default:
+        break;
     }
-
-    if (!rdy && st[6] << 10 <= st[0xF]) {
-        s32 mbCols = st[6];
-
-        do {
-            avail -= 0x400;
-            if (mbCols > 0) {
-                s32 col = 0;
-                s32 srcBase = st[0xF];
-
-                while (1) {
-                    s32 ringSize = st[0x10];
-                    s32 emitted = 0;
-                    s32 rowBytes = st[7];
-                    u8 *src = (u8 *)(st[0xD] + (st[0xE] - srcBase + ringSize) % ringSize +
-                                     col * rowBytes);
-                    u8 *dst = D_1B2354;
-
-                    do {
-                        s32 i;
-                        for (i = 0; i < st[7]; i++) {
-                            *dst++ = *src++;
-                            emitted++;
-                        }
-                        rowBytes = st[7];
-                        src += rowBytes * (st[6] - 1);
-                    } while (emitted < 0x400);
-
-                    if (st[0x18] == 0xC00) {
-                        D_1B2354[0x3F1] = 3;
-                    }
-                    if (st[0x18] == 0) {
-                        D_1B2354[0x11] = 2;
-                        D_1B2354[1] = 6;
-                    }
-                    func_00350868((u8 *)st, D_1B2354, 0x400, col * 0x1000 + st[0x18]);
-                    if (st[6] <= col + 1) {
-                        break;
-                    }
-                    srcBase = st[0xF];
-                    col++;
+    while (t >= 0x400 && o[15] >= o[6] * 1024) {
+        next = t - 0x400;
+        for (i = 0; i < o[6]; i++) {
+            count = 0;
+            src = (u8 *)o[13] + (o[14] - o[15] + o[16]) % o[16];
+            src += i * o[7];
+            dst = FMV_DRAIN_DECODE_BUF;
+            do {
+                s32 k;
+                for (k = 0; k < o[7]; k++) {
+                    *dst++ = *src++;
+                    count++;
                 }
+                src += o[7] * (o[6] - 1);
+            } while (count < 0x400);
+            if (o[24] + 0x400 == 0x1000)
+                FMV_DRAIN_DECODE_BUF[0x3F1] = 3;
+            if (o[24] == 0) {
+                u8 *p = FMV_DRAIN_DECODE_BUF;
+                p[1] = 6;
+                p[0x11] = 2;
             }
-            {
-                s32 step = st[0x18] + 0x400;
-                s32 r = (step >= 0) ? step : step + 0x13FF;
-                s32 left = st[0xF] - mbCols * 0x400;
-                st[0x18] = step - (r >> 12) * 0x1000;
-                st[0x14] += 0x400;
-                st[0xF] = left;
-                mbCols = st[6];
-            }
-        } while ((s32)avail >= 0x400 && mbCols * 0x400 <= st[0xF]);
+            func_00350868((u8 *)o, FMV_DRAIN_DECODE_BUF, 0x400, (i << 12) + o[24]);
+        }
+        t = next;
+        o[15] -= o[6] * 1024;
+        o[24] = (o[24] + 0x400) % 0x1000;
+        o[20] += 0x400;
     }
 }
+#undef FMV_DRAIN_DECODE_BUF
 #endif
 
 /* TODO(hle): needs PS2 graphics/IO HLE backend — builds the per-frame GIF
@@ -2281,21 +2293,97 @@ s32 func_00352680(FmvStream *obj) {
 /* func_003526A0: 8 bytes of inter-function padding, no C. */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/250080", func_003526A0);
 
-/* func_003526A8: end-of-stream flush (pads the bitstream to a 4-byte boundary).
- * Blocked (match, cc1 2.9 arm): 8-byte-packed saves (s0@0x20, ra@0x28).
- * PARKED #70 (#else not confident): the asm sets up 4 stack out-param pointers
- * (sp+0x10/+0x14/+0x18/+0x1C) before `jal func_00352590`, then reads sp+0x14/+0x1C
- * (sum<4 -> early-out) and sp+0x10/+0x18 (masked &0xFFFFFFF | 0x20000000 into DMATAGs
- * for func_003511A8), also copying D_1AE818 (unaligned lwl/lwr) to sp+0x0. Ghidra
- * decompiles func_00352590 as a 1-param forwarder `FUN_003517c0(p+0x48)`; that part is
- * resolved since task #2037: func_00352590 forwards all five arguments and
- * func_003517C0 (byte-exact on the s136os arm) does write the 4 slots (span pointers
- * and lengths). func_003511A8's arity is still to check before writing a faithful
- * #else. Not forcing a low-confidence body.
- * Save stride NOT re-measured for this member on the s136os arm: it has no C arm to compile
- * (NOTE #9871). Of the 111 labeled members that were, 0 reproduce the 16-byte save stride there
- * (FACT #9873), so the stride is not evidence that this member is walled. Residual: UNMEASURED. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003526A8);
+/**
+ * func_003526A8 — end-of-stream flush: append the MPEG sequence_end_code to
+ * the bitstream ring and move an idle playback FSM to state 2.
+ * @param a0  the FMV stream object (FmvStream, read raw: +0x48 the embedded
+ *            bitstream sub-object, +0xA8 the FSM state word)
+ * @return    0 when the ring has fewer than 4 free bytes (nothing written),
+ *            else 1
+ *
+ * Builds a 16-byte packet on the stack whose first 4 bytes are copied from
+ * D_1AE818 (00 00 01 B7, the MPEG-1/2 sequence_end_code; an unaligned
+ * lwl/lwr copy), asks the ring for its two free spans (func_00352590, the
+ * five-argument free-span forwarder), and when they hold at least 4 bytes
+ * scatters the packet into them through uncached (0x20000000-based) addresses
+ * with func_003511A8, accounts the stored bytes on the arena's stream object
+ * (func_003525B0), rounds the bitstream cursor up to 2KB (func_00352000), and
+ * moves an idle FSM (state 0) to 2.
+ *
+ * MATCHED on the s136os arm (SN 2.95.3 v1.36 cc1plus -fopt-stack, the unit's
+ * S136EXTRA "" = gcse ON; FACT #12200 reads 0/54 with -fno-gcse as well and
+ * 12 of 54 words different on the 2.9 arm). Row in
+ * tools/ee/s136os_functions.txt, spliced over
+ * S136OS_SLOT by tools/ee/s136os_splice.sh. There is no asm fallback: a build
+ * that skips the splice drops the function. On native it is plain C.
+ * func_00352590 and func_00352000 are called through void-returning casts
+ * (upstream declares both void; ours return s32, which nothing here reads).
+ * Measured in-unit (task #2320): with the s32 return visible at the
+ * func_00352000 call, cc1 loads the state word into $3 where the ROM has $2
+ * (`lw/bnez` at 0x00352758/0x0035275C, 2 of 54 words), the residue NOTE #12202
+ * traced to an implicit `int f()` call; with it at the func_00352590 call,
+ * `addiu $6,$29,0x14` is scheduled before `addiu $11,$2,%lo(D_1AE818)`
+ * instead of after the swr (0x003526C4..0x003526D8).
+ * ADDRESSING-MODEL DEVICE (RULING #8620, EE arm only, extern declaration,
+ * emits nothing): D_1AE818 is declared `section(".data")`, so cc1 splits its
+ * address into the ROM's `lui $2,%hi(D_1AE818)` / `addiu $11,$2,%lo(D_1AE818)`
+ * at 0x003526AC/0x003526C4 (without it the splice refuses: 53 words, ROM 54).
+ * The arena pointer needs no device: the unit's file-scope
+ * `.extern g_pFmvArenaBase, 16` gives the ROM's absolute lui/lw pair at
+ * 0x00352734 (NOTE #12202's unsized-array `.sdata` alias builds a
+ * sha-identical unit object).
+ *
+ * Source: OpenRAC/rac2-gc-decomp @96927f872c709e13aaa0f32265bb81a5531bf7ed
+ * (GPL-3.0, adopted with the authors' permission per RULINGs #10405 and
+ * #12108), src/game/003512B8.c, func_00351960 (v1.01 address; author commit
+ * 455cde53, Flavius), C body and its Header_351960/Packet_351960 typedefs
+ * ADAPTED: our symbol name; the callees by their v2.00 names with our
+ * prototypes and casts at the calls (their func_00350460 is our
+ * func_003511A8, taking `u8 *` addresses and packet where theirs takes u32;
+ * their ref_L00_00351960_00/_01 are our func_00352590/func_003525B0, taking
+ * `FmvStream *`, the first called through a void-returning cast; their
+ * func_003512B8 is our func_00352000, which returns s32 where theirs is void,
+ * called through a void-returning cast); their D_001AE860 is our D_1AE818 with the `.data`
+ * device above; their `sda` arena word `D_001B23CC[0]` is the unit's
+ * g_pFmvArenaBase. Every statement and its order are theirs. Task #2320.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_003526A8)
+S136OS_SLOT(func_003526A8);
+#else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern s32 func_00352000(u8 *obj);
+/* (end of this body's declarations) */
+typedef struct { char tag[4]; } Header_351960;
+typedef struct { Header_351960 header; char body[12]; } Packet_351960;
+#ifndef TARGET_NATIVE
+extern Header_351960 D_1AE818 __attribute__((section(".data")));
+#else
+extern Header_351960 D_1AE818;
+#endif
+s32 func_003526A8(u8 *a0)
+{
+    Packet_351960 packet;
+    s32 first_address, first_count, second_address, second_count;
+    s32 result;
+
+    packet.header = D_1AE818;
+    ((void (*)(FmvStream *, s32 *, s32 *, s32 *, s32 *))func_00352590)(
+        (FmvStream *)a0, &first_address, &first_count, &second_address, &second_count);
+    if (first_count + second_count < 4) {
+        return 0;
+    }
+    result = func_003511A8((u8 *)((first_address & 0x0FFFFFFF) | 0x20000000), first_count,
+                           (u8 *)((second_address & 0x0FFFFFFF) | 0x20000000), second_count,
+                           (u8 *)&packet, 4, 0, 0);
+    func_003525B0((FmvStream *)(g_pFmvArenaBase + 0xD9048), result);
+    ((void (*)(u8 *))func_00352000)(a0 + 0x48);
+    if (*(s32 *)(a0 + 0xA8) == 0) {
+        *(s32 *)(a0 + 0xA8) = 2;
+    }
+    return 1;
+}
+#endif
 
 /* func_00352780: poll stream-done then host-side done. */
 /* GUARD (task #1394): on EE the #else body below is the image's func_00352780, compiled
