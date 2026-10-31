@@ -1383,9 +1383,159 @@ void DrawSkyShell(s32 shellIdx) {
     }
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", DrawSkyPiecesFormatA);
+extern void CullSkyPieceVisibility(void *pieces, s32 count, u8 *visible);
+extern void func_0029DD90(void *src, s32 qwc, void *spr); /* start a toSPR DMA (ch 9) */
+extern void func_0029DDB0(void);                            /* wait for that DMA */
+extern s32 TransformSkyPieceVerts(void *verts, void *out, s32 count);
+extern void EmitSkyTrianglePackets(s32 count, void *tris, void *sts, void *verts);
+extern void func_002E4DB8(s32 count, void *tris, void *sts, void *verts);
+/* Scratchpad double buffer the sky pieces are DMA'd into, and which half is
+ * being filled. The two pointers are 8 bytes, so cc1 addresses them gp_rel. */
+extern u8 *g_skyPieceSprBuf[2] __asm__("D_1ABE58");
+extern s32 g_skyPieceSprIdx __asm__("D_1ABE60");
+/* The 7-quadword GS state blocks each format REFs into the frame chain. */
+extern u8 g_skyGsStateA[] __asm__("D_139370");
+extern u8 g_skyGsStateB[] __asm__("D_139300");
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", DrawSkyPiecesFormatB);
+/**
+ * DrawSkyPiecesFormatA — draw one sky shell's piece list.
+ *
+ * @param pieceList  s32 piece count at +0x0, then 0x20-byte piece records from
+ *                   +0x10 (s16 vertex count +0x24, triangle count +0x26, and
+ *                   the vertex/ST/triangle offsets +0x28/+0x2A/+0x2C into the
+ *                   piece's data, which sits at the pointer +0x20 and is
+ *                   (s16 +0x2E >> 4) quadwords long).
+ *
+ * Culls the pieces into a stack array of per-piece flags, REFs the GS state
+ * block into the frame chain, then walks the pieces with a two-slot
+ * scratchpad pipeline: piece i+1's data is DMA'd into one half while piece i,
+ * already in the other half, is transformed to 0x70002000 and emitted as
+ * triangle packets. A piece is skipped unless its flag is exactly 1, and
+ * EmitSkyTrianglePackets runs only when TransformSkyPieceVerts returns 0.
+ *
+ * GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+ * (SN 2.95.3 v1.36 -fopt-stack, FACT #8810) with its own selector override
+ * `S136EXTRA=` — gcse ON, where the unit is pinned -fno-gcse (RULING #12178).
+ * gcse is what makes cc1 form `&visible[i]` in $3 and copy it to $17; under the
+ * unit's flags that copy is missing (NOTE #9869). Spelling that the bytes need:
+ *  - an `i++` loop with `i + 1` written out, not `i = next`;
+ *  - the "is there a next piece" test computed BEFORE the buffer flip, so the
+ *    count load is scheduled above the flip store, as in the ROM;
+ *  - the vertex pointer computed first, which gives the ROM's a3/v0/t0 for the
+ *    three offsets.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_DrawSkyPiecesFormatA)
+S136OS_SLOT(DrawSkyPiecesFormatA);
+#else
+void DrawSkyPiecesFormatA(void *pieceList) {
+    u8 *list = (u8 *)pieceList;
+    s32 count = *(s32 *)list;
+    u8 visible[count];
+    s32 i;
+
+    if (count == 0) {
+        return;
+    }
+    CullSkyPieceVisibility(list + 0x10, count, visible);
+    ((u32 *)g_frameDmaCursor)[0] = 0x30000007;
+    ((u32 *)g_frameDmaCursor)[1] = (u32)g_skyGsStateA;
+    ((u32 *)g_frameDmaCursor)[2] = 0;
+    ((u32 *)g_frameDmaCursor)[3] = 0x50000007;
+    g_frameDmaCursor = g_frameDmaCursor + 0x10;
+    g_skyPieceSprIdx = 1 - g_skyPieceSprIdx;
+    if (visible[0] == 1) {
+        func_0029DD90(*(void **)(list + 0x20), *(s16 *)(list + 0x2E) >> 4,
+                      g_skyPieceSprBuf[g_skyPieceSprIdx]);
+    }
+    for (i = 0; i < *(s32 *)list; i++) {
+        if (visible[i] == 1) {
+            func_0029DDB0();
+        }
+        s32 haveNext = i + 1 < *(s32 *)list;
+        g_skyPieceSprIdx = 1 - g_skyPieceSprIdx;
+        if (haveNext && visible[i + 1] == 1) {
+            u8 *next = list + (i + 1) * 0x20;
+            func_0029DD90(*(void **)(next + 0x20), *(s16 *)(next + 0x2E) >> 4,
+                          g_skyPieceSprBuf[g_skyPieceSprIdx]);
+        }
+        if (visible[i] == 1) {
+            u8 *piece = list + i * 0x20;
+            u8 *buf = g_skyPieceSprBuf[1 - g_skyPieceSprIdx];
+            u8 *verts = buf + *(s16 *)(piece + 0x28);
+            u8 *tris = buf + *(s16 *)(piece + 0x2C);
+            u8 *sts = buf + *(s16 *)(piece + 0x2A);
+            if (TransformSkyPieceVerts(verts, (void *)0x70002000, *(s16 *)(piece + 0x24)) == 0) {
+                EmitSkyTrianglePackets(*(s16 *)(piece + 0x26), tris, sts, (void *)0x70002000);
+            }
+        }
+    }
+}
+#endif
+
+/**
+ * DrawSkyPiecesFormatB — DrawSkyPiecesFormatA for a shell whose piece list
+ * carries a +0x4 sub-list (DrawSkyShell picks between them).
+ *
+ * @param pieceList  as DrawSkyPiecesFormatA.
+ *
+ * The same culled, double-buffered piece walk, with g_skyGsStateB as the GS
+ * state block and func_002E4DB8 as the triangle emitter. After the walk (but
+ * not on the empty-list early return) it appends SCANMSK (0x47) = 0x3180B and
+ * ZBUF_1 (0x4E) = ZMSK | 0x1000000 | (g_vramZBuffer >> 13), i.e. the Z buffer
+ * with Z writes masked.
+ *
+ * GUARD: the s136os arm with gcse ON by its own selector override, for the
+ * reasons and with the spelling given at DrawSkyPiecesFormatA.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_DrawSkyPiecesFormatB)
+S136OS_SLOT(DrawSkyPiecesFormatB);
+#else
+void DrawSkyPiecesFormatB(void *pieceList) {
+    u8 *list = (u8 *)pieceList;
+    s32 count = *(s32 *)list;
+    u8 visible[count];
+    s32 i;
+
+    if (count == 0) {
+        return;
+    }
+    CullSkyPieceVisibility(list + 0x10, count, visible);
+    ((u32 *)g_frameDmaCursor)[0] = 0x30000007;
+    ((u32 *)g_frameDmaCursor)[1] = (u32)g_skyGsStateB;
+    ((u32 *)g_frameDmaCursor)[2] = 0;
+    ((u32 *)g_frameDmaCursor)[3] = 0x50000007;
+    g_frameDmaCursor = g_frameDmaCursor + 0x10;
+    g_skyPieceSprIdx = 1 - g_skyPieceSprIdx;
+    if (visible[0] == 1) {
+        func_0029DD90(*(void **)(list + 0x20), *(s16 *)(list + 0x2E) >> 4,
+                      g_skyPieceSprBuf[g_skyPieceSprIdx]);
+    }
+    for (i = 0; i < *(s32 *)list; i++) {
+        if (visible[i] == 1) {
+            func_0029DDB0();
+        }
+        s32 haveNext = i + 1 < *(s32 *)list;
+        g_skyPieceSprIdx = 1 - g_skyPieceSprIdx;
+        if (haveNext && visible[i + 1] == 1) {
+            u8 *next = list + (i + 1) * 0x20;
+            func_0029DD90(*(void **)(next + 0x20), *(s16 *)(next + 0x2E) >> 4,
+                          g_skyPieceSprBuf[g_skyPieceSprIdx]);
+        }
+        if (visible[i] == 1) {
+            u8 *piece = list + i * 0x20;
+            u8 *buf = g_skyPieceSprBuf[1 - g_skyPieceSprIdx];
+            u8 *verts = buf + *(s16 *)(piece + 0x28);
+            u8 *tris = buf + *(s16 *)(piece + 0x2C);
+            u8 *sts = buf + *(s16 *)(piece + 0x2A);
+            if (TransformSkyPieceVerts(verts, (void *)0x70002000, *(s16 *)(piece + 0x24)) == 0) {
+                func_002E4DB8(*(s16 *)(piece + 0x26), tris, sts, (void *)0x70002000);
+            }
+        }
+    }
+    AppendGsRegPacket(0x47, 0x3180B);
+    AppendGsRegPacket(0x4E, (u64)((g_vramZBuffer >> 13) | 0x1000000) | ((u64)0x8000 << 17));
+}
+#endif
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E4C68);
 
@@ -1605,79 +1755,71 @@ s32 ComputeEmitterVolume(SoundEmitterSlot *slot, Vec4 *pos) {
 }
 #endif
 
-/* Compute the stereo pan angle (in degrees) for emitter slot `slot`, the
- * direction of the sound source in camera space.
+/**
+ * ComputeEmitterPan — stereo pan angle, in degrees, for emitter slot `slot`.
  *
- * The emitter->listener vector (slot - g_cameraPos) is rotated into camera space
- * by the camera matrix (g_cameraPos+0x230 == 0x1B54F0), the azimuth is taken as
- * atan2(x, z) of that camera-space direction, normalised into [0, 2pi), and the
- * planar distance is measured.  For close sources (planar distance < 2.0) the
- * raw azimuth is smoothed against the slot's previous angle (stored at slot+0x40)
- * with a +/-0.2 rad hysteresis dead-band so a near, fast-moving source does not
- * pan-jitter; for distant sources (>= 2.0) the last-angle field (slot+0x40) is
- * reset to -1.0 (so the hysteresis restarts next time), but the RETURN is still
- * the current frame's azimuth in degrees (the asm keeps it in callee-saved $f20).
- * The radian angle is converted to degrees (*180/pi) and truncated to int.
+ * @param slot  the emitter slot; lastPanAngle (+0x40) holds last frame's angle
+ *              (radians), or a negative value when there is none.
+ * @param pos   the emitter's world position.
+ * @return      the azimuth of the source in camera space, in whole degrees
+ *              (truncated), in [0, 360).
  *
- * TODO(match): functional equivalent - not byte-exact.  WALLED: three 8-byte
- * callee saves (s0,s1,s2) + two fp saves (f20,f21) packed 8-byte where this cc1
- * rounds to 16-byte, and the hysteresis tests lower to branch-likely (`bc1fl`)
- * stores that cc1 emits as plain `bc1f` + store.  Control flow + call order are
- * faithful. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", ComputeEmitterPan);
-#else
-extern void func_00284098(void *dst, void *mtx, void *src); /* rotate vec by mtx */
-extern void func_00283A48(void *dst, void *a, void *b);     /* vec helper        */
+ * The camera->emitter vector (pos - g_cameraPos) is rotated into camera space
+ * by the transpose of the camera matrix at g_cameraPos+0x230, and the azimuth
+ * is -atan2(x, y) of that, wrapped into [0, 2pi). A source with a planar
+ * (x, y) distance under 2.0 is slew-limited against slot+0x40: when a previous
+ * angle exists and the new one differs from it by more than 0.2 rad, the angle
+ * is moved only 0.2 rad towards it. The result is stored back in lastPanAngle.
+ * A farther source stores -1.0 there, so the slew restarts next time, but
+ * still returns this frame's unlimited azimuth.
+ *
+ * GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+ * (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in tools/ee/s136os_functions.txt)
+ * at the unit's flags, and spliced over S136OS_SLOT. That arm packs the two
+ * float saves ($f20/$f21) into 8-byte slots as the ROM does. Two points of the
+ * earlier functional #else were wrong against the ROM: func_00284098 takes no
+ * third argument, and its output is a 3-row matrix (0x30 bytes), which is
+ * what sizes the ROM's 0x70 frame. The two in-range tests share one store of
+ * slot+0x40, which cc1 reaches through `bc1fl` with the store in the slot.
+ */
+extern void func_00284098(void *dst, void *mtx);        /* dst = transpose of 3x3 mtx */
+extern void func_00283A48(void *dst, void *v, void *mtx); /* dst = v * mtx            */
 extern float Atan2fPoly(float x, float z);               /* atan2(x, z)       */
 extern float Vec2LengthXyVu0(void *v);                        /* planar magnitude  */
 extern float WrapAnglePiSum(float a, float b);              /* wrap a+b to [-pi,pi]*/
 extern float WrapAnglePiDiff(float a, float b);             /* wrap a-b to [-pi,pi]*/
 extern s32   FloatToInt(float v);
 
+#if !defined(TARGET_NATIVE) && !defined(S136OS_ComputeEmitterPan)
+S136OS_SLOT(ComputeEmitterPan);
+#else
 s32 ComputeEmitterPan(SoundEmitterSlot *slot, Vec4 *pos) {
-    f32 dir[4];        /* sp+0x00: emitter->listener, then camera-space dir */
-    f32 rot[4];        /* sp+0x10: rotated scratch                          */
-    f32 azimuth;       /* f20: working radian angle                         */
-    f32 planar;        /* f0:  planar distance                              */
-    f32 lastAngle;     /* slot+0x40: previous frame's angle                 */
+    f32 dir[4];         /* camera->emitter, then the camera-space direction */
+    f32 viewRot[12];    /* transposed camera rotation, 3 rows               */
+    f32 azimuth;
+    f32 delta;
 
     Vec4SubVu0(dir, pos, g_cameraPos);
-    /* asm passes ($4=rot, $5=cameraMatrix, $6=cameraPos) - reproduced verbatim */
-    func_00284098(rot, g_cameraPos + 0x230, g_cameraPos);
-    func_00283A48(dir, dir, rot);
-
+    func_00284098(viewRot, g_cameraPos + 0x230);
+    func_00283A48(dir, dir, viewRot);
     azimuth = -Atan2fPoly(dir[0], dir[1]);
     if (azimuth < 0.0f) {
-        azimuth += 6.2831855f;             /* +2pi -> [0, 2pi)              */
+        azimuth += 6.2831855f;
     }
-
-    planar = Vec2LengthXyVu0(dir);
-    if (planar < 2.0f) {
-        lastAngle = *(f32 *)((u8 *)slot + 0x40);
-        if (lastAngle < 0.0f) {
-            /* no valid previous angle: accept the raw azimuth */
-            *(f32 *)((u8 *)slot + 0x40) = azimuth;
-        } else {
-            f32 delta = WrapAnglePiDiff(azimuth, lastAngle);
+    if (Vec2LengthXyVu0(dir) < 2.0f) {
+        if (slot->lastPanAngle >= 0.0f) {
+            delta = WrapAnglePiDiff(azimuth, slot->lastPanAngle);
             if (delta > 0.2f) {
-                /* moving away CCW faster than the dead-band: clamp the step */
-                azimuth = WrapAnglePiSum(*(f32 *)((u8 *)slot + 0x40), 0.2f);
+                azimuth = WrapAnglePiSum(slot->lastPanAngle, 0.2f);
             } else if (delta < -0.2f) {
-                /* moving away CW faster than the dead-band: clamp the step */
-                azimuth = WrapAnglePiDiff(*(f32 *)((u8 *)slot + 0x40), 0.2f);
+                azimuth = WrapAnglePiDiff(slot->lastPanAngle, 0.2f);
             }
-            /* within +/-0.2: keep the raw azimuth */
-            *(f32 *)((u8 *)slot + 0x40) = azimuth;
         }
+        slot->lastPanAngle = azimuth;
     } else {
-        /* distant source: the asm only STORES -1.0 into the last-angle field
-         * (slot+0x40); $f20 (azimuth) is callee-saved and still holds the
-         * normalized azimuth, so the RETURN uses that, NOT -1.0. */
-        *(f32 *)((u8 *)slot + 0x40) = -1.0f;
+        slot->lastPanAngle = -1.0f;
     }
-
-    return FloatToInt(azimuth * 57.295776f);   /* radians -> degrees, trunc    */
+    return FloatToInt(azimuth * 57.295776f);
 }
 #endif
 
