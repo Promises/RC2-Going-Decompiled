@@ -1001,8 +1001,9 @@ s32 func_002CAFD8(void) {
     return ((s32 (*)(void))BuildFrameViewMatrices)();
 }
 
-/* menu-screen lifecycle routine: switch/jump-table dispatch (splat jtbl reloc gap) — left as
- * INCLUDE_ASM (cc1 jtbl layout not reproduced). */
+/* menu-screen lifecycle routine: switch/jump-table dispatch over the 12-entry
+ * jtbl_0026CC30_text — left as INCLUDE_ASM, no C written yet. The table itself is
+ * bindable by tools/ee/jtbl_bind.sh (task #2247); not attempted (task #2288). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", MenuScreenLoad);
 
 /* func_002CB560: menu exit. Called by TickFrontEndScreenMachine while the exit
@@ -1128,7 +1129,10 @@ void TickFrontEndScreenIdle(void) {
  * change to bring up the next level. Then dispatches the current screen state
  * (g_menuScreenBlock[0], 1..5) to its per-state handler and, for the non-terminal
  * states, runs the shared moby + sound-emitter tick and the optional post-hook.
- * Matching arm stays INCLUDE_ASM (cc1 jump-table reloc layout not reproduced). */
+ * Matching arm stays INCLUDE_ASM. The jump table is no longer the reason: since
+ * tools/ee/jtbl_bind.sh (task #2247) a switch binds to the ROM's
+ * jtbl_0026CC60_text, and an s136os body splices at the ROM's 108 words, 17 off
+ * in allocation and issue order (NOTE #12174 holds that body, task #2288). */
 extern u8 g_areaTable[];
 extern u8 g_nNanotechBonusHealTimer[];
 extern u8 g_nSaveLoadStatusCode[];
