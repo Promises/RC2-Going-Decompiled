@@ -3804,6 +3804,13 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0
  * insn: ROM `sd s0,64(sp)` vs built `daddu a0,sp,zero`). Levers: sibcall guard RUN: sdk29 43.11% /
  * engine96 50.47%; cc1-small/absolute globals model RUN: 51.98% (engine96); engine96 with sched1
  * MEASURED (flag not landed): 47.25%. */
+/* TODO(match) t2292, s136os arm (solo screen NOTE #12195, reloc-masked, not the gate): 4/122 at
+ * ROM length with this body restructured as NOTE #12194 records: cursor through
+ * g_frameDmaCursorAbs/Gp, an Abs equate for g_activeVu1Program, D_10ED20 as an incomplete array,
+ * tied empty fences on the two qword-copy pointers, an empty volatile fence after each copy, and
+ * one EE_REG pin (the first copy's source in $5). Residual: two adjacent swaps, the 0x8000 /
+ * 0x303EC000 constant pair (words 71/72) and the second copy's two address adds (87/88). 18
+ * store-order permutations measured, none better. Class: SCHEDULE. Same with gcse on. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", AppendVu1SphereMapContext);
 #else
@@ -3898,6 +3905,13 @@ void AppendVu1SphereMapContext(void) {
  * for r5900 and asm_unit.sh expands li.s only; RULING #8172 clause 4 keeps li.d out of
  * asm_unit.sh). That is an assembly blocker, so nothing past it was measured: the dli site is not
  * a measured second residual. Not scored. */
+/* TODO(match) t2292, s136os arm (solo screen NOTE #12195, reloc-masked, not the gate): 7/60 with
+ * the body in NOTE #12194. One variable serves as both the clamped shift and z, the clamp is
+ * spelled `if (z >= 17) z = 16;` (the ROM's movz; a ternary gives movn), the final `<< 13` sits
+ * at the join, and an EE_REG pin puts z in $3. 2 of the 7 words are the dli at 0x280F88
+ * ($5,0x8000000044), which a RULING #8549 row would fix. The other 5: the else-branch subtract
+ * lands in $2 (ROM $6) and the join's sll issues after the argument moves (ROM before). Class:
+ * ALLOCATION/SCHEDULE. Same with gcse on. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280EC8);
 #else
@@ -3966,7 +3980,15 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0
  * %hi copy (FACT #9472). With -fno-gcse removed (a diagnostic only: no per-function flag
  * without a RULING) the copy appears and the body is 38 words. The rest is allocation
  * (total in $4 rather than $9, no `daddu $4,$6,$0` pixel copy, no nop before the loop).
- * Class: FLAG (this unit's -fno-gcse) + ALLOCATION. */
+ * Class: FLAG (this unit's -fno-gcse) + ALLOCATION.
+ * TODO(match) t2292 (narrows the above, FACT #12197): a different body reads 0/40 on the s136os
+ * arm with gcse ON (solo screen NOTE #12195, reloc-masked, not the gate) and 37/40 under this
+ * unit's -fno-gcse. It drops the `if (total > 0)` guard, reads the threshold inside the loop, and
+ * re-indexes the record into a fresh local whose result pointer is loaded before the store
+ * (NOTE #12194). With gcse on, then, the wall is the flag alone. It cannot land by unpinning the
+ * unit: S136EXTRA="" makes ResolveZBufferOcclusionQueries splice 120 words against the ROM's 121
+ * and moves func_0027E1E8 (FACT #12196). It needs a per-function gcse-on arm, which needs a
+ * ruling. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00281020);
 #else
