@@ -2859,13 +2859,15 @@ void func_00338F88(void *a1, void *layout, u32 color, s32 val, s32 font,
  * test; the alpha is shifted in place (`packByte <<= 24; packByte |= color`),
  * which leaves the ROM's `bne; nop` slot empty; the heights share $f24; and
  * g_guiInstance reads absolute through the unit's `.extern g_guiInstance, 12`
- * pin. ARGUMENT-ORDER CAST (EE arm only): the quads are emitted through
+ * pin. ARGUMENT-ORDER CAST (EE arm only, a CODEGEN DEVICE under RULING #12184):
+ * the quads are emitted through
  * FrameQuadFn, the 7-param form with `color` after `py`. Under EABI the int and
  * float arguments go to $a0/$a1 and $f12-$f16 whichever order they are
  * declared in, so the call is the same call; what moves is the order cc1 sets
  * the argument registers up in, and only `color` after `py` gives the ROM's
  * `move $a1` after the $f12/$f13 moves at all six sites (the declared order
- * leaves 32 words in that issue order). The unit's EE declaration of
+ * leaves 15 of the 150 words differing by verify_match_unit, all of them that
+ * `move $a1` placement; FACT #35683). The unit's EE declaration of
  * func_003017F8 is the 9-param form GuiSpriteElementDraw is matched against,
  * so this caller casts rather than redeclare it. Native calls the 7-param
  * declaration directly. */
