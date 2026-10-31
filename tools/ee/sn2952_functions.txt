@@ -17,3 +17,7 @@
 # — the helper refuses a row without that slot and a slot without a row.
 # Add a row only with its own Source line, a base-seeded vmu in extent, a
 # NON_MATCHING control and the image cmp 0 that prove it (RULING #12157 term 2).
+usa cod/015180 IntegerToAscii
+usa cod/015180 BufferedWrite128
+usa cod/015180 VfprintfDispatch
+usa cod/015180 BufferedWrite128Secondary

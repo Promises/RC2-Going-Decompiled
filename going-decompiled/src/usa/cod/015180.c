@@ -347,17 +347,252 @@ char *func_001184D0(char *s) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", IntegerToAscii);
+/* The digit table "0123456789abcdefghijklmnopqrstuvwxyz" (ROM 0x134640). */
+extern char D_00134640[];
+
+extern char *func_001184D0(char *s);
+
+/**
+ * IntegerToAscii - itoa: format @input in radix @base into @buf.
+ *
+ * @input: the value. It is negated only when @base is 10; in any other radix
+ *         a negative value is formatted as its unsigned 32-bit pattern, but
+ *         still gets the '-' (the sign test is on the input, not the radix).
+ * @buf:   the output; NUL-terminated, no length check.
+ * @base:  the radix, indexing the digit table D_00134640 (up to 36).
+ *
+ * Returns @buf. The digits are produced least significant first and the
+ * string is then reversed in place by func_001184D0. Only caller:
+ * func_001185E8 (0x118B74), the float formatter.
+ *
+ * MATCHED on the sn2952 arm (held SN 2.95.2 v2.73a cc1, RULING #12157;
+ * selector row in tools/ee/sn2952_functions.txt). The ROM saves $31 with a
+ * TImode `sq`, which neither cc1 2.9 nor the s136os arm emits for this body
+ * (FACT #12152). Task #2311.
+ *
+ * Source: OpenRAC/rac2-gc-decomp @96927f872c709e13aaa0f32265bb81a5531bf7ed
+ * (GPL-3.0, adopted with the authors' permission per RULING #10405),
+ * src/core/00118548.c, func_00118548 (same address on their v2.00 build;
+ * author commit d4ac4036, bigbeno37). ADAPTED: named IntegerToAscii (our
+ * symbol); `int`/`unsigned int` written `s32`/`u32`; their comment dropped
+ * for this one. Statements, externs and control flow are theirs.
+ */
+#if !defined(TARGET_NATIVE) && !defined(SN2952_IntegerToAscii)
+SN2952_SLOT(IntegerToAscii);
+#else
+char *IntegerToAscii(s32 input, char *buf, u32 base) {
+    u32 value = input;
+    u32 neg = (u32)input >> 31;
+    s32 len;
+
+    if (neg) {
+        if (base == 10)
+            value = -input;
+    }
+    len = 0;
+    do {
+        buf[len++] = D_00134640[value % base];
+        value /= base;
+    } while (value != 0);
+    if (neg)
+        buf[len++] = '-';
+    buf[len] = '\0';
+    return func_001184D0(buf);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001185E8);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", BufferedWrite128);
+/* BufferedWrite128's staging buffer, its fill count and its write cursor. */
+extern char D_0013C100[];
+extern s32 D_00134668;
+extern char *D_0013466C;
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", VfprintfDispatch);
+/* Defined below (the DECI2 TTY write); declared here with its definition's
+ * prototype so the two buffered writers can call it. */
+extern s32 func_0011B1E8(s32 fd, const char *buf, s32 len);
+
+/**
+ * BufferedWrite128 - stage TTY output in a 128-byte buffer.
+ *
+ * @fd:    the descriptor, passed through to func_0011B1E8 (which writes only
+ *         fd 1 and 2).
+ * @src:   the bytes to stage; ignored when flushing.
+ * @len:   how many bytes of @src to stage.
+ * @flush: 1 = write out whatever is staged now and reset the buffer.
+ *
+ * Returns, on a flush, func_0011B1E8's result. Otherwise it copies @src into
+ * D_0013C100 one byte at a time; every time the buffer reaches 0x80 bytes it
+ * is written out and reset, and if that write returns 0 the copy stops and
+ * 0 is returned. On completion it returns the number of bytes staged (@len).
+ * Its callers are VfprintfFloat's stream-output sites; VfprintfInteger's go
+ * to BufferedWrite128Secondary, the same body on a second buffer (FACT #589).
+ *
+ * MATCHED on the sn2952 arm (held SN 2.95.2 v2.73a cc1, RULING #12157;
+ * selector row in tools/ee/sn2952_functions.txt): the ROM saves its callee
+ * registers with TImode `sq`, which neither cc1 2.9 nor the s136os arm emits
+ * for this body (FACT #12152). Task #2311.
+ *
+ * Source: OpenRAC/rac2-gc-decomp @96927f872c709e13aaa0f32265bb81a5531bf7ed
+ * (GPL-3.0, adopted with the authors' permission per RULING #10405),
+ * src/core/00118BC0.c, func_00118BC0 (same address on their v2.00 build;
+ * author commit d4ac4036, bigbeno37). ADAPTED: named BufferedWrite128 (our
+ * symbol); `int`/`unsigned int` written `s32`/`u32`; their
+ * `int func_0011B1E8(int, char *, int)` extern dropped for the unit's own
+ * prototype (`const char *buf`, the definition below); their comment dropped
+ * for this one. Statements and control flow are theirs.
+ */
+#if !defined(TARGET_NATIVE) && !defined(SN2952_BufferedWrite128)
+SN2952_SLOT(BufferedWrite128);
+#else
+s32 BufferedWrite128(s32 fd, char *src, u32 len, s32 flush) {
+    u32 i;
+    s32 r;
+
+    if (flush == 1) {
+        r = func_0011B1E8(fd, D_0013C100, D_00134668);
+        D_00134668 = 0;
+        D_0013466C = D_0013C100;
+        return r;
+    }
+    for (i = 0; i < len; i++) {
+        *D_0013466C = src[i];
+        D_0013466C++;
+        D_00134668++;
+        if (D_00134668 >= 0x80) {
+            r = func_0011B1E8(fd, D_0013C100, D_00134668);
+            D_0013466C = D_0013C100;
+            D_00134668 = 0;
+            if (r == 0)
+                return 0;
+        }
+    }
+    return i;
+}
+#endif
+
+/* The one field of newlib's FILE (struct __sFILE) the dispatcher reads: _data,
+ * the struct _reent * at +0x54 (sprintf's stack FILE sets it to _impure_ptr,
+ * D_00133E74). EE layout; nothing else of the FILE is named here. */
+typedef struct PrintfStream {
+    char pad[0x54];
+    void *data;
+} PrintfStream;
+
+extern s32 VfprintfFloat(void *reent, void *fp, char *fmt, void *ap);
+extern s32 VfprintfInteger(void *reent, void *fp, char *fmt, void *ap);
+
+/**
+ * VfprintfDispatch - newlib's split vfprintf: pick the printf engine from
+ * the format string.
+ *
+ * @fp:  the stream (sprintf passes its stack FILE).
+ * @fmt: the format string.
+ * @ap:  the argument area.
+ *
+ * Returns the chosen engine's result. Scans @fmt for a '%' conversion,
+ * skipping flag/width characters below 'A'. At the first conversion that is
+ * one of E G L e f g it calls the float-capable engine VfprintfFloat; if the
+ * string ends without one, the integer-only VfprintfInteger. Each engine gets
+ * (fp->data, fp, fmt, ap). It is a `jal` and a return, not a tail call
+ * (NOTE #5546). Callers: sprintf and snd_PrintError (printf, FACT #5528).
+ * The switch over (c - 'E') is the ROM's 35-entry table
+ * jtbl_0013A4B0, to which tools/ee/jtbl_bind.sh binds the compiled table.
+ *
+ * MATCHED on the sn2952 arm (held SN 2.95.2 v2.73a cc1, RULING #12157;
+ * selector row in tools/ee/sn2952_functions.txt): the ROM saves $31 with a
+ * TImode `sq`, which neither cc1 2.9 nor the s136os arm emits for this body
+ * (FACT #12152). Task #2311.
+ *
+ * Source: OpenRAC/rac2-gc-decomp @96927f872c709e13aaa0f32265bb81a5531bf7ed
+ * (GPL-3.0, adopted with the authors' permission per RULING #10405),
+ * src/core/00118CC8.c, func_00118CC8 (same address on their v2.00 build;
+ * author commit cd02daa5, Louis-Philippe Le Sieur). ADAPTED: named
+ * VfprintfDispatch, callees func_00118D98/func_00119BF8 spelled
+ * VfprintfFloat/VfprintfInteger (our symbols); `int` written `s32`; their
+ * `*(void **)((char *)fp + 0x54)` written as the PrintfStream view's `data`
+ * (the same EE offset), so @fp is `PrintfStream *` for their `void *`; their
+ * comment dropped for this one. Statements and control flow are theirs.
+ */
+#if !defined(TARGET_NATIVE) && !defined(SN2952_VfprintfDispatch)
+SN2952_SLOT(VfprintfDispatch);
+#else
+s32 VfprintfDispatch(PrintfStream *fp, char *fmt, void *ap) {
+    char *p;
+
+    for (p = fmt; *p != '\0'; p++) {
+        if (*p == '%' && p[1] != '\0') {
+            p++;
+            while (*p < 'A' && p[1] != '\0') {
+                p++;
+            }
+            switch (*p) {
+            case 'E':
+            case 'G':
+            case 'L':
+            case 'e':
+            case 'f':
+            case 'g':
+                return VfprintfFloat(fp->data, fp, fmt, ap);
+            }
+        }
+    }
+    return VfprintfInteger(fp->data, fp, fmt, ap);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", VfprintfFloat);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", BufferedWrite128Secondary);
+/* BufferedWrite128Secondary's staging buffer, fill count and write cursor. */
+extern char D_0013C180[];
+extern s32 D_00134670;
+extern char *D_00134674;
+
+/**
+ * BufferedWrite128Secondary - BufferedWrite128 on a second 128-byte buffer
+ * (D_0013C180, count D_00134670, cursor D_00134674); the same 66 words
+ * apart from those addresses (FACT #589). Parameters and return as
+ * BufferedWrite128. Its callers are VfprintfInteger's stream-output sites.
+ *
+ * MATCHED on the sn2952 arm (held SN 2.95.2 v2.73a cc1, RULING #12157;
+ * selector row in tools/ee/sn2952_functions.txt), for the same TImode `sq`
+ * save class (FACT #12152). Task #2311.
+ *
+ * Source: OpenRAC/rac2-gc-decomp @96927f872c709e13aaa0f32265bb81a5531bf7ed
+ * (GPL-3.0, adopted with the authors' permission per RULING #10405),
+ * src/core/00119AC0.c, func_00119AC0 (same address on their v2.00 build;
+ * author commit d4ac4036, bigbeno37). ADAPTED: as BufferedWrite128 (named
+ * BufferedWrite128Secondary, `s32`/`u32`, the unit's func_0011B1E8
+ * prototype, comment dropped). Statements and control flow are theirs.
+ */
+#if !defined(TARGET_NATIVE) && !defined(SN2952_BufferedWrite128Secondary)
+SN2952_SLOT(BufferedWrite128Secondary);
+#else
+s32 BufferedWrite128Secondary(s32 fd, char *src, u32 len, s32 flush) {
+    u32 i;
+    s32 r;
+
+    if (flush == 1) {
+        r = func_0011B1E8(fd, D_0013C180, D_00134670);
+        D_00134670 = 0;
+        D_00134674 = D_0013C180;
+        return r;
+    }
+    for (i = 0; i < len; i++) {
+        *D_00134674 = src[i];
+        D_00134674++;
+        D_00134670++;
+        if (D_00134670 >= 0x80) {
+            r = func_0011B1E8(fd, D_0013C180, D_00134670);
+            D_00134674 = D_0013C180;
+            D_00134670 = 0;
+            if (r == 0)
+                return 0;
+        }
+    }
+    return i;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00119BC8);
 
