@@ -4161,7 +4161,7 @@ S136OS_SLOT(func_002DC940);
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern s32 GetLocalizedString(s32 id);
 extern void *memset(void *s, s32 c, u32 n);
-extern void func_00280BB8(s32 box, s64 tint, s32 str, s32 mode);
+extern void func_00280BB8(s32 box, s64 tint, s32 str, s32 mode); /* DECL-LEVER(#2424): defined s32 tint; the s64 tint is the ROM's positive 64-bit 0x80000000 (`li $5,0x8000; dsll $5,$5,0x10`), as #2090's declaration above */
 extern void func_0027F168(s32 x1, s32 y1, s32 x2, s32 y2, s64 z, const s32 *colors);
 /* (end of this body's declarations) */
 /* The status word, read as %lo(g_menuTransitionMode+0xC8) as the ROM does
