@@ -3364,60 +3364,82 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DB700);
  * phase 3 waits then advances to 4 (done). A kick that fails to start sets phase
  * -1. Each phase is a no-op (returns 0) while its buffer is empty or a load is
  * still in flight. Always returns 0.
- * WALL: multi callee-save + StartFileLoad orchestration; matching arm stays
- * INCLUDE_ASM, portable #else below. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", LoadMenuBgImagePair);
+ * MATCHED on the s136os arm (SN 2.95.3 v1.36 cc1plus -fopt-stack), task #2289.
+ * What closed it, after tasks #1917/#1929 left it at 10/83 (NOTE #9929):
+ *   - gcse on (task #2252). The ROM forms the TOC entry once, reads +0xDD0 from
+ *     it and reads +0xDD4 through a COPY of it (`move $2,$6`); that copy is
+ *     gcse's;
+ *   - the TOC read through a typed view (BgDiscToc) of g_discToc, used
+ *     directly. Raw byte offsets let cse fold +0xDD0 into %lo(g_discToc), and
+ *     a local holding the base merges both entry addresses so the copy goes.
+ * g_fileLoadState and g_menuBgImageIndex are compiler-split (ROM_SPLIT, the
+ * ROM's lui/lh and lui/lw into other registers).
+ * GUARD: compiled alone by SN 2.95.3 v1.36 -fopt-stack and spliced over the
+ * S136OS_SLOT line (tools/ee/s136os_splice.sh); plain C on native. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_LoadMenuBgImagePair)
+S136OS_SLOT(LoadMenuBgImagePair);
 #else
-/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
- * objdiff): sdk29 46.72% / engine96 33.70%; better arm sdk29; 72 differing
- * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
- * insn: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. Not iterated in t495.
- * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): this member's prologue - the
- * ROM's save set at its 8-byte stride, and its frame - is reproduced exactly (NOTE #9871), so
- * the save-slot wall named above is a cc1 2.9 property and was measured false as the reason
- * this member stays unmatched (FACT #9873). Residual: UNMEASURED. */
 extern u8  g_discToc[];                    /* 0x14B540 master disc asset directory */
-extern s16 g_fileLoadState;                /* 0x1A63AC 0 idle / nonzero busy */
-extern s32 g_menuBgImageIndex;             /* active-language bg image index */
+extern s16 g_fileLoadState ROM_SPLIT;      /* 0x1A63AC 0 idle / nonzero busy */
+extern s32 g_menuBgImageIndex ROM_SPLIT;   /* active-language bg image index */
 extern s32 StartFileLoad(s32 dest, s32 lbn, s32 sectors);  /* 0x2B8A38 kick async CD read; returns sectors<<11 (0 = refused) */
 
-s32 LoadMenuBgImagePair(void *obj) {
-    s32 phase = *(s32 *)((u8 *)obj + 0x44);
-    s32 idx;
-    s32 dest, lbn, sectors;
+/* The parts of the disc TOC this loader reads. The bg tables are 8-byte
+ * {lbn offset, sector count} records; the front table runs to 0xDF8, where the
+ * back table starts (5 records' spacing; the index count is not established). */
+typedef struct { s32 lbn; s32 sectors; } BgTocEntry;
+typedef struct {
+    u8 _000[0x36C];
+    s32 baseLbn;                 /* 0x36C first LBN of the asset area */
+    u8 _370[0xDD0 - 0x370];
+    BgTocEntry front[5];         /* 0xDD0 */
+    BgTocEntry back[5];          /* 0xDF8 */
+} BgDiscToc;
+#define bgToc ((BgDiscToc *)g_discToc)
 
-    if (phase == 0) {
-        dest = *(s32 *)((u8 *)obj + 0x48);
-        if (dest == 0 || g_fileLoadState != 0) {
-            return 0;
+s32 LoadMenuBgImagePair(void *obj) {
+    u8 *o = (u8 *)obj;
+    s32 dest;
+
+    switch (*(s32 *)(o + 0x44)) {
+    case 0:
+        dest = *(s32 *)(o + 0x48);
+        if (dest != 0) {
+            if (g_fileLoadState != 0)
+                break;
+            if (StartFileLoad(dest, bgToc->front[g_menuBgImageIndex].lbn + bgToc->baseLbn,
+                              bgToc->front[g_menuBgImageIndex].sectors) != 0)
+                *(s32 *)(o + 0x44) = *(s32 *)(o + 0x44) + 1;
+            else
+                *(s32 *)(o + 0x44) = -1;
         }
-        idx = g_menuBgImageIndex;
-        lbn = *(s32 *)(g_discToc + idx * 8 + 0xDD0) + *(s32 *)(g_discToc + 0x36C);
-        sectors = *(s32 *)(g_discToc + idx * 8 + 0xDD4);
-        *(s32 *)((u8 *)obj + 0x44) = (StartFileLoad(dest, lbn, sectors) == 0) ? -1 : phase + 1;
-    } else if (phase == 1) {
-        if (g_fileLoadState != 0) {
-            return 0;
+        break;
+    case 1:
+        if (g_fileLoadState != 0)
+            break;
+        *(s32 *)(o + 0x44) = 2;
+        break;
+    case 2:
+        dest = *(s32 *)(o + 0x4C);
+        if (dest != 0) {
+            if (g_fileLoadState != 0)
+                break;
+            if (StartFileLoad(dest, bgToc->back[g_menuBgImageIndex].lbn + bgToc->baseLbn,
+                              bgToc->back[g_menuBgImageIndex].sectors) != 0)
+                *(s32 *)(o + 0x44) = *(s32 *)(o + 0x44) + 1;
+            else
+                *(s32 *)(o + 0x44) = -1;
         }
-        *(s32 *)((u8 *)obj + 0x44) = 2;
-    } else if (phase == 2) {
-        dest = *(s32 *)((u8 *)obj + 0x4C);
-        if (dest == 0 || g_fileLoadState != 0) {
-            return 0;
-        }
-        idx = g_menuBgImageIndex;
-        lbn = *(s32 *)(g_discToc + idx * 8 + 0xDF8) + *(s32 *)(g_discToc + 0x36C);
-        sectors = *(s32 *)(g_discToc + idx * 8 + 0xDFC);
-        *(s32 *)((u8 *)obj + 0x44) = (StartFileLoad(dest, lbn, sectors) == 0) ? -1 : phase + 1;
-    } else if (phase == 3) {
-        if (g_fileLoadState != 0) {
-            return 0;
-        }
-        *(s32 *)((u8 *)obj + 0x44) = 4;
+        break;
+    case 3:
+        if (g_fileLoadState != 0)
+            break;
+        *(s32 *)(o + 0x44) = 4;
+        break;
     }
     return 0;
 }
+#undef bgToc
 #endif
 
 /* Draw the loaded menu background-image pair (front/back) as two textured quads.
