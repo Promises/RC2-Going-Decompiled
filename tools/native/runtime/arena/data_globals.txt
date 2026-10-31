@@ -1399,6 +1399,7 @@ g_gsScreenContextPtr
 g_guiInstance
 g_guiTintEnabled
 g_guiTintRgb
+g_hblankTicksAccum
 g_health
 g_heldItemModelBufferBase
 g_heldItemTexDescriptor
@@ -1688,6 +1689,7 @@ g_tieVramLruTail
 g_uiTextureCache
 g_uiTextureCount
 g_uiTextureDataBase
+g_vblankCount
 g_vendorEntryArmor
 g_vendorForcedTab
 g_vendorHasPendingArmor
