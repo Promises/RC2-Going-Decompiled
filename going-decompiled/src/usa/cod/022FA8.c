@@ -2604,8 +2604,9 @@ s32 func_00128250(void) {
  * D_00143580, D_0015B500 -> D_00143600, D_001534D8/F0 -> D_0013B7E8/800,
  * D_00153518 -> D_0013B828, D_00153540 -> D_0013B850, func_00124A20 ->
  * func_00128898, exit -> exit_runAtexitHandlers, sceDbcGetModVersion ->
- * func_00128250, sceDbcSetWorkAddr -> func_00128440, scePrintf -> Kprintf),
- * with D_00143580 passed as `&D_00143580` (this unit types it as the
+ * func_00128250, sceDbcSetWorkAddr -> func_00128440, scePrintf -> Kprintf,
+ * and their SifClientData typedef for the two RPC clients -> this unit's
+ * DbcRpcClient), with D_00143580 passed as `&D_00143580` (this unit types it as the
  * DbcPortStates struct where theirs is a u8 array) and cast `(s32)` for
  * func_00128440's s32 parameter (codegen-neutral). Byte-exact on our ROM:
  * unit objdiff report 99.80% (objdiff_build.sh + unit_report.sh; the residue
