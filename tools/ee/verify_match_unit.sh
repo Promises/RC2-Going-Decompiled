@@ -1333,6 +1333,13 @@ def resolve(name):
     m = re.fullmatch(r"(?:func|D|jtbl|L)_([0-9A-Fa-f]{6,8})", name)
     if m:
         return int(m.group(1), 16)
+    # splat names a jump table in a .data-segment unit `jtbl_<hex>_text`; build.sh
+    # links it at the address in the name. jtbl_bind.sh (task #2247) binds a C
+    # switch's %hi/%lo to exactly that symbol, so without this rule every such
+    # function read UNVERIFIABLE ("no known address: jtbl_0026C6D0_text").
+    m = re.fullmatch(r"jtbl_([0-9A-Fa-f]{6,8})_text", name)
+    if m:
+        return int(m.group(1), 16)
     return None
 
 # The function's own vaddr, needed to index the ROM and to resolve PC16.

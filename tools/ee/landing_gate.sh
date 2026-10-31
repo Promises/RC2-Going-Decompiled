@@ -1637,6 +1637,7 @@ selftest() {
   selftest_asmunit_selftest "$T" || bad=1
   selftest_decldef "$T" || bad=1
   selftest_arena "$T" || bad=1
+  selftest_jtbl "$T" || bad=1
 
   say "-- (14) the real gate on this tree (--no-build, the build above) must PASS"
   STRICT=0
@@ -3039,6 +3040,39 @@ selftest_decldef() {
   unset -f decldef_leg
   rm -rf "$D/tip" "$D/tipm"; FAILED=0; WARNED=0; STRICT=0
   return $b
+}
+
+# selftest_jtbl — arm (30) (task #2247): the jump-table binder that build.sh
+# and objdiff_build.sh run after the splice. wired — both callers run
+# jtbl_bind.sh after s136os_splice.sh, and its --selftest; control — its own
+# --selftest in the container (mawk, the retail ELF it reads the REAL
+# jtbl_0026C6D0_text from) passes with >= 10 arms; fired — a copy whose
+# word compare is deleted (it would bind a table that differs from the ROM)
+# must FAIL on exactly the seeded-mismatch arms 5 (synthetic) and 10 (the real
+# ROM table, entry 5 seeded); closed — an absent script FAILs.
+selftest_jtbl() {
+  local T="$1" b=0 rc m out f; m="$T/jtbl_bind_mut.sh"
+  say "-- (30) JTBL_BIND (#2247): build.sh and objdiff_build.sh run $HERE/jtbl_bind.sh after s136os_splice.sh, and its --selftest; its --selftest in the container -> PASS, >= 10 arms, incl. the real ROM table read from the retail ELF; a copy with the per-entry compare deleted -> FAIL on exactly arms 5 and 10 (the seeded mismatches); an absent script -> FAIL"
+  for f in "$HERE/build.sh" "$HERE/objdiff_build.sh"; do
+    if awk '/s136os_splice\.sh --selftest/ { st = 1 } /jtbl_bind\.sh --selftest/ && st { st = 2 } /s136os_splice\.sh [$]REGION|s136os_splice\.sh "[$]REGION"/ { sp = 1 } /jtbl_bind\.sh [$]REGION|jtbl_bind\.sh "[$]REGION"/ && sp { jb = 1 } END { exit !(st == 2 && jb) }' "$f"; then ok "wired (30): $f runs jtbl_bind.sh --selftest after the splice's, and jtbl_bind.sh after s136os_splice.sh"
+    else say "SELFTEST-FAIL (30) $f does not run jtbl_bind.sh (its --selftest after the splice's, and the bind after s136os_splice.sh)"; b=1; fi
+  done
+  out=$(in_vm "sh $HERE/jtbl_bind.sh --selftest" 2>&1); rc=$?
+  if [ "$rc" = 0 ] && printf '%s\n' "$out" | /usr/bin/grep -q '^#### jtbl_bind --selftest: PASS$' && ! printf '%s\n' "$out" | /usr/bin/grep -q '^  FAIL ' \
+     && [ "$(printf '%s\n' "$out" | sed -n 's/^jtbl_bind --selftest: \([0-9]*\) arms$/\1/p')" -ge 10 ] 2>/dev/null \
+     && printf '%s\n' "$out" | /usr/bin/grep -q '^  OK   arm 9: real jtbl_0026C6D0_text'; then ok "control (30): rc 0, $(printf '%s\n' "$out" | /usr/bin/grep -c '^  OK ' || true) OK arms, the real ROM table bound (arm 9)"
+  else say "SELFTEST-FAIL (30) jtbl_bind.sh --selftest does not pass in the container (rc $rc):"; show < <(printf '%s\n' "$out" | tail -8 | sed 's/^/  inner| /'); b=1; fi
+  sed '/else if (b\[i\] != r\[i\])/d' "$HERE/jtbl_bind.sh" > "$m"
+  if cmp -s "$m" "$HERE/jtbl_bind.sh"; then say "SELFTEST-BROKEN: (30) the mutant is identical to jtbl_bind.sh: the compare line moved, re-aim the seed"; b=1
+  else
+    out=$(in_vm "sh $m --selftest" 2>&1); rc=$?
+    if [ "$rc" = 1 ] && [ "$(printf '%s\n' "$out" | /usr/bin/grep -oE '^  FAIL arm [0-9]+' | sed 's/.* //' | tr '\n' ' ')" = "5 10 " ]; then ok "fired (30): with the per-entry compare deleted, rc 1 and exactly arms 5 and 10 FAIL (the seeded tables bind)"
+    else say "SELFTEST-FAIL (30) the compare-deleted copy did not FAIL on exactly arms 5 and 10 (rc $rc, failing: $(printf '%s\n' "$out" | /usr/bin/grep -oE '^  FAIL arm [0-9]+' | tr '\n' ' '))"; b=1; fi
+  fi
+  rm -f "$m"
+  out=$(in_vm "sh $T/jtbl_bind_absent.sh --selftest" 2>&1); rc=$?
+  if [ "$rc" != 0 ]; then ok "closed (30): an absent script -> rc $rc"; else say "SELFTEST-FAIL (30) an absent jtbl_bind.sh ran rc 0"; b=1; fi
+  return "$b"
 }
 
 # selftest_arena OUTDIR — arm (28), task #1431. A scratch tree holding what

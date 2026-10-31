@@ -62,6 +62,12 @@
 #              invocation (one invocation is one unit) and after the
 #              $OBJ/$EXPECTED delete, so a failed selftest leaves no object
 #              for the report to read (task #1354).
+#   jtbl     — not an object either: after the splice, tools/ee/jtbl_bind.sh
+#              (build.sh runs it at the same point) verifies each switch jump
+#              table the sdk29 base.s carries (2.9 or spliced s136os) against
+#              the ROM's jtbl_ data, drops the copy and binds its %hi/%lo to
+#              the ROM symbol (task #2247). Its --selftest runs beside the
+#              splice's. The engine96 arm is NOT passed through it.
 # WHY per FUNCTION and not per unit: routing a whole engine-region unit through
 # the 2.96 arm was measured (t276, 2026-09-13) and it un-matches rows that are
 # byte-exact under 2.9 today (text/188858 16->12, text/235FE8 73->65,
@@ -373,12 +379,16 @@ docker --context "$EE_CTX" run --rm --user="$(id -u):$(id -g)" -e HOME=/tmp -e A
   sh tools/ee/s136os_splice.sh --selftest > $W/s136os_splice_selftest.log 2>&1 \
     || { cat $W/s136os_splice_selftest.log >&2; echo 'objdiff_build: FATAL (s136os_splice --selftest)' >&2; exit 1; }
   tail -1 $W/s136os_splice_selftest.log
+  sh tools/ee/jtbl_bind.sh --selftest > $W/jtbl_bind_selftest.log 2>&1 \
+    || { cat $W/jtbl_bind_selftest.log >&2; echo 'objdiff_build: FATAL (jtbl_bind --selftest)' >&2; exit 1; }
+  tail -1 $W/jtbl_bind_selftest.log
   $ASMFIX_PRUNE
   \$WIBO \$G/cpp.exe $CPPDEF $INC $TGTC $W/target.i
   \$WIBO \$G/cc1.exe -quiet -O2 -G0 $W/target.i -o $W/target.s
   sh tools/ee/asm_unit.sh $REGION /work/$W/target.s /work/$EXPECTED
   sh tools/ee/ee_cc1.sh sdk29 $BASECFILE $W/base.i $W/base.s '$CPPDEF $INC' '-O2 $GFLAG $CC1EXTRA'
   sh tools/ee/s136os_splice.sh $REGION $UNIT $BASECFILE $W/base.s $GFLAG '$S136EXTRA'
+  sh tools/ee/jtbl_bind.sh $REGION $UNIT $W/base.s $GFLAG
   sh tools/ee/asm_unit.sh $REGION /work/$W/base.s /work/$OBJ $GFLAG
   mips-linux-gnu-nm $EXPECTED | awk '/\\.NON_MATCHING\$/{print \"-N\", \$3}' > $W/nmstrip.txt
   test -s $W/nmstrip.txt && mips-linux-gnu-strip $EXPECTED \$(cat $W/nmstrip.txt) || true

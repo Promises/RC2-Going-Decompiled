@@ -49,10 +49,16 @@
 #   - the s136 compile failing (for C++ that includes any cc1plus diagnostic
 #     exit and a missing __gnu_compiled_cplusplus marker; ee_cc1.sh checks);
 #   - the s136os output has no single `.ent <fn>`..`.end <fn>` block;
-#   - SHAPE: the block switches section (rodata/data/sdata literal, jump table)
-#     or references a `$L` label it does not define (a `$LC` string/float
+#   - SHAPE: the block switches section (rodata/data/sdata literal) or
+#     references a `$L` label it does not define (a `$LC` string/float
 #     literal). Those live outside the block and are not spliced, so such a
 #     function is out of this arm's domain until the rodata side is solved.
+#     A switch's JUMP TABLE is the exception (task #2247, FACT #12092): a
+#     `.rdata` holding one `$L` label and only `.word $L...` entries, back to
+#     `.text`, is spliced with the block, and tools/ee/jtbl_bind.sh — which
+#     both callers run right after this helper — verifies it word for word
+#     against the ROM's jtbl_ table, drops the copy and binds %hi/%lo to the
+#     ROM symbol (or refuses).
 #   - REFUSED (task #1326): once every block is spliced, a block would not
 #     assemble as it did in its s136os TU: a symbol's gp-relative/absolute
 #     class differs (ADDRESSING), or it needs a definition the s136os TU has
@@ -274,6 +280,32 @@ length_lines() {
     }' "$1" "$2"
 }
 
+# shape_check <block>: print, one per line, every reason the block needs data
+# from outside .ent..end (SHAPE); empty = admit. No section switch after the
+# preamble, every $L reference defined here. A jump table is the one admitted
+# switch (task #2247): `.rdata`, an optional .align, one `$L` label, only
+# `.word $L...` lines, then `.text` —
+# the shape tools/ee/jtbl_bind.sh recognises, verifies against the ROM's
+# jtbl_ and binds after this helper (the caller runs it next). Anything else
+# in a switched section is still refused, as is a table that does not close.
+shape_check() {
+  awk '
+    { sub(/\r$/, "") }
+    $1 == ".ent" { body = 1 }
+    /^\$L[A-Za-z0-9_]*:/ { lab = $0; sub(/:.*/, "", lab); def[lab] = 1 }
+    { s = $0; sub(/#.*/, "", s)
+      while (match(s, /\$L[A-Za-z0-9_]*/)) { ref[substr(s, RSTART, RLENGTH)] = 1; s = substr(s, RSTART + RLENGTH) } }
+    body && st == 0 && /^[ \t]*(\.rdata|\.section[ \t]+\.rodata)[ \t]*$/ { st = 1; held = $0; next }
+    st == 1 && (/^[ \t]*$/ || /^[ \t]*\.(p2)?align[ \t]+[0-9]+[ \t]*$/) { next }
+    st == 1 && /^\$L[A-Za-z0-9_]+:[ \t]*$/ { st = 2; n = 0; next }
+    st == 2 && $1 == ".word" && NF == 2 && $2 ~ /^\$L[A-Za-z0-9_]+$/ { n++; next }
+    st == 2 && n > 0 && /^[ \t]*(\.text|\.section[ \t]+\.text)[ \t]*$/ { st = 0; next }
+    st { print "section switch: " held; st = 0 }
+    body && /^[ \t]*\.(section|rdata|data|sdata|sbss|bss|rodata|lit4|lit8|text)([ \t,]|$)/ { print "section switch: " $0 }
+    END { if (st) print "section switch: " held " (a jump table that never returns to .text)"
+      for (r in ref) if (!(r in def)) print "label defined outside the block: " r }' "$1"
+}
+
 if [ "${1:-}" = "--selftest" ]; then
   # Arms: X is declared by the unit at 16 (a device) and by the solo TU at 4
   # -> no X line (FACT #8838's wall); Y is solo-only -> carried; Z is declared
@@ -364,6 +396,21 @@ if [ "${1:-}" = "--selftest" ]; then
       *) echo "  FAIL arm $1: '$v'"; rc=1 ;;
     esac
   done
+  # Arms 17-20 (task #2247): SHAPE admits a jump table and nothing else. 17 is
+  # UpgradeWeaponToMax's table as SN 1.36 emits it (2 entries shown): admitted.
+  # 18 the same block with a $LC literal in the switched section: refused. 19
+  # a table that never returns to .text: refused. 20 a .rdata string literal
+  # with a $LC reference: refused on both counts. A check that admits every
+  # .rdata fails 18-20; the pre-#2247 check refuses 17.
+  J='\t.ent\tf\nf:\n\tlui\t$2,%%hi($L63) # high\n\taddiu\t$2,$2,%%lo($L63) # low\n\tj\t$4\n\t.p2align 2\n\t.rdata\n\t.align\t4\n$L63:\n\t.word\t$L62\n\t.word\t$L57\n%b$L62:\n\tli\t$5,1\n$L57:\n\tj\t$31\n\t.end\tf\n'
+  printf "$J" '\t.text\n\t.p2align 2\n' > "$T/blk"; v="$(shape_check "$T/blk")"
+  if [ -z "$v" ]; then echo "  OK   arm 17: a jump table (.rdata, \$L63:, .word \$L62/\$L57, .text) -> admitted"; else echo "  FAIL arm 17: refused the jump table: '$v'"; rc=1; fi
+  printf "$J" '\t.ascii\t"x"\n\t.text\n' > "$T/blk"; v="$(shape_check "$T/blk")"
+  case "$v" in "section switch: "*".rdata"*) echo "  OK   arm 18: a table with a literal in its section -> refused: $(echo $v)" ;; *) echo "  FAIL arm 18: '$v'"; rc=1 ;; esac
+  printf "$J" '' > "$T/blk"; v="$(shape_check "$T/blk")"
+  case "$v" in *"section switch: "*".rdata"*) echo "  OK   arm 19: a table that never returns to .text -> refused: $(echo $v)" ;; *) echo "  FAIL arm 19: '$v'"; rc=1 ;; esac
+  printf '\t.ent\tf\nf:\n\t.rdata\n\t.align\t2\n$LC0:\n\t.ascii\t"x\\000"\n\t.text\n\tla\t$2,$LC1\n\t.end\tf\n' > "$T/blk"; v="$(shape_check "$T/blk")"
+  case "$v" in *"section switch: "*".rdata"*"label defined outside the block: \$LC1"*) echo "  OK   arm 20: a .rdata string literal + an outside \$LC1 -> refused: $(echo $v)" ;; *) echo "  FAIL arm 20: '$v'"; rc=1 ;; esac
   [ "$rc" = 0 ] && echo "#### s136os_splice --selftest: PASS" || echo "#### s136os_splice --selftest: FAIL"
   exit "$rc"
 fi
@@ -420,15 +467,9 @@ for f in $ROWS; do
     || fatal "s136 $FE compile failed for $f (ee_cc1.sh s136 $SRC)"
   extract_block "$f" "$TMP/$f.s" "$TMP/$f.blk" > "$TMP/$f.why"
   [ ! -s "$TMP/$f.why" ] || fatal "no single .ent/.end block for $f in $TMP/$f.s ($(cat "$TMP/$f.why"))"
-  # SHAPE: no section switch after the preamble, every $L reference defined here.
-  SHAPE="$(awk '
-    { sub(/\r$/, "") }
-    $1 == ".ent" { body = 1 }
-    body && /^[ \t]*\.(section|rdata|data|sdata|sbss|bss|rodata|lit4|lit8|text)([ \t,]|$)/ { print "section switch: " $0 }
-    /^\$L[A-Za-z0-9_]*:/ { lab = $0; sub(/:.*/, "", lab); def[lab] = 1 }
-    { s = $0; sub(/#.*/, "", s)
-      while (match(s, /\$L[A-Za-z0-9_]*/)) { ref[substr(s, RSTART, RLENGTH)] = 1; s = substr(s, RSTART + RLENGTH) } }
-    END { for (r in ref) if (!(r in def)) print "label defined outside the block: " r }' "$TMP/$f.blk")"
+  # SHAPE (shape_check): a section switch other than a jump table, or a $L
+  # label defined outside the block, refuses.
+  SHAPE="$(shape_check "$TMP/$f.blk")"
   [ -z "$SHAPE" ] || fatal "$f is outside the s136os arm's domain (its block needs data spliced from outside .ent..end):" "$SHAPE"
   # Rename the block's labels, carry the missing .extern lines, splice.
   awk -v fn="$f" '{ o = ""; s = $0

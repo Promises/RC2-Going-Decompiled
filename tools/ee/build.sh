@@ -74,6 +74,11 @@ if [ -d "$SRC" ]; then
   sh tools/ee/s136os_splice.sh --selftest > "$BUILD/s136os_splice_selftest.log" 2>&1 \
     || { cat "$BUILD/s136os_splice_selftest.log" >&2; echo "BUILD FAIL (s136os_splice --selftest)" >&2; exit 1; }
   echo "   $(tail -1 "$BUILD/s136os_splice_selftest.log")"
+  # The jump-table binder's seeded arms likewise (task #2247), incl. the real
+  # ROM table it reads from the retail ELF.
+  sh tools/ee/jtbl_bind.sh --selftest > "$BUILD/jtbl_bind_selftest.log" 2>&1 \
+    || { cat "$BUILD/jtbl_bind_selftest.log" >&2; echo "BUILD FAIL (jtbl_bind --selftest)" >&2; exit 1; }
+  echo "   $(tail -1 "$BUILD/jtbl_bind_selftest.log")"
   m=0
   for c in $(find "$SRC" \( -name '*.c' -o -name '*.cpp' \)); do
     # ukey: the unit's path spelled .c whatever its language, so the per-unit
@@ -156,6 +161,10 @@ if [ -d "$SRC" ]; then
     u="${c#$SRC/}"
     sh tools/ee/s136os_splice.sh "$REGION" "${u%.*}" "$c" "$us" "$GFLAG" "$S136EXTRA" \
       || { echo "BUILD FAIL (s136os splice): $c" >&2; exit 1; }
+    # A switch's compiled jump table (2.9 or spliced s136os) is verified against
+    # the ROM's jtbl_ data and bound to it, its copy dropped (task #2247).
+    sh tools/ee/jtbl_bind.sh "$REGION" "${u%.*}" "$us" "$GFLAG" \
+      || { echo "BUILD FAIL (jtbl bind): $c" >&2; exit 1; }
     sh tools/ee/asm_unit.sh "$REGION" "/work/$us" "/work/$o" "$GFLAG" \
       || { echo "BUILD FAIL (as): $c" >&2; exit 1; }
     [ -s "$o" ] || { echo "BUILD FAIL (no object produced): $c" >&2; exit 1; }
