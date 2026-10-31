@@ -907,17 +907,17 @@ GuiInstance *func_0034F300(GuiInstance *mgr) {
  * gui+0x38000+0x79D0.., and finally zeroes two small tables. Returns gui.
  *
  * Purely integer/pointer construction (no float, no GS/DMA). Pass 2 really does
- * call GuiQuitDialogInit and func_0033D4B0 twice each (the ROM has both jal pairs); the
- * second pair is not a transcription slip. The ~50 per-screen constructors live
- * in neighbouring units.
+ * call GuiQuitDialogInit and func_0033D4B0 twice each (the ROM has both jal
+ * pairs), so the second pair is not a transcription slip. The ~50 per-screen
+ * constructors live in neighbouring units.
  *
  * MATCHED on the s136os arm (task #2340): SN 2.95.3 v1.36 -fopt-stack compiles
- * the body below byte-exact. The cc1 2.9 arm's ten-GPR save layout was never
- * the wall here. Four spelling points closed it:
+ * the body below byte-exact, ten-GPR save layout included (it had kept the
+ * function on asm for the cc1 2.9 arm). Four spelling points closed it:
  *   - ctx and mgr are computed where the ROM computes them, after the clear
  *     loop and after pass 1. Computed at their declarations, both became
  *     long-lived pseudos and shifted every slot of the pass-1 spill table
- *     (302 of 344 words differ with the old body).
+ *     (the old body built 348 words on this arm, not the ROM's 344).
  *   - the GUI block size 0x3FB20 sits in a local (`guiSize`). Written inline,
  *     cc1 folds `+ 3` into one 0x3FB23 constant. The ROM loads 0x3FB20 once
  *     and reuses it for the +0x79D0 store.
