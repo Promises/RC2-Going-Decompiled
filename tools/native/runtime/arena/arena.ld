@@ -1291,6 +1291,7 @@ PROVIDE(D_1AE7A0 = __gamedata_start + 0x7A930);
 PROVIDE(D_1AE7D8 = __gamedata_start + 0x7A968);  /* const */
 PROVIDE(D_1AE7E8 = __gamedata_start + 0x7A978);  /* const */
 PROVIDE(D_1AE800 = __gamedata_start + 0x7A990);
+PROVIDE(D_1AE818 = __gamedata_start + 0x7A9A8);
 PROVIDE(D_1AE820 = __gamedata_start + 0x7A9B0);  /* const */
 PROVIDE(D_1AE838 = __gamedata_start + 0x7A9C8);  /* const */
 PROVIDE(D_1AE860 = __gamedata_start + 0x7A9F0);
