@@ -300,7 +300,7 @@ segments:
       #     built at -O2 -G8 -fno-gcse (per-unit override in
       #     tools/ee/objdiff_build.sh / diff.sh / build.sh).
       #     Boundaries are real, consecutive function starts verified in the
-      #     disassembly: func_002907B8 ends exactly at 0x290870 (jr/nop at
+      #     disassembly: func_002907C0 ends exactly at 0x290870 (jr/nop at
       #     0x290868/6C); 0x2912B8 is func_002912B8's real prologue. The unit
       #     starts on an 8-byte inter-function padding pair (addiu $sp,+0x90 /
       #     nop) with the real prologue at 0x290878 - both pinned in
@@ -377,7 +377,7 @@ segments:
       #   GetLocalizedString, DebugMalloc. Boundaries are real, consecutive
       #   function starts verified in the disassembly: 0x2888D8 is
       #   func_002888D8's real prologue (g_itemEquippedSlot reader, abuts
-      #   text/188580 which ends at 0x2888D7); func_002907B8 ends at 0x290870
+      #   text/188580 which ends at 0x2888D7); func_002907C0 ends at 0x290870
       #   (jr/nop at 0x290868/6C) = the start of text/1907F0, so the tile abuts
       #   1907F0 with no overlap. Walls expected: 8-byte-packed saves (every
       #   2+-GPR-save fn), switch/jtbl reloc-gap functions stay INCLUDE_ASM.

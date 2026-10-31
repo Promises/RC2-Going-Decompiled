@@ -270,6 +270,8 @@ func_0033F200 = 0x0033F200; // type:func
 func_0033F3B8 = 0x0033F3B8; // type:func
 func_0033F508 = 0x0033F508; // type:func size:0x8
 func_0033F510 = 0x0033F510; // type:func
+func_00336B38 = 0x00336B38; // type:func size:0x10 - unreachable orphan words (swc1 $f3,0xC($5), nop, addiu-sp +0x20, nop) ahead of 0x336B48, no inbound reference (NOTE #9459), INCLUDE_ASM_FRAGMENT (task #2240)
+func_00336B48 = 0x00336B48; // type:func - real entry, splat name kept. A GUI vtable slot (the data word at 0x1AD954) that forwards (p, flag) to func_00336678, twin of func_00336B68 (task #2240)
 func_00290870 = 0x00290870; // type:func size:0x8
 func_00290878 = 0x00290878; // type:func
 // text/188858 Tier-1-A carve: leading-epilogue mis-split pins. spimdisasm
@@ -281,6 +283,7 @@ func_002898E0 = 0x002898E0; // type:func - real subtitle-clear leaf
 func_0028C698 = 0x0028C698; // type:func size:0x48
 func_0028C6E0 = 0x0028C6E0; // type:func - real HUD-init forwarder
 func_0028F700 = 0x0028F700; // type:func - real fn (DrawHudIconQuadPixel) jal'd by func_002D9D60 in text/1D54C0 - split out of func_0028F6E8 (the preceding 0x14 bytes, unreferenced epilogue debris per task 2126, not a setup thunk). Replaces a bad bare DrawHudIconQuadPixel pin that truncated func_0028F6E8 and dropped 0x28F700..0x28F8DF. It was INCLUDE_ASM in text/188858.c and is byte-exact on the s136os arm since task 2108 (splat name kept, see its doc comment)
+func_002907C0 = 0x002907C0; // type:func - real entry, splat name kept (was the inner label D_002907C0 of func_002907B8, whose first two words, sw $2,0x6C($5) and a nop, are a foreign tail that nothing references, NOTE #9576, now INCLUDE_ASM_FRAGMENT). The ammo-vendor widget's tick callback, passed by address by func_0028EB10 (hi/lo at 0x28EBA8), not a jal. type:func on the body only, as func_00130A90 (FACT #10349) (task #2240)
 // text/188580 sub-TU data anchors: give the two .bss objects the unit reads
 // their own symbols (otherwise spimdisasm attaches them to far-away preceding
 // named symbols with huge offsets, which forces raw-offset C).

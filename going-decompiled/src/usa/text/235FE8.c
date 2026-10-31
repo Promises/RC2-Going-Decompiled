@@ -861,7 +861,13 @@ void func_00336AC8(f32 *src, f32 t, f32 *dst) {
     dst[3] = it * src[8] + t * src[9];
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336B38);
+/* func_00336B38: four unreachable orphan words (`swc1 $f3,0xC($5)`, nop,
+ * `addiu $29,$29,0x20`, nop) after func_00336AC8's return. No reference in the
+ * ROM reaches 0x336B38 (NOTE #9459). Split off its real entry at 0x336B48 by a
+ * symbol_addrs size:0x10 pin (task #2240); kept as layout asm. */
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336B38);
+
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336B48);
 
 /* func_00336B68: forward to func_00336678. */
 void func_00336B68(void *p, s32 flag) {
