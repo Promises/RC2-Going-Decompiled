@@ -445,12 +445,50 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00124630);
  * by a symbol_addrs size:0x10 pin (task #2143); kept as layout asm. */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_001246D0);
 
-/* func_001246E0: sceCdRead's RPC end callback, passed to sceSifCallRpc by
- * address (the %hi/%lo pair at 0x1254F8), never by jal. Copies the reply's two
- * byte runs (counts at +0x0/+0x4 of its argument's uncached 0x20000000
- * alias, data at +0x10/+0x50) to the destinations stored at +0x8/+0xC, then tail-jumps to func_00124630 with D_001363D4. Was the body of
- * func_001246D0 until the task #2143 split; not yet attempted as C. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_001246E0);
+/* The reply block of sceCdRead's RPC, read through its uncached alias. */
+typedef struct {
+    int n0;           /* 0x00: bytes in the first run */
+    int n1;           /* 0x04: bytes in the second run */
+    char *dst0;       /* 0x08: where the first run goes */
+    char *dst1;       /* 0x0C: where the second run goes */
+    char buf0[0x40];  /* 0x10 */
+    char buf1[0x40];  /* 0x50 */
+} CdRecv;
+
+extern volatile s32 D_001363D4;
+extern void func_00124630(s32 *arg0);
+
+/**
+ * sceCdRead's RPC end callback, passed to sceSifCallRpc by address (the
+ * %hi/%lo pair at 0x1254F8), never by jal. Copies the reply's two byte runs
+ * (counts at +0x0/+0x4 of `arg0`'s uncached 0x20000000 alias, data at
+ * +0x10/+0x50) to the destinations stored at +0x8/+0xC, then tail-jumps to
+ * func_00124630 with &D_001363D4 (the pending end-callback state). Was the body
+ * of func_001246D0 until the task #2143 split.
+ *
+ * Source: OpenRAC/rac2-gc-decomp @96927f87 (GPL-3.0, adopted with the authors'
+ * permission per RULING #10405), src/core/00124568.c, func_001246D0 (author
+ * commit 15ac0fe3, Flavius); upstream rac1-decomp src/core/001208E8.c
+ * func_001246D0; C body adapted: verbatim apart from our callee and data
+ * spellings (their r1_func_001209D8 = func_00124630, r1_D_00131414 =
+ * D_001363D4, whose volatile is now on our declaration rather than an asm
+ * alias) and the name at our split address (theirs is func_001246D0) (task
+ * #2231).
+ */
+void func_001246E0(int arg0) {
+    CdRecv *p = (CdRecv *)(arg0 | 0x20000000);
+    int i;
+
+    if (p->n0 > 0) {
+        char *d0 = p->dst0;
+        for (i = 0; i < p->n0; i++) d0[i] = p->buf0[i];
+    }
+    if (p->n1 > 0) {
+        char *d1 = p->dst1;
+        for (i = 0; i < p->n1; i++) d1[i] = p->buf1[i];
+    }
+    func_00124630((s32 *)&D_001363D4);
+}
 
 /* libcdvd's semaphores and busy flag. Written from the RPC end-callback
  * func_00124630 (interrupt context) as well as from sceCdInit, sceCdRead,
@@ -659,7 +697,147 @@ s32 func_00124C28(s32 mode) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00124C98);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", sceCdInit);
+/* A SIF RPC client block (sceSifClientData); only its bound-server word is
+ * read here. */
+typedef struct {
+    char pad[0x24];
+    void *serve;  /* 0x24: non-zero once sceSifBindRpc has bound the server */
+} SifRpcClientData;
+
+extern void sceSifInitRpc(u32 mode);
+extern s32 sceSifBindRpc(void *client, u32 rpcNumber, s32 mode);
+extern s32 func_0011AB10(void);  /* GetThreadId */
+extern void sceSifWriteBackDCache(void *buf, s32 size);
+extern volatile s32 D_001363B4;
+extern u32 D_00137580[];         /* S-command RPC receive buffer */
+extern s32 D_001363B8;           /* libcdvd RPC bind states, -1 = unbound */
+extern s32 D_001363C0;
+extern s32 D_001363C4;
+extern s32 D_001363C8;
+extern s32 D_001363CC;
+extern s32 D_001363D0;           /* init call count, printed by the bind error */
+extern s32 D_00141850;           /* thread id of the sceCdInit caller */
+extern s32 D_00141A68[];         /* RPC client data of the init channel */
+extern s32 D_00141AC0;           /* the 4-byte init request (init_mode) */
+extern char D_0013B268[];        /* the init bind error message */
+extern char D_0013B288[];        /* the SCECdEXIT message */
+
+/**
+ * libcdvd's sceCdInit (cdvd000.o): unless an S-command is still in flight
+ * (func_00124C28(1)), start SIF RPC, record the caller's thread id, reset every
+ * RPC bind state to -1 and bump the init count; bind the 0x80000592 init server,
+ * retrying (with a 0x100000-iteration delay, and a Kprintf when the debug level
+ * D_00136390 is positive) until it answers, then send `init_mode` as a 4-byte
+ * request and take the 0x10-byte reply into D_00137580. The reply's status word
+ * 0xFF is accepted as is and 0xFE turns on debug output; otherwise both version
+ * words must be at least 0x200 or the result is 2. Mode 5 (SCECdEXIT) then
+ * tears the library's semaphores down (func_00124818) and marks them -1; every
+ * other mode creates the command semaphores (func_00124780) and installs the
+ * 0x80000012 handler (func_001248F8). Only mode == 5 takes the teardown path,
+ * not mode >= 5 (FACT #5881).
+ *
+ * Returns 0 if the S-command was busy or the RPC failed, 2 on an old IOP module
+ * version, else 1. D_001363A4 is held at 1 for the duration so the
+ * 0x80000012 handler stays quiet.
+ *
+ * The D_001363A4 and D_001363AC stores are volatile, as upstream declares them
+ * (here a cast, since the unit declares both plain): with the copy of
+ * GetThreadId's result folded into its store, sched1 then leaves the ROM's
+ * register allocation in the init block (upstream's own note).
+ *
+ * Source: OpenRAC/rac2-gc-decomp @96927f87 (GPL-3.0, adopted with the authors'
+ * permission per RULING #10405), src/core/00124C98.c, func_00124E08 (author
+ * commit 6a0dbf0b, bigbeno37); C body adapted: verbatim apart from our callee
+ * and data spellings (their r1_func_00124C28 = func_00124C28, r1_func_0011CF78 =
+ * sceSifInitRpc, r1_func_0011AB10 = func_0011AB10, r1_func_0011D450 =
+ * sceSifBindRpc, r1_func_0011C820 = Kprintf, r1_func_0011CEC8 =
+ * sceSifWriteBackDCache, r1_func_0011D620 = sceSifCallRpc, r1_func_00124818/
+ * 00124780/001248F8 = ours, r1_D_<addr> = D_<addr>), `&D_00141A68` written as
+ * the array D_00141A68, `(char *)` on D_00137580 (our u32[]), the two volatile
+ * aliases (r1_D_001363A4, r1_D_001363AC_v) written as volatile casts, and the
+ * signature in our s32 spelling (task #2231).
+ */
+s32 sceCdInit(s32 init_mode) {
+    int ret;
+    int r;
+    int i;
+    int stat;
+    int a;
+    int b;
+    int owner;
+    char *rbuf;
+
+    if (func_00124C28(1) != 0) {
+        return 0;
+    }
+    sceSifInitRpc(0);
+    owner = func_0011AB10();
+    *(volatile s32 *)&D_001363A4 = 1;
+    D_00141850 = owner;
+    D_001363C0 = -1;
+    D_001363B8 = -1;
+    D_001363C8 = -1;
+    D_001363C4 = -1;
+    D_001363CC = -1;
+    D_001363BC = -1;
+    D_001363B4 = 0;
+    D_001363D0++;
+    while (1) {
+        r = sceSifBindRpc(D_00141A68, 0x80000592, 0);
+        if (r < 0) {
+            if (D_00136390 > 0) {
+                Kprintf(D_0013B268, r, D_001363D0);
+            }
+            for (i = 0x100000; i != -1; i--) {
+            }
+            continue;
+        }
+        if (((SifRpcClientData *)D_00141A68)->serve != 0) {
+            D_00141AC0 = init_mode;
+            D_001363CC = 0;
+            sceSifWriteBackDCache(&D_00141AC0, 4);
+            rbuf = (char *)D_00137580;
+            if (sceSifCallRpc(D_00141A68, 0, 0, &D_00141AC0, 4, rbuf, 0x10, 0, 0) < 0) {
+                *(volatile s32 *)&D_001363A4 = 0;
+                return 0;
+            }
+            break;
+        }
+        for (i = 0x100000; i != -1; i--) {
+        }
+    }
+    a = *(int *)((unsigned int)(rbuf + 4) | 0x20000000);
+    b = *(int *)((unsigned int)(rbuf + 8) | 0x20000000);
+    stat = *(int *)((unsigned int)(rbuf + 0xC) | 0x20000000);
+    ret = 1;
+    if (stat == 0xFF) {
+    } else if (stat == 0xFE) {
+        D_00136390 = ret;
+    } else {
+        if (a / 256 < 2 || b / 256 < 2) {
+            ret = 2;
+        }
+    }
+    *(volatile s32 *)&D_001363A4 = 0;
+    switch (init_mode) {
+    case 5:
+        if (D_00136390 > 0) {
+            Kprintf(D_0013B288);
+        }
+        func_00124818();
+        D_001363A8 = -1;
+        *(volatile s32 *)&D_001363AC = -1;
+        D_001363A0 = -1;
+        break;
+    case 0:
+    case 1:
+    default:
+        func_00124780();
+        func_001248F8();
+        break;
+    }
+    return ret;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", sceCdDiskReady);
 
@@ -734,7 +912,7 @@ extern u8 D_00137480[0x90];
 extern s32 D_00137540;
 extern char D_0013B2E0[];      /* "call cdread cmd\n" */
 extern char D_0013B2F8[];      /* "cdread end\n" */
-extern void func_001246E0(void);
+extern void func_001246E0(int arg0);
 
 /**
  * libcdvd's sceCdRead (its debug messages, D_0013B2E0/D_0013B2F8, read
@@ -1014,7 +1192,126 @@ s32 GsDefDispEnvNeedsOffsetFix(void) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", GetGsDisplayOffsets);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", BuildGsDispEnv);
+/* libgraph's display environment (sceGsDispEnv): the five 64-bit GS
+ * privileged-register images func_00125D98 writes out. */
+typedef struct {
+    u64 pmode;    /* 0x00: PMODE */
+    u64 smode2;   /* 0x08: SMODE2 */
+    u64 dispfb;   /* 0x10: DISPFB */
+    u64 display;  /* 0x18: DISPLAY */
+    u64 bgcolor;  /* 0x20: BGCOLOR */
+} GsDispEnv;
+
+extern void GetGsDisplayOffsets(int outMode, int *dx1, int *dy1, int *dx2, int *dy2);
+extern char D_0013B358[];  /* the unsupported-output-mode message */
+
+/**
+ * libgraph's sceGsSetDefDispEnv: fill `disp` for a `w` x `h` frame buffer of
+ * pixel format `psm` shown at offset (`dx`, `dy`), for the output mode in the
+ * GsGParam block. PMODE = 0x66 (circuit 2 on, alpha from ALP); SMODE2 from
+ * the interlace and field/frame modes (1 field, 3 frame, 2 non-interlaced);
+ * DISPFB from psm and the width in 64-pixel units. DISPLAY carries the
+ * horizontal magnification (2560 / w, rounded up), the position and the
+ * magnified size, with per-mode origins: NTSC (2) 636/50 interlaced or 636/25,
+ * PAL (3) 656/72 or 656/36, DTV 480p (0x50) at 232 + centred, double-width.
+ * Only a mode other than NTSC/PAL on a boot ROM newer than 2001-06-08
+ * (GsDefDispEnvNeedsOffsetFix) takes GetGsDisplayOffsets' origin correction;
+ * every other case uses a zero correction. A mode other than 2, 3 or 0x50
+ * prints D_0013B358 and leaves DISPLAY unset. BGCOLOR = 0.
+ *
+ * The non-interlaced arms spell the magnification out three times rather than
+ * through the `magh` local; that is how the ROM recomputes the division.
+ *
+ * Source: OpenRAC/rac2-gc-decomp @96927f87 (GPL-3.0, adopted with the authors'
+ * permission per RULING #10405), src/core/00125970.c, func_00125A20 (author
+ * commit c8887184, Flavius); upstream rac1-decomp src/core/00121D18.c
+ * func_00125A20; C body adapted: our callee and data spellings (their
+ * r1_func_00121D08 = func_00125960, cast to our GsGParam *; r1_func_00121D18
+ * = GsDefDispEnvNeedsOffsetFix; r1_func_00121DB8 = GetGsDisplayOffsets;
+ * r1_func_0011A6C8 = Kprintf; r1_D_00153140 = D_0013B358), our GsGParam in
+ * place of theirs (same first four halfwords), and every `unsigned long`
+ * written u64, the same type on the EE, so the native ILP32 build keeps
+ * 64-bit fields (task #2231).
+ */
+void BuildGsDispEnv(GsDispEnv *disp, short psm, short w, short h, short dx, short dy) {
+    GsGParam *gp;
+    int dx1, dy1, dx2, dy2;
+    int mode;
+    short omode;
+    unsigned short imode;
+
+    gp = (GsGParam *)func_00125960();
+    if (gp->outMode != 2 && gp->outMode != 3 && GsDefDispEnvNeedsOffsetFix() != 0) {
+        GetGsDisplayOffsets(gp->outMode, &dx1, &dy1, &dx2, &dy2);
+    } else {
+        dy2 = 0;
+        dx2 = 0;
+        dy1 = 0;
+        dx1 = 0;
+    }
+    imode = gp->interMode;
+    disp->pmode = 0x66;
+    if (gp->interMode != 0) {
+        if (gp->ffMode != 0) {
+            disp->smode2 = 3;
+        } else {
+            disp->smode2 = 1;
+        }
+    } else {
+        disp->smode2 = 2;
+    }
+    disp->dispfb = ((u64)(psm & 0xF) << 15) |
+                   ((u64)(((w + 63) >> 6) & 0x3F) << 9);
+    omode = gp->outMode;
+    if (omode == 2) {
+        if ((short)imode == 1) {
+            int magh = (w + 2559) / w;
+            u64 dxo = (u64)dx1 + 636;
+            disp->display = ((((u64)(magh - 1) << 23) |
+                            (((dx * magh + dxo) & 0xFFF) |
+                             ((u64)(gp->ffMode ? (h << 1) - 1 : h - 1) << 44))) |
+                            (((u64)(dy + dy1 + 50) & 0xFFF) << 12)) |
+                            ((u64)(magh * w - 1) << 32);
+        } else {
+            int magh = (w + 2559) / w;
+            u64 dxo = (u64)dx1 + 636;
+            magh = (w + 2559) / w;
+            disp->display = ((((u64)((w + 2559) / w - 1) << 23) |
+                            (((dx * ((w + 2559) / w) + dxo) & 0xFFF) |
+                             ((u64)(h - 1) << 44))) |
+                            (((u64)(dy + dy1 + 25) & 0xFFF) << 12)) |
+                            ((u64)((w + 2559) / w * w - 1) << 32);
+        }
+    } else if (omode == 3) {
+        if ((short)imode == 1) {
+            int magh = (w + 2559) / w;
+            u64 dxo = (u64)dx1 + 656;
+            disp->display = ((((u64)(magh - 1) << 23) |
+                            (((dx * magh + dxo) & 0xFFF) |
+                             ((u64)(gp->ffMode ? (h << 1) - 1 : h - 1) << 44))) |
+                            (((u64)(dy + dy1 + 72) & 0xFFF) << 12)) |
+                            ((u64)(magh * w - 1) << 32);
+        } else {
+            int magh = (w + 2559) / w;
+            u64 dxo = (u64)dx1 + 656;
+            magh = (w + 2559) / w;
+            disp->display = ((((u64)((w + 2559) / w - 1) << 23) |
+                            (((dx * ((w + 2559) / w) + dxo) & 0xFFF) |
+                             ((u64)(h - 1) << 44))) |
+                            (((u64)(dy + dy1 + 36) & 0xFFF) << 12)) |
+                            ((u64)((w + 2559) / w * w - 1) << 32);
+        }
+    } else if (omode == 0x50) {
+        u64 dxo = (u64)(dx * 2) + 232;
+        disp->display = ((((u64)(h - 1) << 44) |
+                          ((((720 - w) / 2 * 2 + (u64)dx1 + dxo) & 0xFFF) | 0x800000)) |
+                         (((u64)(dy + dy1 + 35) & 0xFFF) << 12)) |
+                        ((u64)(w * 2 - 1) << 32);
+    } else {
+        Kprintf(D_0013B358);
+    }
+    disp->bgcolor = 0;
+}
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00125D94);
 
@@ -4754,7 +5051,141 @@ void func_0012D420(IpuDecoder *dec, s32 count, s32 enable) {
     }
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012D4B0);
+#define PI_(o) (*(int *)((char *)p + (o)))
+#define PP_(o) (*(char **)((char *)p + (o)))
+#define RDY_(o) (*(int *)(PP_(o) + 0x28))
+
+/**
+ * libmpeg picture-buffer rotation, run after each picture is decoded: pick the
+ * output frame record for the picture just finished and say whether it is
+ * ready to show. `p` is the IpuDecoder (offsets as in that struct: 0x150
+ * picture_coding_type, 0x174 picture_structure, 0x1B8..0x1E4 the frames[3][4]
+ * buffer table, a buffer's +0x28 its ready flag).
+ *
+ * For a B picture (coding type 3) each row's current slot (0x1C0/0x1D0/0x1E0)
+ * takes that row's B buffer (column 3). Once the GOP has seen two I/P frames
+ * or four I/P fields (the running indices 0xA0 + 0xA4), fieldE8 (0xE8),
+ * brokenLink (0x1A8) and closedGop (0x1A4) are cleared; if fieldE8 or
+ * brokenLink was set without closedGop, the column-0 ready flags are cleared
+ * first. The B picture is ready when the column-0 and column-1 buffers its
+ * structure needs are (or closedGop is set). For an I/P picture, unless `arg1`
+ * (a second field), each row swaps its column-0 and column-1 buffers; column 1
+ * becomes current, and the picture is ready unless it is a P picture whose
+ * reference is not yet ready. Finally the selected record (by
+ * picture_structure: 3 frame, 1 top, 2 bottom) is marked not-shown (+0x28 = 0)
+ * and stamped with the picture's 64-bit timestamps (0x828/0x830) and its
+ * header fields. Returns 1 if the picture can be output, else 0.
+ *
+ * Source: OpenRAC/rac2-gc-decomp @96927f87 (GPL-3.0, adopted with the authors'
+ * permission per RULING #10405), src/core/0012D100.c, func_0012D4B0 (author
+ * commit c8887184, Flavius); upstream rac1-decomp src/core/00125630.c
+ * func_0012D4B0; C body adapted: verbatim apart from the two `long` timestamp
+ * copies written s64, the same type on the EE, so the native ILP32 build
+ * keeps 64 bits, and the three offset macros #undef'd after it to keep them
+ * local (task #2231).
+ */
+int func_0012D4B0(void *p, int arg1) {
+    char *rec;
+    int ret;
+    int n;
+    char *tmp;
+    char *cur;
+
+    rec = 0;
+    ret = 0;
+    n = (PI_(0x174) == 3) ? 2 : 4;
+    if (PI_(0x150) == 3) {
+        PP_(0x1C0) = PP_(0x1C4);
+        PP_(0x1D0) = PP_(0x1D4);
+        PP_(0x1E0) = PP_(0x1E4);
+        if (PI_(0xA0) + PI_(0xA4) >= n) {
+            PI_(0xE8) = 0;
+            PI_(0x1A8) = 0;
+            PI_(0x1A4) = 0;
+        }
+        if ((PI_(0xE8) != 0 || PI_(0x1A8) != 0) && PI_(0x1A4) == 0) {
+            RDY_(0x1B8) = 0;
+            RDY_(0x1C8) = 0;
+            RDY_(0x1D8) = 0;
+        }
+        PI_(0xE8) = 0;
+        PI_(0x1A8) = 0;
+        if (PI_(0x174) == 3) {
+            if (RDY_(0x1B8) == 1 || PI_(0x1A4) != 0) {
+                if (RDY_(0x1BC) == 1) {
+                    ret = 1;
+                }
+            }
+        } else {
+            if ((RDY_(0x1C8) == 1 && RDY_(0x1D8) == 1) || PI_(0x1A4) != 0) {
+                if (RDY_(0x1CC) == 1) {
+                    if (RDY_(0x1DC) == 1) {
+                        ret = 1;
+                    }
+                }
+            }
+        }
+    } else {
+        if (arg1 == 0) {
+            tmp = PP_(0x1B8);
+            PP_(0x1B8) = PP_(0x1BC);
+            PP_(0x1BC) = tmp;
+            tmp = PP_(0x1C8);
+            PP_(0x1C8) = PP_(0x1CC);
+            PP_(0x1CC) = tmp;
+            tmp = PP_(0x1D8);
+            PP_(0x1D8) = PP_(0x1DC);
+            PP_(0x1DC) = tmp;
+        }
+        PP_(0x1C0) = PP_(0x1BC);
+        PP_(0x1D0) = PP_(0x1CC);
+        PP_(0x1E0) = PP_(0x1DC);
+        if (PI_(0x174) == 3) {
+            if (PI_(0x150) != 2 || RDY_(0x1B8) == 1) {
+                ret = 1;
+            }
+        } else {
+            cur = (PI_(0x174) == 1) ? PP_(0x1E0) : PP_(0x1D0);
+            if (PI_(0x150) != 2 || (arg1 != 0 && *(int *)(cur + 0x28) == 1) ||
+                (RDY_(0x1C8) == 1 && RDY_(0x1D8) == 1)) {
+                ret = 1;
+            }
+        }
+    }
+    switch (PI_(0x174)) {
+    case 3:
+        rec = PP_(0x1C0);
+        break;
+    case 1:
+        rec = PP_(0x1D0);
+        break;
+    case 2:
+        rec = PP_(0x1E0);
+        break;
+    }
+    *(int *)(rec + 0x28) = 0;
+    *(s64 *)(rec + 0x18) = *(s64 *)((char *)p + 0x828);
+    *(int *)(rec + 0x2C) = PI_(0x150);
+    *(s64 *)(rec + 0x20) = *(s64 *)((char *)p + 0x830);
+    *(int *)(rec + 0x30) = PI_(0x174);
+    *(int *)(rec + 0x34) = PI_(0x13C);
+    *(int *)(rec + 0x38) = PI_(0x188);
+    *(int *)(rec + 0x3C) = PI_(0x178);
+    *(int *)(rec + 0x40) = PI_(0x184);
+    *(int *)(rec + 0x44) = PI_(0x18C);
+    *(int *)(rec + 0x48) = PI_(0x190);
+    *(int *)(rec + 0x4C) = PI_(0x194);
+    *(int *)(rec + 0x50) = PI_(0x198);
+    *(int *)(rec + 0x54) = PI_(0x19C);
+    *(int *)(rec + 0x58) = PI_(0x1A0);
+    *(int *)(rec + 0x5C) = PI_(0x148);
+    *(int *)(rec + 0x60) = PI_(0x14C);
+    return ret;
+}
+
+#undef PI_
+#undef PP_
+#undef RDY_
 
 
 extern s32 sprintf(char *dst, const char *fmt, ...);
@@ -5218,7 +5649,100 @@ void func_0012E110(IpuDecoder *dec, u32 dst, s32 mbCount) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012E238);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012E378);
+/* The progress record func_0012E378 hands its DMAC channel-3 handler
+ * func_0012E238, which advances it once per 0x3FF-macroblock chunk. */
+typedef struct {
+    volatile int done; /* 0x00: chunks finished (the handler counts them) */
+    int err;           /* 0x04 */
+    int size;          /* 0x08: macroblocks still to convert */
+    int next;          /* 0x0C: physical destination of the next chunk */
+    int total;         /* 0x10: chunks in all */
+} CscRec;
+
+extern s32 func_0011A940(s32 channel, void *handler, s32 next, void *arg);  /* AddDmacHandler */
+extern s32 RemoveDmacHandler(s32 channel, s32 handlerId);
+extern s32 EnableDmac(s32 channel);
+extern s32 DisableDmac(s32 channel);
+extern void func_0012E238(void);  /* D3 chunk handler (asm) */
+extern char D_0013BCC0[];         /* "CSC handler error\n" */
+
+/**
+ * Colour-convert `mbCount` macroblocks out of the IPU into `dst` in chunks of
+ * at most 0x3FF (the IPU CSC command's limit), func_0012E110's chained twin.
+ * Seeds a CscRec (chunk count mbCount / 0x3FF + 1, the remainder, the second
+ * chunk's destination dst + 0xFFC00), waits for IPU_CTRL to go idle, installs
+ * func_0012E238 as the DMAC channel-3 (fromIPU) handler with the record as its
+ * argument, enables D3's interrupt (D_STAT 0x1000E010 = 8, EnableDmac(3)),
+ * starts the first chunk (MADR = dst, QWC = 0xFFC0, CHCR = STR) with interrupts
+ * held off, and issues CSC 0x3FF. After request 4 to the decoder's callbacks
+ * it spins until the handler has counted every chunk, reports D_0013BCC0
+ * through func_00130288 if the handler flagged an error, waits for the IPU
+ * again and removes the handler.
+ *
+ * `done` is volatile because the D3 interrupt handler really does advance it
+ * while this function spins on it: it is an asynchronous object, not a codegen
+ * device (RULING #8404 does not apply). The three DMA registers are written
+ * through pointer locals; that, with the chunk count stored first, is what
+ * closed NOTE #10159's 6-word $3/$4 residual.
+ *
+ * Source: OpenRAC/rac2-gc-decomp @96927f87 (GPL-3.0, adopted with the authors'
+ * permission per RULING #10405), src/core/0012E110.c, func_0012E378 (author
+ * commit de08d596, Flavius); upstream rac1-decomp src/core/0012A2F0.c
+ * func_0012E378; C body adapted: our callee and data spellings (their
+ * r1_func_00118AC0 = func_0011A940, r1_func_00119460 = EnableDmac,
+ * r1_func_0012A418 = func_0012E238, r1_func_0011D960/0011D9A8 =
+ * func_0011F5E0/func_0011F628, r1_func_0012BC78 = func_0012FA98,
+ * r1_func_0012C468 = func_00130288, r1_D_00153AB0 = D_0013BCC0,
+ * r1_func_001193F8 = DisableDmac, r1_func_00118AD0 = RemoveDmacHandler),
+ * casts to our prototypes ((s32 *) on the callbacks word, (s32) on the
+ * decoder pointer), the record typedef named CscRec (theirs CscRec_2A558),
+ * and the signature in the unit's shared IpuDecoder * / u32 / s32 prototype
+ * (task #2231).
+ */
+void func_0012E378(IpuDecoder *dec, u32 dst, s32 mbCount) {
+    char *p = (char *)dec;
+    int event[8];
+    CscRec rec;
+    CscRec *rp;
+    int h;
+    int r;
+
+    rec.total = mbCount / 0x3FF + 1;
+    rec.size = mbCount;
+    rec.next = (dst + 0xFFC00) & 0x0FFFFFFF;
+    rec.err = 0;
+    rec.done = 0;
+    rp = &rec;
+    while (*(volatile int *)0x10002010 < 0) {
+    }
+    h = func_0011A940(3, (void *)func_0012E238, 0, rp);
+    *(volatile unsigned int *)0x1000E010 = 8;
+    EnableDmac(3);
+    r = func_0011F5E0();
+    {
+        volatile unsigned int *madr = (volatile unsigned int *)0x1000B010;
+        volatile unsigned int *qwc = (volatile unsigned int *)0x1000B020;
+        volatile unsigned int *chcr = (volatile unsigned int *)0x1000B000;
+        *madr = dst & 0x0FFFFFFF;
+        *qwc = 0xFFC0;
+        *chcr = 0x100;
+    }
+    if (r != 0) {
+        func_0011F628();
+    }
+    *(volatile unsigned int *)0x10002000 = 0x700003FF;
+    event[0] = 4;
+    func_0012FA98(*(s32 **)(p + 0x858), event);
+    while (rec.done < rec.total) {
+    }
+    if (rec.err != 0) {
+        func_00130288((s32)p, D_0013BCC0);
+    }
+    while (*(volatile int *)0x10002010 < 0) {
+    }
+    DisableDmac(3);
+    RemoveDmacHandler(3, h);
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012E538);
 
@@ -6425,7 +6949,36 @@ void func_00130300(s32 *ipu) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00130428);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_001306D0);
+/**
+ * Fill nine out-pointers with buffer addresses: write the uncached (0x20000000)
+ * physical addresses of three buffers `a`, `b`, `c` twice each to `o0`..`o5`,
+ * and to `o6`..`o8` the same three advanced by (w * h / 512) * 384 bytes.
+ *
+ * The ROM forms `q * 384` three times, as three separate products with 384
+ * held in a register; written once and reused, cc1 CSEs it (NOTE #10177's
+ * 39.68% first spelling). Hence the three `q * 384` statements below.
+ *
+ * Source: OpenRAC/rac2-gc-decomp @96927f87 (GPL-3.0, adopted with the authors'
+ * permission per RULING #10405), src/core/00130288.c, func_001306D0 (author
+ * commit c8887184, Flavius); upstream rac1-decomp src/core/0012AC80.c
+ * func_001306D0; C body verbatim (task #2231).
+ */
+void func_001306D0(unsigned int *o0, unsigned int *o1, unsigned int *o2, unsigned int *o3,
+                   unsigned int *o4, unsigned int *o5, unsigned int *o6, unsigned int *o7,
+                   unsigned int *o8, int a, int b, int c, int w, int h) {
+    unsigned int x = (a & 0xFFFFFFF) | 0x20000000;
+    unsigned int y = (b & 0xFFFFFFF) | 0x20000000;
+    unsigned int z = (c & 0xFFFFFFF) | 0x20000000;
+    int q = (w * h) / 512;
+    int s6, s7, s8;
+    s6 = q * 384; s6 += a;
+    s7 = q * 384; s7 += b;
+    s8 = q * 384; s8 += c;
+    *o0 = x; *o1 = y; *o2 = z; *o3 = x; *o4 = y; *o5 = z;
+    *o6 = (s6 & 0xFFFFFFF) | 0x20000000;
+    *o7 = (s7 & 0xFFFFFFF) | 0x20000000;
+    *o8 = (s8 & 0xFFFFFFF) | 0x20000000;
+}
 
 /**
  * func_001307B0(obj, cmd, madr): restart the IPU input DMA — run entry 2 of
@@ -6578,12 +7131,24 @@ void func_00130A80(s32 arg0) {
  * kept as layout asm. */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00130A8C);
 
-/* func_00130A90: the MPEG decoder's stop callback, stored by address at
- * dec->field1C by IpuInitDecoder (the %hi/%lo pair at 0x12F7C4): tail-calls
- * sceIpuStopDMA with the env at dec->field40 + 0x4C. Twin of the restart
- * callback func_00130AA0. Was the inner label D_00130A90 until the task #2143
- * split; not yet attempted as C. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00130A90);
+extern void sceIpuStopDMA(IpuDmaEnv *env);
+
+/**
+ * The MPEG decoder's stop callback, stored by address at dec->field1C by
+ * IpuInitDecoder (the %hi/%lo pair at 0x12F7C4): tail-calls sceIpuStopDMA
+ * with the env at object->field40 + 0x4C (the decoder's saved IpuDmaEnv).
+ * Twin of the restart callback func_00130AA0. Was the inner label D_00130A90
+ * until the task #2143 split.
+ *
+ * Source: OpenRAC/rac2-gc-decomp @96927f87 (GPL-3.0, adopted with the authors'
+ * permission per RULING #10405), src/core/00130890.c, func_00130A8C (author
+ * commit d9e7028d, Flavius); C body adapted: their func_00130B80 is our
+ * sceIpuStopDMA, so the argument takes an (IpuDmaEnv *) cast, and the name is
+ * ours at the split address (theirs is func_00130A8C) (task #2231).
+ */
+void func_00130A90(void *object) {
+    sceIpuStopDMA((IpuDmaEnv *)(*(char **)((char *)object + 0x40) + 0x4C));
+}
 
 /**
  * Frameless tail-call thunk: forward the sub-object at arg0->field_0x40 + 0x4C

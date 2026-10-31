@@ -294,6 +294,35 @@
     `src/game/002D2018-g32.c` (`func_002D2018`, author commits `0eb05a7c` and
     `0f3403f8`, Flavius).
 
+- **OpenRAC — `rac2-gc-decomp`, commit `96927f87`, libcdvd/libgraph/libmpeg bodies** (GPL-3.0)
+  <https://github.com/OpenRAC/rac2-gc-decomp> at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`
+
+  Seven core C bodies, adopted with the authors' permission (held by the
+  operator, RULING #10405) and re-checked byte-exact against our v2.00 ROM on
+  the plain sdk29 arm (task #2231). Contributors: Flavius and bigbeno37. Five
+  are rac1-decomp's C carried into rac2-gc-decomp; `sceCdInit` and
+  `func_00130A90` are OpenRAC's own. Each doc comment carries the `Source:`
+  line, which names every change beyond extern spellings.
+
+  Used so far, all in `going-decompiled/src/usa/cod/022FA8.c`:
+  - **`func_001246E0`** (`0x001246E0`, sceCdRead's RPC end callback), adapted,
+    from `src/core/00124568.c` (`func_001246D0`, author commit `15ac0fe3`,
+    Flavius); rac1-decomp `src/core/001208E8.c`.
+  - **`sceCdInit`** (`0x00124E08`), adapted, from `src/core/00124C98.c`
+    (`func_00124E08`, author commit `6a0dbf0b`, bigbeno37).
+  - **`BuildGsDispEnv`** (`0x00125A20`), adapted (`unsigned long` written
+    `u64`), from `src/core/00125970.c` (`func_00125A20`, author commit
+    `c8887184`, Flavius); rac1-decomp `src/core/00121D18.c`.
+  - **`func_0012D4B0`** (`0x0012D4B0`), adapted (`long` written `s64`), from
+    `src/core/0012D100.c` (author commit `c8887184`, Flavius); rac1-decomp
+    `src/core/00125630.c`.
+  - **`func_0012E378`** (`0x0012E378`), adapted, from `src/core/0012E110.c`
+    (author commit `de08d596`, Flavius); rac1-decomp `src/core/0012A2F0.c`.
+  - **`func_001306D0`** (`0x001306D0`), verbatim, from `src/core/00130288.c`
+    (author commit `c8887184`, Flavius); rac1-decomp `src/core/0012AC80.c`.
+  - **`func_00130A90`** (`0x00130A90`), adapted, from `src/core/00130890.c`
+    (`func_00130A8C`, author commit `d9e7028d`, Flavius).
+
 - **Lombyte** (MIT, © 2026 Mateusz Kłysz)
   <https://github.com/mateuszklysz/Lombyte> at commit `2c4452dd03f5f7ebb2868dbe073ccdb1afb27f61`
 

@@ -204,6 +204,27 @@ here and in the function's doc comment (task #2239, RULING #10405):
     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
     SOFTWARE.
 
+### OpenRAC rac2-gc-decomp at 96927f87, cod/022FA8 core bodies (GPL-3.0)
+
+Seven C function bodies are taken from OpenRAC's `rac2-gc-decomp`,
+<https://github.com/OpenRAC/rac2-gc-decomp> at commit
+`96927f872c709e13aaa0f32265bb81a5531bf7ed` (root `LICENSE`: GNU General Public
+License, version 3), with the authors' permission (RULING #10405), task #2231.
+All are in `going-decompiled/src/usa/cod/022FA8.c`:
+
+| Here | Upstream file | Upstream name |
+|---|---|---|
+| `func_001246E0` (adapted: extern spellings, name at our split address) | `src/core/00124568.c` (from rac1-decomp `src/core/001208E8.c`) | `func_001246D0` |
+| `sceCdInit` (adapted: extern spellings, volatile aliases written as casts) | `src/core/00124C98.c` | `func_00124E08` |
+| `BuildGsDispEnv` (adapted: extern spellings, our GsGParam, `unsigned long` written `u64`) | `src/core/00125970.c` (from rac1-decomp `src/core/00121D18.c`) | `func_00125A20` |
+| `func_0012D4B0` (adapted: `long` written `s64`) | `src/core/0012D100.c` (from rac1-decomp `src/core/00125630.c`) | `func_0012D4B0` |
+| `func_0012E378` (adapted: extern spellings, our shared prototype) | `src/core/0012E110.c` (from rac1-decomp `src/core/0012A2F0.c`) | `func_0012E378` |
+| `func_001306D0` | `src/core/00130288.c` (from rac1-decomp `src/core/0012AC80.c`) | `func_001306D0` |
+| `func_00130A90` (adapted: callee spelling, name at our split address) | `src/core/00130890.c` | `func_00130A8C` |
+
+The GPL-2.0-or-later note in the section "OpenRAC rac2-gc-decomp (GPL-3.0)"
+above applies to these bodies too.
+
 ### Lombyte (MIT)
 
 The C body of `_sysbitFlush` in `going-decompiled/src/usa/cod/022FA8.c` is
