@@ -168,54 +168,70 @@ typedef struct EmitterView {
  * func_002E0000..end +0x78 (the 41K C-only pointer residual). */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E0000);
 
-/* Format a level-select entry's display name into `dst`. A jump table
- * (jtbl_0026CEB0_text, 25 cases on id-2 in 0..0x18) selects the format: the
- * "normal" ids {2,5,0xA,0x17,0x18,0x19,0x1A} use the name-only format D_1ABA38;
- * every other id (including out-of-range) uses the "special" format D_1AB9B8
- * with a GetLocalizedString(0xB44) prefix. The level name is
- * GetLocalizedString(g_levelSelectEntries[id]) (stride 8); both go through the
- * SDK sprintf func_00115DA8. Returns dst.
- * The 25-case jtbl->flag mapping was extracted from jtbl_0026CEB0_text (0x2E0054
- * => normal, 0x2E005C => special) — the faithful #else the prior park-note asked
- * for. Match-walled by the jtbl reloc (engine-2.96); matching arm stays INCLUDE_ASM.
- * s136os arm: OpenRAC rac2-gc-decomp @96927f87 src/game/002DF1B8-g8.c
- * func_002DF1F8 closes masked 0/58 standalone (FACT #12087), but with our
- * symbols, an S136OS_SLOT guard and a selector row the real build refuses it
- * on SHAPE: "func_002E0010 is outside the s136os arm's domain (its block needs
- * data spliced from outside .ent..end): section switch: .rdata" (task #2234).
- * Its switch makes SN 1.36 emit its own .rdata table, and the ROM's is
- * jtbl_0026CEB0_text in the data segment. Not adopted. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E0010);
-#else
-extern u8    g_levelSelectEntries[];
-extern char  D_1AB9B8[];   /* "special" format: prefix + name */
-extern char  D_1ABA38[];   /* "normal" format: name only */
-extern char *GetLocalizedString(s32 id);
-extern void  func_00115DA8(char *dst, const char *fmt, ...);
+/* Format a level-select entry's display name into `buf` and return `buf`.
+ *   buf:  destination string buffer.
+ *   kind: level-select entry index (g_levelSelectEntries, stride 8).
+ * A switch on `kind` (the ROM's jump table jtbl_0026CEB0_text, 25 cases on
+ * kind-2 in 0..0x18) picks the format: the "normal" kinds {2,5,10,23,24,25,26}
+ * use the name-only format D_1ABA38; every other kind, including out-of-range,
+ * uses the "special" format D_1AB9B8 with a GetLocalizedString(0xB44) prefix.
+ * The level name is GetLocalizedString(g_levelSelectEntries[kind].labelStrId);
+ * both go through sprintf.
+ * MATCHED on the s136os arm (task #2262). No device. The switch's compiled
+ * table is not kept: tools/ee/jtbl_bind.sh checks every entry against the
+ * ROM's jtbl_0026CEB0_text (retail ELF words), drops the copy and binds the
+ * %hi/%lo to the ROM symbol (FACT #12102). Without the binder the splice
+ * refused this body on SHAPE (task #2234, FACT #12104).
+ * GUARD: compiled alone by SN 2.95.3 v1.36 -fopt-stack and spliced over the
+ * S136OS_SLOT line (tools/ee/s136os_splice.sh, row in
+ * tools/ee/s136os_functions.txt); plain C on native.
+ * Source: OpenRAC/rac2-gc-decomp @96927f872c709e13aaa0f32265bb81a5531bf7ed
+ * (GPL-3.0, adopted with the authors' permission per RULING #10405),
+ * src/game/002DF1B8-g8.c, func_002DF1F8 (v1.01 address; author commit
+ * 04cbc7e5, Flavius). ADAPTED: (1) our callee and data spellings:
+ * func_00115DA8 = sprintf (declared value-returning, as in 1CA080),
+ * func_00288FB8 = GetLocalizedString, D_001AB998 = D_1AB9B8, D_001AB9F8 =
+ * D_1ABA38, D_00258D70 = g_levelSelectEntries; (2) their anonymous
+ * `struct { int text; int pad; }` element is LevelSelectEntry with the
+ * (labelStrId, valueStrId) field names of symbol_addrs, so `.text` reads
+ * `.labelStrId`; (3) int is spelled s32. */
+typedef struct LevelSelectEntry {
+    s32 labelStrId;   /* level name text id */
+    s32 valueStrId;   /* value/description text id */
+} LevelSelectEntry;
 
-char *func_002E0010(char *dst, s32 id) {
-    s32 special = 1;
-    if ((u32)(id - 2) < 0x19) {
-        switch (id) {
-        case 0x2: case 0x5: case 0xA:
-        case 0x17: case 0x18: case 0x19: case 0x1A:
-            special = 0;
-            break;
-        default:
-            special = 1;
-            break;
-        }
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002E0010)
+S136OS_SLOT(func_002E0010);
+#else
+extern LevelSelectEntry g_levelSelectEntries[];
+extern const char D_1AB9B8[];   /* "special" format: prefix + name */
+extern const char D_1ABA38[];   /* "normal" format: name only */
+extern char *GetLocalizedString(s32 id);
+extern s32 sprintf(char *dst, const char *fmt, ...);
+
+char *func_002E0010(char *buf, s32 kind) {
+    s32 flag;
+
+    switch (kind) {
+    case 2:
+    case 5:
+    case 10:
+    case 23:
+    case 24:
+    case 25:
+    case 26:
+        flag = 0;
+        break;
+    default:
+        flag = 1;
+        break;
     }
-    if (special) {
-        char *prefix = GetLocalizedString(0xB44);
-        char *name   = GetLocalizedString(*(s32 *)(g_levelSelectEntries + id * 8));
-        func_00115DA8(dst, D_1AB9B8, prefix, name);
+    if (flag) {
+        sprintf(buf, D_1AB9B8, GetLocalizedString(0xB44), GetLocalizedString(g_levelSelectEntries[kind].labelStrId));
     } else {
-        char *name = GetLocalizedString(*(s32 *)(g_levelSelectEntries + id * 8));
-        func_00115DA8(dst, D_1ABA38, name);
+        sprintf(buf, D_1ABA38, GetLocalizedString(g_levelSelectEntries[kind].labelStrId));
     }
-    return dst;
+    return buf;
 }
 #endif
 

@@ -63,9 +63,9 @@
  * UpdateMobyMotionVelocity [since matched on the s136os arm from OpenRAC's C,
  * task #2235] ResolveMobyMotionCollision ApplyMobyGroundAndEvents
  * ProbeMobyGroundLine ResolveMobySphereCollision UpdateMobyLeanFromTurn
- * UpdateActiveMobys StepDialogVoiceChannel UpdateDialogVoiceManager [OpenRAC's
- * switch body for it is refused by s136os_splice on SHAPE, its jump table being
- * an .rdata block: task #2235, the FACT #12092 wall]) the save
+ * UpdateActiveMobys StepDialogVoiceChannel UpdateDialogVoiceManager [since
+ * matched on the s136os arm from OpenRAC's C, task #2262, its switch table
+ * bound to the ROM's by tools/ee/jtbl_bind.sh]) the save
  * stride is NOT re-measured on the s136os arm and the residual is UNMEASURED:
  * tree-wide, 0 of the 111 labeled members that were run reproduce the 16-byte
  * stride there (FACT #9873). A per-member
@@ -4048,265 +4048,226 @@ finalize:
 #endif
 
 /* Per-frame tick of the dialog/voice manager (base = g_fileLoadVoiceState =
- * g_saveImageArea + 0x1000). Three cooperating pieces:
+ * g_saveImageArea + 0x1000). No parameters, no return value. Three pieces:
  *
  *   1. Queue-consume: if the primary channel is idle and a secondary voice is
- *      queued (+0x4C bit0), start it (StartSecondaryVoice); else chain onto an
- *      in-flight secondary (ChainSecondaryVoice) when +0x44 is armed and +0x4E==8.
- *   2. Primary-voice progress: when the aux slot at +0x38 is armed
- *      (TickCountdownTimer), either finish the primary voice (latch the next state +
- *      arm the +0x38 timer) or kick the tertiary voice (StartTertiaryVoice); and
- *      launch the queued dialog voice (StartDialogVoice) once its bank handle
- *      (+0x24) is ready.
- *   3. State machine: dispatch on state (+0x2C, jtbl_0026CBF0 over states 2..6)
- *      to advance the crossfade/timing (states 2 & 6 issue a 989snd play command
- *      func_00132BC0 with the OnTertiaryVoiceStarted callback), then step the
- *      three voice channels (+0x44, +0x8C, +0x68) and pump the file-load
- *      completion path: on an aborted read (+0x6) fire the completion callback
- *      (+0x18) with success=0; otherwise (re)kick a queued read (StartFileLoad).
+ *      queued (+0x4C bit0, no requested track), start it (StartSecondaryVoice);
+ *      else chain onto an in-flight one (ChainSecondaryVoice) when its handle
+ *      is live and its state is 8.
+ *   2. Requested-track progress: when the retry timer at +0x38 expires
+ *      (TickCountdownTimer) and no crossfade runs, either begin the crossfade
+ *      (state 3 or 6, timer 300) or kick the transition track
+ *      (StartTertiaryVoice, timer 420); then start the queued secondary voice
+ *      (StartDialogVoice) once nothing occupies its channel.
+ *   3. Crossfade state machine on +0x2C (switch; the ROM's table is
+ *      jtbl_0026CBF0_text, states 2..6): states 2 and 6 fade the primary voice
+ *      through func_00132BC0 with OnTertiaryVoiceStarted as the callback, 3
+ *      starts the requested track (StartAmbientVoice), 4 stops the primary
+ *      (func_00133400), 5 waits for the transition to drop. Then step the three
+ *      channels (+0x44, +0x8C, +0x68) and pump the file-load path: on an
+ *      aborted read (+0x6) fire the completion callback (+0x18) with status 0
+ *      once the bank load settles; otherwise re-kick a queued read
+ *      (StartFileLoad).
  *
- * The manager reinterprets the file-load struct's fields cross-purpose (+0x2C is
- * the switch state, not fileLoadPhase; +0x44 is a voice handle, not ambientState;
- * +0x30/+0x34 are crossfade timers), and several offsets (+0x7 enable, +0x28,
- * +0x38, +0x9C, +0xA4) have no named field — so the manager body uses raw offsets
- * on the base pointer and reserves the struct-field names for the genuine
- * file-load tail. Control flow is transcribed op-for-op (goto labels = asm block
- * addresses) with branch-likely delay-slot discipline; the two crossfade divides
- * carry the original div-by-zero guards (denominator +0x34 non-zero on the taken
- * path). Region-portable: no divergent immediates; the EU twin reuses this body
- * verbatim (symbols resolve per-region via symbol_addrs).
+ * The State/Channel view below is upstream's; it reinterprets the file-load
+ * struct's fields cross-purpose (+0x2C is the crossfade state, not
+ * fileLoadPhase; +0x44 is the primary channel's handle, not ambientState).
  *
- * NATIVE #else for coverage — the matching arm stays INCLUDE_ASM (byte-frozen).
- * WALL (matching build, cc1 2.9 arm): switch dispatch (the state-2 jtbl) +
- * save-layout (3 callee-saves + $ra at 8-byte spacing).
- * Save stride NOT re-measured for this member on the s136os arm (SN 1.36
- * -fopt-stack): NOTE #9871's census vocabulary did not match this label, so
- * FACT #9873's re-screen never ran it. Of the 111 labeled members that were
- * run, 0 reproduce the 16-byte save stride there, so the stride is not
- * evidence that this member is walled. Residual: UNMEASURED.
- * MEASURED (task #2235): OpenRAC rac2-gc-decomp @96927f87's C for it
- * (src/game/002B7578.c, func_002B7578; masked 0/341 in a standalone TU, FACT
- * #12087) dispatches its crossfade state through a `switch`, and SN 1.36 emits
- * that table as an .rdata section switch inside .ent..end, which
- * tools/ee/s136os_splice.sh refuses on SHAPE ("outside the s136os arm's
- * domain"). The ROM's table is jtbl_0026CBF0_text in the data segment. Not
- * adopted; the jtbl wall of FACT #12092. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", UpdateDialogVoiceManager);
+ * MATCHED on the s136os arm (task #2262). No device. The switch's compiled
+ * table is not kept: tools/ee/jtbl_bind.sh checks every entry against the
+ * ROM's jtbl_0026CBF0_text (retail ELF words), drops the copy and binds the
+ * %hi/%lo to the ROM symbol (FACT #12102). Without the binder the splice
+ * refused this body on SHAPE (task #2235, FACT #12101).
+ * GUARD: compiled alone by SN 2.95.3 v1.36 -fopt-stack (cc1plus, this unit's
+ * S136EXTRA="") and spliced over the S136OS_SLOT line
+ * (tools/ee/s136os_splice.sh, row in tools/ee/s136os_functions.txt); plain C
+ * on native.
+ * Source: OpenRAC/rac2-gc-decomp @96927f872c709e13aaa0f32265bb81a5531bf7ed
+ * (GPL-3.0, adopted with the authors' permission per RULING #10405),
+ * src/game/002B7578.c, func_002B7578 (v1.01 address; author commit 8f3538bb,
+ * bigbeno37; their header: "Adapted from RAC1 src/game/music.c music_Update
+ * (GPL-3.0); RAC2 layout and behavior measured from retail"). ADAPTED: the
+ * statements and the State/Channel layouts are theirs. Changed from theirs:
+ * (1) our symbol spellings: D_001A63A8 = &g_fileLoadVoiceState (so `S` is
+ * defined over it and #undef'd after), func_00282948 = TickCountdownTimer,
+ * func_002B6E78 = StartSecondaryVoice, func_002B6F70 = ChainSecondaryVoice,
+ * func_002B6D80 = StartAmbientVoice, func_002B7088 = StartTertiaryVoice,
+ * func_002B6958 = StartDialogVoice, func_002B7FF0 = OnTertiaryVoiceStarted,
+ * func_002B7380 = StepDialogVoiceChannel, func_00133580 =
+ * snd_CheckLoadInProgress, func_002B7B18 = StartFileLoad, func_0026FEB8 =
+ * DebugPrintStub, D_001AA1B0/C0/D0 = D_1AA1B0/C0/D0; (2) the unit's existing
+ * prototypes, with a cast at the call where theirs differ:
+ * StepDialogVoiceChannel's channel as u8 *, and StartDialogVoice called
+ * through a void-returning cast of its s32 declaration (theirs is void; still
+ * a direct jal). The cast is load-bearing: called as s32, the build takes $3
+ * instead of $2 for the -1 stored after the call, 2 of 341 words differing
+ * (0x2B85D0/D8; measured with (3) in place, task #2262). (3) func_00132BC0 is
+ * declared here with their parameter types (start callback
+ * void (*)(s32, long), context long, which is 64-bit on the EE): with the
+ * unit's earlier void * spelling the build swaps $5/$11 in states 2 and 6,
+ * 8 of 341 words differing (0x2B8744..98; measured with the cast in place,
+ * task #2262). cod/0321A0.c defines both parameters as s32. (4) The callees
+ * that an s136os compile of this function alone cannot see from other
+ * functions' native arms are declared here. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_UpdateDialogVoiceManager)
+S136OS_SLOT(UpdateDialogVoiceManager);
 #else
-/* TODO(match): functional equivalent - not byte-exact; switch-dispatch + save-layout wall on cc1 2.9 (s136os unmeasured, see above). */
-extern s32  StartTertiaryVoice(s32 a0, s32 a1, s32 a2, s32 a3);        /* 0x2B7FA8 (s136os arm above) */
+typedef struct { unsigned int handle; short track,volume,flags,state,fade_flags,unknown,crossfade_enabled,unknown2; int poll_interval,remaining_time,unknown1C,slot; } Channel;
+typedef struct { int unknown0; short read_state; unsigned char break_requested,updates_suspended; int read_sector,unknownC,read_sector_count,read_dst; void (*callback)(int,int); int callback_data,unknown20,queued_secondary_track,queued_volume; short crossfade_state,pad2E; int crossfade_remaining_time,crossfade_interval,retry_timer; short requested_track,requested_transition_track; int mode; Channel primary,secondary,transition; } State;
+#define S (*(State *)&g_fileLoadVoiceState)
+extern s32  TickCountdownTimer(void *counter);                       /* 0x2832F8 */
+extern void ChainSecondaryVoice(s32 idx, s32 flags, s32 pan);        /* 0x2B7E90 (s136os arm above) */
+extern s32  StartTertiaryVoice(s32 a0, s32 a1, s32 a2, s32 a3);      /* 0x2B7FA8 (s136os arm above) */
 extern void func_00132BC0(s32 handle, s32 cmd, s32 sampleCount, s32 a3,
-                          s32 a4, s32 a5, void *startCb, void *ctx);   /* 0x132BC0 989snd play command */
-extern s32  snd_CheckLoadInProgress(s32 flag);                        /* 0x133580 tests/waits bank-load-in-progress */
-extern s32  StartFileLoad(s32 dest, s32 lbn, s32 sectorCount);        /* 0x2B8A18 (defined below) */
+                          s32 a4, s32 a5, void (*startCb)(s32, long),
+                          long ctx);                                 /* 0x132BC0 989snd play command */
+extern void OnTertiaryVoiceStarted(s32 voiceId, long handleAddr);    /* below; tertiary voice-started callback */
+extern void func_00133400(s32 handle);                               /* 0x133400 snd_StopVoice: 989snd cmd 0x2E */
+extern void StepDialogVoiceChannel(u8 *ch);                          /* 0x2B82A0 (above) */
+extern s32  snd_CheckLoadInProgress(s32 flag);                       /* 0x133580 tests/waits bank-load-in-progress */
+extern s32  StartFileLoad(s32 dest, s32 lbn, s32 sectorCount);       /* 0x2B8A18 (defined below) */
 extern char D_1AA1B0[];                    /* dialog-voice load debug strings (retail no-ops) */
 extern char D_1AA1C0[];
 extern char D_1AA1D0[];
 void UpdateDialogVoiceManager(void) {
-    u8 *m = (u8 *)&g_fileLoadVoiceState;   /* manager base = g_saveImageArea + 0x1000 */
-    s16 dvid;
-    s16 idx;
-    s32 h;
-    s32 old44;
-    s32 num;
-    s32 prod;
-    s32 v6;
-    void (*cb)(void *, s32);   /* completion callback: fn(void *ctx, s32 status) — CONFIRMED
-                                * from func_002949E0(s32 *rec, s32) installed via
-                                * StartFileLoadWithCallback with ctx = &D_1A9330 (a pointer) */
-    s32 cbArg;                 /* raw +0x1C word; holds the callback's context pointer */
-    s16 prev;
-    s32 fdest, flbn, fcnt;
+    short requested_track;
+    int fade_volume;
+    int handle;
+    short pending_state;
 
-    if (*(u8 *)(m + 0x7) != 0) {
-        return;                            /* manager disabled */
-    }
-
-    /* --- 1. consume queued secondary / chained voice --- */
-    if ((*(u16 *)(m + 0x50) & 0x8000) != 0) goto L8568;   /* primary channel active */
-    if ((*(u16 *)(m + 0x4E) & 0x8000) != 0) goto L8568;
-    if (*(s32 *)(m + 0x44) != 0) goto L8534;
-    if ((*(u16 *)(m + 0x4C) & 0x1) == 0) goto L8524;      /* no secondary queued */
-    if (*(s16 *)(m + 0x3C) != -1) goto L8528;             /* primary already assigned */
-    StartSecondaryVoice(*(s16 *)(m + 0x48), *(s16 *)(m + 0x4C), *(s16 *)(m + 0x4A));
-    goto L8568;
-L8524:
-L8528:
-    if (*(s32 *)(m + 0x44) == 0) goto L8564;
-L8534:
-    if (*(s32 *)(m + 0x44) == -1) goto L8564;
-    if (*(s16 *)(m + 0x4E) != 8) goto L8568;
-    ChainSecondaryVoice(*(s16 *)(m + 0x48), *(s16 *)(m + 0x4C), *(s16 *)(m + 0x4A));
-L8564:
-L8568:
-    /* --- 2. primary-voice progress (aux slot at +0x38) --- */
-    if (TickCountdownTimer(m + 0x38) == 0) goto L8608;
-    dvid = *(s16 *)(m + 0x3C);
-    if (dvid == -1) goto L860C;
-    if (*(s16 *)(m + 0x2C) != 0) goto L860C;
-    if (*(s16 *)(m + 0x48) == dvid) {
-        *(s16 *)(m + 0x3C) = -1;
-        goto L8608;
-    }
-    if (*(s16 *)(m + 0x3E) != -1) goto L85F4;
-    /* primary voice finished: latch the next state + arm the +0x38 timer */
-    if ((*(u16 *)(m + 0x4E) & 0x8000) != 0) {
-        *(s16 *)(m + 0x4E) = 5;
-        *(s16 *)(m + 0x2C) = 3;
-    } else {
-        *(s16 *)(m + 0x2C) = 6;
-        *(s32 *)(m + 0xA4) = 15;
-        *(s32 *)(m + 0x34) = 15;
-    }
-    *(s32 *)(m + 0x38) = 300;
-    goto L8608;
-L85F4:
-    if (StartTertiaryVoice(dvid, *(s16 *)(m + 0x3E),
-                           *(s16 *)(m + 0x4C), *(s16 *)(m + 0x4A)) != 0) {
-        *(s32 *)(m + 0x38) = 420;
-    }
-L8608:
-L860C:
-    /* launch the queued dialog voice once its bank handle (+0x24) is ready */
-    h = *(s32 *)(m + 0x24);
-    if (h < 0) goto L8660;
-    if (*(s32 *)(m + 0x68) != 0) {
-        if ((u32)(*(u16 *)(m + 0x72) - 6) < 2u) goto L8660;
-        *(s16 *)(m + 0x72) = 5;
-        goto L8660;
-    }
-    StartDialogVoice(h, 0, *(s32 *)(m + 0x28), 0x400);
-    *(s32 *)(m + 0x28) = 0;
-    *(s32 *)(m + 0x24) = -1;
-L8660:
-    /* --- 3. state machine: dispatch on state (+0x2C) --- */
-    if (*(s16 *)(m + 0x4E) == 9) goto L8918;
-    if (*(s32 *)(m + 0x44) == -1) goto L891C;
-    if ((*(u16 *)(m + 0x50) & 0x8000) != 0) goto L8918;
-    if ((*(u16 *)(m + 0x4E) & 0x8000) != 0) goto L8918;
-    if (*(s16 *)(m + 0x3E) == -1) goto L86D4;
-    if ((*(u16 *)(m + 0x98) & 0x8000) != 0) goto L8918;
-    if ((*(u16 *)(m + 0x96) & 0x8000) != 0) goto L8918;
-L86D4:
-    idx = (s16)(*(u16 *)(m + 0x2C) - 2);
-    if ((u32)idx >= 5) goto L8914;         /* default: no active state */
-    switch (idx) {                         /* jtbl_0026CBF0_text (state - 2) */
-    case 0: goto L8778;                    /* state 2 */
-    case 1: goto L8834;                    /* state 3 */
-    case 2: goto L8880;                    /* state 4 */
-    case 3: goto L88F0;                    /* state 5 */
-    case 4: goto L8704;                    /* state 6 */
-    default: goto L8914;
-    }
-
-L8704: /* state 6: crossfade by (+0x4A * +0xA4) / +0x34, then play + advance */
-    prod = (s32)*(s16 *)(m + 0x4A) * *(s32 *)(m + 0xA4);
-    old44 = *(s32 *)(m + 0x44);
-    *(s32 *)(m + 0x44) = -1;
-    v6 = prod / *(s32 *)(m + 0x34);
-    func_00132BC0(old44, 5, v6, 0, 0, 0, (void *)&OnTertiaryVoiceStarted, m + 0x44);
-    if (TickCountdownTimer(m + 0xA4) == 0) goto L8914;
-    *(s16 *)(m + 0x4E) = 5;
-    *(s16 *)(m + 0x2C) = 3;
-    goto L8914;
-
-L8778: /* state 2: crossfade-in by +0x4A * (+0x34 - (+0x30 - +0xA4)) / +0x34 */
-    num = *(s32 *)(m + 0x34) - (*(s32 *)(m + 0x30) - *(s32 *)(m + 0xA4));
-    v6 = ((s32)*(s16 *)(m + 0x4A) * num) / *(s32 *)(m + 0x34);
-    if (v6 <= 0) goto L87E0;
-    if (*(s16 *)(m + 0x96) != 4) {
-        if (*(s32 *)(m + 0x8C) == 0) goto L87E0;
-        goto L87D4;
-    }
-    if (*(s16 *)(m + 0x9C) != 0) goto L87D4;
-    if (*(s32 *)(m + 0x8C) == 0) goto L87E0;
-L87D4:
-    old44 = *(s32 *)(m + 0x44);
-    if (old44 == 0) goto L87E0;
-    if (*(s16 *)(m + 0x4E) == 9) goto L8914;
-    *(s32 *)(m + 0x44) = -1;
-    func_00132BC0(old44, 5, v6, 0, 0, 0, (void *)&OnTertiaryVoiceStarted, m + 0x44);
-    goto L8918;
-L87E0:
-    *(s16 *)(m + 0x2C) = 3;
-    *(s16 *)(m + 0x4E) = 5;
-    goto L8914;
-
-L8834: /* state 3: start the ambient/looping voice, then advance to state 4 */
-    if (*(s16 *)(m + 0x4E) != 0) goto L8918;
-    if (*(s16 *)(m + 0x9C) != 0) goto L8860;
-    if (*(s32 *)(m + 0x8C) != 0) goto L8918;
-L8860:
-    StartAmbientVoice(*(s16 *)(m + 0x3C), *(s16 *)(m + 0x4C), *(s16 *)(m + 0x4A));
-    *(s16 *)(m + 0x2C) = 4;
-    *(s16 *)(m + 0x3C) = -1;
-    goto L8914;
-
-L8880: /* state 4: once the crossfade elapses (+0xA4 >= +0x34), stop the voice */
-    if (*(s16 *)(m + 0x4E) != 3) goto L8918;
-    if (*(s32 *)(m + 0xA4) < *(s32 *)(m + 0x34)) goto L88D4;
-    if (*(s16 *)(m + 0x96) != 4) goto L88D4;
-    if (*(s16 *)(m + 0x9C) != 0) goto L8918;
-    if (*(s32 *)(m + 0x8C) != 0) goto L891C;
-L88D4:
-    func_00133400(*(s32 *)(m + 0x44));
-    *(s16 *)(m + 0x2C) = 5;
-    *(s16 *)(m + 0x4E) = 8;
-    goto L8914;
-
-L88F0: /* state 5: hold until the voice has fully stopped, then clear state */
-    if (*(s16 *)(m + 0x96) != 4) {
-        *(s16 *)(m + 0x2C) = 0;
-        goto L8914;
-    }
-    if (*(s16 *)(m + 0x9C) != 0) goto L8918;
-    *(s16 *)(m + 0x2C) = 0;
-    /* fall through to L8914 */
-
-L8914:
-L8918:
-L891C:
-    /* step the three dialog voice channels (0x24-byte blocks from +0x44) */
-    StepDialogVoiceChannel(m + 0x44);
-    StepDialogVoiceChannel(m + 0x8C);
-    StepDialogVoiceChannel(m + 0x68);
-
-    /* --- file-load completion / (re)kick --- */
-    if (g_fileLoadVoiceState.readStopped != 0) {
-        /* read was aborted: fire the completion callback with success=0 */
-        DebugPrintStub(D_1AA1B0);
-        if (snd_CheckLoadInProgress(1) != 0) {
-            return;                        /* still loading */
-        }
-        g_fileLoadVoiceState.fileLoadActive = 0;
-        g_fileLoadVoiceState.readStopped = 0;
-        DebugPrintStub(D_1AA1C0);
-        cb = (void (*)(void *, s32))g_fileLoadVoiceState.pLoadCallback;
-        if (cb == 0) {
-            return;
-        }
-        cbArg = g_fileLoadVoiceState.loadCallbackArg;
-        g_fileLoadVoiceState.loadCallbackArg = 0;
-        g_fileLoadVoiceState.pLoadCallback = NULL;
-        DebugPrintStub(D_1AA1D0);
-        cb((void *)cbArg, 0);
+    if (S.updates_suspended != 0) {
         return;
     }
-    if (g_fileLoadVoiceState.fileLoadActive == 2) {
-        /* a read is queued (state 2): clear the active gate so StartFileLoad
-         * proceeds, kick it, and restore the request state if it refused */
-        prev = g_fileLoadVoiceState.fileLoadActive;
-        fdest = g_fileLoadVoiceState.fileLoadDest;
-        flbn = g_fileLoadVoiceState.fileLoadLbn;
-        fcnt = g_fileLoadVoiceState.fileLoadSectorCount;
-        g_fileLoadVoiceState.fileLoadActive = 0;
-        StartFileLoad(fdest, flbn, fcnt);
-        if (g_fileLoadVoiceState.fileLoadActive == 0) {
-            g_fileLoadVoiceState.fileLoadActive = prev;
+    if (!(S.primary.fade_flags & 0x8000) && !(S.primary.state & 0x8000)) {
+        if (S.primary.handle == 0 && (S.primary.flags & 1) &&
+            S.requested_track == -1) {
+            StartSecondaryVoice(S.primary.track, (short)S.primary.flags,
+                              S.primary.volume);
+        } else if (S.primary.handle != 0) {
+            if (S.primary.handle != 0xFFFFFFFF && S.primary.state == 8) {
+                ChainSecondaryVoice(S.primary.track, S.primary.flags,
+                                       S.primary.volume);
+            }
+        }
+    }
+    if (TickCountdownTimer(&S.retry_timer) != 0) {
+        requested_track = S.requested_track;
+        if (requested_track != -1 && S.crossfade_state == 0) {
+            if (S.primary.track != requested_track) {
+                if (S.requested_transition_track == -1) {
+                    if (S.primary.state & 0x8000) {
+                        S.crossfade_state=3;
+                        S.primary.state=5;
+                    } else {
+                        S.crossfade_interval=15;
+                        S.transition.remaining_time=15;
+                        S.crossfade_state=6;
+                    }
+                    S.retry_timer=300;
+                } else if (StartTertiaryVoice(requested_track,S.requested_transition_track,S.primary.flags,S.primary.volume)) {
+                    S.retry_timer=420;
+                }
+            } else {
+                S.requested_track = -1;
+            }
+        }
+    }
+    if (S.queued_secondary_track >= 0) {
+        if (S.secondary.handle != 0) {
+            if ((unsigned short)S.secondary.state - 6 >= 2U) {
+                S.secondary.state = 5;
+            }
+        } else {
+            ((void (*)(s32, s32, s32, s32))StartDialogVoice)(S.queued_secondary_track, 0, S.queued_volume, 0x400);
+            S.queued_volume=0;
+            S.queued_secondary_track = -1;
+        }
+    }
+    if (S.primary.state != 9 && S.primary.handle != 0xFFFFFFFF &&
+        !(S.primary.fade_flags & 0x8000) && !(S.primary.state & 0x8000) &&
+        (S.requested_transition_track == -1 || (!(S.transition.fade_flags & 0x8000) && !(S.transition.state & 0x8000)))) {
+        switch (S.crossfade_state) {
+        case 6:
+            fade_volume=S.primary.volume*S.transition.remaining_time/S.crossfade_interval;
+            handle=S.primary.handle;
+            S.primary.handle=0xFFFFFFFF;
+            func_00132BC0(handle,5,fade_volume,0,0,0,OnTertiaryVoiceStarted,(long)&S.primary.handle);
+            if(TickCountdownTimer(&S.transition.remaining_time)) { S.crossfade_state=3; S.primary.state=5; }
+            break;
+        case 2:
+            /* Fade the primary stream against the transition's remaining time. */
+            fade_volume =
+                S.primary.volume *
+                (S.crossfade_interval -
+                 (S.crossfade_remaining_time - S.transition.remaining_time)) /
+                S.crossfade_interval;
+            if (fade_volume <= 0 ||
+                ((S.transition.state != 4 ||
+                  S.transition.crossfade_enabled == 0) &&
+                 S.transition.handle == 0) ||
+                (handle = S.primary.handle) == 0) {
+                S.crossfade_state = 3;
+                S.primary.state = 5;
+            } else if (S.primary.state != 9) {
+                /* The callback receives the old handle; mark its slot pending before submission. */
+                *(unsigned int *)&S.primary.handle = 0xFFFFFFFF;
+                func_00132BC0(handle, 5, fade_volume, 0, 0, 0, OnTertiaryVoiceStarted,
+                                        (long)&S.primary.handle);
+            }
+            break;
+        case 3:
+            if (S.primary.state == 0 && (S.transition.crossfade_enabled != 0 ||
+                                                   S.transition.handle == 0)) {
+                StartAmbientVoice(S.requested_track, S.primary.flags,
+                                    S.primary.volume);
+                S.requested_track = -1;
+                S.crossfade_state = 4;
+            }
+            break;
+        case 4:
+            if (S.primary.state == 3) {
+                if (S.transition.remaining_time < S.crossfade_interval ||
+                    S.transition.state != 4 ||
+                    (S.transition.crossfade_enabled == 0 &&
+                     S.transition.handle == 0)) {
+                    func_00133400(S.primary.handle);
+                    S.primary.state = 8;
+                    S.crossfade_state = 5;
+                }
+            }
+            break;
+        case 5:
+            if (S.transition.state != 4 ||
+                S.transition.crossfade_enabled == 0) {
+                S.crossfade_state = 0;
+            }
+            break;
+        }
+    }
+    StepDialogVoiceChannel((u8 *)&S.primary.handle);
+    StepDialogVoiceChannel((u8 *)&S.transition.handle);
+    StepDialogVoiceChannel((u8 *)&S.secondary.handle);
+    if (S.break_requested != 0) {
+        DebugPrintStub(D_1AA1B0);
+        if (snd_CheckLoadInProgress(1) == 0) {
+            S.read_state = 0;
+            S.break_requested = 0;
+            DebugPrintStub(D_1AA1C0);
+            if(S.callback) { void (*cb)(int,int)=S.callback; int data=S.callback_data; S.callback=0; S.callback_data=0; DebugPrintStub(D_1AA1D0); cb(data,0); }
+        }
+    } else {
+        pending_state = S.read_state;
+        if (pending_state == 2) {
+            S.read_state = 0;
+            StartFileLoad(S.read_dst, S.read_sector,
+                                    S.read_sector_count);
+            if (S.read_state == 0) {
+                S.read_state = pending_state;
+            }
         }
     }
 }
+#undef S
 #endif
 
 /* Abort the in-flight CD file read: if a read is active, emit the

@@ -681,3 +681,5 @@ usa text/1D54C0 func_002D75D8
 usa text/1B4218 UpdateMobyMotionVelocity
 usa text/1B4218 StartTertiaryVoice
 usa text/1A00F0 UpdateMobyAnimLoopSound
+usa text/1B4218 UpdateDialogVoiceManager
+usa text/1DFF80 func_002E0010
