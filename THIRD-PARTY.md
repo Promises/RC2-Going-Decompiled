@@ -230,7 +230,8 @@ above applies to these bodies too.
 Seven C function bodies are taken from Lombyte,
 <https://github.com/mateuszklysz/Lombyte> at commit
 `2c4452dd03f5f7ebb2868dbe073ccdb1afb27f61` (before Lombyte's GPL-3.0 relicence
-at `a1379f5`), with the authors' permission (RULING #10405). Each function's
+at `a1379f5`), with the authors' permission (RULING #10405) and the
+operator's 2026-10-31 "adopt all" (RULING #12108). Each function's
 `Source:` line names every respelling and edit.
 
 | Here | Upstream file | Upstream name |

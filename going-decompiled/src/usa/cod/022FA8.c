@@ -1686,8 +1686,8 @@ extern DmaEnv D_00141AD8; /* the last environment applied */
  *
  * Source: Lombyte github.com/mateuszklysz/Lombyte
  * @2c4452dd03f5f7ebb2868dbe073ccdb1afb27f61 (MIT, (c) 2026 Mateusz Klysz;
- * adopted with the authors' permission per RULING #10405),
- * src/sdk/dma/sce_dma_put_env.c, upstream sceDmaPutEnv @0x001230E8 (their
+ * adopted with the authors' permission per RULING #10405 and the operator's "adopt all", RULING #12108),
+ * src/sdk/dma/sce_dma_put_env.c (author commit 200f9bc4, Mateusz Klysz), upstream sceDmaPutEnv @0x001230E8 (their
  * RAC1 NTSC build), C body adopted verbatim apart from our extern spellings
  * (D_00153420/30/40 -> D_0013B730/40/50, D_001599D8 -> D_00141AD8) and their
  * sceDmaEnv typedef spelled DmaEnv here (same members, comments added); the
@@ -2597,8 +2597,8 @@ s32 func_00128250(void) {
  *
  * Source: Lombyte github.com/mateuszklysz/Lombyte
  * @2c4452dd03f5f7ebb2868dbe073ccdb1afb27f61 (MIT, (c) 2026 Mateusz Klysz;
- * adopted with the authors' permission per RULING #10405),
- * src/sdk/library/sceDbcInit.c, upstream sceDbcInit @0x00124510 (their RAC1
+ * adopted with the authors' permission per RULING #10405 and the operator's "adopt all", RULING #12108),
+ * src/sdk/library/sceDbcInit.c (author commit f18ea57e, Mateusz Klysz), upstream sceDbcInit @0x00124510 (their RAC1
  * NTSC build), C body ADAPTED: statements verbatim apart from our spellings
  * (D_0015B008 -> D_00143108, D_0015B030 -> D_00143130, D_0015B480 ->
  * D_00143580, D_0015B500 -> D_00143600, D_001534D8/F0 -> D_0013B7E8/800,
@@ -6925,8 +6925,8 @@ extern s32 func_00130020(s32 *arg0);
  *
  * Source: Lombyte github.com/mateuszklysz/Lombyte
  * @2c4452dd03f5f7ebb2868dbe073ccdb1afb27f61 (MIT, (c) 2026 Mateusz Klysz;
- * adopted with the authors' permission per RULING #10405),
- * src/sdk/library/_decodeOrSkipFrame.c, upstream _decodeOrSkipFrame
+ * adopted with the authors' permission per RULING #10405 and the operator's "adopt all", RULING #12108),
+ * src/sdk/library/_decodeOrSkipFrame.c (author commit 89ce6ed1, after 3a119627, 649420e8 and 1e779339, Mateusz Klysz), upstream _decodeOrSkipFrame
  * @0x0012BE00 (their RAC1 NTSC build; the name is testimony, RULING #10083,
  * so the splat name stays), C body ADAPTED: statements as upstream with our
  * names (their M2c_arg0 / M2c_temp_16_13 are MpegCtx / IpuDecoder, unk40 ->
@@ -7024,8 +7024,8 @@ s32 func_0012FE78(s32 *obj, s32 arg1, s32 arg2) {
  *
  * Source: Lombyte github.com/mateuszklysz/Lombyte
  * @2c4452dd03f5f7ebb2868dbe073ccdb1afb27f61 (MIT, (c) 2026 Mateusz Klysz;
- * adopted with the authors' permission per RULING #10405),
- * src/sdk/library/_decodeOrSkipField.c, upstream _decodeOrSkipField
+ * adopted with the authors' permission per RULING #10405 and the operator's "adopt all", RULING #12108),
+ * src/sdk/library/_decodeOrSkipField.c (author commit 3a119627, after 41172bc8, 6e3394b6 and c2077f7f, Mateusz Klysz), upstream _decodeOrSkipField
  * @0x0012BF60 (their RAC1 NTSC build; the name is testimony, RULING #10083,
  * so the splat name stays), C body ADAPTED: upstream's control flow with the
  * permuter leftovers above removed (`if (bVar3 == 0) goto out;` becomes the

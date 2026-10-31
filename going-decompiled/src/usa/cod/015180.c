@@ -2054,8 +2054,8 @@ extern s32 func_0011B030(s32 arg0);
  *
  * Source: Lombyte github.com/mateuszklysz/Lombyte
  * @2c4452dd03f5f7ebb2868dbe073ccdb1afb27f61 (MIT, (c) 2026 Mateusz Klysz;
- * adopted with the authors' permission per RULING #10405),
- * src/sdk/rpc/sce_sif_init_rpc.c, upstream sceSifInitRpc @0x0011AB20 (their
+ * adopted with the authors' permission per RULING #10405 and the operator's "adopt all", RULING #12108),
+ * src/sdk/rpc/sce_sif_init_rpc.c (author commit 9faf4ef8, Mateusz Klysz), upstream sceSifInitRpc @0x0011AB20 (their
  * RAC1 NTSC build), C body ADAPTED: statements verbatim apart from our
  * spellings (D_0012FC08[0] -> the scalar D_001346A0, D_00155000 -> D_0013D100,
  * D_00155800 -> D_0013D900, D_00156000 -> D_0013E100, D_00156800 ->
@@ -3521,8 +3521,8 @@ extern s32 sceSifResetIop(const char *arg, s32 mode);
  *
  * Source: Lombyte github.com/mateuszklysz/Lombyte
  * @2c4452dd03f5f7ebb2868dbe073ccdb1afb27f61 (MIT, (c) 2026 Mateusz Klysz;
- * adopted with the authors' permission per RULING #10405),
- * src/sdk/rpc/sce_sif_reboot_iop.c, upstream sceSifRebootIop @0x0011CF48
+ * adopted with the authors' permission per RULING #10405 and the operator's "adopt all", RULING #12108),
+ * src/sdk/rpc/sce_sif_reboot_iop.c (author commit 9faf4ef8, Mateusz Klysz), upstream sceSifRebootIop @0x0011CF48
  * (their RAC1 NTSC build), C body adopted verbatim apart from our extern
  * spellings (D_00152960 -> D_0013ABA0 'rom0:UDNL ', D_00152970 -> D_0013ABB0
  * "too long parameter '%s'\n", scePrintf -> Kprintf, InitializeRpcCommand ->
