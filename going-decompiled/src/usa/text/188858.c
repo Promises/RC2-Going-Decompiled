@@ -1085,42 +1085,58 @@ __asm__(".word 0\n\t.word 0");
 #endif
 
 /* UpgradeWeaponToMax(itemId): select the item's "fully upgraded" weapon variant
- * and zero its accumulated XP. Returns 0 (no change) when the item's currently
- * equipped variant does not exist; otherwise picks an upgrade level by item id
- * (a 0x2A-entry dispatch table over itemId-0xC: most items resolve to level 2,
- * a handful to level 1; out-of-range items also resolve to level 2), calls
- * SetWeaponUpgradeSlot(itemId, level), and on success resets g_weaponXp[itemId]
- * to 0. Returns SetWeaponUpgradeSlot's result.
+ * and zero its accumulated XP.
+ *   itemId - inventory item id (index into g_itemEquippedSlot / g_weaponXp)
+ * Returns 0 (no change) when the item's currently equipped variant does not
+ * exist; otherwise SetWeaponUpgradeSlot(itemId, level)'s result, and on a
+ * nonzero result g_weaponXp[itemId] is reset to 0. The level is 1 for items
+ * 0xC, 0xE, 0x11, 0x12 and 0x35 and 2 for every other id, out-of-range ids
+ * included.
  *
- * WALL: single callee-save + jal, a jtbl dispatch and the 0xE0-stride `mult`
- * chain walk with bnez loop colouring cc1 does not reproduce. Left INCLUDE_ASM. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", UpgradeWeaponToMax);
+ * The switch only sets a flag. Its case labels span 0xC..0x35, so the ROM
+ * dispatches through a 42-entry table, jtbl_0026C6D0_text, whose only
+ * non-default targets are those five ids. The two call sites are cross-jumped
+ * into the ROM's single jal.
+ *
+ * MATCHED on the s136os arm (SN 2.95.3 v1.36 -fopt-stack, unit unpinned per
+ * RULING #9450; selector row in tools/ee/s136os_functions.txt). The compiled
+ * jump table is checked entry by entry against jtbl_0026C6D0_text and bound to
+ * it by tools/ee/jtbl_bind.sh (task #2247), so no copy of the table is linked.
+ * Task #2248.
+ *
+ * Source: OpenRAC/rac2-gc-decomp @96927f872c709e13aaa0f32265bb81a5531bf7ed
+ * (GPL-3.0, adopted with the authors' permission per RULING #10405),
+ * src/game/002887B0.c, func_002887B0 (v1.01 address; author commit 768f3964,
+ * Flavius, from Louis-Philippe Le Sieur's draft df59088a). ADAPTED:
+ * (1) our signature and names: `s32 itemId` for their `int a0`, `w` for
+ * `record`, s32 for int; (2) our symbols and types: D_00239BA0 / ClassRecord =
+ * g_weaponTable / WeaponDef (their word00 = our `exists`), D_00139568 =
+ * g_itemEquippedSlot, D_00139868 = g_weaponXp, func_00287FF8 =
+ * SetWeaponUpgradeSlot; (3) their local typedefs and externs dropped for this
+ * unit's declarations. The control flow and every test are theirs. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_UpgradeWeaponToMax)
+S136OS_SLOT(UpgradeWeaponToMax);
 #else
 s32 UpgradeWeaponToMax(s32 itemId) {
-    /* jtbl_0026C6D0_text: itemId-0xC -> target level. Two targets only — most
-     * entries pick level 2, indices {0,2,5,6,41} pick level 1. */
-    static const u8 kUpgradeLevelByItem[0x2A] = {
-        1, 2, 1, 2, 2, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2,
-        2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
-        2, 2, 2, 2, 2, 2, 2, 2, 2, 1,
-    };
-    s32 slot = g_itemEquippedSlot[itemId];
-    s32 idx;
-    s32 level;
-    s32 ok;
+    WeaponDef *w = &g_weaponTable[g_itemEquippedSlot[itemId]];
+    s32 result = 0;
 
-    if (g_weaponTable[slot].exists == 0) {
-        return 0;
-    }
-    idx = itemId - 0xC;
-    level = ((u32)idx < 0x2A) ? kUpgradeLevelByItem[idx] : 2;
+    if (w->exists != 0) {
+        s32 small = 0;
 
-    ok = SetWeaponUpgradeSlot(itemId, level);
-    if (ok != 0) {
-        g_weaponXp[itemId] = 0;
+        switch (itemId) {
+        case 0xC: case 0xE: case 0x11: case 0x12: case 0x35:
+            small = 1;
+            break;
+        }
+        if (small)
+            result = SetWeaponUpgradeSlot(itemId, 1);
+        else
+            result = SetWeaponUpgradeSlot(itemId, 2);
+        if (result != 0)
+            g_weaponXp[itemId] = 0;
     }
-    return ok;
+    return result;
 }
 #endif
 
@@ -1548,49 +1564,62 @@ s32 GetSavePromptPending(void) {
 void func_002897B0(void) {
 }
 
-/* func_002897B8(): map the subtitle state-machine state (g_subtitleState[0],
- * 0..7) through jump table jtbl_0026C780_text to a status code; for state 1 it
- * also writes -1 to g_subtitleState+0x24, for state 4 it computes 4 - (count) at
- * +0x4DF8. Returns -1 / 6 / 7 depending on the branch taken.
+/* func_002897B8(): cut the current subtitle short by moving the subtitle state
+ * machine (g_subtitleState) into its exit states. In the state machine's
+ * update, state 6 hands over to 7, and 7 returns to idle (0) once animStep
+ * passes 7. No params, no return value.
+ *   state 0          - idle: showingIndex = -1 (drop any pending line)
+ *   state 1/2/3      - state = 7, animStep = 0
+ *   state 4          - state = 6, animStep = 4 - animStep
+ *   state 5          - state = 6, animStep = 0
+ *   state 6/7, other - unchanged
  *
- * MATCH-WALL (jtbl): the matcher can't reproduce the compiler jump-table
- * layout/relocations from a C `switch`, so the #ifndef arm stays INCLUDE_ASM; the
- * #else arm is a faithful functional switch (engine 2.96 = no byte-match anyway).
- * State map (jtbl_0026C780_text): 0 -> showingIndex(+0x24) = -1, return -1;
- * 1/2/3 -> state = 7, animStep = 0, return 7; 4 -> animStep = 4 - old, state = 6,
- * return 6; 5 -> state = 6, animStep = 0, return 6; 6/7 -> return 1; else -> 0.
- * (The state/animStep writes lower as `sw ...,%lo(g_subtitleState)($page)` — the
- * 0x4DF8/0x4DFC in the .s ARE %lo(g_subtitleState)/+4, i.e. offsets 0 and 4, NOT a
- * +0x4DF8 struct offset — %hi/%lo page-base addressing.) */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_002897B8);
+ * The ROM dispatches through jtbl_0026C780_text (8 entries, states 0..7). The
+ * values left in $v0 on each path (-1/7/6) are only the constants being stored;
+ * the function is void, and nothing in the ROM calls it by a direct jal.
+ *
+ * MATCHED on the s136os arm (SN 2.95.3 v1.36 -fopt-stack, unit unpinned per
+ * RULING #9450; selector row in tools/ee/s136os_functions.txt). The compiled
+ * jump table is checked entry by entry against jtbl_0026C780_text and bound to
+ * it by tools/ee/jtbl_bind.sh (task #2247), so no copy of the table is linked.
+ * Task #2248. Before this the native arm returned -1/7/6/1/0; no caller read it.
+ *
+ * Source: OpenRAC/rac2-gc-decomp @96927f872c709e13aaa0f32265bb81a5531bf7ed
+ * (GPL-3.0, adopted with the authors' permission per RULING #10405),
+ * src/game/00288D88.c, func_00288D90 (v1.01 address; author commit be9f428d,
+ * Louis-Philippe Le Sieur; the file is headed "Qwen draft"). ADAPTED: our
+ * symbols and types: D_00254E78 / their SubtitleState = g_subtitleState / our
+ * SubtitleState, with their fields active = state, timer = animStep and
+ * unk24 = showingIndex; their local typedef and extern dropped. The control
+ * flow and every case are theirs. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002897B8)
+S136OS_SLOT(func_002897B8);
 #else
-s32 func_002897B8(void) {
+void func_002897B8(void)
+{
     switch (g_subtitleState.state) {
     case 0:
         g_subtitleState.showingIndex = -1;
-        return -1;
+        return;
     case 1:
     case 2:
+        g_subtitleState.state = 7;
+        g_subtitleState.animStep = 0;
+        return;
     case 3:
         g_subtitleState.state = 7;
         g_subtitleState.animStep = 0;
-        return 7;
-    case 4: {
-        s32 old = g_subtitleState.animStep;
+        return;
+    case 4:
         g_subtitleState.state = 6;
-        g_subtitleState.animStep = 4 - old;
-        return 6;
-    }
+        g_subtitleState.animStep = 4 - g_subtitleState.animStep;
+        return;
     case 5:
         g_subtitleState.state = 6;
         g_subtitleState.animStep = 0;
-        return 6;
-    case 6:
+        return;
     case 7:
-        return 1;
-    default:
-        return 0;
+        return;
     }
 }
 #endif
@@ -1950,8 +1979,10 @@ void BeginSubtitleDisplay(void) {
 /* UpdateSubtitleStateMachine(): per-frame tick of the subtitle/voice display
  * state machine (large dispatcher, ~0x928 bytes).
  *
- * MATCH-WALL: compiler jtbl dispatch (jtbl_0026C7A0_text) not reproducible from a
- * C switch; the #ifndef arm stays INCLUDE_ASM, the #else arm is the faithful
+ * MATCH-WALL: compiler jtbl dispatch (jtbl_0026C7A0_text) was not reproducible
+ * from a C switch until tools/ee/jtbl_bind.sh (task #2247, FACT #12102), which
+ * now binds a C switch's table to the ROM's jtbl_ data, so that half of this
+ * wall is retired; no body has been tried since. The #ifndef arm stays INCLUDE_ASM, the #else arm is the faithful
  * functional model (engine 2.96 = no byte-match; NB it is pure integer, no FP).
  * Addressing notes: g_subtitleState is at 0x254DF8 — its fields at +0x28..+0x48
  * (the "0x254e2x" globals) are read via the FULL address (real offsets); .state
@@ -2228,8 +2259,9 @@ void func_0028A4E0(void) {
  * coords); the line text is laid out by func_00280C98 and drawn by func_00280BB8.
  * Colours are GS-packed word constants.
  *
- * WALL: extensive FP scheduling + jr-through-jtbl dispatch cc1 does not
- * reproduce. Matching arm stays INCLUDE_ASM; the #else below is the portable
+ * WALL: extensive FP scheduling cc1 does not reproduce. (Its jr-through-jtbl
+ * dispatch, jtbl_0026C7D0_text, is bindable from C since tools/ee/jtbl_bind.sh,
+ * task #2247.) Matching arm stays INCLUDE_ASM; the #else below is the portable
  * body.
  *
  * The four signed divide-by-8s are written as `/ 8`: the ROM carries cc1's own
@@ -5253,7 +5285,9 @@ void func_0028D720(HudElement *w) {
  * draws its localized name (main + shadow, colour cross-faded by fillB*fillA).
  * Returns the widget status word at hud+0x58.
  *
- * WALL: extensive float math + jtbl dispatch; neither reproducible from C.
+ * WALL: extensive float math not reproducible from C. (Its jtbl dispatch,
+ * jtbl_0026C7F0_text, is bindable from C since tools/ee/jtbl_bind.sh, task
+ * #2247.)
  * Matching arm stays INCLUDE_ASM; the #else below is the portable body. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028DC28);

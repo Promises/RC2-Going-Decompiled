@@ -150,12 +150,12 @@
 - **OpenRAC — `rac2-gc-decomp`, commit `96927f87`, s136os bodies** (GPL-3.0)
   <https://github.com/OpenRAC/rac2-gc-decomp> at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`
 
-  Nine engine C bodies, two in text/16E980, one in text/1A00F0, one in
-  text/1A8180, three in text/1B4218, one in text/1D54C0 and one in
-  text/1DFF80, adopted with the authors' permission (held by the operator,
-  RULING #10405) and re-checked byte-exact against our v2.00 ROM on the
-  s136os arm (tasks #2232, #2234, #2235, #2251, #2252 and #2262, from audit
-  NOTE #12089 rows 3, 5, 6, 8 and 9).
+  Eleven engine C bodies, two in text/16E980, one in text/1A00F0, one in
+  text/1A8180, three in text/1B4218, one in text/1D54C0, one in text/1DFF80
+  and two in text/188858, adopted with the authors' permission (held by the
+  operator, RULING #10405) and re-checked byte-exact against our v2.00 ROM on
+  the s136os arm (tasks #2232, #2234, #2235, #2248, #2251, #2252 and #2262,
+  from audit NOTE #12089 rows 3, 4, 5, 6, 8 and 9).
   Contributors: bigbeno37, Flavius and Louis-Philippe Le Sieur. Each doc comment carries the `Source:`
   line, which names every change beyond extern spellings.
 
@@ -230,6 +230,21 @@
     `jtbl_0026CEB0_text` by `tools/ee/jtbl_bind.sh`. ADAPTED: our symbol
     spellings (`sprintf`, `GetLocalizedString`, `D_1AB9B8`, `D_1ABA38`,
     `g_levelSelectEntries` as a `LevelSelectEntry` array).
+  - **`UpgradeWeaponToMax`** (`0x002891D8`) in
+    `going-decompiled/src/usa/text/188858.c`, from `src/game/002887B0.c`
+    (`func_002887B0`, v1.01 address, author commit `768f3964`, Flavius, from
+    Louis-Philippe Le Sieur's draft `df59088a`), task #2248 (audit NOTE
+    #12089 row 4). Its switch's jump table is bound to the ROM's
+    `jtbl_0026C6D0_text` by `tools/ee/jtbl_bind.sh`. ADAPTED: our signature,
+    local names and types, and our symbols (`g_weaponTable`,
+    `g_itemEquippedSlot`, `g_weaponXp`, `SetWeaponUpgradeSlot`).
+  - **`func_002897B8`** (`0x002897B8`) in
+    `going-decompiled/src/usa/text/188858.c`, from `src/game/00288D88.c`
+    (`func_00288D90`, v1.01 address, author commit `be9f428d`,
+    Louis-Philippe Le Sieur; the file is headed "Qwen draft"), task #2248
+    (audit NOTE #12089 row 4). Its jump table is bound to
+    `jtbl_0026C780_text`. ADAPTED: their subtitle block `D_00254E78` is our
+    `g_subtitleState`, with our struct and field names.
 
 - **RC2 decomp contributions — `src/game/002E4528-rc2.c` in OpenRAC `rac2-gc-decomp`, commit `96927f87`** (MIT, © 2026 RC2 decomp contributions)
   <https://github.com/OpenRAC/rac2-gc-decomp> at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`

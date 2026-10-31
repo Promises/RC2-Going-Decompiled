@@ -98,11 +98,11 @@ The GPL-2.0-or-later note in the section above applies to these bodies too.
 
 ### OpenRAC rac2-gc-decomp at 96927f87 (GPL-3.0)
 
-Sixteen C function bodies are taken from OpenRAC's `rac2-gc-decomp`,
+Eighteen C function bodies are taken from OpenRAC's `rac2-gc-decomp`,
 <https://github.com/OpenRAC/rac2-gc-decomp> at commit
 `96927f872c709e13aaa0f32265bb81a5531bf7ed` (root `LICENSE`: GNU General Public
 License, version 3), with the authors' permission (RULING #10405), tasks #2230, #2232,
-#2234, #2235, #2236, #2251, #2252, #2261 and #2262. Each is adapted, with every respelling named in the
+#2234, #2235, #2236, #2248, #2251, #2252, #2261 and #2262. Each is adapted, with every respelling named in the
 function's `Source:` line.
 
 | Here | Upstream file | Upstream name |
@@ -123,6 +123,8 @@ function's `Source:` line.
 | `UpdateMobyAnimLoopSound` in `going-decompiled/src/usa/text/1A00F0.cpp` (adapted: signature, symbol spellings and prototypes ours; control flow theirs), task #2251 | `src/game/0029DE38.c` | `func_0029F450` (v1.01 address) |
 | `UpdateDialogVoiceManager` in `going-decompiled/src/usa/text/1B4218.cpp` (adapted: symbol spellings ours, the unit's prototypes with casts at the call, `func_00132BC0` declared with their parameter types; their header: adapted from RAC1 `src/game/music.c` `music_Update`, GPL-3.0), task #2262 | `src/game/002B7578.c` | `func_002B7578` (v1.01 address) |
 | `func_002E0010` in `going-decompiled/src/usa/text/1DFF80.cpp` (adapted: symbol spellings ours, their element struct named `LevelSelectEntry`), task #2262 | `src/game/002DF1B8-g8.c` | `func_002DF1F8` (v1.01 address) |
+| `UpgradeWeaponToMax` in `going-decompiled/src/usa/text/188858.c` (adapted: signature, local names, symbol spellings and types ours; control flow theirs), task #2248 | `src/game/002887B0.c` | `func_002887B0` (v1.01 address) |
+| `func_002897B8` in `going-decompiled/src/usa/text/188858.c` (adapted: the subtitle-state symbol, struct and field names are ours), task #2248 | `src/game/00288D88.c` | `func_00288D90` (v1.01 address) |
 
 The GPL-2.0-or-later note in the section "OpenRAC rac2-gc-decomp (GPL-3.0)" above applies to these bodies too.
 

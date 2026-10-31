@@ -683,3 +683,5 @@ usa text/1B4218 StartTertiaryVoice
 usa text/1A00F0 UpdateMobyAnimLoopSound
 usa text/1B4218 UpdateDialogVoiceManager
 usa text/1DFF80 func_002E0010
+usa text/188858 UpgradeWeaponToMax
+usa text/188858 func_002897B8
