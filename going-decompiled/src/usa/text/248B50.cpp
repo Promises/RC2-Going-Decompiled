@@ -1838,10 +1838,132 @@ void func_0034B1F0(GuiWidget *w, s32 v) {
     *(s32 *)((char *)w + 0x4) = v;
 }
 
-/* func_0034B220: GUI value/gauge update routine reading the D_1AE5E8/D_1AE5F8
- * tables (0x80 frame, 5 GPR + 2 fp callee saves). WALL: many callee saves —
- * frame-layout divergence. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034B220);
+/* func_0034B220: pick the fade tier for a count n and lay out the two-glyph
+ * badge of widget w for it.
+ *
+ * n selects a tier: 1..20 -> 0, 21..40 -> 1, 41..80 -> 2 (any other n leaves
+ * the badge untouched and returns 0.0f). For the chosen tier it writes
+ *   *outA  6 (tier 0) or 10,           *outB  1 when n <= 20, else 2,
+ *   *outC  D_1AE5E8[tier] (f32),       *outD  D_1AE608[tier] (s32),
+ *   *outE  D_1AE618[tier] (s32),       *outF  1 for tier 2 only, else 0,
+ *   *outG  0.0f (tier 0) or -0.5f,
+ * sets the alpha of the two glyph elements at w+0x5C and w+0xA8 to
+ * (n-1)/4 - 5*tier, clamped at 0, and gives them the glyph pair
+ * 0x11/0x12, 0x13/0x14 or 0x15/0x16 from the GUI atlas (g_guiInstance+0x8710).
+ * Returns D_1AE5F8[tier]. *outF and *outB are written whatever n is.
+ *
+ * The four 3-entry tables are copied to the stack whole first, as the ROM does
+ * (struct copies, the ldl/ldr/sdl/sdr pairs).
+ *
+ * Tier 0 carries two SCHEDULING DEVICES, both empty asm fences (RULING #8483,
+ * EE arm only: the native arm defines them away). They change no instruction,
+ * only the issue order sched2 picks inside one cycle (FACT #12371's residual),
+ * and are insn-count fragile in the way RULING #12316 notes for fences.
+ *  - B220_FENCE_AFTER_LOAD ties the biased dividend t (the open-coded m/4:
+ *    `m > -1 ? m : m + 3`, then >> 2) to the ta[0] load, so the sra waits a
+ *    load latency and `li 6` issues first as in the ROM.
+ *    Removal probe: 7/201 words differ (ranking probe, t2426 r2).
+ *  - B220_FENCE_MEMORY_AFTER is a memory clobber that consumes alpha, so the
+ *    tc[0]/td[0] loads and the outC/outD/outE stores all issue after the
+ *    cvt.s.w, interleaved with the call-argument moves as in the ROM.
+ *    Removal probe: 18/201 (r1); without the clobber only: 1/201 (r4).
+ *
+ * GUARD (task #2426): on EE the #else body below is the image's func_0034B220,
+ * compiled alone by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810;
+ * row in tools/ee/s136os_functions.txt; the unit's S136EXTRA is empty, so
+ * gcse is on) and spliced over S136OS_SLOT by tools/ee/s136os_splice.sh.
+ * There is no asm fallback: a build that skips the splice drops the function.
+ * On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0034B220)
+S136OS_SLOT(func_0034B220);
+#else
+#ifndef TARGET_NATIVE
+#define B220_FENCE_AFTER_LOAD(t, c) __asm__("" : "+r"(t) : "f"(c))
+#define B220_FENCE_MEMORY_AFTER(a) __asm__("" : : "f"(a) : "memory")
+#else
+#define B220_FENCE_AFTER_LOAD(t, c) ((void)0)
+#define B220_FENCE_MEMORY_AFTER(a) ((void)0)
+#endif
+typedef struct TierF32 { f32 v[3]; } TierF32;
+typedef struct TierS32 { s32 v[3]; } TierS32;
+extern const TierF32 D_1AE5E8, D_1AE5F8;
+extern const TierS32 D_1AE608, D_1AE618;
+extern void GuiElementSetAlpha(void *e, f32 alpha);
+extern void GuiElementSetGlyph(void *e, u8 *atlas, s32 code);
+f32 func_0034B220(GuiWidget *w, s32 n, s32 *outA, s32 *outB, f32 *outC, s32 *outD,
+                  s32 *outE, s32 *outF, f32 *outG) {
+    char *b = (char *)w;
+    TierF32 ta = D_1AE5E8;
+    TierF32 tb = D_1AE5F8;
+    TierS32 tc = D_1AE608;
+    TierS32 td = D_1AE618;
+    f32 ret = 0.0f;
+    f32 alpha;
+    s32 m;
+
+    *outF = 0;
+    *outB = (n > 20) ? 2 : 1;
+    m = n - 1;
+    if (m < 0) {
+        m = 0;
+    }
+    if (n >= 1 && n <= 20) {
+        f32 c = ta.v[0];
+        s32 t = (m > -1) ? m : m + 3;
+        s32 q;
+        B220_FENCE_AFTER_LOAD(t, c);
+        q = t >> 2;
+        *outA = 6;
+        alpha = (f32)q;
+        B220_FENCE_MEMORY_AFTER(alpha);
+        *outC = c;
+        *outD = tc.v[0];
+        *outE = td.v[0];
+        *outG = 0.0f;
+        ret = tb.v[0];
+        GuiElementSetAlpha(b + 0x5C, alpha);
+        GuiElementSetAlpha(b + 0xA8, alpha);
+        GuiElementSetGlyph(b + 0x5C, g_guiInstance + 0x8710, 0x11);
+        GuiElementSetGlyph(b + 0xA8, g_guiInstance + 0x8710, 0x12);
+    } else if (n >= 21 && n <= 40) {
+        s32 q = m / 4 - 5;
+        if (q < 0) {
+            q = 0;
+        }
+        *outA = 10;
+        *outC = ta.v[1];
+        *outD = tc.v[1];
+        *outE = td.v[1];
+        alpha = (f32)q;
+        *outG = -0.5f;
+        ret = tb.v[1];
+        GuiElementSetAlpha(b + 0x5C, alpha);
+        GuiElementSetAlpha(b + 0xA8, alpha);
+        GuiElementSetGlyph(b + 0x5C, g_guiInstance + 0x8710, 0x13);
+        GuiElementSetGlyph(b + 0xA8, g_guiInstance + 0x8710, 0x14);
+    } else if (n >= 41 && n <= 80) {
+        s32 q = m / 4 - 10;
+        if (q < 0) {
+            q = 0;
+        }
+        *outA = 10;
+        *outC = ta.v[2];
+        *outD = tc.v[2];
+        *outE = td.v[2];
+        alpha = (f32)q;
+        *outG = -0.5f;
+        *outF = 1;
+        ret = tb.v[2];
+        GuiElementSetAlpha(b + 0x5C, alpha);
+        GuiElementSetAlpha(b + 0xA8, alpha);
+        GuiElementSetGlyph(b + 0x5C, g_guiInstance + 0x8710, 0x15);
+        GuiElementSetGlyph(b + 0xA8, g_guiInstance + 0x8710, 0x16);
+    }
+    return ret;
+}
+#undef B220_FENCE_AFTER_LOAD
+#undef B220_FENCE_MEMORY_AFTER
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034B548);
 /* func_0034B770: refresh the ammo/nanotech HUD list sub-element (w+0xF4). Hidden
