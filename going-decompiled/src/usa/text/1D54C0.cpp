@@ -691,51 +691,63 @@ s32 func_002D5C48(void) {
 /* Per-language menu-background readiness check + screen-back driver. Selects the
  * active language's bg image index (g_menuBgImageIndex = D_1ABAF0[language]); if
  * `focus` is not the manager screen's focused widget returns 0, else drives the
- * standard exit/back navigation from g_padButtonsPressed: L1/R1 (0x900) returns
- * 1 unless an override (g_menuScreenBlock+0x134) is set; on back (0x10) mirrors
- * the next-screen pointer into +0x18 (returning 0), or requests parent (-1) /
- * stays (0). Returns 0/1/-1.
- * Wall: gp/absolute address mix + bnel/beql ladder. */
+ * standard exit/back navigation from the pad block's newly-pressed mask
+ * (D_138180+0x1C4): L1/R1 (0x900) returns 1 unless an override
+ * (g_menuScreenBlock+0x134) is set; on back (0x10) copies the screen's
+ * next-screen pointer (+0xE0) into g_menuScreenBlock+0x18 and returns 0, or,
+ * with no next screen, returns -1 unless the override is set (0).
+ * Returns 0/1/-1. The same back/exit prelude as func_002D75D8.
+ * MATCHED on the s136os arm (SN 2.95.3 v1.36 cc1plus -fopt-stack), task #2289.
+ * gcse on (task #2252) gives the ROM's kept %hi copies of g_menuScreenBlock
+ * and D_138180. Two addressing models, both measured: g_menuBgImageIndex is
+ * compiler-split (ROM_SPLIT, the ROM's `lui $6` / `sw %lo($6)`), and
+ * g_currentLanguage is cc1-small but assembler-absolute (the `.extern ,16`
+ * at file scope just above): gas expands cc1's one-insn `lbu` macro into the
+ * ROM's lui/lbu in the destination register. Read compiler-split instead, its
+ * %hi takes another register and the prelude reschedules (19 of 45 words
+ * differ). Every g_currentLanguage access in this unit's ROM is that macro
+ * form, and no other EE-compiled function here touches it.
+ * GUARD: compiled alone by SN 2.95.3 v1.36 -fopt-stack and spliced over the
+ * S136OS_SLOT line (tools/ee/s136os_splice.sh); plain C on native. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D5C58);
+__asm__(".extern g_currentLanguage, 16");
+#endif
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002D5C58)
+S136OS_SLOT(func_002D5C58);
 #else
-/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
- * objdiff): sdk29 39.93% / engine96 43.20%; better arm engine96; 55 differing
- * rows on it, class STRUCTURAL; first differing insn: ROM `lui v0,0x0  [HI16
- * 0x001A7BBC]` vs `lbu v0,0(gp)  [GPREL16 0x001A7BBC]`. Not iterated in t495. */
-    /* TODO(match): functional equivalent - not byte-exact. */
+extern s32 D_1ABAF0[2];                      /* per-language bg image index */
+extern s32 g_menuBgImageIndex ROM_SPLIT;
+extern u8 g_currentLanguage;                 /* assembler-absolute, above */
+extern u8 D_138180[];
+typedef struct { char p00[0x14]; char *owner; int value; char p1c[0x118]; int fallback; } BgMenuRoot;
+typedef struct { char reserved[0x1C4]; int flags; } BgPadState;
+#define bgRoot (*(BgMenuRoot *)g_menuScreenBlock)
+#define bgPad  (*(BgPadState *)D_138180)
+
 s32 func_002D5C58(void *focus) {
-    extern s32 D_1ABAF0[];           /* per-language bg image index table */
-    extern s32 g_menuBgImageIndex;
-    extern u8  g_currentLanguage;
-    u8 *blk = (u8 *)g_menuScreenBlock;   /* g_menuScreenBlock == D_1F27C0 */
-    u8 *scr;
-    s32 pressed;
+    int status;
+
     g_menuBgImageIndex = D_1ABAF0[g_currentLanguage];
-    scr = *(u8 **)(blk + 0x14);
-    if (*(void **)(scr + 0xE8) != focus) {
+    if (*(void **)(bgRoot.owner + 0xE8) != focus)
         return 0;
-    }
-    pressed = g_padButtonsPressed[0];
-    if (pressed & 0x900) {
-        if (*(s32 *)(blk + 0x134) == 0) {
-            return 1;
+    if ((bgPad.flags & 0x900) && bgRoot.fallback == 0)
+        return 1;
+    if (bgPad.flags & 0x10) {
+        int next = *(int *)(bgRoot.owner + 0xE0);
+        if (next != 0)
+            bgRoot.value = next;
+        else if (bgRoot.fallback == 0) {
+            status = -1;
+            goto finish;
         }
-        pressed = g_padButtonsPressed[0];
-    }
-    if ((pressed & 0x10) == 0) {
-        return 0;
-    }
-    scr = *(u8 **)(blk + 0x14);
-    if (*(s32 *)(scr + 0xE0) != 0) {
-        *(s32 *)(blk + 0x18) = *(s32 *)(scr + 0xE0);
-        return 0;
-    }
-    if (*(s32 *)(blk + 0x134) == 0) {
-        return -1;
+        status = 0;
+finish:
+        return status;
     }
     return 0;
 }
+#undef bgRoot
+#undef bgPad
 #endif
 
 /* Draw the title-screen menu header glyph row: three packed-colour glyphs
