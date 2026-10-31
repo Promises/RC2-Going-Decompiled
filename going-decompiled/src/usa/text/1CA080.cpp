@@ -127,8 +127,10 @@ __asm__(".extern g_nLevelExitRequested, 12");
 /* LevelSelectListHandleInput: the ROM forms &g_abLevelAvailableFlags as a one-insn
  * `la` macro (`lui $20; addiu $20,$20`), task #1739. */
 __asm__(".extern g_abLevelAvailableFlags, 16");
-/* The skill-point completion flags: all five ROM readers (UpdateSkillPointsMenu,
- * DrawSkillPointsMenu, func_002CD670, UpdateCheatMenuInput, DrawCheatMenu) form the
+/* The skill-point completion flags: all five readers in this unit (UpdateSkillPointsMenu,
+ * DrawSkillPointsMenu, func_002CD670, UpdateCheatMenuInput, DrawCheatMenu; the ROM has
+ * four more of the same shape elsewhere: CountSkillPointsCompleted 0x2B1DB0,
+ * RestorePlayerProgressState 0x2DF970 and 0x2DFCA0, func_002D9178 0x2D94E8) form the
  * address with the one-insn macro (`lui $r; addiu|lbu $r,%lo($r)`, same register), not
  * a compiler split, so it takes this model rather than ROM_SPLIT (task #2236). */
 __asm__(".extern g_skillPointFlags, 16");
@@ -1850,8 +1852,10 @@ s32 func_002CC788(s32 action) {
  * cc1 emits its own table into 1CA080.o's .rodata, which the USA link script discards:
  * build.sh usa fails "`.rodata' referenced in section `.text' of .../1CA080.o: defined
  * in discarded section `.rodata'" (task #2236; same wall as FACT #9456 / FACT #12095).
- * Only the task #947 route (this unit's .rodata linked in place of the data asm, every
- * table owner in 0x26CC30..0x26CD3F in C at once) would admit it. */
+ * The task #947 route (this unit's .rodata linked in place of the data asm, every
+ * table owner in 0x26CC30..0x26CD3F in C at once) would admit it, and so would
+ * tools/ee/jtbl_bind.sh (task #2247, FACT #12102), which binds the switch table to
+ * the ROM's jtbl_ data. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CC7D8);
 
 /* func_002CC858: dispatch one of seven map-cell config descriptors (D_1AA6D8,
@@ -3041,7 +3045,7 @@ typedef struct { short f0; short text; short f4; } TextEntry;
  * (131 words against the ROM's 150 on this arm, task #2117) is retired; its control
  * flow agreed with this body.
  *
- * Source: OpenRAC/rac2-gc-decomp @96927f872c709e13aaa0f32265bb81a5531bf7ed (GPL-3.0, adopted with the authors' permission per RULING #10405), src/game/002CDB30-g8.c, func_002CDB30 (v1.01; author commit 14fd82f2, bigbeno37; its back-button block and block typedef carry over from upstream's src/pal/game/002D3DE8.c, 20d9186d, Flavius), C body and MenuCounter/MenuSelection typedefs (TableRow at file scope) ADAPTED: statements identical apart from symbol spelling, our names per the ROM's relocations (D_00138344 = g_padButtonsPressed, D_001AB9B0/B4/B8 = g_bestiaryCursor/g_bestiaryPrevEntry/g_bestiaryNextEntry, D_001F2840 = g_menuScreenBlock read through g_menuSelection (upstream's CallbackState is the shared SelectionCallback above), D_00188510 = g_bestiaryKillCounts read through g_bestiaryKills, D_00264630 = g_bestiaryEntryTable, declared with upstream's TableRow (a cast view of a byte array allocates differently: 4/150 words), D_0025ABC0 = D_0025ABA0, D_0025AC28 = D_0025AC08, func_002E5E58 = PlayGlobalSound with our prototype), upstream's `sda` attribute dropped (our cc1 ignores it; -G8 sizing gives the same $gp class) and our symbol name; byte-exact on our ROM: vmu BYTE IDENTICAL 150/150 words (45 relocs; base-seeded flip rc 1 at 0x2ceac8), unit objdiff report 100.00% size=600 (objdiff_build.sh + unit_report.sh), whole-image cmp 0 under landing_gate usa and eu --strict (task #2236)
+ * Source: OpenRAC/rac2-gc-decomp @96927f872c709e13aaa0f32265bb81a5531bf7ed (GPL-3.0, adopted with the authors' permission per RULING #10405), src/game/002CDB30-g8.c, func_002CDB30 (v1.01; author commit 14fd82f2, bigbeno37; its back-button block and block typedef carry over from upstream's src/pal/game/002D3DE8.c, 20d9186d, Flavius), C body and MenuCounter/MenuSelection typedefs (TableRow at file scope) ADAPTED: statements identical apart from symbol spelling, our names per the ROM's relocations (D_00138344 = g_padButtonsPressed, whose upstream NOT_SDA marking is our ROM_SPLIT declaration, D_001AB9B0/B4/B8 = g_bestiaryCursor/g_bestiaryPrevEntry/g_bestiaryNextEntry, D_001F2840 = g_menuScreenBlock read through g_menuSelection (upstream's CallbackState is the shared SelectionCallback above), D_00188510 = g_bestiaryKillCounts read through g_bestiaryKills, D_00264630 = g_bestiaryEntryTable, declared with upstream's TableRow (a cast view of a byte array allocates differently: 4/150 words), D_0025ABC0 = D_0025ABA0, D_0025AC28 = D_0025AC08, func_002E5E58 = PlayGlobalSound with our prototype), upstream's `sda` attribute dropped (our cc1 ignores it; -G8 sizing gives the same $gp class) and our symbol name; byte-exact on our ROM: vmu BYTE IDENTICAL 150/150 words (45 relocs; base-seeded flip rc 1 at 0x2ceac8), unit objdiff report 100.00% size=600 (objdiff_build.sh + unit_report.sh), whole-image cmp 0 under landing_gate usa and eu --strict (task #2236)
  */
 #if !defined(TARGET_NATIVE) && !defined(S136OS_UpdateBestiaryMenuInput)
 S136OS_SLOT(UpdateBestiaryMenuInput);
