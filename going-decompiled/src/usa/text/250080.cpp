@@ -2261,10 +2261,116 @@ s32 func_003521B0(void *dmaq, void *cmd) {
 }
 #endif
 
-/* TODO(hle): needs PS2 graphics/IO HLE backend — scans the IPU frame-slot ring
-   for the range covering the channel's current REG_DMAC_4_IPU_TO_MADR /
-   REG_IPU_BP position and pops it; depends on live IPU/DMAC hardware state. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003522C0);
+/* func_003522C0(dmaq, out): pop the DMA-add ring entry that covers the IPU's
+ * current read position, and hand back its two 64-bit tags.
+ *   dmaq: the FMV DMA-add queue (g_pFmvArenaBase + FMV_DMAQ_OFS; the ring that
+ *         func_003521B0 fills).
+ *   out:  receives {tag0, tag1} of the hit, or {-1, -1} if no entry covers the
+ *         position.
+ *   returns 1 always (func_00352AE0, the only caller, ignores it).
+ * The position is D4_MADR (IPU-to-memory DMA address) less the bytes the IPU
+ * still holds in its FIFO ((BP.IFC + BP.FP) qwords) plus the bit pointer's
+ * whole bytes (queue+0x38, masked to 7 bits, >> 3). It is taken relative to the
+ * source base (+0x00) and wrapped into the ring of ringSize (+0x08) 2 KiB
+ * sectors. The scan visits the count (+0x58) live entries, oldest first, from
+ * (writeIdx - count) modulo capacity. An entry covers the position when
+ * (pos - start) mod ringBytes < len. On a hit both tags are copied out, the
+ * entry is overwritten with the -1 sentinel, and the count drops by one,
+ * floored at 0. The hardware registers are read before the queue sema is taken.
+ *
+ * Compiled on the s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810) at the
+ * unit's gcse-on flags (task #2396). EE-only: the native port has no IPU/DMAC
+ * state to read, and eetest's isolated 250080 harness links its own mock of
+ * this symbol into a TARGET_NATIVE build of the unit.
+ *
+ * DEVICE: CODE SHAPE. The in-loop modulus goes through the static inline
+ * RingMod. Its job is the divide-by-zero trap. SN's div_trap prints nothing
+ * for a trap that compares against literal $0 and has an anti-dependence on an
+ * earlier trap in the same block. That is why the ROM checks ringBytes once,
+ * before the pre-loop divu, and not again at its in-loop div (0x3523C0).
+ * Written inline, loop.c merges this trap's zero with the capacity trap's zero
+ * into one hoisted register, so the trap compares against a register and is
+ * printed. Through the inline function, loop.c lists no movable for it (-dL
+ * dump), and combine folds the zero back to $0. Removal probe (positional
+ * words against the ROM's 105, s136os probe): a plain `%` gives 107 words, 55
+ * differ, with 3 `break`s against the ROM's 2.
+ * Other spellings are not devices, but each is measured to matter. Each was
+ * changed alone, with words differing on the same probe:
+ *   - q->writeIdx is read before the loop and `first - n` is written in the
+ *     loop, so loop.c hoists the subtraction past the blez guard, as the ROM
+ *     has it. first = writeIdx - n before the loop: 6. writeIdx read in the
+ *     loop: 19.
+ *   - The cursor's `+ ringBytes` is likewise in the loop expression, so the
+ *     remainder stays in a temporary. Folded into pos before the loop: 36.
+ *   - The ring entry is re-addressed as q->ring[idx] for every field. A cached
+ *     entry pointer: 1 (an addu operand order). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_003522C0)
+S136OS_SLOT(func_003522C0);
+#elif !defined(TARGET_NATIVE)
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern s32 func_0011AC60(s32 sema);    /* WaitSema (acquire) */
+extern s32 SignalSema(s32 sema);    /* SignalSema (release) */
+/* (end of this body's declarations) */
+typedef struct FmvDmaPopEntry {
+    /* 0x00 */ s64 tag0;
+    /* 0x08 */ s64 tag1;
+    /* 0x10 */ s32 start;  /* source offset of the range */
+    /* 0x14 */ s32 len;    /* range length in bytes */
+} FmvDmaPopEntry;
+typedef struct FmvDmaPopQueue {
+    /* 0x00 */ u32 srcBase;
+    /* 0x04 */ u8 pad04[4];
+    /* 0x08 */ s32 ringSize;  /* in 2 KiB sectors */
+    /* 0x0C */ u8 pad0C[0x2C];
+    /* 0x38 */ s32 bitPos;
+    /* 0x3C */ u8 pad3C[4];
+    /* 0x40 */ s32 sema;
+    /* 0x44 */ u8 pad44[0xC];
+    /* 0x50 */ FmvDmaPopEntry *ring;
+    /* 0x54 */ s32 capacity;
+    /* 0x58 */ s32 count;
+    /* 0x5C */ s32 writeIdx;
+} FmvDmaPopQueue;
+static inline s32 RingMod(s32 a, s32 b) { return a % b; }
+s32 func_003522C0(void *dmaq, s64 *out) {
+    FmvDmaPopQueue *q = (FmvDmaPopQueue *)dmaq;
+    u32 pos = *(volatile u32 *)0x1000B410;      /* D4_MADR */
+    u32 bp = *(volatile u32 *)0x10002020;       /* IPU_BP */
+    s32 bits = q->bitPos & 0x7F;
+    u32 ringBytes = q->ringSize << 11;
+    s32 found = 0;
+    s32 n;
+    s32 first;
+    s32 i;
+
+    pos -= (((bp >> 16) & 3) + ((bp >> 8) & 0xF)) << 4;
+    func_0011AC60(q->sema);
+    out[0] = -1;
+    out[1] = -1;
+    pos += bits >> 3;
+    pos += ringBytes;
+    pos -= q->srcBase;
+    pos = pos % ringBytes;
+    i = 0;
+    n = q->count;
+    first = q->writeIdx;
+    while (i < n && found == 0) {
+        s32 idx = (first - n + q->capacity + i) % q->capacity;
+        i++;
+        if (RingMod((s32)(pos + ringBytes - q->ring[idx].start), (s32)ringBytes) < q->ring[idx].len) {
+            found = 1;
+            out[0] = q->ring[idx].tag0;
+            out[1] = q->ring[idx].tag1;
+            q->ring[idx].tag0 = -1;
+            q->ring[idx].tag1 = -1;
+            q->count = q->count - (q->count > 1 ? 1 : q->count);
+        }
+    }
+    SignalSema(q->sema);
+    return 1;
+}
+#endif
 
 #if !defined(TARGET_NATIVE) && !defined(S136OS_FmvStreamInit)
 S136OS_SLOT(FmvStreamInit);
