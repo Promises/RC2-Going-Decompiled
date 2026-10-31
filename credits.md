@@ -252,10 +252,11 @@
 - **OpenRAC — `rac2-gc-decomp`, commit `96927f87`, core bodies** (GPL-3.0)
   <https://github.com/OpenRAC/rac2-gc-decomp> at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`
 
-  One core C body, adopted with the authors' permission (held by the
+  Three core C bodies, adopted with the authors' permission (held by the
   operator, RULING #10405) and re-checked byte-exact against our v2.00 ROM on
-  the plain sdk29 arm (task #2230). Contributor: Flavius. The doc comment
-  carries the `Source:` line, which names every change beyond extern spellings.
+  the plain sdk29 arm (tasks #2230 and #2261). Contributor: Flavius. The doc
+  comment carries the `Source:` line, which names every change beyond extern
+  spellings.
 
   Used so far:
   - **`func_0011DE08`** (`0x0011DE08`, the file-I/O RPC library init) in
@@ -265,6 +266,22 @@
     extern prototypes are dropped for this unit's own, which adds a
     `(SifRpcClient *)` cast on the bind client and `(char *)` casts on two
     `u8[]` buffers.
+  - **`func_0011C1F8`** (`0x0011C1F8`, the Kprintf/vfprintf formatting core)
+    in `going-decompiled/src/usa/cod/015180.c`, from `src/core/0011BF18.c`
+    (`func_0011C1F8`, author commit `c8887184`, Flavius), rac1-decomp's C
+    carried into rac2-gc-decomp. ADAPTED: our spellings of their asm-label
+    aliases, the float conversion spelled as an explicit
+    `func_0011C090(func_001234F0(f))`, and `va_list ap` as `char *ap`. Its
+    switch's jump table is bound to the ROM's `jtbl_0013A9F0` by
+    `tools/ee/jtbl_bind.sh` (task #2261).
+  - **`func_0011D9C0`** (`0x0011D9C0`, the file-I/O RPC reply handler) in
+    `going-decompiled/src/usa/cod/015180.c`, from `src/core/0011D950.c`
+    (`func_0011D9C0` and the `Word`/`FsRcv*` typedefs, author commit
+    `c8887184`, Flavius), rac1-decomp's C carried into rac2-gc-decomp.
+    ADAPTED: our extern spellings, and the one store into their
+    `volatile s32[]` semaphore table spelled through a `(volatile s32 *)`
+    cast on this unit's `s32 D_001346A8[32]`. Its switch's jump table is bound
+    to the ROM's `jtbl_0013AB20` by `tools/ee/jtbl_bind.sh` (task #2261).
 
 - **OpenRAC — `rac2-gc-decomp`, commit `96927f87`, boundary-split bodies** (GPL-3.0, and MIT for one carried file)
   <https://github.com/OpenRAC/rac2-gc-decomp> at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`

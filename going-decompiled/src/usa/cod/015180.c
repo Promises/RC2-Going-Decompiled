@@ -1479,289 +1479,259 @@ s32 func_0011C090(s64 value) {
 #endif
 
 /**
- * func_0011C1F8 = the Kprintf/vfprintf CORE - a hand-rolled formatted-output
- * engine. Signature `s32 func_0011C1F8(char *fmt, s64 *ap)`: walks `fmt`, emitting
- * every literal byte through the global char hook (*D_00134698)(int), and on '%'
- * parses an optional zero-pad field width ("%0NN", 1-2 digits, clamped to 31) and
- * an optional length modifier ('l' -> 64-bit, 'h' -> 16-bit, else 32-bit), then
- * dispatches a conversion via the jump table jtbl_0013A9F0 (indexed by spec-'0'):
- *   o  octal      (digits built with n&7, n>>=3)
- *   x  hex        (n&0xF, n>>=4; 'a'-'f' lowercase, +0x57)
- *   d  signed dec (emits '-', uses __moddi3 %10 / __divdi3 /10)
- *   u  unsigned   (__umoddi3 %10 / __udivdi3 /10)
- *   e,f float     (lwc1 arg; ==0 -> '0', else func_001234F0 then func_0011C090)
- *   s  string     ("(null)" when the target is empty, else byte-copy)
- *   c  char        (sign-extended single byte)
- * Integers are formatted right-to-left into a 32-byte stack buffer ending at a NUL
- * at sp+0x1F; the field width pre-fills '0's from sp+(0x1F-w) and the digit start
- * pointer is clamped down to it. Wraps the whole run between func_0011F5E0 (disable
- * interrupts) and func_0011F628 (restore); the return value is the interrupt-state
- * cookie (0 / func_0011F628()). Variadic args are pulled from `ap` in 8-byte slots.
+ * func_0011C1F8 = the Kprintf/vfprintf CORE, a hand-rolled formatted-output
+ * engine. Walks `fmt`, emitting every literal byte through the global char
+ * hook (*D_00134698)(int). On '%' it parses an optional zero-pad field width
+ * ("%0N"/"%0NN", clamped to 31) and an optional length modifier ('l' 64-bit,
+ * 'h' 16-bit, else 32-bit), then dispatches the conversion through a switch on
+ * `*fmt - '0'`, whose jump table is the ROM's jtbl_0013A9F0 (73 entries, data
+ * unit 03A180.rodata; tools/ee/jtbl_bind.sh binds the compiled table to it):
+ *   o octal, x lowercase hex, d signed decimal (a '-' first, then the
+ *   magnitude), u unsigned decimal: built right to left into a 32-byte stack
+ *   buffer, the digit start clamped down to the zero-pad start;
+ *   e, f  a float slot: 0.0f prints '0', anything else func_001234F0 (float
+ *         to double bits) then func_0011C090 (the "0.%de+NN" printer);
+ *   s     a string, "(null)" when it is EMPTY (the pointer is not tested);
+ *   c     one char.
+ * Any other conversion character is dropped silently. Every argument takes an
+ * 8-byte slot of `ap`. The whole run is bracketed by func_0011F5E0 (disable
+ * interrupts) and, only if they were enabled, func_0011F628.
  *
- * MATCHING WALL (cc1 register-allocation + char-load-scheduling ceiling). A clean,
- * behaviourally-faithful reconstruction of the full control flow (the goto-state-
- * machine, the jtbl switch in memory order, the per-branch `ap++; *(T*)(ap-1)`
- * arg fetch, the s0=cursor / s1=value / s2=p / s3=ap / s4=pad / s5=hook / s6=cookie
- * register model) rebuilds to ~85.7% byte-identical (380/380 instrs, same frame,
- * same prologue/saves, same jump table). The residual is NOT behaviour - it is two
- * unsteerable ee-gcc 2.9 choices that diverge per call site:
- *   (1) the char output loops: the original re-loads each emitted byte as a fresh
- *       `lbu` (separate from the `lb` zero-test), whereas gcc CSEs our `*q` to one
- *       load + `move` (this also cascades the hook-pointer to v1 vs v0);
- *   (2) the length-modifier temp lands in a2 vs the original's a3, and %c's byte
- *       in a temp vs s1.
- * Both are scheduler/allocator tie-breaks invariant under every source phrasing
- * tried (do-while vs while, (s8)(u8) casts, per-case vs shared value locals,
- * declaration order). The MATCHING arm stays INCLUDE_ASM (byte-exact). The
- * recovered faithful C ships as the portable TARGET_NATIVE #else: it is a correct
- * printf, cmp-oracle'd asm-vs-C bit-identical (the D_00134698 hook-captured byte
- * stream over every conversion specifier, width and length modifier) on the real
- * R5900 by run_cmp_015180_iso.sh. The %e/%f path composes onto func_0011C090's
- * own #else (itself cmp-oracle'd).
+ * @param fmt  the format string
+ * @param ap   the argument area: 8-byte slots, as func_0011C7E8 and Kprintf
+ *             spill their register arguments
+ * @return     nothing is returned in C (the upstream body falls off its end).
+ *             In the ROM $v0 at exit is the last `lb` of the terminating NUL
+ *             (0), or func_0011F628's result when interrupts were re-enabled;
+ *             func_0011C7E8 and Kprintf pass that on.
+ *
+ * Source: OpenRAC/rac2-gc-decomp @96927f872c709e13aaa0f32265bb81a5531bf7ed
+ * (GPL-3.0, adopted with the authors' permission per RULING #10405),
+ * src/core/0011BF18.c lines 89-288, func_0011C1F8 (same address on their
+ * v2.00 build; author commit c8887184, Flavius; upstream of that, rac1-decomp src/core/00119D88.c). C body
+ * ADAPTED: statements verbatim apart from our spellings of their asm-label
+ * aliases (DIntr_A0A0 -> func_0011F5E0, EnableInterrupts_A0A0 ->
+ * func_0011F628, r1_D_0012FD00_A0A0[0](x) -> D_00134698(x), 15 sites), and
+ * two edits: `printfloat_A0A0(f)` -> `func_0011C090(func_001234F0(f))`
+ * (their prototype takes a double, so cc1 emits the float-to-double call
+ * implicitly; ours spells it, because func_0011C090 takes the double's bits
+ * as s64), and the parameter `va_list ap` -> `char *ap` (the body does
+ * pointer arithmetic on it, which a native host's va_list does not allow).
+ * Their extern prototypes are dropped for the unit's own. The fall-off end is
+ * load-bearing: `return func_0011F628(); ... return 0;` rebuilds 15 of 382
+ * words different in the epilogue. Byte-exact on our ROM: jtbl_bind binds the
+ * 73-entry table to jtbl_0013A9F0 (every entry checked against the retail
+ * ELF), verify_match_unit BYTE IDENTICAL 380/380 words (st_size 379, plus the
+ * zero pad at 0x11C7E4) with 35 relocs resolved, symtab_extent_compare MATCH
+ * over 379, a base-seeded bit flip firing rc 1 at 0x11c208; unit objdiff
+ * report 100.00% size=1516 (objdiff_build.sh + unit_report.sh); whole-image
+ * cmp 0 (task #2261).
  */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011C1F8);
-#else
 extern s32 func_0011F5E0(void);
 extern s32 func_0011F628(void);
 extern s64 func_001234F0(float f);
-extern s64 __moddi3(s64 a, s64 b);   /* __moddi3  signed mod   */
-extern s64 __divdi3(s64 a, s64 b);   /* __divdi3  signed div   */
-extern u64 __umoddi3(u64 u, u64 v);   /* __umoddi3 unsigned mod */
-extern u64 __udivdi3(u64 u, u64 v);   /* __udivdi3 unsigned div */
-
-s32 func_0011C1F8(char *fmt, s64 *ap) {
+extern void (*D_00134698)(s32 ch);
+s32 func_0011C090(s64 value);
+int func_0011C1F8(const char *fmt, char *ap) {
     char buf[32];
-    s64 n;
-    char *s = fmt;
-    char *p;
-    char *q;
     char *pad;
-    s32 lenmod;
-    s32 c;
-    s32 saved = func_0011F5E0();
+    char *p;
+    s32 mod;
+    s32 n;
+    unsigned long d;
+    u8 ch;
+    char second;
+    s64 v;
+    s32 ie;
 
-    if (*s == 0) goto Lend;
-
-    for (;;) {
+    ie = func_0011F5E0();
+    for (; *fmt != 0; fmt++) {
+        p = (char *)fmt;
         pad = 0;
-        lenmod = 0;
-        c = (s8)*s;
-        if (c != '%') goto Lputc;
-        p = s + 1;
-    Lscan:
-        s = p;
-        {
-            s32 idx = (s8)((u8)*s - 0x30);
-            if ((u32)idx >= 0x49) { p = s + 1; goto Lskip; }
-            switch (idx) {
-            case '0' - '0': { /* zero-pad field width */
-                s32 w;
-                s32 d1 = *(p + 1) - 0x30;
-                if ((u8)d1 < 0xA) {
-                    s32 d2 = *(p + 2) - 0x30;
-                    if ((u32)d2 < 0xA) {
-                        w = d1 * 10 + d2;
-                        if (w >= 0x20) w = 0x1F;
-                        s = p + 2;
+        mod = 0;
+        if (*fmt == '%') {
+        again:
+            fmt++;
+            switch ((char)(*fmt - '0')) {
+            case 0:
+                n = fmt[1] - '0';
+                second = fmt[2];
+                if ((u8)n < 10) {
+                    if ((u32)(second - '0') < 10) {
+                        n = n * 10 + (second - '0');
+                        fmt += 2;
+                        if (n >= 32) {
+                            n = 31;
+                        }
                     } else {
-                        w = d1;
-                        s = p + 1;
+                        fmt += 1;
                     }
-                    if (w > 0) {
-                        pad = &buf[0x1F] - w;
-                        p = s + 1;
-                        do {
-                            buf[0x1F - w] = '0';
-                            w--;
-                        } while (w > 0);
-                        s = p;
-                        goto Lscan;
+                    pad = &buf[31 - n];
+                    while (n > 0) {
+                        buf[31 - n] = '0';
+                        n--;
                     }
-                    p = s + 1;
-                    goto Lscan;
+                    goto again;
                 }
-                p++;
-                goto Lscan;
-            }
+                goto again;
             case 'l' - '0':
-                lenmod = 0x6C;
-                p++;
-                goto Lscan;
+                mod = 'l';
+                goto again;
             case 'h' - '0':
-                lenmod = 0x68;
-                p++;
-                goto Lscan;
+                mod = 'h';
+                goto again;
             case 'o' - '0':
-                if (lenmod == 0x6C) { ap++; n = *(ap - 1); }
-                else if (lenmod == 0x68) { ap++; n = *(u16 *)(ap - 1); }
-                else { ap++; n = *(u32 *)(ap - 1); }
-                q = &buf[0x1F];
-                buf[0x1F] = 0;
-                if (n == 0) {
-                    q = &buf[0x1E];
-                    buf[0x1E] = '0';
-                    p++;
+                if (mod == 'l') {
+                    v = (ap += 8, *(s64 *)(ap - 8));
+                } else if (mod == 'h') {
+                    v = (ap += 8, *(u16 *)(ap - 8));
                 } else {
-                    p++;
-                    do {
-                        *--q = (char)((n & 7) + 0x30);
-                        n = (u64)n >> 3;
-                    } while (n != 0);
+                    v = (ap += 8, *(u32 *)(ap - 8));
                 }
-                if (pad != 0 && pad < q) q = pad;
-                if (*q == 0) goto Lskip;
-                do { D_00134698(*q); q++; } while (*q != 0);
-                s = p;
-                goto Lcont;
+                p = &buf[31];
+                *p = 0;
+                if (v == 0) {
+                    *--p = '0';
+                } else {
+                    do {
+                        *--p = (v & 7) + '0';
+                        v = (u64)v >> 3;
+                    } while (v != 0);
+                }
+                if (pad != 0 && pad < p) {
+                    p = pad;
+                }
+                while (*p != 0) {
+                    D_00134698(*p++);
+                }
+                break;
             case 'x' - '0':
-                if (lenmod == 0x6C) { ap++; n = *(ap - 1); }
-                else if (lenmod == 0x68) { ap++; n = *(u16 *)(ap - 1); }
-                else { ap++; n = *(u32 *)(ap - 1); }
-                q = &buf[0x1F];
-                buf[0x1F] = 0;
-                if (n == 0) {
-                    q = &buf[0x1E];
-                    buf[0x1E] = '0';
-                    p++;
+                if (mod == 'l') {
+                    v = (ap += 8, *(s64 *)(ap - 8));
+                } else if (mod == 'h') {
+                    v = (ap += 8, *(u16 *)(ap - 8));
                 } else {
-                    p++;
-                    do {
-                        u64 nib = n & 0xF;
-                        *--q = (char)(nib < 0xA ? nib + 0x30 : nib + 0x57);
-                        n = (u64)n >> 4;
-                    } while (n != 0);
+                    v = (ap += 8, *(u32 *)(ap - 8));
                 }
-                if (pad != 0 && pad < q) q = pad;
-                if (*q == 0) goto Lskip;
-                do { D_00134698(*q); q++; } while (*q != 0);
-                s = p;
-                goto Lcont;
+                p = &buf[31];
+                *p = 0;
+                if (v == 0) {
+                    *--p = '0';
+                } else {
+                    do {
+                        d = v & 0xF;
+                        if (d < 10) {
+                            *--p = d + '0';
+                        } else {
+                            *--p = d + 'a' - 10;
+                        }
+                        v = (u64)v >> 4;
+                    } while (v != 0);
+                }
+                if (pad != 0 && pad < p) {
+                    p = pad;
+                }
+                while (*p != 0) {
+                    D_00134698(*p++);
+                }
+                break;
             case 'd' - '0':
-            {
-                s64 dn;
-                if (lenmod == 0x6C) { ap++; dn = *(ap - 1); }
-                else if (lenmod == 0x68) { ap++; dn = *(s16 *)(ap - 1); }
-                else { ap++; dn = *(s32 *)(ap - 1); }
-                q = &buf[0x1F];
-                buf[0x1F] = 0;
-                if (dn == 0) {
-                    q = &buf[0x1E];
-                    buf[0x1E] = '0';
-                    p++;
+                if (mod == 'l') {
+                    v = (ap += 8, *(s64 *)(ap - 8));
+                } else if (mod == 'h') {
+                    v = (ap += 8, *(s16 *)(ap - 8));
                 } else {
-                    if (dn < 0) {
+                    v = (ap += 8, *(s32 *)(ap - 8));
+                }
+                p = &buf[31];
+                *p = 0;
+                if (v == 0) {
+                    *--p = '0';
+                } else {
+                    if (v < 0) {
+                        v = -v;
                         D_00134698('-');
-                        dn = -dn;
                     }
-                    p++;
-                    while (dn != 0) {
-                        *--q = (char)(__moddi3(dn, 10) + 0x30);
-                        dn = __divdi3(dn, 10);
+                    while (v != 0) {
+                        *--p = v % 10 + '0';
+                        v = v / 10;
                     }
                 }
-                if (pad != 0 && pad < q) q = pad;
-                if (*q == 0) goto Lskip;
-                do { D_00134698(*q); q++; } while (*q != 0);
-                s = p;
-                goto Lcont;
-            }
+                if (pad != 0 && pad < p) {
+                    p = pad;
+                }
+                while (*p != 0) {
+                    D_00134698(*p++);
+                }
+                break;
             case 'u' - '0':
-                if (lenmod == 0x6C) { ap++; n = *(ap - 1); }
-                else if (lenmod == 0x68) { ap++; n = *(u16 *)(ap - 1); }
-                else { ap++; n = *(u32 *)(ap - 1); }
-                q = &buf[0x1F];
-                buf[0x1F] = 0;
-                if (n == 0) {
-                    q = &buf[0x1E];
-                    buf[0x1E] = '0';
-                    p++;
+                if (mod == 'l') {
+                    v = (ap += 8, *(s64 *)(ap - 8));
+                } else if (mod == 'h') {
+                    v = (ap += 8, *(u16 *)(ap - 8));
                 } else {
-                    p++;
-                    do {
-                        *--q = (char)(__umoddi3(n, 10) + 0x30);
-                        n = __udivdi3(n, 10);
-                    } while (n != 0);
+                    v = (ap += 8, *(u32 *)(ap - 8));
                 }
-                if (pad != 0 && pad < q) q = pad;
-                if (*q == 0) goto Lskip;
-                do { D_00134698(*q); q++; } while (*q != 0);
-                s = p;
-                goto Lcont;
+                p = &buf[31];
+                *p = 0;
+                if (v == 0) {
+                    *--p = '0';
+                } else {
+                    do {
+                        *--p = (u64)v % 10 + '0';
+                        v = (u64)v / 10;
+                    } while (v != 0);
+                }
+                if (pad != 0 && pad < p) {
+                    p = pad;
+                }
+                while (*p != 0) {
+                    D_00134698(*p++);
+                }
+                break;
             case 'e' - '0':
             case 'f' - '0': {
-                float f;
-                ap++;
-                f = *(float *)(ap - 1);
+                f32 f = (ap += 8, *(f32 *)(ap - 8));
                 if (f == 0.0f) {
                     D_00134698('0');
-                    p++;
                 } else {
-                    p++;
                     func_0011C090(func_001234F0(f));
                 }
-                s = p;
-                goto Lcont;
-            }
+            } break;
             case 's' - '0': {
-                char *str;
-                ap++;
-                str = (char *)*(s32 *)(ap - 1);
-                if (*str == 0) {
+                char *string = (ap += 8, *(char * *)(ap - 8));
+                if (*string == 0) {
                     D_00134698('(');
-                    p++;
                     D_00134698('n');
                     D_00134698('u');
                     D_00134698('l');
                     D_00134698('l');
                     D_00134698(')');
-                    s = p;
-                    goto Lcont;
+                } else {
+                    p = string;
+                    if (*p != 0) {
+                        do {
+                            D_00134698(*p++);
+                        } while (*p != 0);
+                    }
                 }
-                q = str;
-                p++;
-                do {
-                    D_00134698(*q);
-                    q++;
-                } while (*q != 0);
-                s = p;
-                goto Lcont;
+                break;
             }
             case 'c' - '0':
-            {
-                s64 cn;
-                ap++;
-                cn = *(char *)(ap - 1);
-                D_00134698((s32)cn);
-                p++;
-                s = p;
-                goto Lcont;
-            }
+                v = (ap += 8, *(char *)(ap - 8));
+                D_00134698(v);
+                break;
             default:
-                p++;
-                goto Lskip;
+                break;
             }
+        } else {
+            D_00134698(*fmt);
         }
-
-    Lputc:
-        D_00134698(c);
-        p = s + 1;
-        s = p;
-        goto Lcont;
-
-    Lskip:
-        s = p;
-    Lcont:
-        if (*s == 0) break;
     }
-
-Lend:
-    if (saved != 0) {
-        return func_0011F628();
+    if (ie != 0) {
+        func_0011F628();
     }
-    return 0;
 }
-#endif
 
 /**
  * func_0011C7E8 = printf-style wrapper around the core formatter func_0011C1F8.
@@ -1769,8 +1739,6 @@ Lend:
  * forwards (dest, va_list) to func_0011C1F8, returning its result. `dest` is the
  * sink passed straight through; the va_list points at the first variadic arg.
  */
-extern s32 func_0011C1F8(char *fmt, s64 *ap);
-
 s32 func_0011C7E8(void *dest, ...) {
     /* EABI single-float va_start (va_list == char*): point past the named arg
      * into the spilled variadic register-save area. */
@@ -1778,7 +1746,7 @@ s32 func_0011C7E8(void *dest, ...) {
                - (__builtin_args_info(2) >= 8
                       ? 0
                       : (8 - __builtin_args_info(2)) * 8);
-    return func_0011C1F8((char *)dest, (s64 *)ap);
+    return func_0011C1F8((const char *)dest, ap);
 }
 
 extern void (*D_00134698)(s32 ch);  /* single-character output hook */
@@ -1801,7 +1769,7 @@ s32 Kprintf(const char *fmt, ...) {
     D_00134698 = func_0011BF18;
     ap = (char *)__builtin_next_arg(fmt)
          - (__builtin_args_info(2) >= 8 ? 0 : (8 - __builtin_args_info(2)) * 8);
-    ret = func_0011C1F8((char *)fmt, (s64 *)ap);
+    ret = func_0011C1F8(fmt, ap);
     D_00134698 = saved;
     return ret;
 }
@@ -2750,7 +2718,166 @@ hit:
     return slot;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011D9C0);
+typedef struct {
+    s32 v;
+} __attribute__((packed)) Word;
+typedef struct {
+    Word ret;
+    Word func;
+    Word dest;
+    Word size;
+} FsRcvHead;
+typedef struct {
+    void *dest;
+} __attribute__((packed)) FsRcvPtr;
+typedef struct {
+    Word dest;
+    Word size;
+} FsRcvBuf;
+typedef struct {
+    s32 n1;
+    s32 n2;
+    u8 *d1;
+    u8 *d2;
+    u8 buf1[0x40];
+    u8 buf2[0x40];
+} FsRcvRead;
+typedef struct {
+    u8 b[0x144];
+} __attribute__((packed)) FsDirent;
+typedef struct {
+    u8 b[0x40];
+} __attribute__((packed)) FsStat;
+extern s32 D_001346A8[32];
+extern u32 D_00134728[];
+extern s32 D_00134730[];
+extern u8 D_0013F600[];
+extern void func_0011AC50(s32);
+
+/**
+ * func_0011D9C0 = the file-I/O RPC reply handler, registered by
+ * func_0011DE08 as SIF command 0x80000011's handler. Picks the receive
+ * buffer (D_00134730[0] set = double-buffered, so arg[3] chooses one of the
+ * two 0x440-byte buffers at D_0013F600; otherwise buffer 0), records the
+ * choice in D_00134728[0], and reads the reply header (result, command,
+ * destination, size) through the uncached KSEG alias (| 0x20000000). A
+ * non-negative result copies `size` bytes of payload to the destination. Then
+ * per command: 2 (read) copies n1 bytes of buf1 to d1 and n2 bytes of
+ * buf2 to d2; 11 copies a 0x144-byte dirent and 12 a 0x40-byte
+ * stat to the pointer at +0x14; 23, 25 and 26 copy up to 0x400 bytes from +0x1C
+ * to the buffer named at +0x14. The dispatch is a switch whose jump table is
+ * the ROM's jtbl_0013AB20 (25 entries, data unit 03A180.rodata;
+ * tools/ee/jtbl_bind.sh binds the compiled table to it). Finally a negative
+ * result is a no-wait completion: its negation is a semaphore, and the
+ * D_001346A8 entry holding it is freed (-1); otherwise func_0011AC50 is
+ * called with the result.
+ *
+ * @param arg  the SIF command packet; word 3 selects the receive buffer
+ *
+ * Source: OpenRAC/rac2-gc-decomp @96927f872c709e13aaa0f32265bb81a5531bf7ed
+ * (GPL-3.0, adopted with the authors' permission per RULING #10405),
+ * src/core/0011D950.c, func_0011D9C0 and the Word/FsRcv* typedefs above it
+ * (same address on their v2.00 build; author commit c8887184, Flavius;
+ * upstream of that, rac1-decomp src/core/00119D88.c). C body ADAPTED: statements verbatim apart from our
+ * extern spellings (r1_D_0012FD98 -> D_00134730, r1_D_0012FD90 ->
+ * D_00134728, r1_D_00157600 -> D_0013F600, r1_func_00115248 -> memcpy,
+ * r1_D_0012FD10 -> D_001346A8, r1_func_00118CA0 -> func_0011AC50) and one
+ * edit: their table is `extern volatile s32[]`, which conflicts with this
+ * unit's `s32 D_001346A8[32]`, so the one store through it is spelled
+ * `((volatile s32 *)D_001346A8)[i] = -1`. Their extern prototypes are dropped
+ * for the unit's own. Byte-exact on our ROM: jtbl_bind binds the 25-entry
+ * table to jtbl_0013AB20 (every entry checked against the retail ELF),
+ * verify_match_unit BYTE IDENTICAL 226/226 words (st_size 225, plus the zero
+ * pad at 0x11DD44) with 15 relocs resolved, symtab_extent_compare MATCH over
+ * 225, a base-seeded bit flip firing rc 1 at 0x11d9d0; unit objdiff report
+ * 100.00% size=900 (objdiff_build.sh + unit_report.sh); whole-image cmp 0
+ * (task #2261).
+ */
+void func_0011D9C0(s32 *arg) {
+    FsRcvHead h;
+    FsRcvHead *src;
+    FsRcvBuf *bs;
+    union {
+        FsRcvPtr p;
+        FsRcvBuf b;
+    } u;
+    FsRcvRead *r;
+    u8 *pkt;
+    u8 *base;
+    u8 *d;
+    u32 *bank = D_00134728;
+    s32 idx;
+    s32 i;
+    s64 ret;
+    u32 n;
+    u32 addr;
+
+    idx = D_00134730[0] != 0 ? arg[3] : 0;
+    *bank = idx;
+    base = D_0013F600;
+    addr = (u32)base;
+    addr += (u32)idx * 0x440;
+    pkt = (u8 *)(addr | 0x20000000);
+    src = (FsRcvHead *)pkt;
+    h.ret = src->ret;
+    h.func = src->func;
+    h.dest = src->dest;
+    h.size = src->size;
+    if (h.ret.v >= 0) {
+        memcpy((void *)h.dest.v, pkt + 0x10, h.size.v);
+    }
+    switch (h.func.v) {
+    case 2:
+        r = (FsRcvRead *)(pkt + 0x14);
+        if (r->n1 > 0) {
+            d = r->d1;
+            for (i = 0; i < r->n1; i++) {
+                d[i] = r->buf1[i];
+            }
+        }
+        if (r->n2 > 0) {
+            d = r->d2;
+            for (i = 0; i < r->n2; i++) {
+                d[i] = r->buf2[i];
+            }
+        }
+        break;
+    case 11:
+        u.p = *(FsRcvPtr *)(pkt + 0x14);
+        *(FsDirent *)u.p.dest = *(FsDirent *)(pkt + 0x18);
+        break;
+    case 12:
+        u.p = *(FsRcvPtr *)(pkt + 0x14);
+        *(FsStat *)u.p.dest = *(FsStat *)(pkt + 0x18);
+        break;
+    case 23:
+    case 25:
+    case 26:
+        bs = (FsRcvBuf *)(pkt + 0x14);
+        u.b.dest = bs->dest;
+        u.b.size = bs->size;
+        n = u.b.size.v;
+        if (n > 0x400) {
+            u.b.size.v = 0x400;
+            n = 0x400;
+        }
+        memcpy((void *)u.b.dest.v, pkt + 0x1C, n);
+        break;
+    }
+    if (h.ret.v < 0) {
+        u32 semaphore = 0u - (u32)h.ret.v;
+        ret = (s32)semaphore;
+        h.ret.v = (s32)semaphore;
+        for (i = 0; i < 32; i++) {
+            if (((s32 *)D_001346A8)[i] == ret) {
+                ((volatile s32 *)D_001346A8)[i] = -1;
+                break;
+            }
+        }
+        return;
+    }
+    func_0011AC50(h.ret.v);
+}
 
 extern s32 func_0011AC60(s32 handle);
 extern s32 D_00134734;
