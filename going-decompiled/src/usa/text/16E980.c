@@ -37,8 +37,9 @@
  * 05_all29_report.txt, 07_all96_report.txt, classes 08/09_classify*.txt). None
  * reached 100 on either arm; sdk29 >= engine96 on 31 of 40, but 32 of those are
  * PACKED-SAVE-walled there. The wall is a property of the 2.9 arm only: the
- * s136os arm (SN 1.36 -fopt-stack) has the ROM's 8-byte slots, and twenty-seven of
- * these arms are matched there (FACTs #8830, #9658, #9707, #9856, #10000,
+ * s136os arm (SN 1.36 -fopt-stack) has the ROM's 8-byte slots, and twenty-six of
+ * these arms are matched there (the unit has 27 selector rows; func_00272560's is
+ * not a table arm) (FACTs #8830, #9658, #9707, #9856, #10000,
  * #10023, UpdateScreenFadeBlack from its former MATCH_ guard (task #2092),
  * func_00273D20 (task #2101), func_00271140 (task #2116) and
  * BuildAttractReelPlaylist (OpenRAC's C, task #2207), ApplyCameraShakeAxis and

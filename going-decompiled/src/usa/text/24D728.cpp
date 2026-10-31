@@ -565,7 +565,7 @@ extern void func_00338AB8(void *listHead, void *pool);
 
 /* ADDRESSING DEVICE (RULING #8620 terms, #8036 offset-0 alias; EE only, emits
  * nothing): GuiManagerInitHudLists reads g_guiInstance twice with the absolute
- * `lui; lw %lo` pair (0x34EDBC, 0x34EDFC). The `, 16` size keeps GNU as from
+ * `lui; lw %lo` pair (0x34EDBC, and 0x34EE00/0x34EE04). The `, 16` size keeps GNU as from
  * making those reads gp-relative under -G8; the relocations name g_guiInstance
  * and no alias reaches nm. At file scope because the s136os splice refuses an
  * `.extern ,16` inside a member's arm (FACT #9057). Without it: 5 words differ
