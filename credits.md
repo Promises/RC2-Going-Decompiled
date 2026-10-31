@@ -150,13 +150,14 @@
 - **OpenRAC — `rac2-gc-decomp`, commit `96927f87`, s136os bodies** (GPL-3.0)
   <https://github.com/OpenRAC/rac2-gc-decomp> at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`
 
-  Fourteen engine C bodies, two in text/16E980, one in text/1A00F0, one in
+  Fifteen engine C bodies, two in text/16E980, one in text/1A00F0, one in
   text/1A8180, three in text/1B4218, one in text/1D54C0, one in text/1DFF80,
-  two in text/188858, two in cod/0321A0 and one in text/235FE8, adopted with
-  the authors' permission (held by the operator, RULING #10405) and re-checked
-  byte-exact against our v2.00 ROM on the s136os arm (tasks #2232, #2234,
-  #2235, #2248, #2251, #2252, #2262, #2294 and #2304, from audit NOTE #12089
-  rows 3, 4, 5, 6, 8 and 9, NOTE #12161 and NOTE #12173).
+  two in text/188858, two in cod/0321A0, one in text/235FE8 and one in
+  text/248B50, adopted with the authors' permission (held by the operator,
+  RULING #10405) and re-checked byte-exact against our v2.00 ROM on the s136os
+  arm (tasks #2232, #2234, #2235, #2248, #2251, #2252, #2262, #2294, #2304 and
+  #2306, from audit NOTE #12089 rows 3, 4, 5, 6, 8 and 9, NOTE #12161 and NOTE
+  #12173).
   Contributors: bigbeno37, Flavius, Louis-Philippe Le Sieur and ThorpenCodes. Each doc comment carries the `Source:`
   line, which names every change beyond extern spellings.
 
@@ -272,6 +273,16 @@
     `g_guiInstance` for their `sda` array `D_001A8CFC`), memset called
     through an asm-label alias so cc1 does not treat it as the builtin, and
     our name and signature.
+  - **`func_0034BA50`** (`0x0034BA50`) in
+    `going-decompiled/src/usa/text/248B50.cpp`, from `src/game/00345358.c`
+    (`func_0034AD10`, v1.01 address, author commit `5e993d01`, bigbeno37),
+    task #2306 (audit NOTE #12173 / FACT #12175). It closes only with gcse
+    on, so text/248B50's s136os compile was unpinned first. ADAPTED: our
+    callee and data names and prototypes (the widget arguments cast to
+    `GuiWidget *`, `func_002AA3F0` declared with `s32` parameters as in
+    188858.c), and their `section(".sdata")` on the GUI instance pointer
+    dropped for the unit's `.extern g_guiInstance, 16`; the control flow and
+    expressions are theirs.
 
 - **RC2 decomp contributions — `src/game/002E4528-rc2.c` in OpenRAC `rac2-gc-decomp`, commit `96927f87`** (MIT, © 2026 RC2 decomp contributions)
   <https://github.com/OpenRAC/rac2-gc-decomp> at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`

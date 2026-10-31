@@ -1987,7 +1987,131 @@ void func_0034B950(GuiWidget *w) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034BA50);
+/* func_0034BA50(o): draw a pip meter widget, one glyph per pip.
+ *   o - the meter widget. Its fields: +0x00 the filled pip count,
+ *       +0x04 the pip count, +0x0C the visible flag, +0x10 the pip glyph
+ *       element (re-posed and redrawn once per pip), +0x5C/+0xA8 two sprite
+ *       elements, +0xF4 a sub-element, +0x1C8 a pointer to the filled colour,
+ *       +0x3F8 a flash frame counter, +0x3FC the first pip that flashes.
+ * Returns nothing. Does nothing unless +0x0C is set. Otherwise it draws the two
+ * sprites and the sub-element. While +0x3F8 is nonzero it takes one pulsed
+ * colour from func_002AA3F0(-1, 0x22222222, 10, 0, 0) and decrements +0x3F8.
+ * Then, for each pip i, func_0034B548 lays it out and returns x, y, size and a
+ * mirror mode (1 flips x, 2 flips y, 3 flips both). The pip element is placed
+ * and scaled from those. A meter of up to 20 pips uses glyphs 26 (filled) /
+ * 25 (frame); a longer one uses 27 / 24, all from the GUI atlas
+ * (g_guiInstance + 0x8710). A filled pip (i < +0x00) is drawn first, coloured
+ * from +0x1C8 or, while flashing and i >= +0x3FC, with the pulsed colour. Then
+ * the frame glyph is drawn over it in 0x55F0C070.
+ * MATCHED on the s136os arm (task #2306, from audit NOTE #12173 / FACT
+ * #12175). It closes only with gcse on, the unit's S136EXTRA "" since this
+ * task's first commit. No device: the unit's file-scope
+ * `.extern g_guiInstance, 16` already keeps the four atlas reads absolute.
+ * GUARD: compiled alone by SN 2.95.3 v1.36 -fopt-stack and spliced over the
+ * S136OS_SLOT line (tools/ee/s136os_splice.sh, row in
+ * tools/ee/s136os_functions.txt); plain C on native.
+ * Source: OpenRAC/rac2-gc-decomp @96927f872c709e13aaa0f32265bb81a5531bf7ed
+ * (GPL-3.0), src/game/00345358.c, func_0034AD10 (v1.01 address; author commit
+ * 5e993d01, bigbeno37), adopted with permission per RULING #10405. ADAPTED:
+ * (1) our callee and data names: func_00336320 = GuiSpriteElementDraw,
+ * func_00336548 = func_00337350, func_002A9588 = func_002AA3F0,
+ * func_0034A808 = func_0034B548, func_00335E38 = GuiElementSetPos,
+ * func_00335F88 = GuiElementSetScale, func_00336390 = GuiElementSetGlyph,
+ * func_00335E20 = GuiElementGetColor, D_001A8CFC = g_guiInstance (theirs are
+ * the v1.01 addresses); (2) our prototypes for those names, so the widget
+ * arguments are cast to GuiWidget * and the colour stores go through
+ * GuiElementGetColor's s32 * (the float store keeps its f32 * cast), and
+ * func_002AA3F0 is declared with s32 parameters as 188858.c declares it (its
+ * 1A8180 definition's u32 makes the -1 a lui/ori pair: 184 words, LENGTH
+ * refused); (3) their
+ * `section(".sdata")` on D_001A8CFC is not used (see above); (4) the name is
+ * func_0034BA50. The control flow, locals and expressions are theirs.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0034BA50)
+S136OS_SLOT(func_0034BA50);
+#else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void GuiSpriteElementDraw(void *p);
+extern void func_00337350(void *self);
+extern s32 func_002AA3F0(s32 color1, s32 color2, s32 period, s32 counterSel, s32 reset);
+extern void func_0034B548(void *meter, s32 count, s32 index, f32 *x, f32 *y, f32 *size, s32 *mode);
+extern void GuiElementSetPos(GuiWidget *e, f32 x, f32 y, f32 z, f32 w);
+extern void GuiElementSetScale(GuiWidget *e, f32 x, f32 y, f32 z, f32 w);
+extern void GuiElementSetGlyph(void *e, u8 *atlas, s32 code);
+extern s32 *GuiElementGetColor(GuiWidget *e);
+/* (end of this body's declarations) */
+void func_0034BA50(char *o)
+{
+    if (*(int *)(o + 0xC)) {
+        float x, y, size;
+        int mode, color = 0, i;
+
+        GuiSpriteElementDraw(o + 0x5C);
+        GuiSpriteElementDraw(o + 0xA8);
+        func_00337350(o + 0xF4);
+        x = 0;
+        y = 0;
+        size = 0;
+        mode = 0;
+        if (*(int *)(o + 0x3F8)) {
+            color = func_002AA3F0(-1, 0x22222222, 10, 0, 0);
+            --*(int *)(o + 0x3F8);
+        }
+        for (i = 0; i < *(int *)(o + 4); i++) {
+            int flash = 0;
+            float sx, sy;
+
+            if (*(int *)(o + 0x3F8) && i >= *(int *)(o + 0x3FC))
+                flash = 1;
+            func_0034B548(o, *(int *)(o + 4), i, &x, &y, &size, &mode);
+            GuiElementSetPos((GuiWidget *)(o + 0x10), x, y, 0, 0);
+            sx = size;
+            sy = size;
+            switch (mode) {
+            case 0:
+                break;
+            case 1:
+                sx = -size;
+                break;
+            case 2:
+                sy = -size;
+                break;
+            case 3:
+                sy = -size;
+                sx = -sx;
+                break;
+            }
+            GuiElementSetScale((GuiWidget *)(o + 0x10), sx, sy, 0, 0);
+            if (*(int *)(o + 4) < 21) {
+                if (*(int *)o >= i + 1) {
+                    GuiElementSetGlyph(o + 0x10, g_guiInstance + 0x8710, 26);
+                    if (flash)
+                        *GuiElementGetColor((GuiWidget *)(o + 0x10)) = color;
+                    else
+                        *(float *)GuiElementGetColor((GuiWidget *)(o + 0x10)) = **(float **)(o + 0x1C8);
+                    GuiSpriteElementDraw(o + 0x10);
+                }
+                GuiElementSetGlyph(o + 0x10, g_guiInstance + 0x8710, 25);
+                *GuiElementGetColor((GuiWidget *)(o + 0x10)) = 0x55F0C070;
+                GuiSpriteElementDraw(o + 0x10);
+            } else {
+                if (*(int *)o >= i + 1) {
+                    GuiElementSetGlyph(o + 0x10, g_guiInstance + 0x8710, 27);
+                    if (flash)
+                        *GuiElementGetColor((GuiWidget *)(o + 0x10)) = color;
+                    else
+                        *(float *)GuiElementGetColor((GuiWidget *)(o + 0x10)) = **(float **)(o + 0x1C8);
+                    GuiSpriteElementDraw(o + 0x10);
+                }
+                GuiElementSetGlyph(o + 0x10, g_guiInstance + 0x8710, 24);
+                *GuiElementGetColor((GuiWidget *)(o + 0x10)) = 0x55F0C070;
+                GuiSpriteElementDraw(o + 0x10);
+            }
+        }
+    }
+}
+#endif
 
 /* func_0034BD28: set the widget's extent/size vector.
  *   w - the widget; x, y - the new extent in 2D screen units.
