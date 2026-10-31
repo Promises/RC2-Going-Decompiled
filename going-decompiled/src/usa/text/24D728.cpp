@@ -596,12 +596,12 @@ extern void *g_guiInstanceHudAbs;
  * identical text). Instrument: solo s136 probe + difflib word screen 0/105, then
  * the unit gate (objdiff_build + unit_report, vmu, image cmp). Devices, each
  * priced by removing it alone from the closing body (aligned words differing):
- *  - REGISTER-PIN DEVICE (RULING #8598): `off` (the 0x8710 atlas offset) and
+ *  - REGISTER-PIN DEVICE (RULING #8598): `atlasOffset` (0x8710) and
  *    `row` both pinned to $16. The hard-register anti-dependency stops sched1
  *    issuing the row-cursor copy before the offset's last use (the 7th saved
  *    register of FACT #9552) without NOTE #9550's full asm barrier, which had
  *    also pinned %hi(D_1AE6C8) and the copy below the 'X' lookup. Unpinning
- *    `off`: 37; unpinning `row`: 43 (both 108 built words).
+ *    `atlasOffset`: 37; unpinning `row`: 43 (both 108 built words).
  *  - SCHEDULING DEVICE (RULING #8483, empty, emits nothing): the operand-tied
  *    fence before func_00337B88 orders `lui a1,0x8000` before `move a0,s0`, so
  *    cc1 fills the jal slot with the move, as the ROM does (the precedent is
