@@ -5078,62 +5078,109 @@ extern CaptionIdPair D_1ADDA8 __attribute__((section(".data")));
 extern CaptionIdPair D_1ADDA8;
 #endif
 
-/* func_0033D070: draw the progressive-scan option screen. Lays out the box body
- * (func_0033BF90(e+8)), formats the D_1ADDB0 template with the fixed label 0x307B
- * plus the on/off id from D_1ADDA8 selected by g_bProgressiveScan into a scratch
- * buffer, and draws it centered at (g_screenWidth/2, 0x8C) in colour 0x80F0F0F0
- * (func_002801B8). Then lays out a text box (func_00280C98) at a GUI-scaled
- * position (scale*170, scale*379 rounded, from the config float at
- * g_swapGadgetItemIndex+0x8A) and draws the help string 0x3136 into it
- * (func_00280B48). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033D070);
+/*
+ * func_0033D070(object): draw the progressive-scan option screen. Lays out
+ * the box body (func_0033BF90(object + 8)), copies the D_1ADDA8 off/on string
+ * id pair to the stack, formats the D_1ADDB0 template with the localized
+ * label 0x307B and the id g_bProgressiveScan selects, and draws it centred
+ * at (g_screenWidth / 2, 0x8C) in colour 0x80F0F0F0 (func_002801B8). Then
+ * lays out a text box (func_00280C98) at a GUI-scaled position (scale * 170
+ * and scale * 379, each rounded by +0.5 and truncated, the scale being the
+ * float at g_swapGadgetItemIndex+0x8A) and draws the help string 0x3136 into
+ * it (func_00280B48). Param: object = the option-screen object. No return
+ * value.
+ * Non-obvious: upstream's `if (w != 0) h = ...; else h = ...;` has the same
+ * expression on both arms; it is kept as written (see ABLATION below).
+ *
+ * MATCHED on the s136os arm as the unit is (S136EXTRA -fno-gcse
+ * -fno-strict-aliasing), row `usa text/235FE8 func_0033D070` (task #2501).
+ * DEVICES (EE arm only; native reads the true objects):
+ * - the unit's own: D_1ADDA8's `section(".data")` (RULING #8620, declared
+ *   above it), the file-scope `.extern g_bProgressiveScan, 16` and the
+ *   g_timerHudYScale assembler alias of g_swapGadgetItemIndex+0x8A (RULING
+ *   #12316 family, declared with func_00336BC8).
+ * - SCREEN_WIDTH_SDATA: g_screenWidthSdata[0], an unsized s32[] asm-label view
+ *   of g_screenWidth with upstream's `sda` as `section(".sdata")` (RULINGs
+ *   #8620/#13168), so the assembler keeps the ROM's absolute `lui; lw`.
+ * ABLATION (task #2501, each removed alone, image build): plain g_screenWidth
+ * -> the splice refuses (cc1 then emits `.extern g_screenWidth, 4`, which
+ * flips func_00338F88's absolute load to gp-relative); g_timerHudYScale
+ * replaced by the native cast -> 83 words, not 84; D_1ADDA8 read through a
+ * plain asm-label alias without `.data` -> the splice refuses (D_1ADDA8 turns
+ * gp-relative for func_0033D3C0/func_0033E680); the unit's `.extern
+ * g_bProgressiveScan, 16` removed -> 83 words; upstream's identical-arm
+ * `if (w != 0)` replaced by the one assignment -> 84 words, DIFF 112 bytes
+ * (kept verbatim; it changes no behaviour).
+ * GUARD: on EE this C is the image's body, compiled alone by SN 2.95.3 v1.36
+ * -fopt-stack and spliced over S136OS_SLOT by tools/ee/s136os_splice.sh; there
+ * is no asm fallback. On native it is plain C.
+ * qcopy: upstream's file is named 0033C958-qcopy.c (built with
+ * -frac2-qcopy), but this body calls no qcopy and contains no asm; its one
+ * aggregate copy (`pair = D_1ADDA8`) is plain C that our cc1, which has no
+ * qcopy flag, compiles to the ROM's ldl/ldr/sdl/sdr block copy (RULING #8435
+ * not engaged).
+ * Source: OpenRAC/rac2-decomp @5776dcc35045fb2320610edd1d2db4fa7660ef37
+ * (GPL-3.0, adopted with the authors' permission per RULINGs #10405/#12108),
+ * src/us2/game/0033C958-qcopy.c, func_US2_0033D070 (author commit c4928ea3,
+ * Flavius); file unchanged at upstream head f3cc4dbf. Respellings by
+ * ROM-encoded address: func_US2_0033BF90 = func_0033BF90, func_00288FB8 =
+ * GetLocalizedString, func_00115DA8 (sprintf) as the unit spells it,
+ * func_0027FAA8 = func_002801B8, func_002802E0 = func_00280C98,
+ * func_00280190 = func_00280B48, D_001ADDD0 = D_1ADDA8, D_001ADDD8 = D_1ADDB0,
+ * D_001A7340 = g_screenWidth, D_001A7BB8 = g_bProgressiveScan, D_001B23A4 =
+ * g_swapGadgetItemIndex+0x8A (g_timerHudYScale on EE).
+ * ADAPTED: (1) their struct SolIds as the unit's CaptionIdPair (.ids = .id);
+ * (2) GetLocalizedString's s32 return cast to char * (the unit's prototype);
+ * (3) their `sda` scalars: D_001A7340 read through the EE-only view above,
+ * D_001A7BB8 and D_001B23A4 through the unit's existing devices (no
+ * attribute); (4) int/float/unsigned long as s32/f32/u64 (RULING #13197);
+ * (5) our signature (void *object). Control flow and expressions are theirs.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0033D070)
+S136OS_SLOT(func_0033D070);
 #else
-/* NOT MATCHED (task #1521 audit; solo s136os screen, masked words). The old
-   #else was wrong where its siblings were (func_0033D3C0): the ROM block-copies
-   the D_1ADDA8 id pair to a stack local, passes a 64-bit colour, and reads the
-   GUI scale at +0x8A as an offset-free alias (g_timerHudYScale). (The ROM also
-   loads func_00280B48's colour zero-extended, as a 64-bit value, but that
-   callee's definition in 178E88.cpp takes s32, so the declaration stays u32 and
-   the screen counts those words.) This body has those fixes and still differs
-   in 48/84 words: the ROM reads g_screenWidth in the absolute `lui $4; lw $4`
-   macro form (other functions read it $gp-relative, so it needs an alias device
-   like g_timerHudYScale's: with one and a u64 colour, 33/84), and the residual
-   is scheduling of the two rounded float arguments plus a nop the toolchain
-   inserts after `mfc1` before cvt.w.s's raw `.word` (move_fixup.sed), which the
-   ROM does not have. */
 extern s32 func_002801B8(s32 x, s32 y, u64 color, const char *text, s32 flag); /* DECL-LEVER(#1877): defined s32 colour; u64 kept so this unit's four declarations agree — the other two are load-bearing u64 (func_0033D3C0/func_0033ED18), and mixed u32/u64 block-scope declarations fail the native C compile */
 extern void func_00280C98(void *layout, s32 x, s32 y, s32 a, s32 b, s32 c, s32 d,
                           s32 e, s32 f);
-extern void func_00280B48(void *layout, u32 color, const char *text, s32 flag);
+extern void func_00280B48(void *layout, u64 style, const char *text, s32 length);
 extern u8 D_1ADDB0[];
-/* The GUI scale float at g_swapGadgetItemIndex+0x8A, read through its
- * offset-free alias on EE (the g_timerHudYScale device) and through the block
- * on native. */
 extern s32 g_screenWidth;
+extern s32 g_bProgressiveScan;
 #ifndef TARGET_NATIVE
+extern s32 g_screenWidthSdata[] __asm__("g_screenWidth") __attribute__((section(".sdata")));
+#define SCREEN_WIDTH_SDATA g_screenWidthSdata[0]
 #define CAPTION_GUI_SCALE g_timerHudYScale
 #else
 extern s32 g_swapGadgetItemIndex;
+#define SCREEN_WIDTH_SDATA g_screenWidth
 #define CAPTION_GUI_SCALE (*(f32 *)((char *)&g_swapGadgetItemIndex + 0x8A))
 #endif
-extern s32 g_bProgressiveScan;
-void func_0033D070(void *e) {
-    char buf[64];
-    CaptionIdPair ids;
-    u8 layout[32];
-    f32 scale;
+void func_0033D070(void *object)
+{
+    char buffer[64];
+    CaptionIdPair pair;
+    char scratch[32];
+    char *format;
+    char *first;
+    char *second;
+    f32 x;
+    s32 w, h;
 
-    func_0033BF90((char *)e + 8);
-    ids = D_1ADDA8;
-    func_00115DA8(buf, (const char *)D_1ADDB0, (const char *)GetLocalizedString(0x307B),
-                  (const char *)GetLocalizedString(ids.id[g_bProgressiveScan ? 1 : 0]));
-    func_002801B8(g_screenWidth >> 1, 0x8C, 0x80F0F0F0, buf, -1);
-
-    scale = CAPTION_GUI_SCALE;
-    func_00280C98(layout, (s32)(scale * 170.0f + 0.5f),
-                  (s32)(scale * 379.0f + 0.5f), 0x2C, 0x1D4, 0xFE, 0xDE, 0x14, 3);
-    func_00280B48(layout, 0x80F0F0F0, (const char *)GetLocalizedString(0x3136), -1);
+    func_0033BF90((char *)object + 8);
+    pair = D_1ADDA8;
+    format = (char *)D_1ADDB0;
+    first = (char *)GetLocalizedString(0x307B);
+    second = (char *)GetLocalizedString(pair.id[g_bProgressiveScan != 0]);
+    func_00115DA8(buffer, format, first, second);
+    func_002801B8(SCREEN_WIDTH_SDATA >> 1, 0x8C, 0x80F0F0F0UL, buffer, -1);
+    x = CAPTION_GUI_SCALE;
+    w = (s32)(x * 170.0f + 0.5f);
+    if (w != 0)
+        h = (s32)(x * 379.0f + 0.5f);
+    else
+        h = (s32)(x * 379.0f + 0.5f);
+    func_00280C98(scratch, w, h, 44, 468, 254, 222, 20, 3);
+    func_00280B48(scratch, 0x80F0F0F0UL, (char *)GetLocalizedString(0x3136), -1);
 }
 #endif
 
