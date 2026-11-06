@@ -3150,94 +3150,194 @@ void DrawTexturedQuad2d(f32 x, f32 y, f32 w, f32 h, s32 u, s32 v, s32 uw, s32 vh
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027EB20);
 
-/* DrawRotatedSprite2d: PARKED #70 — large (13 callee-save) rotated-sprite emitter with
- * sin/cos rotation (func_00283B30/B48), Vec4 transforms and FP rounding (FloatToInt) into
- * a GS packet. Intricate FP+GS-packing class (silent-misrender risk); needs the rotation +
- * GS format traced before a faithful #else. */
-/* DrawRotatedSprite2d(cx, cy, hh, hw, angle, pivX, pivY, u, v, tex0, zField, uvDesc, mirrorX, mirrorY)
- * — draw a rotated/scaled textured HUD-icon quad. Builds two rotated edge vectors from the angle
- * (edge1 = hw*(cos,sin), edge2 = hh*(sin,-cos)), then the 4 corners around the fractional pivot
- * (pivX,pivY): c = center +/- (1-piv or piv)*edge1 +/- (1-piv or piv)*edge2 (via Vec4Scale/Add/Sub).
- * mirrorX/mirrorY swap the U/V winding (u<<4 vs 0x10 / v<<0x14 vs 0x100000). Emits a 7-qword GIF
- * packet: DMA/GIF tag + TEX0/ST descriptor + tex0 + 4 {UV, XYZ2} vertices whose screen coords are
- * FloatToInt(corner*16) + g_gsPixelOffsetX/Y[0] - 8, with the z-field zField<<0x20.
+/**
+ * DrawRotatedSprite2d — append a rotated, scaled, optionally mirrored textured
+ * quad (a HUD icon) to the frame DMA chain.
  *
- * Engine region — faithful #else, whole-.s traced (Ghidra-complete, 0 lq/sq → all 8-byte sd). GS-pack
- * safeguard: all 64-bit packs (UV, XYZ, z-field) in s64. */
-/* TODO(match) t493: sdk29 45.85% / engine96 48.00% (unit objdiff, objdiff_build.sh +
- * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
- * every other remaining arm). Residual on the better arm (engine96): MACRO-AT (first differing
- * insn: ROM `andi t1,t1,0xff` vs built `sll t2,t2,0x18`). Levers: cc1-small/absolute globals model
- * RUN: 47.19% (engine96); engine96 with sched1 MEASURED (flag not landed): 46.06%. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", DrawRotatedSprite2d);
+ * Params: (center_x, center_y) the screen-space centre; quad_width and
+ * quad_height scale the two rotated edge vectors; angle in radians;
+ * pivot_u/pivot_v the fractional pivot inside the quad (0.5 = centred);
+ * texture_width/texture_height the texel extent (packed as UV << 4 / << 20);
+ * texture_tex0 the GS TEX0 value; z_and_fog the 32-bit Z field placed in
+ * XYZ2 bits 32..63; color the RGBAQ word; flip_u/flip_v swap the U/V winding.
+ * Returns nothing.
+ *
+ * Builds the two edges from four trig-leaf calls (the ROM recomputes rather
+ * than caches them): vertical = quad_height * (B48(a), B30(a)), horizontal =
+ * quad_width * (B30(a), -B48(a)), where B30/B48 are the VU0 microprogram
+ * leaves at 0x283B30/0x283B48 (FACT #5674: B30 is cos, B48 is sin; Ghidra's
+ * SinfVu0/CosfVu0 aliases have them inverted, so this body names them by
+ * address). The four corners are centre +/- (1-pivot or pivot) * edge via
+ * Vec4Scale/Add/Sub. The packet is a DMA CNT tag (7 qwords) + GIF tag, the
+ * TEX0/RGBAQ/UV/XYZ2 descriptor words, then four {UV, XYZ2} vertices whose
+ * coordinates are FloatToInt(corner * 16) + g_gsPixelOffsetX/Y - 8, and a
+ * closing zero word; the cursor advances 0x80 bytes in two steps.
+ *
+ * MATCHED on the s136os arm (SN 2.95.3 v1.36 cc1plus -fopt-stack at the
+ * unit's S136EXTRA; row in tools/ee/s136os_functions.txt), spliced over
+ * S136OS_SLOT by tools/ee/s136os_splice.sh. No asm fallback: a build that
+ * skips the splice drops the function. On native it is plain C.
+ * Devices, each priced by removing it alone (objdiff_build.sh usa
+ * text/178E88 + verify_match_unit.sh against the ROM; the closed body reads
+ * 286/286 words BYTE IDENTICAL):
+ *   - TWO RULING #8549 dli rows (0x27ED6C `$5,0xb400000000008001`, the GIF
+ *     tag high word; 0x27ED78 `$6,0x53535353106`, the register descriptor) in
+ *     tools/ee/ps2eeas_dli_sites.txt: without them 6/286 (GNU as's expansion
+ *     of those two constants, every other word identical);
+ *   - the cursor's TYPED VIEW below (RULING #13168): read as
+ *     g_frameDmaCursor[0] instead, the body builds SHORTER, 282/285 words;
+ *   - the pixel offsets read through the unit's g_gsPixelOffsetXAbs/YAbs
+ *     views (RULING #8620, declared at the top of this unit): read as
+ *     g_gsPixelOffsetX[0]/Y[0] instead, the body builds LONGER, 291/285.
+ * Upstream's parameter order is load-bearing too: with the floats first (our
+ * old #else's order) the FP callee-save allocation swaps, 13/286. So the
+ * native caller (text/16E980 DrawScreenSpriteFxEntry's #else) was moved to
+ * this order.
+ * Supersedes the t493 #else (sdk29 45.85% / engine96 48.00%, unit objdiff).
+ *
+ * Source: OpenRAC/rac2-decomp @5776dcc35045fb2320610edd1d2db4fa7660ef37
+ * (GPL-3.0, adopted with the authors' permission per RULING #10405/#12108),
+ * src/game/0027B948.c, func_0027E4A8
+ * (author commit 7dc80be1, bigbeno37, 2026-10-29; the body is unchanged
+ * from it to 5776dcc3 and fe6adf9b). Upstream notes the body is
+ * "Adapted from OpenRAC/rac1-decomp src/game/draw.c's
+ * append_rotated_sprite_quad, itself adapted from Lombyte
+ * src/rendering/append_rotated_sprite_quad.c (GPL-3.0)". ADAPTED: our
+ * callee and data spellings by address (their func_00282D30 = Vec4ScaleVu0,
+ * called with our (dst, scale, src) prototype, same registers under EABI;
+ * func_00282CC0 = Vec4AddVu0; func_00282CF0 = Vec4SubVu0; func_00283198 =
+ * func_00283B48; func_00283180 = func_00283B30; func_00283CF0 = FloatToInt;
+ * D_001B22A8 = g_frameDmaCursor through the typed view below;
+ * Ff67aa9df_D_001A7350/7354 = g_gsPixelOffsetXAbs/YAbs); upstream's
+ * file-scope types (QuadPoint, QuadDmaTag, union QuadCursor) declared in
+ * this arm; `__attribute__((sda))` dropped (the views are -G8 small
+ * scalars); `long`/`unsigned long` spelled s64/u64 (RULING #13197),
+ * `int`/`float`/`unsigned int`/`unsigned char` spelled s32/f32/u32/u8.
+ * Parameter order and statements as upstream wrote them. Upstream's file
+ * also says: "Rotated sprite construction follows RAC1 draw.c (GPL-3.0)."
+ * (task #2541; audit NOTE #13181 / FACT #13187.)
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_DrawRotatedSprite2d)
+S136OS_SLOT(DrawRotatedSprite2d);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern void Vec4ScaleVu0(void *dst, f32 s, void *src);
 extern void Vec4SubVu0(void *dst, void *a, void *b);
-/* (end of this body's declarations) */
-extern s32  FloatToInt(f32 x);
-extern f32  SinfVu0(f32 x);
-extern f32  CosfVu0(f32 x);
 extern void Vec4AddVu0(void *dst, void *a, void *b);
+extern s32  FloatToInt(f32 x);
+extern f32  func_00283B30(f32 angle);   /* VU0 trig leaf (cos, FACT #5674) */
+extern f32  func_00283B48(f32 angle);   /* VU0 trig leaf (sin, FACT #5674) */
+/* (end of this body's declarations) */
 
-void DrawRotatedSprite2d(f32 cx, f32 cy, f32 hh, f32 hw, f32 angle, f32 pivX, f32 pivY,
-                         s32 u, s32 v, u64 tex0, s32 zField, s32 uvDesc, s8 mirrorX, s8 mirrorY) {
-    f32 center[4], edge1[4], edge2[4], c0[4], c1[4], c2[4], c3[4];
-    u8  tmp[16];
-    f32 co = CosfVu0(angle);
-    f32 si = SinfVu0(angle);
-    s64 z  = (s64)zField << 0x20;
-    s32 uA, uB, px, py;
-    s64 vA, vB;
-    u32 *base;
+typedef struct { f32 x, y, z, w; } QuadPoint;
+typedef struct { u32 tag, addr, vif0, vif1; } QuadDmaTag;
+union QuadCursor { QuadDmaTag *tag; s32 *words; u8 *bytes; s32 addr; };
+#ifndef TARGET_NATIVE
+/* TYPED VIEW (RULING #13168): the frame DMA cursor read through upstream's
+ * union, bound by asm label to the unit's g_frameDmaCursorAbs equate (same
+ * address 0x1B2228, no storage; relocations name g_frameDmaCursor).
+ * Without it (read as g_frameDmaCursor[0]) the body builds SHORTER,
+ * 282/285 words. */
+extern union QuadCursor g_frameDmaCursorQuad __asm__("g_frameDmaCursorAbs");
+#else
+#define g_frameDmaCursorQuad (*(union QuadCursor *)&g_frameDmaCursor[0])
+#endif
 
-    if (mirrorX == 0) { uB = u << 4; uA = 0x10; } else { uA = u << 4; uB = 0x10; }
-    if (mirrorY == 0) { vB = (s64)(v << 0x14); vA = 0x100000; }
-    else              { vA = (s64)(v << 0x14); vB = 0x100000; }
+void DrawRotatedSprite2d(f32 center_x, f32 center_y, f32 quad_width, f32 quad_height,
+                         f32 angle, s32 texture_width, s32 texture_height,
+                         s64 texture_tex0, s64 z_and_fog, s32 color,
+                         u8 flip_u, u8 flip_v, f32 pivot_u, f32 pivot_v)
+{
+    QuadPoint vertical_edge;
+    QuadPoint horizontal_edge;
+    QuadPoint center;
+    QuadPoint temporary;
+    QuadPoint top_left;
+    QuadPoint top_right;
+    QuadPoint bottom_left;
+    QuadPoint bottom_right;
+    QuadDmaTag *tag;
+    u64 *packet_words;
+    s32 texture_left;
+    s32 texture_right;
+    s32 texture_top;
+    s32 texture_bottom;
+    f32 inverse_pivot_u;
+    f32 inverse_pivot_v;
 
-    center[0] = cx;      center[1] = cy;
-    edge1[0]  = hw * co; edge1[1]  = hw * si;
-    edge2[0]  = hh * si; edge2[1]  = -hh * co;
-
-    Vec4ScaleVu0(tmp, 1.0f - pivY, edge1);  Vec4AddVu0(c0, center, tmp);
-    Vec4ScaleVu0(tmp, 1.0f - pivX, edge2);  Vec4SubVu0(c0, c0, tmp);
-    Vec4ScaleVu0(tmp, 1.0f - pivY, edge1);  Vec4AddVu0(c1, center, tmp);
-    Vec4ScaleVu0(tmp, pivX, edge2);         Vec4AddVu0(c1, c1, tmp);
-    Vec4ScaleVu0(tmp, pivY, edge1);         Vec4SubVu0(c2, center, tmp);
-    Vec4ScaleVu0(tmp, 1.0f - pivX, edge2);  Vec4SubVu0(c2, c2, tmp);
-    Vec4ScaleVu0(tmp, pivY, edge1);         Vec4SubVu0(c3, center, tmp);
-    Vec4ScaleVu0(tmp, pivX, edge2);         Vec4AddVu0(c3, c3, tmp);
-
-    base = g_frameDmaCursor[0];
-    base[0] = 0x10000007;
-    base[1] = 0;
-    base[2] = 0;
-    base[3] = 0x50000007;
-    base[4] = 0x8001;
-    base[5] = 0xb4000000;
-    base[6] = 0x35353106;
-    base[7] = 0x535;
-    *(u64 *)(base + 8) = tex0;
-    base[0xa] = 0x154;
-    base[0xb] = 0;
-    *(s64 *)(base + 0xc) = (s64)uvDesc;
-    *(u64 *)(base + 0xe) = (s64)uA | vA;                                          /* v0 UV */
-    px = FloatToInt(c0[0] * 16.0f); py = FloatToInt(c0[1] * 16.0f);
-    *(u64 *)(base + 0x10) = (s64)(px + g_gsPixelOffsetX[0] - 8) | ((s64)(py + g_gsPixelOffsetY[0] - 8) << 16) | z;
-    *(u64 *)(base + 0x12) = (s64)uB | vA;                                         /* v1 UV */
-    px = FloatToInt(c1[0] * 16.0f); py = FloatToInt(c1[1] * 16.0f);
-    *(u64 *)(base + 0x14) = (s64)(px + g_gsPixelOffsetX[0] - 8) | ((s64)(py + g_gsPixelOffsetY[0] - 8) << 16) | z;
-    *(u64 *)(base + 0x16) = (s64)uA | vB;                                         /* v2 UV */
-    px = FloatToInt(c2[0] * 16.0f); py = FloatToInt(c2[1] * 16.0f);
-    *(u64 *)(base + 0x18) = (s64)(px + g_gsPixelOffsetX[0] - 8) | ((s64)(py + g_gsPixelOffsetY[0] - 8) << 16) | z;
-    *(u64 *)(base + 0x1a) = (s64)uB | vB;                                         /* v3 UV */
-    px = FloatToInt(c3[0] * 16.0f); py = FloatToInt(c3[1] * 16.0f);
-    base[0x1e] = 0;
-    base[0x1f] = 0;
-    *(u64 *)(base + 0x1c) = (s64)(px + g_gsPixelOffsetX[0] - 8) | ((s64)(py + g_gsPixelOffsetY[0] - 8) << 16) | z;
-    g_frameDmaCursor[0] = base + 0x20;
+    if (flip_u != 0) {
+        texture_left = ((u32)texture_width << 4);
+        texture_right = 0x10;
+    } else {
+        texture_right = ((u32)texture_width << 4);
+        texture_left = 0x10;
+    }
+    if (flip_v != 0) {
+        texture_top = ((u32)texture_height << 20);
+        texture_bottom = 0x100000;
+    } else {
+        texture_bottom = ((u32)texture_height << 20);
+        texture_top = 0x100000;
+    }
+    center.x = center_x;
+    center.y = center_y;
+    inverse_pivot_v = 1.0f - pivot_v;
+    vertical_edge.x = quad_height * func_00283B48(angle);
+    vertical_edge.y = quad_height * func_00283B30(angle);
+    horizontal_edge.x = quad_width * func_00283B30(angle);
+    horizontal_edge.y = -quad_width * func_00283B48(angle);
+    inverse_pivot_u = 1.0f - pivot_u;
+    Vec4ScaleVu0(&temporary, inverse_pivot_v, &vertical_edge);
+    Vec4AddVu0(&top_left, &center, &temporary);
+    Vec4ScaleVu0(&temporary, inverse_pivot_u, &horizontal_edge);
+    Vec4SubVu0(&top_left, &top_left, &temporary);
+    Vec4ScaleVu0(&temporary, inverse_pivot_v, &vertical_edge);
+    Vec4AddVu0(&top_right, &center, &temporary);
+    Vec4ScaleVu0(&temporary, pivot_u, &horizontal_edge);
+    Vec4AddVu0(&top_right, &top_right, &temporary);
+    Vec4ScaleVu0(&temporary, pivot_v, &vertical_edge);
+    Vec4SubVu0(&bottom_left, &center, &temporary);
+    Vec4ScaleVu0(&temporary, inverse_pivot_u, &horizontal_edge);
+    Vec4SubVu0(&bottom_left, &bottom_left, &temporary);
+    Vec4ScaleVu0(&temporary, pivot_v, &vertical_edge);
+    Vec4SubVu0(&bottom_right, &center, &temporary);
+    Vec4ScaleVu0(&temporary, pivot_u, &horizontal_edge);
+    Vec4AddVu0(&bottom_right, &bottom_right, &temporary);
+    g_frameDmaCursorQuad.tag->tag = 0x10000007;
+    g_frameDmaCursorQuad.tag->addr = 0;
+    g_frameDmaCursorQuad.tag->vif0 = 0;
+    g_frameDmaCursorQuad.tag->vif1 = 0x50000007;
+    tag = g_frameDmaCursorQuad.tag;
+    packet_words = (u64 *)(tag + 1);
+    g_frameDmaCursorQuad.tag = tag + 1;
+    packet_words[0] = 0xB400000000008001;
+    packet_words[1] = 0x53535353106;
+    packet_words[2] = texture_tex0;
+    packet_words[3] = 0x154;
+    packet_words[4] = color;
+    packet_words[5] = texture_left | texture_top;
+    packet_words[6] =
+        (FloatToInt(top_left.x * 16.0f) + g_gsPixelOffsetXAbs - 8) |
+        ((u64)(FloatToInt(top_left.y * 16.0f) + g_gsPixelOffsetYAbs - 8) << 16) |
+        ((u64)z_and_fog << 32);
+    packet_words[7] = texture_right | texture_top;
+    packet_words[8] =
+        (FloatToInt(top_right.x * 16.0f) + g_gsPixelOffsetXAbs - 8) |
+        ((u64)(FloatToInt(top_right.y * 16.0f) + g_gsPixelOffsetYAbs - 8) << 16) |
+        ((u64)z_and_fog << 32);
+    packet_words[9] = texture_left | texture_bottom;
+    packet_words[10] =
+        (FloatToInt(bottom_left.x * 16.0f) + g_gsPixelOffsetXAbs - 8) |
+        ((u64)(FloatToInt(bottom_left.y * 16.0f) + g_gsPixelOffsetYAbs - 8) << 16) |
+        ((u64)z_and_fog << 32);
+    packet_words[11] = texture_right | texture_bottom;
+    packet_words[12] =
+        (FloatToInt(bottom_right.x * 16.0f) + g_gsPixelOffsetXAbs - 8) |
+        ((u64)(FloatToInt(bottom_right.y * 16.0f) + g_gsPixelOffsetYAbs - 8) << 16) |
+        ((u64)z_and_fog << 32);
+    packet_words[13] = 0;
+    g_frameDmaCursorQuad.tag = (QuadDmaTag *)((u8 *)g_frameDmaCursorQuad.tag + 0x70);
 }
 #endif
 

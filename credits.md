@@ -783,7 +783,7 @@
   permission (held by the operator, RULING #10405/#12108) and re-checked
   byte-exact against our v2.00 ROM on the s136os arm (tasks #2471 and #2472,
   from the Window X boot audit NOTE #13122 / FACT #13116; task #2459, from
-  NOTE #13117 / FACT #13102; tasks #2503 and #2504, from the Window X
+  NOTE #13117 / FACT #13102; tasks #2503, #2504 and #2541, from the Window X
   re-screen NOTE #13181 / FACT #13187, read at `5776dcc3`, where their files
   are identical to `b2a35115`'s). Each doc comment carries the `Source:` line,
   which names every change beyond symbol spellings.
@@ -910,6 +910,18 @@
     `.data` on the two u64 ZBUF images (RULING #8620); their `ScreenExtent`
     struct spelled as its eight fields' own symbols; struct and parameter
     names (task #2504).
+  - **`DrawRotatedSprite2d`** (`0x0027EB28`, the rotated/mirrored HUD-icon
+    quad) in `going-decompiled/src/usa/text/178E88.cpp`, on the s136os arm
+    with two RULING #8549 Ps2EeAs dli rows (0x27ED6C, 0x27ED78), from
+    `src/game/0027B948.c` (`func_0027E4A8`, author commit `7dc80be1`,
+    bigbeno37, 2026-10-29), which upstream says is adapted from rac1-decomp
+    `src/game/draw.c`'s `append_rotated_sprite_quad`, itself adapted from
+    Lombyte `src/rendering/append_rotated_sprite_quad.c` (GPL-3.0). ADAPTED:
+    our callee and data spellings by address (the cursor through a RULING
+    #13168 typed view of `g_frameDmaCursor`, the pixel offsets as the unit's
+    `g_gsPixelOffsetXAbs`/`YAbs`), `long` written `s64`/`u64` (RULING
+    #13197), `int`/`float`/`unsigned char` written `s32`/`f32`/`u8`; the
+    parameter order and statements are upstream's (task #2541).
 
 - **Forja contributors** (MIT, © 2026 Forja contributors), via OpenRAC
   `rac2-gc-decomp` at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`

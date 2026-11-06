@@ -3049,9 +3049,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", DrawScreenSprit
 extern u64 GetUiTextureTex0(s32 texId);
 extern f32 CosfVu0(f32 a);
 extern f32 SinfVu0(f32 a);
+/* Parameter order and types as the definition in text/178E88 (task #2541). */
 extern void DrawRotatedSprite2d(f32 x, f32 y, f32 w, f32 h, f32 angle,
-                                f32 u0, f32 v0, s32 u1, s32 v1, u64 tex0,
-                                u32 color, u32 rgba, s32 mirrorX, s32 mirrorY);
+                                s32 u1, s32 v1, s64 tex0, s64 zField, s32 rgba,
+                                u8 mirrorX, u8 mirrorY, f32 pivotU, f32 pivotV);
 /* TODO(match): functional equivalent - not byte-exact. The ROM has nine
    callee-saves and the fp-pipeline scheduling of the repeated Cos/Sin reloads;
    its save layout is a cc1 2.9 wall only (FACT #9873 / NOTE #9871). The
@@ -3068,24 +3069,30 @@ void DrawScreenSpriteFxEntry(f32 x, f32 y, ScreenSpriteFx *fx) {
         f32 dy = SinfVu0(angle) * 40.0f * fx->x;
         f32 ex = SinfVu0(angle) * 40.0f * fx->x;
         f32 ey = CosfVu0(angle) * -40.0f * fx->x;
-        DrawRotatedSprite2d(x, y, scale, scale, angle, 0, 0, 0x3f, 0x3f, tex0,
-                            0xfffff3, fx->color, 0, 0);
-        DrawRotatedSprite2d(x + ex, y + ey, scale, scale, angle, 0, 0, 0x3f, 0x3f,
-                            tex0, 0xfffff3, fx->color, 1, 0);
-        DrawRotatedSprite2d(x - dx, y - dy, scale, scale, angle, 0, 0, 0x3f, 0x3f,
-                            tex0, 0xfffff3, fx->color, 0, 1);
-        DrawRotatedSprite2d((x + ex) - dx, (y + ey) - dy, scale, scale, angle, 0,
-                            0, 0x3f, 0x3f, tex0, 0xfffff3, fx->color, 1, 1);
+        DrawRotatedSprite2d(x, y, scale, scale, angle,
+                            0x3f, 0x3f, tex0, 0xfffff3, fx->color,
+                            0, 0, 0, 0);
+        DrawRotatedSprite2d(x + ex, y + ey, scale, scale, angle,
+                            0x3f, 0x3f, tex0, 0xfffff3, fx->color,
+                            1, 0, 0, 0);
+        DrawRotatedSprite2d(x - dx, y - dy, scale, scale, angle,
+                            0x3f, 0x3f, tex0, 0xfffff3, fx->color,
+                            0, 1, 0, 0);
+        DrawRotatedSprite2d((x + ex) - dx, (y + ey) - dy, scale, scale, angle,
+                            0x3f, 0x3f, tex0, 0xfffff3, fx->color,
+                            1, 1, 0, 0);
     } else if (mode == 0) {
         s32 i;
         for (i = 0; i < fx->drawFlags; i++) {
-            DrawRotatedSprite2d(x, y, scale, scale, angle, 0, 0, 0x3f, 0x3f, tex0,
-                                0xfffff3, fx->color, 0, 0);
+            DrawRotatedSprite2d(x, y, scale, scale, angle,
+                                0x3f, 0x3f, tex0, 0xfffff3, fx->color,
+                                0, 0, 0, 0);
             angle = WrapAnglePiSum(angle, fx->angle);
         }
     } else if (mode == 2) {
-        DrawRotatedSprite2d(x, y, scale, scale, angle, 0.5f, 0.5f, 0x3f, 0x3f,
-                            tex0, 0xfffff3, fx->color, 0, 0);
+        DrawRotatedSprite2d(x, y, scale, scale, angle,
+                            0x3f, 0x3f, tex0, 0xfffff3, fx->color,
+                            0, 0, 0.5f, 0.5f);
     }
 }
 #endif

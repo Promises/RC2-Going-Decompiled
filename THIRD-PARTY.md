@@ -488,8 +488,8 @@ C function bodies are taken from OpenRAC's `rac2-decomp`,
 <https://github.com/OpenRAC/rac2-decomp> at commit
 `b2a35115e0cf580a1fdab8dd1071b157799e590e` (root `LICENSE`: GNU General Public
 License, version 3), with the authors' permission (RULING #10405/#12108), tasks
-#2471, #2472, #2459, #2503 and #2504 (tasks #2503 and #2504 read their files at
-`5776dcc3`; they are identical at `b2a35115`). Each is adapted, with every respelling named in the function's `Source:`
+#2471, #2472, #2459, #2503, #2504 and #2541 (tasks #2503, #2504 and #2541 read
+their files at `5776dcc3`; they are identical at `b2a35115`). Each is adapted, with every respelling named in the function's `Source:`
 line.
 
 | Here | Upstream file | Upstream name |
@@ -504,6 +504,7 @@ line.
 | `func_00279F08` in `going-decompiled/src/usa/text/178E88.cpp` (adapted: their index holder, item table and per-level `sda` state word as our `g_textRunCursor` view, `g_textRunTable` and a sized equate at `g_cameraCallbackCount + 0x80`; `func_002798A0` as `func_00279E00`; struct/local names; read at `5776dcc3`, file blob identical at `b2a35115`; s136os arm, gcse ON via `S136EXTRA=`, RULING #12178; task #2504) | `src/game/00274128.c` (author commit `65ef3209`, ThorpenCodes) | `func_002799A8` |
 | `func_0027DC40` in `going-decompiled/src/usa/text/178E88.cpp` (adapted: data and callees by address to our names; `sda`/`volatile` externs as EE-only RULING #8620/#12316/#13168/#8404 devices; asm-label prototype views of `func_00280C98` and `func_00280BB8`; `long` written `s64`/`u64`, RULING #13197; read at `5776dcc3`, body unchanged from `b2a35115`; s136os arm, gcse ON; task #2504) | `src/game/0027B948.c` (author commit `bf067513`, bigbeno37; layout credited upstream to OpenRAC `rac1-decomp` `src/game/draw.c`, GPL-3.0) | `func_0027D5C0` |
 | `SetupGsDisplayBuffers` in `going-decompiled/src/usa/text/178E88.cpp` (adapted: `long long` u64/s64 as our `long`-based u64/s64, RULING #13197; every scalar through an EE-only sized alias and `.data` on two u64 images, RULING #8620; their `ScreenExtent` struct as its fields' own symbols; struct/parameter names; read at `5776dcc3`, file blob identical at `b2a35115`; s136os arm, gcse ON; task #2504) | `src/game/00274128.c` (author commit `00ebb44e`, bigbeno37; credited upstream as adapted from RAC1 `SetPalMode` and Lombyte `src/video/display/set_pal_mode.c`, GPL-3.0) | `func_0027B440` |
+| `DrawRotatedSprite2d` in `going-decompiled/src/usa/text/178E88.cpp` (adapted: our callee spellings Vec4ScaleVu0 / Vec4AddVu0 / Vec4SubVu0 / func_00283B48 / func_00283B30 / FloatToInt for their func_00282D30 / func_00282CC0 / func_00282CF0 / func_00283198 / func_00283180 / func_00283CF0, Vec4ScaleVu0 called with our (dst, scale, src) prototype; their `D_001B22A8` read through a RULING #13168 typed view of our `g_frameDmaCursor`, their `Ff67aa9df_D_001A7350`/`7354` as the unit's `g_gsPixelOffsetXAbs`/`YAbs`; `sda` dropped; `long`/`unsigned long` written `s64`/`u64` (RULING #13197), `int`/`float`/`unsigned int`/`unsigned char` written `s32`/`f32`/`u32`/`u8`; s136os arm with two RULING #8549 Ps2EeAs dli rows, 0x27ED6C and 0x27ED78), task #2541 | `src/game/0027B948.c`, whose comment says the body is adapted from rac1-decomp `src/game/draw.c` `append_rotated_sprite_quad`, itself adapted from Lombyte `src/rendering/append_rotated_sprite_quad.c` (GPL-3.0) | `func_0027E4A8` (author commit `7dc80be1`, bigbeno37) |
 
 ### OpenRAC rac2-decomp at b2a35115, cod/022FA8 Window X bodies (GPL-3.0)
 

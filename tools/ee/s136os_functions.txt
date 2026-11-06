@@ -765,3 +765,4 @@ usa text/178E88 func_0027DB38
 usa text/178E88 func_00279F08 S136EXTRA=
 usa text/178E88 func_0027DC40 S136EXTRA=
 usa text/178E88 SetupGsDisplayBuffers S136EXTRA=
+usa text/178E88 DrawRotatedSprite2d

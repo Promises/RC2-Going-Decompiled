@@ -75,6 +75,14 @@
 # followed by an `ld`. GNU as gives `li 2048; dsll32; ori 0xf`; the ROM has the
 # form below at 0x34FE9C..0x34FEA4.
 #
+# DrawRotatedSprite2d (text/178E88) is compiled from C (s136os arm, adopted
+# from OpenRAC, task #2541). Its two sites are the packet's GIF tag high word
+# and its register-descriptor qword, both in reorder mode, back to back and
+# followed by an `lw`. GNU as gives `lui 0xb400; dsll32 0; ori 0x8001` and
+# `li 0x535; dsll 16; ori 0x3535; dsll 16; ori 0x3106` (measured in the built
+# object); the ROM has the forms below at 0x27ED6C..0x27ED74 and
+# 0x27ED78..0x27ED88.
+#
 # region function       rom_addr    operands                 words
 usa      func_00290320  0x0029033C  $12,0x4400000000008001   340c8800 000c63fc 358c8001
 usa      func_00290320  0x002903AC  $4,0xfffff000000000      3404ffff 00042438 3484f000 00042638
@@ -187,3 +195,5 @@ usa      func_002E07F8  0x002E087C  $11,0x2400000000000001   340b9000 000b5bbc 3
 #
 usa      func_00280EC8  0x00280F88  $5,0x8000000044          34058000 00052e38 34a50044
 usa      FmvStreamFeedLoop  0x0034FE9C  $4,0x8000000000f  34048000 00042738 3484000f
+usa      DrawRotatedSprite2d  0x0027ED6C  $5,0xb400000000008001  3405b400 00052c3c 34a58001
+usa      DrawRotatedSprite2d  0x0027ED78  $6,0x53535353106       3406a6a6 00063438 34c6a6a6 000632f8 34c60106
