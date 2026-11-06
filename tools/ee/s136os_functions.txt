@@ -744,6 +744,7 @@ usa text/1CA080 BuildCheatMenuItemList
 usa text/235FE8 GuiConfirmPopupTick S136EXTRA=-fno-strict-aliasing
 usa text/235FE8 func_0033CEE0 S136EXTRA=-fno-strict-aliasing
 usa text/1D54C0 func_002DC940
+usa text/1D54C0 func_002DEEF8
 usa text/178E88 func_00280EC8
 usa text/1DFF80 ComputeEmitterPan
 usa text/1DFF80 DrawSkyPiecesFormatA S136EXTRA=

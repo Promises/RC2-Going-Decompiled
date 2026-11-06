@@ -639,13 +639,14 @@
   <https://github.com/OpenRAC/rac2-decomp> at commit `b2a35115e0cf580a1fdab8dd1071b157799e590e`
   (the same history as `rac2-gc-decomp` above: `96927f87` is an ancestor)
 
-  C bodies from upstream's `src/us2/` (their USA v2.00 port), `src/levels/`
-  (their level programs) and `src/core/` (their boot core), adopted with the
+  C bodies from upstream's `src/us2/` (their USA v2.00 port), `src/game/`
+  (their v1.01 sources), `src/levels/` (their level programs) and `src/core/`
+  (their boot core), adopted with the
   authors' permission (held by the operator, RULINGs #10405 and #12108) and
   re-checked byte-exact against our v2.00 ROM (the boot ELF, or the level
   program off the disc) on the s136os arm, or for the five cod/015180 malloc
-  bodies on the sn2952 arm (RULING #12157). Contributors so far: Flavius,
-  Louis-Philippe Le Sieur and ReaperOfVeriod.
+  bodies on the sn2952 arm (RULING #12157). Contributors so far: bigbeno37,
+  Flavius, Louis-Philippe Le Sieur and ReaperOfVeriod.
   Each doc comment carries the `Source:` line, which names every respelling.
 
   Used so far:
@@ -722,6 +723,19 @@
       `src/core/00116360.c` (author commit `0f740805`, Louis-Philippe Le
       Sieur). ADAPTED: `SignalSema` for their `func_0011AC40`, newlib's
       unused `reent` parameter added, `int` written `s32`. RULING #13221.
+  - **`func_002DEEF8`** (`0x002DEEF8`, the per-frame tick of a streamed
+    moby-animation job: decompress, install three animation tables, then
+    step the moby's idle/dialog sequence) in
+    `going-decompiled/src/usa/text/1D54C0.cpp`, from
+    `src/game/002DDEC8-animation.c` (`func_002DE0D0`, author commit
+    `b073e803`, bigbeno37; the file carries no notice of its own; its
+    comment names RAC1's `update_streamed_moby_animation`). ADAPTED: our
+    symbol names per the ROM's relocations, their struct views renamed,
+    their `sda` byte array as our scalar `g_miscExtras` behind an EE-only
+    `.extern g_miscExtras, 16` (RULING #12316), `g_fileLoadState` through
+    the unit's `section(".data")` declaration (RULING #8620). Unit s136os
+    arm (S136EXTRA "", task #2480), after splitting the 4-word debris head
+    `func_002DEEE8` off it.
 
 - **Newlib** (<https://sourceware.org/git/newlib-cygwin.git>, tag
   `newlib-2000-02-17`, commit `061afe83dc04a43321d69b5f04860e5de799665c`;

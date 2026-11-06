@@ -5222,11 +5222,189 @@ void func_002DECE0(void) {
  * symbol_addrs size pin (task #2480). */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DEEE8);
 
-/* Save-image WAD streaming/decompress state machine (obj->0x34 state 0..3),
- * driving DecompressWad on the save preview. Until task #2480 this body sat
- * under func_002DEEE8 behind 4 words of debris (split above); its real
- * prologue is the addiu $sp,-0x30 at 0x2DEEF8. Bare INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DEEF8);
+/* func_002DEEF8(stream): per-frame tick of a streamed moby-animation job
+ * (upstream's note: it corresponds to RAC1's update_streamed_moby_animation).
+ * The job's state word (+0x34):
+ *   0  waits for the CD file load to go idle (g_fileLoadState == 0), then
+ *      goes to 3;
+ *   1  once idle: clears the menu load-active byte (g_menuScreenBlock+0xDB),
+ *      decompresses the streamed WAD in place (DecompressWad from
+ *      buffer+offset into buffer), installs its three animation tables into
+ *      moby class 0x7A5's loaded header (header tables[1..3] = buffer + the
+ *      offsets in the buffer's first three 8-byte records, each followed by
+ *      func_00293B10(class, n)), then goes to 2 and starts the moby in state
+ *      0, or 4 when g_miscExtras is set, with its counter cleared;
+ *   2  steps the moby's own sequence (moby+0x20; frame counter at +0xBC):
+ *      even states 0/2/4 idle for 120 frames, then wait for the dialog voice
+ *      (g_fileLoadVoiceState phase 3, count < 6000), advance to the odd state
+ *      and play animation state/2 + 1 (func_002A82D8(moby, n, 0, 24));
+ *      odd states 1/3/5 stop the dialog voice once when the moby's two
+ *      animation bytes (+0x42/+0x43) agree, and once flag value 2 is set in
+ *      moby+0x60 go to 2 (from 1) or 6 (from 3/5) and play animation 0;
+ *      state 6 waits 240 frames and restarts at 0 (4 with g_miscExtras).
+ *   3  (and any other state) does nothing.
+ * Param: the job. Returns 0 on every path.
+ * Until task #2480 this body sat under func_002DEEE8 behind 4 words of debris
+ * (split above); no static ROM reference names 0x2DEEF8.
+ *
+ * MATCHED on the s136os arm, 1D54C0's S136EXTRA "" (SN 2.95.3 v1.36
+ * cc1plus -O2 -G8 -fopt-stack), task #2480. The 2.9 arm builds 174 words
+ * (FACT #13142). The inner switch's table is the ROM's jtbl_0026CE90_text:
+ * tools/ee/jtbl_bind.sh verifies the compiled table word for word against it
+ * and binds %hi/%lo to it.
+ * DEVICE (RULING #12316, addressing, EE arm only): the file-scope
+ * `.extern g_miscExtras, 16` below. g_miscExtras is a 1-byte object, so under
+ * the unit's -G8 cc1 and gas would address it gp-relative; the ROM reads it
+ * with the absolute `lui $3; lbu $3,%lo(g_miscExtras)($3)` macro pair (twice).
+ * Declaring it 16 bytes to gas makes gas expand cc1's one-insn `lbu` that way.
+ * Nothing is moved or emitted; native does not see it. Removal probe
+ * (build.sh usa): without it the block builds 173 words, not 175, and the
+ * s136os splice refuses it (SHORTER).
+ * DEVICE (RULING #8620, section attribute on an extern declaration): the
+ * unit's ROM_SPLIT on g_fileLoadState, as the other g_fileLoadState readers
+ * in this unit declare it. The ROM reads the 2-byte flag with a compiler-split
+ * `lui $2; lh $3,%lo($2)` (twice). Removal probe: declared plain, this TU
+ * makes the s136os splice carry `.extern g_fileLoadState, 2` in front of the
+ * block, and the splice REFUSES (ADDRESSING) because that would flip three
+ * already matched rows (RestorePrevTextTable, TickStreamedImageWidget,
+ * LoadMenuBgImagePair) to gp-relative.
+ * Source: OpenRAC/rac2-decomp @b2a35115e0cf580a1fdab8dd1071b157799e590e
+ * (GPL-3.0, adopted with the authors' permission per RULINGs #10405/#12108),
+ * src/game/002DDEC8-animation.c, func_002DE0D0 (v1.01 address; author commit
+ * b073e803, bigbeno37). Respellings by ROM-encoded address:
+ * D_001A63AC = g_fileLoadState, D_001F291B = g_menuScreenBlock[0xDB],
+ * func_0029D4D0 = DecompressWad, D_001CEC85 = g_mobyClassSlotRemap[0x7A5],
+ * D_001CDB80 = g_mobyClassHeaders, func_00293260 = func_00293B10,
+ * D_001A7A0A[0] = g_miscExtras, D_001A63A8 = g_fileLoadVoiceState,
+ * func_002B6D28 = StopDialogVoice, func_002A7470 = func_002A82D8.
+ * ADAPTED: (1) their AnimationMoby/AnimationStream/AnimationClass/Dialogue
+ * as StreamedAnimMoby/StreamedAnimJob/StreamedAnimClass/DialogVoiceView,
+ * fields as theirs; (2) their `u8 D_001A7A0A[] __attribute__((sda))` read
+ * as [0] becomes our scalar `u8 g_miscExtras` with the `.extern` device
+ * above in place of `sda`; (3) g_fileLoadState through the unit's ROM_SPLIT
+ * s16 declaration (the second device, above); g_fileLoadVoiceState
+ * declared as a DialogVoiceView (upstream's plain declaration);
+ * (4) s32/s16/u8 for int/short/unsigned char, and int return as s32.
+ * Statements and control flow are theirs. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002DEEF8)
+S136OS_SLOT(func_002DEEF8);
+#else
+/* The moby a streamed-animation job drives (only the fields it touches). */
+typedef struct {
+    u8 pad0[0x20];
+    u8 state;          /* +0x20 sequence state 0..6 */
+    u8 pad21[0x21];
+    u8 primary;        /* +0x42 */
+    u8 secondary;      /* +0x43 */
+    u8 pad44[0x1c];
+    u8 flags;          /* +0x60 value 2 tested before leaving an odd state */
+    u8 pad61[0x5b];
+    u8 counter;        /* +0xBC frame counter */
+} StreamedAnimMoby;
+/* The job (its state word sits at +0x34). */
+typedef struct {
+    u8 pad0[0x34];
+    s32 state;         /* +0x34 0 wait, 1 install, 2 run, 3 done */
+    s32 reserved;      /* +0x38 */
+    u8 *buffer;        /* +0x3C decompress destination */
+    s32 offset;        /* +0x40 compressed data offset in buffer */
+    StreamedAnimMoby *moby;  /* +0x44 */
+} StreamedAnimJob;
+/* A loaded moby class header (animation table pointers at +0x48). */
+typedef struct {
+    u8 pad[0x48];
+    u8 *tables[4];
+} StreamedAnimClass;
+/* The dialog-voice fields of the file-load/voice block. */
+typedef struct {
+    u8 pad[0x6c];
+    s16 count;         /* +0x6C */
+    u8 pad6e[4];
+    s16 phase;         /* +0x72 */
+} DialogVoiceView;
+extern s16 g_fileLoadState ROM_SPLIT;
+extern u8 g_mobyClassSlotRemap[];
+extern StreamedAnimClass *g_mobyClassHeaders[];
+#ifndef TARGET_NATIVE
+__asm__(".extern g_miscExtras, 16");
+#endif
+extern u8 g_miscExtras;
+extern DialogVoiceView g_fileLoadVoiceState;
+extern void DecompressWad(void *src, void *dest);
+extern void func_00293B10(StreamedAnimClass *cls, s32 table);
+extern s32 StopDialogVoice(void);
+extern void func_002A82D8(StreamedAnimMoby *moby, s32 animation, s32 arg2, s32 arg3);
+
+s32 func_002DEEF8(StreamedAnimJob *stream) {
+    StreamedAnimMoby *moby;
+    u8 *header;
+    StreamedAnimClass **resource;
+    s32 i, animation;
+    u8 *table;
+    DialogVoiceView *dialogue;
+
+    switch (stream->state) {
+    case 0:
+        if (g_fileLoadState != 0) break;
+        stream->state = 3;
+        break;
+    case 1:
+        if (g_fileLoadState != 0) break;
+        g_menuScreenBlock[0xDB] = 0;
+        DecompressWad(stream->buffer + stream->offset, stream->buffer);
+        resource = &g_mobyClassHeaders[g_mobyClassSlotRemap[0x7A5]];
+        header = stream->buffer;
+        for (i = 0; i < 3; i++) {
+            table = stream->buffer + *(s32 *)(header + (i << 3));
+            (*resource)->tables[i + 1] = table;
+            func_00293B10(*resource, i + 1);
+        }
+        stream->state = 2;
+        if (g_miscExtras == 0) stream->moby->state = 0;
+        else stream->moby->state = 4;
+        stream->moby->counter = 0;
+        break;
+    case 2:
+        moby = stream->moby;
+        switch (moby->state) {
+        case 0: case 2: case 4:
+            animation = moby->state >> 1;
+            moby->counter++;
+            if (moby->counter > 120) moby->counter = 120;
+            if (moby->counter < 120) return 0;
+            dialogue = &g_fileLoadVoiceState;
+            if (dialogue->phase != 3) return 0;
+            if (dialogue->count >= 6000) return 0;
+            moby->counter = 0;
+            moby->state++;
+            func_002A82D8(moby, animation + 1, 0, 24);
+            break;
+        case 1: case 3: case 5:
+            if (moby->counter == 0 && moby->primary == moby->secondary) {
+                StopDialogVoice();
+                moby->counter = 1;
+            }
+            if (moby->flags & 2) {
+                if (moby->state == 1) moby->state = moby->state + 1;
+                else moby->state = 6;
+                moby->counter = 0;
+                func_002A82D8(moby, 0, 0, 24);
+            }
+            break;
+        case 6:
+            moby->counter++;
+            if (moby->counter > 240) moby->counter = 240;
+            if (moby->counter < 240) return 0;
+            if (g_miscExtras == 0) moby->state = 0;
+            else moby->state = 4;
+            moby->counter = 0;
+            break;
+        }
+        break;
+    }
+    return 0;
+}
+#endif
 
 /* (Re)assign the 5 map cache slots' backing addresses and flags for a text
  * table swap. `param` selects whether the secondary banks are included: the
