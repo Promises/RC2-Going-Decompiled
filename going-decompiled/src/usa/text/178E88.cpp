@@ -2337,8 +2337,8 @@ extern s32 g_vramZBufferAbs;
  * func_0027E368 — emit the GS scissor / Z-buffer register packets for a render
  * context.
  *
- * When the context's 64-bit field at +0x8 is set, appends GS reg 0x42 (SCISSOR)
- * masked to its low + high bytes. When the +0x4 field's top byte is set, appends
+ * When the context's 64-bit field at +0x8 is set, appends GS reg 0x42 (ALPHA_1,
+ * a blend equation) masked to its low + high bytes. When the +0x4 field's top byte is set, appends
  * a Z-buffer setup: reg 0x4E (ZBUF) from g_vramZBuffer>>13 with the frame + mask
  * bits, a scissored screen rect (func_0027E4D0 over the g_gsScreenContext dims),
  * and a second ZBUF variant. Finally re-appends reg 0x42 (0x44 variant) when
@@ -4008,7 +4008,8 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0
  *  — resolved by address (g_sceneActorMobys = 0x1B894C in symbol_addrs;
  *  +0x44 = 0x1B8990 = the ROM's reloc target; upstream's name spells 0x1B8A10,
  *  which is not where the ROM relocates); `CopyRegion` -> `CopyRegion_280670`;
- *  `int`/`float` -> `s32`/`f32`. Statements otherwise as upstream wrote them. */
+ *  `int`/`float`/`short` -> `s32`/`f32`/`s16` (the CopyRegion_280670 x/y/w/h
+ *  fields). Statements otherwise as upstream wrote them. */
 /* GUARD: on EE this unit compiles func_00281020 once per arm. Under the
  * default arm (sdk29 2.9) the guard below is false and S136OS_SLOT emits only
  * a comment marker into the unit .s — no bytes. tools/ee/s136os_splice.sh
