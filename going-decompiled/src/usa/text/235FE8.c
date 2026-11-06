@@ -11580,75 +11580,110 @@ void func_00346878(void *w, s32 buttons)
 }
 #endif
 
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00346AF8);
+/*
+ * func_00346AF8(w, buttons): the mode-3 sub-builder that GuiMapScreenTick
+ * forwards to, a d-pad / confirm handler for the one-row, two-entry select
+ * screen `w` over the D_1AA7F8 slot table (0xA-byte GuiWeaponSlotEntry
+ * records, item id at +6). Each held direction in `buttons` plays the wheel
+ * cue PlayGlobalSound(3, 0, 0) first:
+ *   0x1000 up    -> cursor++, upFlag = 1, downFlag = 0
+ *   0x4000 down  -> cursor++, downFlag = 1, upFlag = 0
+ *   0x8000 left  -> cursor--, wrapping to 1 below 0
+ *   0x2000 right -> cursor++, wrapping to 0 at 2
+ *   0x40 confirm (no cue first) -> for a nonzero, owned item: accept cue (4),
+ *                 the item id into g_menuTransitionMode+0x30 and `selected`;
+ *                 otherwise the deny cue (5)
+ * Every path then re-reads the highlighted item into `selected` and, if it is
+ * owned, sets D_1ADAF0 to its equipped variant's weapon-name string id
+ * (g_weaponTable record +0x06). Params: w = the screen object (cursor fields
+ * at +0x4FC..+0x508, GuiSelectPairCursor), buttons = pad mask. No return value.
+ *
+ * MATCHED on the s136os arm with a per-function override (task #2501):
+ * row `usa text/235FE8 func_00346AF8 S136EXTRA=-fno-strict-aliasing` in
+ * tools/ee/s136os_functions.txt, i.e. the unit's flags minus -fno-gcse
+ * (RULING #12178, as func_00346878).
+ * DEVICE, ADDRESSING MODEL (RULING #8620): g_inventoryOwned is read through
+ * g_inventoryOwnedSdata, the EE-only `section(".sdata")` asm-label alias
+ * declared with func_00345298; with the unit's `.extern g_inventoryOwned, 16`
+ * it assembles to the ROM's absolute `lui; addiu`. It moves no data and emits
+ * nothing; native reads g_inventoryOwned. Without it: 118 words, not 119.
+ * DEVICE, TYPED VIEW (RULING #13168): the slot table is read through
+ * g_selectPairSlots, an EE-only asm-label alias of D_1AA7F8 typed
+ * GuiWeaponSlotEntry[] (upstream's own typed InputEntry extern). Read as
+ * `((GuiWeaponSlotEntry *)D_1AA7F8)[i]` through the u8[] it builds the same
+ * length but swaps the base/index registers of both slot reads (12 bytes of
+ * image, task #2501). Same symbol, no storage; native casts the u8[].
+ * Without the override (the unit's -fno-gcse): 114 words, not 119.
+ * GUARD: on EE this C is the image's body, compiled alone by SN 2.95.3 v1.36
+ * -fopt-stack and spliced over S136OS_SLOT by tools/ee/s136os_splice.sh; there
+ * is no asm fallback. On native it is plain C.
+ * Source: OpenRAC/rac2-decomp @5776dcc35045fb2320610edd1d2db4fa7660ef37
+ * (GPL-3.0, adopted with the authors' permission per RULINGs #10405/#12108),
+ * src/us2/game/00346AF8-g8.c, func_US2_00346AF8 (author commit 37ee1b19,
+ * Flavius); file unchanged at upstream head f3cc4dbf. Respellings by
+ * ROM-encoded address: func_002E5E58 = PlayGlobalSound, D_001A7AF8 =
+ * g_inventoryOwned, D_00139568 = g_itemEquippedSlot, D_00239BA0 =
+ * g_weaponTable, D_001ADB10 = D_1ADAF0, D_001AA7D8 = D_1AA7F8,
+ * D_001F288C[0] = g_menuTransitionMode+0x30.
+ * ADAPTED: (1) our signature (void *w, s32 buttons), with their I(off) word
+ * macro over `o` as the GuiSelectPairCursor fields through the local `owner`;
+ * (2) their InputEntry array D_001AA7D8 read as the unit's GuiWeaponSlotEntry
+ * (.index = .weaponId) through the EE-only typed view g_selectPairSlots; (3) their InputRecord read as
+ * the unit's GuiWeaponTableEntry (.value = .nameStringId, the s16 at +0x06),
+ * the same `slot * 224 + base` address form; (4) their int array D_001F288C
+ * written as the s32 at g_menuTransitionMode+0x30; (5) their `sda`
+ * g_inventoryOwned carried on the EE-only alias above; their `sda` on
+ * D_001ADB10 dropped (the unit's -G8 already makes D_1ADAF0 gp-relative);
+ * (6) our PlayGlobalSound(s32, s32, s32) prototype; int as s32. Control flow
+ * and expressions are theirs.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00346AF8)
+S136OS_SLOT(func_00346AF8);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00346AF8, unit objdiff): 31.61%,
-   120/156 insns differ. Residual: UNKNOWN-sd + gp/abs-mixed symbol (first differing insn: 'sd s0, 0x0(sp)' vs 'sd s1, 0x8(sp)').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
-extern u8   D_1AA7F8[];              /* select-screen entry table, stride 0xA, +6 = s16 item id */
+/* The cursor fields of the two-entry select screen GuiMapScreenTick drives in
+ * mode 3. */
+typedef struct {
+    u8  _pad0[0x4FC];
+    s32 cursor;   /* 0x4FC: 0..1 */
+    s32 upFlag;   /* 0x500: set by up, cleared by down */
+    s32 selected; /* 0x504: item id under the cursor */
+    s32 downFlag; /* 0x508: set by down, cleared by up */
+} GuiSelectPairCursor;
+extern u8   D_1AA7F8[];              /* select-screen slot table, GuiWeaponSlotEntry[] */
 extern u8   g_menuTransitionMode[];  /* 0x1F27DC - +0x30 receives the activated item id */
 extern s32 PlayGlobalSound(s32 id, s32 a, s32 b);
-/*
- * func_00346AF8(w, flags) — the mode-3 sub-builder: a two-axis cursor/confirm
- * handler for the D_1AA7F8 select screen `w`. `flags` (held-button bits) drives
- * the cursor index at w+0x4FC and the sub-state at w+0x500/+0x508, each with the
- * wheel-turn cue PlayGlobalSound(3):
- *   0x1000 -> advance cursor, set sub-state 0x500=1 / 0x508=0
- *   0x4000 -> advance cursor, set sub-state 0x508=1 / 0x500=0
- *   0x8000 -> retreat cursor (wrap to 1 on underflow)
- *   0x2000 -> advance cursor (wrap to 0 at 2)
- *   0x40   -> confirm: for the highlighted owned item play the accept cue (4),
- *             record it in g_menuTransitionMode+0x30 and w+0x504; otherwise the
- *             deny cue (5).
- * Every path then refreshes the highlighted entry (w+0x504) and, for an owned
- * item, its weapon-name caption id D_1ADAF0 = g_weaponTable[slot*0xE0 + 6].
- */
-void func_00346AF8(void *w, s32 flags) {
-    s16 entry;
+#ifndef TARGET_NATIVE
+extern GuiWeaponSlotEntry g_selectPairSlots[] __asm__("D_1AA7F8");
+#else
+#define g_selectPairSlots ((GuiWeaponSlotEntry *)D_1AA7F8)
+#endif
+void func_00346AF8(void *w, s32 buttons)
+{
+    GuiSelectPairCursor *owner = (GuiSelectPairCursor *)w;
+    s32 index;
 
-    if (flags & 0x1000) {
-        PlayGlobalSound(3, 0, 0);
-        *(s32 *)((char *)w + 0x500) = 1;
-        *(s32 *)((char *)w + 0x508) = 0;
-        *(s32 *)((char *)w + 0x4FC) += 1;
-    } else if (flags & 0x4000) {
-        PlayGlobalSound(3, 0, 0);
-        *(s32 *)((char *)w + 0x508) = 1;
-        *(s32 *)((char *)w + 0x500) = 0;
-        *(s32 *)((char *)w + 0x4FC) += 1;
-    } else if (flags & 0x8000) {
-        s32 v;
-        PlayGlobalSound(3, 0, 0);
-        v = *(s32 *)((char *)w + 0x4FC) - 1;
-        *(s32 *)((char *)w + 0x4FC) = v;
-        if (v < 0) {
-            *(s32 *)((char *)w + 0x4FC) = 1;
-        }
-    } else if (flags & 0x2000) {
-        s32 v;
-        PlayGlobalSound(3, 0, 0);
-        v = *(s32 *)((char *)w + 0x4FC) + 1;
-        *(s32 *)((char *)w + 0x4FC) = v;
-        if (v >= 2) {
-            *(s32 *)((char *)w + 0x4FC) = 0;
-        }
-    } else if (flags & 0x40) {
-        s16 sel = *(s16 *)&D_1AA7F8[*(s32 *)((char *)w + 0x4FC) * 0xA + 6];
-        if (sel == 0 || g_inventoryOwned[sel] == 0) {
-            PlayGlobalSound(5, 0, 0);
-        } else {
+    if (buttons & 0x1000) {
+        PlayGlobalSound(3, 0, 0); owner->cursor++; owner->upFlag = 1; owner->downFlag = 0;
+    } else if (buttons & 0x4000) {
+        PlayGlobalSound(3, 0, 0); owner->cursor++; owner->downFlag = 1; owner->upFlag = 0;
+    } else if (buttons & 0x8000) {
+        PlayGlobalSound(3, 0, 0); if (--owner->cursor < 0) owner->cursor = 1;
+    } else if (buttons & 0x2000) {
+        PlayGlobalSound(3, 0, 0); if (++owner->cursor >= 2) owner->cursor = 0;
+    } else if (buttons & 0x40) {
+        index = g_selectPairSlots[owner->cursor].weaponId;
+        if (index && g_inventoryOwnedSdata[index]) {
             PlayGlobalSound(4, 0, 0);
-            *(s32 *)&g_menuTransitionMode[0x30] = sel;
-            *(s32 *)((char *)w + 0x504) = sel;
-        }
+            *(s32 *)&g_menuTransitionMode[0x30] = index;
+            owner->selected = index;
+        } else
+            PlayGlobalSound(5, 0, 0);
     }
-
-    entry = *(s16 *)&D_1AA7F8[*(s32 *)((char *)w + 0x4FC) * 0xA + 6];
-    *(s32 *)((char *)w + 0x504) = entry;
-    if (entry != 0 && g_inventoryOwned[entry] != 0) {
-        D_1ADAF0 = *(s16 *)&g_weaponTable[g_itemEquippedSlot[entry] * 0xE0 + 6];
+    {
+        s32 selected = g_selectPairSlots[owner->cursor].weaponId;
+        owner->selected = selected;
+        if (selected && g_inventoryOwnedSdata[selected])
+            D_1ADAF0 = ((GuiWeaponTableEntry *)(g_itemEquippedSlot[selected] * 224 + (char *)g_weaponTable))->nameStringId;
     }
 }
 #endif
