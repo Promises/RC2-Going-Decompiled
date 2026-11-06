@@ -1061,8 +1061,9 @@ extern ScreenDimensions g_gsScreenContextDims __asm__("g_gsScreenContext");
  * g_screenExtent view over g_screenWidth with sda respelled section(".sdata")
  * (the x arm), their D_001B9040 as the cast (ScreenState
  * *)(g_sceneActorMobys + 0x674) (same address 0x1B8FC0), their func_00283CE0
- * as IntToFloat; int/short/float spelled s32/s16/f32. Statements as upstream
- * wrote them. (task #2503; audit NOTE #13181.) */
+ * as IntToFloat; int/short/float spelled s32/s16/f32; our ScreenState view
+ * adds an s32 color[3] tail that upstream's ScreenState lacks (unused here).
+ * Statements as upstream wrote them. (task #2503; audit NOTE #13181.) */
 #if !defined(TARGET_NATIVE) && !defined(S136OS_InitScreenGeometry)
 S136OS_SLOT(InitScreenGeometry);
 #else
@@ -1206,7 +1207,8 @@ void func_0027B858(s32 width, s32 height, f32 scale, f32 a, f32 b, f32 c, f32 d)
  * (the x arm), their D_001B9040 as the cast (ScreenState
  * *)(g_sceneActorMobys + 0x674) (same address 0x1B8FC0), their func_00283CE0
  * as IntToFloat, their func_00279FF0 as func_0027A550; short/int/float spelled
- * s16/s32/f32. Statements as upstream wrote them. (task #2503; audit NOTE
+ * s16/s32/f32; our ScreenState view adds an s32 color[3] tail that upstream's
+ * ScreenState lacks (unused here). Statements as upstream wrote them. (task #2503; audit NOTE
  * #13181.) */
 #if !defined(TARGET_NATIVE) && !defined(S136OS_RecomputeScreenViewportFromGsContext)
 S136OS_SLOT(RecomputeScreenViewportFromGsContext);
@@ -2242,8 +2244,10 @@ void FadeOutToBlackBlocking(s32 frames)
  * func_00283180 -> func_00283B30 (cosine); func_00283D38 -> ColorLerpPacked;
  * func_00288FB8 -> GetLocalizedString (u8 *); func_0027F5B8 -> DrawDebugString,
  * prototyped here to its definition's shape (five s32) with a `(s32)text` cast
- * on the pointer argument (a codegen no-op); `long` -> s32 and
- * `unsigned char *` -> u8 * for our typedefs (EE 32-bit long); their undeclared
+ * on the pointer argument (a codegen no-op); their int-valued `long` (64-bit
+ * on the EE; it only carries an int into s32 parameters) -> s32, byte-identical
+ * (RULING #13282), and `unsigned char *` -> u8 *; their func_0027FB40
+ * prototype dropped (unused here); their undeclared
  * callees get prototypes in this file. Body otherwise theirs. */
 #ifndef TARGET_NATIVE
 /* ADDRESSING-MODEL DEVICES (RULINGs #8620/#12316) for func_0027DB38, from the

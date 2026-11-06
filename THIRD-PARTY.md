@@ -488,7 +488,8 @@ C function bodies are taken from OpenRAC's `rac2-decomp`,
 <https://github.com/OpenRAC/rac2-decomp> at commit
 `b2a35115e0cf580a1fdab8dd1071b157799e590e` (root `LICENSE`: GNU General Public
 License, version 3), with the authors' permission (RULING #10405/#12108), tasks
-#2471, #2472 and #2459. Each is adapted, with every respelling named in the function's `Source:`
+#2471, #2472, #2459 and #2503 (task #2503 read its four files at `5776dcc3`;
+they are identical at `b2a35115`). Each is adapted, with every respelling named in the function's `Source:`
 line.
 
 | Here | Upstream file | Upstream name |
@@ -496,6 +497,10 @@ line.
 | `func_00280EC8` in `going-decompiled/src/usa/text/178E88.cpp` (adapted: our callee spellings func_002859E0 / func_0027B858 / AppendGsRegPacket for their func_00285030 / func_0027B2F8 / func_002FC560, their `D_001A65EE` read as `*(s16 *)(g_gsScreenContext + 0x16E)`, `int`/`float` spelled `s32`/`f32`; s136os arm with one RULING #8549 Ps2EeAs dli row at 0x280F88) | `src/game/0027F128.c` | `func_00280510` (author commit `bf067513e`, bigbeno37) |
 | `func_00281020` in `going-decompiled/src/usa/text/178E88.cpp` (adapted: their `extern CopyRegion D_001B8A10[]` and `D_001B8A10[index]` written as the cast view of our `g_sceneActorMobys + 0x44` — 0x1B894C + 0x44 = 0x1B8990, the address the ROM relocates, which their name does not spell; their `CopyRegion` typedef as `CopyRegion_280670`; `int`/`float`/`short` written `s32`/`f32`/`s16`; s136os arm, gcse ON via the per-function `S136EXTRA=` override, RULING #12178), task #2472 | `src/game/0027F128.c` | `func_00280670` (author commit `bf067513e`, bigbeno37) |
 | `DrawLensFlare` in `going-decompiled/src/usa/text/16E980.c` (adapted: our data and callee spellings; the flare block read through a struct view of our `g_pLensFlareSource`, `g_cameraPos` through an unaligned view, upstream's `sda` screen-centre array as one RULING #8620 + #12316 `.sdata` extern device spanning our four screen scalars, EE arm only; `long` written `s64` and the native arm reading the true `g_nGsPixelOffsetX`/`g_nGsPixelOffsetY` (RULING #13197); struct fields renamed; tasks #2459, #2510) | `src/game/0026EA00.c` (author commit `d4ac4036`, bigbeno37) | `func_002725E0` |
+| `InitScreenGeometry` in `going-decompiled/src/usa/text/178E88.cpp` (adapted: their `D_001A6480` view as `g_gsScreenContextDims` over `g_gsScreenContext`, their `D_001A7340` as the `g_screenExtent` view over `g_screenWidth` with sda respelled `section(".sdata")`, their `D_001B9040` as the cast `(ScreenState *)(g_sceneActorMobys + 0x674)`, their `func_00283CE0` as `IntToFloat`, `int`/`short`/`float` spelled `s32`/`s16`/`f32`; s136os arm at the unit's pinned S136EXTRA) | `src/game/00274128.c` | `func_0027A9F0` (author commit `7dc80be1`, bigbeno37) |
+| `func_0027B858` in `going-decompiled/src/usa/text/178E88.cpp` (adapted: their `D_001B9040` as the cast `(ScreenState *)(g_sceneActorMobys + 0x674)`, their `D_001A7340` as the `g_screenExtent` view over `g_screenWidth` with sda respelled `section(".sdata")`, their `func_00283CE0` as `IntToFloat`, their `func_0027AB40` as `BuildCameraProjection`, `int`/`float` spelled `s32`/`f32`; s136os arm at the unit's pinned S136EXTRA) | `src/us2/game/0027B858.c` | `func_US2_0027B858` (author commit `ac7e1a2e`, bigbeno37) |
+| `RecomputeScreenViewportFromGsContext` in `going-decompiled/src/usa/text/178E88.cpp` (adapted: their `D_001A6480` as `&g_gsScreenContextDims` over `g_gsScreenContext`, their `D_001A7340` as the `g_screenExtent` view over `g_screenWidth` with sda respelled `section(".sdata")`, their `D_001B9040` as the cast `(ScreenState *)(g_sceneActorMobys + 0x674)`, their `func_00283CE0` as `IntToFloat`, their `func_00279FF0` as `func_0027A550`, `short`/`int`/`float` spelled `s16`/`s32`/`f32`; s136os arm at the unit's pinned S136EXTRA) | `src/us2/game/0027B858.c` | `func_US2_0027B988` (author commit `ac7e1a2e`, bigbeno37) |
+| `func_0027DB38` in `going-decompiled/src/usa/text/178E88.cpp` (adapted: their `D_001A7BB1` is stale — the ROM reads `0x1A7BB9` — respelled as the `g_noticeFadeSuppress` view over `D_1A7BB9` with the file-scope `.extern D_1A7BB9, 16` sizing device; their `D_L00_001BCAF4` is stale — the ROM reads `0x1B87F4` — respelled as the `g_noticePulseFrame` `.data` view over `g_sceneFrame`; their `func_00283180` as `func_00283B30` (cosine), `func_00283D38` as `ColorLerpPacked`, `func_00288FB8` as `GetLocalizedString` (`u8 *`), `func_0027F5B8` as `DrawDebugString` prototyped to its definition's five-`s32` shape with a `(s32)text` cast; their int-valued `long` (64-bit on the EE) spelled `s32` (RULING #13282) and `unsigned char *` spelled `u8 *`; s136os arm at the unit's pinned S136EXTRA) | `src/us2/game/0027DB38.c` | `func_US2_0027DB38` (author commit `cde7e4dd`, Flavius) |
 
 ### OpenRAC rac2-decomp at b2a35115, cod/022FA8 Window X bodies (GPL-3.0)
 
@@ -519,22 +524,6 @@ src/assembly/sdk/library/_getRef0.c", and upstream's removed draft
 `5ccfa1fb314e9cb43f6ff9a43249523e1c4a5310`. The MIT notice reproduced under
 "Lombyte (MIT)" below covers it (RULING #12108); the doc comment carries the
 notice verbatim.
-
-### OpenRAC rac2-decomp at 5776dcc3, text/178E88 Window X screen-geometry bodies (GPL-3.0)
-
-Four C function bodies are taken from OpenRAC's `rac2-decomp`,
-<https://github.com/OpenRAC/rac2-decomp> at commit
-`5776dcc35045fb2320610edd1d2db4fa7660ef37` (root `LICENSE`: GNU General Public
-License, version 3), with the authors' permission (RULING #10405/#12108), task
-#2503. Each is adapted, with every respelling named in the function's `Source:`
-line.
-
-| Here | Upstream file | Upstream name |
-|---|---|---|
-| `InitScreenGeometry` in `going-decompiled/src/usa/text/178E88.cpp` (adapted: their `D_001A6480` view as `g_gsScreenContextDims` over `g_gsScreenContext`, their `D_001A7340` as the `g_screenExtent` view over `g_screenWidth` with sda respelled `section(".sdata")`, their `D_001B9040` as the cast `(ScreenState *)(g_sceneActorMobys + 0x674)`, their `func_00283CE0` as `IntToFloat`, `int`/`short`/`float` spelled `s32`/`s16`/`f32`; s136os arm at the unit's pinned S136EXTRA) | `src/game/00274128.c` | `func_0027A9F0` (author commit `7dc80be1`, bigbeno37) |
-| `func_0027B858` in `going-decompiled/src/usa/text/178E88.cpp` (adapted: their `D_001B9040` as the cast `(ScreenState *)(g_sceneActorMobys + 0x674)`, their `D_001A7340` as the `g_screenExtent` view over `g_screenWidth` with sda respelled `section(".sdata")`, their `func_00283CE0` as `IntToFloat`, their `func_0027AB40` as `BuildCameraProjection`, `int`/`float` spelled `s32`/`f32`; s136os arm at the unit's pinned S136EXTRA) | `src/us2/game/0027B858.c` | `func_US2_0027B858` (author commit `ac7e1a2e`, bigbeno37) |
-| `RecomputeScreenViewportFromGsContext` in `going-decompiled/src/usa/text/178E88.cpp` (adapted: their `D_001A6480` as `&g_gsScreenContextDims` over `g_gsScreenContext`, their `D_001A7340` as the `g_screenExtent` view over `g_screenWidth` with sda respelled `section(".sdata")`, their `D_001B9040` as the cast `(ScreenState *)(g_sceneActorMobys + 0x674)`, their `func_00283CE0` as `IntToFloat`, their `func_00279FF0` as `func_0027A550`, `short`/`int`/`float` spelled `s16`/`s32`/`f32`; s136os arm at the unit's pinned S136EXTRA) | `src/us2/game/0027B858.c` | `func_US2_0027B988` (author commit `ac7e1a2e`, bigbeno37) |
-| `func_0027DB38` in `going-decompiled/src/usa/text/178E88.cpp` (adapted: their `D_001A7BB1` is stale — the ROM reads `0x1A7BB9` — respelled as the `g_noticeFadeSuppress` view over `D_1A7BB9` with the file-scope `.extern D_1A7BB9, 16` sizing device; their `D_L00_001BCAF4` is stale — the ROM reads `0x1B87F4` — respelled as the `g_noticePulseFrame` `.data` view over `g_sceneFrame`; their `func_00283180` as `func_00283B30` (cosine), `func_00283D38` as `ColorLerpPacked`, `func_00288FB8` as `GetLocalizedString` (`u8 *`), `func_0027F5B8` as `DrawDebugString` prototyped to its definition's five-`s32` shape with a `(s32)text` cast; `long`/`unsigned char *` spelled `s32`/`u8 *`; s136os arm at the unit's pinned S136EXTRA) | `src/us2/game/0027DB38.c` | `func_US2_0027DB38` (author commit `cde7e4dd`, Flavius) |
 
 ### OpenRAC rac2-gc-decomp at 96927f87, Lombyte-origin body (GPL-3.0)
 

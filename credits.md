@@ -783,7 +783,9 @@
   permission (held by the operator, RULING #10405/#12108) and re-checked
   byte-exact against our v2.00 ROM on the s136os arm (tasks #2471 and #2472,
   from the Window X boot audit NOTE #13122 / FACT #13116; task #2459, from
-  NOTE #13117 / FACT #13102). Each doc comment carries the `Source:` line,
+  NOTE #13117 / FACT #13102; task #2503, from the Window X audit NOTE
+  #13181, read at `5776dcc3`, where its four files are identical to
+  `b2a35115`'s). Each doc comment carries the `Source:` line,
   which names every change beyond symbol spellings.
 
   Used so far:
@@ -817,17 +819,6 @@
     RULING #13197); the 64-bit `long` written `s64` (RULING #13197); struct
     fields renamed (timer->intensity, texture->texId,
     interpolation->offset); the statements and locals are upstream's.
-
-- **OpenRAC — `rac2-decomp`, commit `5776dcc3`, text/178E88 Window X screen-geometry bodies** (GPL-3.0)
-  <https://github.com/OpenRAC/rac2-decomp> at commit `5776dcc35045fb2320610edd1d2db4fa7660ef37`
-
-  Engine C bodies in text/178E88, adopted with the authors' permission
-  (held by the operator, RULING #10405/#12108) and re-checked byte-exact
-  against our v2.00 ROM on the s136os arm (task #2503, from the Window X
-  audit NOTE #13181). Each doc comment carries the `Source:` line, which
-  names every change beyond symbol spellings.
-
-  Used so far:
   - **`InitScreenGeometry`** (`0x0027AF50`, 83 words, one-time screen-geometry
     and projection-viewport init) in `going-decompiled/src/usa/text/178E88.cpp`,
     on the s136os arm at the unit's pinned S136EXTRA, from
@@ -880,7 +871,8 @@
     `func_00283D38` as `ColorLerpPacked`, `func_00288FB8` as
     `GetLocalizedString` (`u8 *`), `func_0027F5B8` as `DrawDebugString`
     prototyped to its definition's five-`s32` shape with a `(s32)text`
-    cast, and `long`/`unsigned char *` spelled `s32`/`u8 *`.
+    cast, their int-valued `long` (64-bit on the EE) written `s32` (RULING
+    #13282), and `unsigned char *` written `u8 *`.
 
 - **Forja contributors** (MIT, © 2026 Forja contributors), via OpenRAC
   `rac2-gc-decomp` at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`
