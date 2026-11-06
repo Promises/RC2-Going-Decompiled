@@ -310,15 +310,16 @@
     `g_frameDmaCursorWords` (`MACRO_ADDR` dropped), `int`/`long` spelled
     `s32`/`s64`, and our local names.
 
-- **RC2 decomp contributions — `src/game/002E4528-rc2.c`, `src/game/002B7380-rc2.c` and `src/game/00297BB0-rc2.c` in OpenRAC `rac2-gc-decomp`, commit `96927f87`** (MIT, © 2026 RC2 decomp contributions)
+- **RC2 decomp contributions — `src/game/002E4528-rc2.c`, `src/game/002B7380-rc2.c`, `src/game/00297BB0-rc2.c` and `src/game/003409C8-rc2.c` in OpenRAC `rac2-gc-decomp`, commit `96927f87`** (MIT, © 2026 RC2 decomp contributions)
   <https://github.com/OpenRAC/rac2-gc-decomp> at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`
 
-  Three engine C bodies, adopted with permission (held by the operator, RULINGs
+  Four engine C bodies, adopted with permission (held by the operator, RULINGs
   #10405 and #12108) and re-checked byte-exact against our v2.00 ROM on the
   s136os arm. `002E4528-rc2.c` was carried into rac2-gc-decomp by atlasbez-dot
   (commit `ebf90a4c`, from atlasbez-dot/rac2-gc-decomp at `921a4dee`), as was
-  `00297BB0-rc2.c` (commit `bc1dd02f`); `002B7380-rc2.c` came in with commit
-  `fe9859d7` (Sergio Rodmauser). All three files carry the same MIT notice,
+  `00297BB0-rc2.c` (commit `bc1dd02f`) and `003409C8-rc2.c` (commit
+  `13cb3d0b`); `002B7380-rc2.c` came in with commit
+  `fe9859d7` (Sergio Rodmauser). All four files carry the same MIT notice,
   which is kept in each doc comment and in `THIRD-PARTY.md`. Each doc comment
   carries the `Source:` line, which names every change beyond extern spellings.
 
@@ -346,6 +347,16 @@
     `D_001C4FAC`, and the RULING #8620 `section(".data")` device on the
     `g_mapBitmapBuffer` extern (EE arm only). Without that device the -G8 unit
     reads the scalar gp-relative, where the ROM uses lui/lw.
+  - **`func_003418D8`** (`0x003418D8`, the weapon grid's region-0 d-pad
+    handler) in `going-decompiled/src/usa/text/235FE8.c`, from
+    `src/game/003409C8-rc2.c` (`func_003409C8`, v1.01 address, author commit
+    `13cb3d0b`, atlasbez-dot), read at OpenRAC `rac2-decomp` commit
+    `b2a35115e0cf580a1fdab8dd1071b157799e590e`, where the file is
+    blob-identical. ADAPTED: our callee and data spellings and prototypes,
+    our `(void *w, s32 flags)` signature with their `struct Obj` as our
+    `GuiWeaponGridCursor` view, and their typed `s16[][5]` table as an EE-only
+    asm-label view of `D_00259F38` (RULING #13168). Per-function
+    `S136EXTRA=-fno-strict-aliasing` override (RULING #12178), task #2469.
 - **OpenRAC — `rac2-gc-decomp`, commit `96927f87`, core bodies** (GPL-3.0)
   <https://github.com/OpenRAC/rac2-gc-decomp> at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`
 
@@ -760,6 +771,31 @@
     the unit's `section(".data")` declaration (RULING #8620). Unit s136os
     arm (S136EXTRA "", task #2480), after splitting the 4-word debris head
     `func_002DEEE8` off it.
+  - **`func_00339F98`** (`0x00339F98`, a camera-projection override around a
+    HUD list update) in `going-decompiled/src/usa/text/235FE8.c`, from
+    `src/game/00338F58.c` (`func_00338F58`, v1.01 address, author commit
+    `4afceda4`, Louis-Philippe Le Sieur). ADAPTED: our callee spellings and
+    declarations, and their v1.01 `D_L00_001BD2C0` array as the EE-only
+    assembler equate `g_cameraProjScratch = g_sceneActorMobys + 0x674`
+    (RULING #9574). Per-function `S136EXTRA=-fno-strict-aliasing` override
+    (RULING #12178), task #2469.
+  - **`func_00341A80`** (`0x00341A80`, the weapon grid's region-1 d-pad
+    handler) in `going-decompiled/src/usa/text/235FE8.c`, from
+    `src/game/0033F030.c` (`func_00340B70`, v1.01 address, body author commit
+    `aac730b3`, Flavius). ADAPTED: our callee and data spellings and
+    prototypes, our `(void *w, s32 buttons)` signature with their
+    `MenuState`/`MenuEntry` as our `GuiWeaponGridCursor`/`GuiWeaponGridEntry`,
+    and their typed table as an EE-only asm-label view of `D_259CC0`
+    (RULING #13168). Per-function `S136EXTRA=-fno-strict-aliasing` override
+    (RULING #12178), task #2469.
+  - **`func_00342520`** (`0x00342520`, a multi-column screen's column
+    select) in `going-decompiled/src/usa/text/235FE8.c`, from
+    `src/us2/game/003424C8-g8.c` (`func_US2_00342520`, author commit
+    `5800c586`, Flavius). ADAPTED: our callee and data spellings and
+    declarations with `GuiElement *` casts, and their `sda` scalar
+    `D_001AE0C8` as our `D_1AE0A0[idx]`, declared `s32[2]` on EE (RULING
+    #12316 Q3) and `s32[3]` on native. Per-function
+    `S136EXTRA=-fno-strict-aliasing` override (RULING #12178), task #2469.
 
 - **Newlib** (<https://sourceware.org/git/newlib-cygwin.git>, tag
   `newlib-2000-02-17`, commit `061afe83dc04a43321d69b5f04860e5de799665c`;

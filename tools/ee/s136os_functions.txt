@@ -766,3 +766,7 @@ usa text/178E88 func_00279F08 S136EXTRA=
 usa text/178E88 func_0027DC40 S136EXTRA=
 usa text/178E88 SetupGsDisplayBuffers S136EXTRA=
 usa text/178E88 DrawRotatedSprite2d
+usa text/235FE8 func_00339F98 S136EXTRA=-fno-strict-aliasing
+usa text/235FE8 func_003418D8 S136EXTRA=-fno-strict-aliasing
+usa text/235FE8 func_00341A80 S136EXTRA=-fno-strict-aliasing
+usa text/235FE8 func_00342520 S136EXTRA=-fno-strict-aliasing

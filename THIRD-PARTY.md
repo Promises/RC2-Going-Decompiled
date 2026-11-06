@@ -196,6 +196,9 @@ bodies" below.
 | `func_00115CF0` in `going-decompiled/src/usa/cod/015180.c` (Newlib `fiprintf`, notice below; adapted: parameters typed `void *stream, const char *fmt`, callee prototype the unit's; a `TARGET_NATIVE` `__builtin_va_start` branch of ours; sn2952 arm), tasks #2497 and #2518 | `src/core/00115CF0.c`, author commit `ab9b31a8` (Louis-Philippe Le Sieur) | `func_00115CF0` |
 | `snd_PrintError` in `going-decompiled/src/usa/cod/015180.c` (Newlib `printf`, notice below; adapted: our symbol name, callee func_00118CC8 spelled `VfprintfDispatch` with the unit's prototype, `_impure_ptr` read through the unit's `s32 D_00133E74`, parameter typed, locals named; a `TARGET_NATIVE` `__builtin_va_start` branch of ours; sn2952 arm), tasks #2497 and #2518 | `src/core/00115D48.c`, author commit `ab9b31a8` (Louis-Philippe Le Sieur) | `func_00115D48` |
 | `func_002DEEF8` in `going-decompiled/src/usa/text/1D54C0.cpp` (adapted: our symbol names; their struct views renamed; their `sda` byte array `D_001A7A0A[0]` as our scalar `g_miscExtras` behind an EE-only `.extern g_miscExtras, 16` (RULING #12316); `g_fileLoadState` through the unit's `section(".data")` declaration (RULING #8620); `s32`/`s16`/`u8` spellings; its switch table bound to the ROM's by `tools/ee/jtbl_bind.sh`), task #2480 | `src/game/002DDEC8-animation.c` (author commit `b073e803`, bigbeno37) | `func_002DE0D0` (v1.01 address) |
+| `func_00339F98` in `going-decompiled/src/usa/text/235FE8.c` (adapted: our callee spellings and declarations; their `D_L00_001BD2C0` array as the EE-only equate `g_cameraProjScratch = g_sceneActorMobys + 0x674`), task #2469 | `src/game/00338F58.c` | `func_00338F58` (v1.01 address) |
+| `func_00341A80` in `going-decompiled/src/usa/text/235FE8.c` (adapted: our symbol names, signature and prototypes; their `MenuState`/`MenuEntry` as our `GuiWeaponGridCursor`/`GuiWeaponGridEntry`; their typed table as an EE-only asm-label view of `D_259CC0`), task #2469 | `src/game/0033F030.c` | `func_00340B70` (v1.01 address) |
+| `func_00342520` in `going-decompiled/src/usa/text/235FE8.c` (adapted: our symbol names and declarations, `GuiElement *` casts; their `sda` scalar `D_001AE0C8` as our `D_1AE0A0[idx]`, `s32[2]` on EE and `s32[3]` on native; `char[]` as `u8[]`), task #2469 | `src/us2/game/003424C8-g8.c` | `func_US2_00342520` (v2.00 address) |
 
 The four `cod/015180` files are byte-identical between `b2a35115` and
 `8b26d8adeb0b5515a962f83230df4bf909fd0cf5`, the commit task #2497 read.
@@ -412,11 +415,11 @@ a URL for it. The notice, which the doc comment also carries verbatim:
 
 ### RC2 decomp contributions, via OpenRAC rac2-gc-decomp (MIT)
 
-Three C bodies are adapted from OpenRAC's `rac2-gc-decomp`,
+Four C bodies are adapted from OpenRAC's `rac2-gc-decomp`,
 <https://github.com/OpenRAC/rac2-gc-decomp> at commit
 `96927f872c709e13aaa0f32265bb81a5531bf7ed`, from files that carry their own
 MIT notice, not the repository's GPL-3.0. The notice is the same, word for
-word, in all three files. It is reproduced verbatim here and in each function's doc
+word, in all four files. It is reproduced verbatim here and in each function's doc
 comment (RULINGs #10405 and #12108):
 
 - `CastEmitterOcclusionRay` in `going-decompiled/src/usa/text/1DFF80.cpp`,
@@ -434,6 +437,14 @@ comment (RULINGs #10405 and #12108):
   `D_001C4FAC`, the RULING #8620 `section(".data")` device on that extern,
   parameter and row-counter names). That file was carried over by
   atlasbez-dot (upstream commit `bc1dd02f`), task #2299.
+- `func_003418D8` in `going-decompiled/src/usa/text/235FE8.c`,
+  from `src/game/003409C8-rc2.c`, `func_003409C8` (v1.01 address; read at
+  OpenRAC `rac2-decomp` `b2a35115e0cf580a1fdab8dd1071b157799e590e`, where the
+  file is blob-identical; adapted: callee and data spellings ours, our
+  signature with their `struct Obj` as our `GuiWeaponGridCursor`, their typed
+  table as an EE-only asm-label view of `D_00259F38`). That file was carried
+  over from atlasbez-dot/rac2-gc-decomp at `921a4dee` by atlasbez-dot
+  (upstream commit `13cb3d0b`), task #2469.
 
     SPDX-License-Identifier: MIT
     MIT License

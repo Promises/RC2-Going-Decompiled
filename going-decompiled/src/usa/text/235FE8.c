@@ -3389,47 +3389,86 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00339B00);
 void func_00339F90(void *w) {
 }
 
-/* func_00339F98: temporarily override a camera-projection parameter, rebuild the
- * projection, run one per-mode scene update, then restore the parameter and
- * rebuild again. *(w+0x4) is a curve/animator whose first float gates the whole
- * op: if it is 0 the widget is inactive and nothing happens. The overridden
- * parameter is a float at g_sceneActorMobys+0x674+0xB0 (an unnamed projection
- * sub-struct co-located with the scene-cast region); it is forced to 0.62 for
- * the duration. Mode = *(w+0x1C8): 0 -> func_00339B00(w) (the full per-frame
- * update); 2 -> func_00339F90(w) (stub hook); any other value -> no update. */
+/*
+ * func_00339F98(object): temporarily override a camera-projection parameter,
+ * rebuild the projection, run one per-mode scene update, then restore the
+ * parameter and rebuild again. *(object+0x4) points at a curve/animator whose
+ * first float gates the whole op: if it is 0 the widget is inactive and nothing
+ * happens. The overridden parameter is word 44 (+0xB0) of the camera/projection
+ * scratch block at g_sceneActorMobys+0x674, the scale BuildCameraProjection
+ * reads (func_00339398 overrides the same word); it is forced to 0.62 for the
+ * duration. Mode *(object+0x1C8): 0 -> func_00339B00(object) (the full
+ * per-frame update); 2 -> func_00339F90(object) (stub hook); any other value ->
+ * no update. Param: object = the HUD list widget (24D728.cpp passes gui+0x1FDC
+ * and mgr+0x1D8C). No return value.
+ *
+ * MATCHED on the s136os arm with a per-function override (task #2469): row
+ * `usa text/235FE8 func_00339F98 S136EXTRA=-fno-strict-aliasing` in
+ * tools/ee/s136os_functions.txt, i.e. the unit's flags minus -fno-gcse
+ * (RULING #12178). With the unit's -fno-gcse it builds 41 words, not 44
+ * (removal probe, task #2469; FACT #12193 measured the same). The ROM keeps
+ * the %hi of the scratch block in $17 across the update call, so each restore
+ * path re-adds only the %lo; this body reproduces that only with gcse on.
+ * DEVICE, ADDRESSING MODEL (RULING #9574, the nonzero-offset assembler equate
+ * under RULING #8620): upstream reads the block as a float array symbol
+ * (D_L00_001BD2C0[44]); the ROM forms that base as %hi/%lo(g_sceneActorMobys +
+ * 0x674) and keeps the 0xB0 in the lwc1/swc1 offset. The file-scope EE-only
+ * equate `g_cameraProjScratch = g_sceneActorMobys + 0x674` below gives cc1 that
+ * symbol. It emits no bytes and no symbol (nm of the unit object: 0), and the
+ * relocations name g_sceneActorMobys with the 0x674 in the immediates. It sits
+ * outside the S136OS guard so the 2.9 TU that receives the spliced block
+ * defines it too. Without it (the same body through
+ * `((float *)(g_sceneActorMobys + 0x674))[44]`) the splice refuses the function
+ * on LENGTH, 42 words for the ROM's 44 (task #2469). Native reads through that
+ * cast.
+ * GUARD: on EE this C is the image's body, compiled alone by SN 2.95.3 v1.36
+ * -fopt-stack and spliced over S136OS_SLOT by tools/ee/s136os_splice.sh; there
+ * is no asm fallback. On native it is plain C.
+ * Source: OpenRAC/rac2-decomp @b2a35115e0cf580a1fdab8dd1071b157799e590e
+ * (GPL-3.0, adopted with the authors' permission per RULINGs #10405/#12108),
+ * src/game/00338F58.c, func_00338F58 (v1.01 address; author commit 4afceda4,
+ * Louis-Philippe Le Sieur; the file is blob-identical at rac2-gc-decomp
+ * 96927f87). Respellings by ROM-encoded address: func_0027AB40 =
+ * BuildCameraProjection, func_00338AD8 = func_00339B00, func_00338F50 =
+ * func_00339F90, D_L00_001BD2C0 (their v1.01 `float[]`) = g_cameraProjScratch
+ * (= g_sceneActorMobys + 0x674, the equate below). ADAPTED: (1) their callee
+ * declarations `func_00338AD8(char *)` / `func_00338F50(char *)` replaced by
+ * the unit's `func_00339B00(void *)` declaration and func_00339F90's
+ * `(void *)` definition above; (2) D_L00_001BD2C0 as the EE-only equate device
+ * below, with a native cast. Signature, control flow and expressions are theirs.
+ */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00339F98);
+__asm__("g_cameraProjScratch = g_sceneActorMobys + 0x674");
+#endif
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00339F98)
+S136OS_SLOT(func_00339F98);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00339F98, unit objdiff): 68.45%,
-   26/47 insns differ. Residual: UNKNOWN-addiu (first differing insn: 'addiu sp, sp, -0x30' vs 'addiu sp, sp, -0x20').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
 extern u8 g_sceneActorMobys[];
 extern void func_00339B00(void *w);
 extern void BuildCameraProjection(void);
-void func_00339F98(void *w) {
-    u8 *proj;
-    f32 saved;
-    s32 mode;
-
-    if (*(f32 *)(*(void **)((char *)w + 0x4)) == 0.0f) {
+#ifndef TARGET_NATIVE
+extern float g_cameraProjScratch[];
+#else
+#define g_cameraProjScratch ((float *)(g_sceneActorMobys + 0x674))
+#endif
+void func_00339F98(char *object)
+{
+    float saved;
+    if (*(float *)*(int *)(object + 4) == 0.0f)
         return;
-    }
-    proj = g_sceneActorMobys + 0x674;
-    saved = *(f32 *)(proj + 0xB0);
-    *(f32 *)(proj + 0xB0) = 0.62f; /* 0x3F1EB852 */
+    saved = g_cameraProjScratch[44];
+    g_cameraProjScratch[44] = 0.62f;
     BuildCameraProjection();
-
-    mode = *(s32 *)((char *)w + 0x1C8);
-    if (mode == 0) {
-        func_00339B00(w);
-    } else if (mode == 2) {
-        func_00339F90(w);
+    switch (*(int *)(object + 0x1C8)) {
+    case 0: func_00339B00(object); break;
+    case 2: func_00339F90(object); break;
     }
-
-    *(f32 *)(proj + 0xB0) = saved;
+    g_cameraProjScratch[44] = saved;
     BuildCameraProjection();
 }
+#ifdef TARGET_NATIVE
+#undef g_cameraProjScratch
+#endif
 #endif
 
 /* func_0033A048: init the screen's eight embedded sub-elements at their fixed
@@ -8442,145 +8481,272 @@ void func_00341708(void *w, void *table, s32 rowStride) {
 }
 #endif
 
-/* func_003418D8: d-pad + confirm handler for the two-region weapon grid `w`
- * (a 4-column x N main grid at col +0x814 / row +0x818, plus a 2-wide sub-region
- * occupying rows 4/5). `flags` (held buttons): up (0x1000) row-- wrapping to 5;
- * down (0x4000) row++ wrapping to 0; left (0x8000) col--, and on underflow drops
- * to col 3 (or, when the row is 4/5, crosses into the sub-region: col 2, row-=4,
- * region flag +0x81C=1); right (0x2000) col++, and on overflow past 4 wraps to
- * col 0 (row 4 -> row 0 + flag; row 5 -> col 1/row 1 + flag). Confirm (0x40)
- * forwards to func_00341708(w, D_00259F38, 4). Each path then refreshes the
- * selected entry +0x820 = D_00259F38[col + row*4].field_0x6. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003418D8);
+/* The cursor fields of the weapon-grid screen object that func_003418D8 and
+ * func_00341A80 drive (mode w+0x81C picks which one, see the dispatcher above). */
+typedef struct {
+    u8  _pad[0x814];
+    s32 column;   /* +0x814 */
+    s32 row;      /* +0x818 */
+    s32 region;   /* +0x81C: which grid handles the next input (0 = 3418D8, 1 = 341A80) */
+    s32 selected; /* +0x820: item id under the cursor */
+} GuiWeaponGridCursor;
+/* One 0xA-byte D_259CC0 grid entry; the item id is the halfword at +0x6. */
+typedef struct {
+    u8  _pad0[6];
+    s16 itemId;   /* +0x6 */
+    u8  _pad8[2];
+} GuiWeaponGridEntry;
+
+/*
+ * func_003418D8(w, flags): d-pad + confirm handler for region 0 of the weapon
+ * grid screen `w` (GuiWeaponGridCursor): a 4-column x 6-row grid over the
+ * D_00259F38 entry table (index column + row * 4, five halfwords per entry, the
+ * item id at halfword 3). `flags` is the held-button mask; the four directions
+ * play the wheel cue PlayGlobalSound(3, 0, 0) first:
+ *   0x1000 up    -> row--, wrapping from 0 to 5
+ *   0x4000 down  -> row++, wrapping past 5 to 0
+ *   0x8000 left  -> column--; below 0 it becomes 3, except on rows 4/5, which
+ *                   cross into region 1 (func_00341A80's grid): column 2,
+ *                   row -= 4, region = 1
+ *   0x2000 right -> column++; past 3 it becomes 0, and rows 4/5 cross into
+ *                   region 1 (row 4 -> row 0; row 5 -> column 1, row 1)
+ *   0x40 confirm -> func_00341708(w, D_00259F38, 4) (no cue here)
+ * Every path then stores the highlighted entry's item id in `selected`
+ * (+0x820). No return value.
+ *
+ * MATCHED on the s136os arm with a per-function override (task #2469): row
+ * `usa text/235FE8 func_003418D8 S136EXTRA=-fno-strict-aliasing` in
+ * tools/ee/s136os_functions.txt, i.e. the unit's flags minus -fno-gcse
+ * (RULING #12178). With the unit's -fno-gcse it builds 101 words, not 106
+ * (removal probe, task #2469; FACT #12193 measured the same).
+ * DEVICE, TYPED VIEW (RULING #13168): the entry table is read through
+ * g_weaponGrid4Entries, an EE-only asm-label alias of D_00259F38 typed
+ * `s16[][5]` (upstream's own typed extern; the code indexes it [i][3] with a
+ * 10-byte stride). It names the same symbol at the same address, emits no
+ * symbol (nm of the unit object: 0) and adds no storage; native casts the
+ * unit's u8[] D_00259F38. Without it (the same body through
+ * `((s16 (*)[5])D_00259F38)`) the splice refuses the function on LENGTH, 101
+ * words for the ROM's 106 (task #2469).
+ * GUARD: on EE this C is the image's body, compiled alone by SN 2.95.3 v1.36
+ * -fopt-stack and spliced over S136OS_SLOT by tools/ee/s136os_splice.sh; there
+ * is no asm fallback. On native it is plain C.
+ * Source: OpenRAC/rac2-decomp @b2a35115e0cf580a1fdab8dd1071b157799e590e,
+ * src/game/003409C8-rc2.c, func_003409C8 (v1.01 address; blob-identical at
+ * rac2-gc-decomp 96927f87). The file carries its own MIT notice, not the
+ * repository's GPL-3.0; it was carried over by atlasbez-dot (upstream commit
+ * 13cb3d0b) from atlasbez-dot/rac2-gc-decomp at 921a4dee. Adopted with the
+ * authors' permission per RULINGs #10405/#12108. Respellings by ROM-encoded
+ * address: func_002E5E58 = PlayGlobalSound, func_003407F8 = func_00341708,
+ * D_00259F58 = D_00259F38 (as the typed view g_weaponGrid4Entries).
+ * ADAPTED: (1) our signature (void *w, s32 flags), with their `struct Obj *o`
+ * as the local `o` (cast of w); (2) their struct Obj (s8 pad[0x814]; f814,
+ * f818, f81C, f820) as our GuiWeaponGridCursor (u8 _pad; column, row, region,
+ * selected); (3) the unit's PlayGlobalSound(s32, s32, s32) and
+ * func_00341708(void *, void *, s32) declarations for theirs; (4) their
+ * `extern s16 D_00259F58[][5]` as the EE-only typed view below, native
+ * casting our u8[]. Control flow and expressions are theirs. The notice, kept
+ * verbatim:
+ *
+ *   SPDX-License-Identifier: MIT
+ *   MIT License
+ *
+ *   Copyright (c) 2026 RC2 decomp contributions
+ *
+ *   Permission is hereby granted, free of charge, to any person obtaining a copy
+ *   of this software and associated documentation files (the "Software"), to deal
+ *   in the Software without restriction, including without limitation the rights
+ *   to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ *   copies of the Software, and to permit persons to whom the Software is
+ *   furnished to do so, subject to the following conditions:
+ *
+ *   The above copyright notice and this permission notice shall be included in all
+ *   copies or substantial portions of the Software.
+ *
+ *   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ *   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ *   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ *   AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ *   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ *   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ *   SOFTWARE.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_003418D8)
+S136OS_SLOT(func_003418D8);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_003418D8, unit objdiff): 51.89%,
-   102/125 insns differ. Residual: UNKNOWN-addiu + movn/movz (first differing insn: 'addiu sp, sp, -0x20' vs 'addiu sp, sp, -0x10').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
 extern u8 D_00259F38[];
 extern s32 PlayGlobalSound(s32 id, s32 a, s32 b);
 extern void func_00341708(void *w, void *table, s32 mult);
+#ifndef TARGET_NATIVE
+extern s16 g_weaponGrid4Entries[][5] __asm__("D_00259F38");
+#else
+#define g_weaponGrid4Entries ((s16 (*)[5])D_00259F38)
+#endif
 void func_003418D8(void *w, s32 flags) {
-    s32 v, idx;
-
-    if (flags & 0x1000) {          /* up: row-- wrap to 5 */
+    GuiWeaponGridCursor *o = (GuiWeaponGridCursor *)w;
+    if (flags & 0x1000) {
+        s32 m1;
+        s32 r;
+        s32 t;
         PlayGlobalSound(3, 0, 0);
-        v = *(s32 *)((char *)w + 0x818) - 1;
-        *(s32 *)((char *)w + 0x818) = (v >= 0) ? v : 5;
-    } else if (flags & 0x4000) {   /* down: row++ wrap to 0 */
+        m1 = -1;
+        t = o->row - 1;
+        r = (m1 < t) ? t : 5;
+        o->row = r;
+    } else if (flags & 0x4000) {
+        s32 t;
         PlayGlobalSound(3, 0, 0);
-        v = *(s32 *)((char *)w + 0x818) + 1;
-        *(s32 *)((char *)w + 0x818) = (v > 5) ? 0 : v;
-    } else if (flags & 0x8000) {   /* left: col-- (may cross into sub-region) */
+        t = o->row + 1;
+        t = (5 < t) ? 0 : t;
+        o->row = t;
+    } else if (flags & 0x8000) {
+        s32 t;
+        s32 a;
+        s32 b;
         PlayGlobalSound(3, 0, 0);
-        v = *(s32 *)((char *)w + 0x814) - 1;
-        if (v >= 0) {
-            *(s32 *)((char *)w + 0x814) = v;
-        } else {
-            s32 t = *(s32 *)((char *)w + 0x818) - 4;
-            if ((u32)t < 2) {          /* rows 4/5 -> 2-wide sub-region */
-                *(s32 *)((char *)w + 0x814) = 2;
-                *(s32 *)((char *)w + 0x818) = t;
-                *(s32 *)((char *)w + 0x81C) = 1;
-            } else {
-                *(s32 *)((char *)w + 0x814) = 3;
+        t = o->column - 1;
+        o->column = t;
+        if (t < 0) {
+            a = o->row;
+            o->column = 3;
+            b = a - 4;
+            if ((u32)b < 2) {
+                o->column = 2;
+                o->row = b;
+                o->region = 1;
             }
         }
-    } else if (flags & 0x2000) {   /* right: col++ (may wrap/cross region) */
+    } else if (flags & 0x2000) {
+        s32 t;
+        s32 k;
         PlayGlobalSound(3, 0, 0);
-        v = *(s32 *)((char *)w + 0x814) + 1;
-        if (v < 4) {
-            *(s32 *)((char *)w + 0x814) = v;
-        } else {
-            s32 r = *(s32 *)((char *)w + 0x818);
-            *(s32 *)((char *)w + 0x814) = 0;
-            if (r == 4) {
-                *(s32 *)((char *)w + 0x818) = 0;
-                *(s32 *)((char *)w + 0x81C) = 1;
-            } else if (r == 5) {
-                *(s32 *)((char *)w + 0x81C) = 1;
-                *(s32 *)((char *)w + 0x814) = 1;
-                *(s32 *)((char *)w + 0x818) = 1;
+        t = o->column + 1;
+        o->column = t;
+        if (t >= 4) {
+            o->column = 0;
+            k = o->row;
+            if (k == 4) {
+                o->row = 0;
+                o->region = 1;
+            } else if (k == 5) {
+                o->column = 1;
+                o->row = 1;
+                o->region = 1;
             }
         }
-    } else if (flags & 0x40) {     /* confirm */
-        func_00341708(w, D_00259F38, 4);
+    } else if (flags & 0x40) {
+        func_00341708(o, g_weaponGrid4Entries, 4);
     }
-
-    /* tail (all paths): result entry from the grid table */
-    idx = *(s32 *)((char *)w + 0x814) + *(s32 *)((char *)w + 0x818) * 4;
-    *(s32 *)((char *)w + 0x820) = *(s16 *)&D_00259F38[idx * 0xA + 0x6];
+    o->selected = g_weaponGrid4Entries[o->column + o->row * 4][3];
 }
+#ifdef TARGET_NATIVE
+#undef g_weaponGrid4Entries
+#endif
 #endif
 
-/* func_00341A80: d-pad + confirm handler for the 3-column weapon grid `w` (sibling
- * of func_003418D8; col +0x814 / row +0x818, table D_259CC0 stride 0xA, idx =
- * col + row*3). up (0x1000) row-- wrapping to 1, but column 0 is single-row so it
- * pins row 0; down (0x4000) row++ wrapping to 0, column 0 pins row 0; left
- * (0x8000) col--, and on underflow (or leaving column 0 from row 1) crosses to
- * col 3 with row += 4 and clears the region flag +0x81C; right (0x2000) col++,
- * and past column 2 wraps to col 0 with row += 4 and flag cleared. Confirm (0x40)
- * forwards to func_00341708(w, D_259CC0, 3). Each path then refreshes +0x820 =
- * D_259CC0[col + row*3].field_0x6. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00341A80);
+/*
+ * func_00341A80(w, buttons): d-pad + confirm handler for region 1 of the weapon
+ * grid screen `w` (GuiWeaponGridCursor; the sibling of func_003418D8): a
+ * 3-column x 2-row grid over the D_259CC0 entry table (index column + 3 * row,
+ * 0xA-byte GuiWeaponGridEntry records, item id at +0x6). `buttons` is the
+ * held-button mask; each direction plays the wheel cue PlayGlobalSound(3, 0, 0):
+ *   0x1000 up    -> row--, wrapping from 0 to 1; column 0 pins row 0
+ *   0x4000 down  -> row++, wrapping past 1 to 0; column 0 pins row 0
+ *   0x8000 left  -> column--; below 0, or onto column 0 from row 1, it crosses
+ *                   back into region 0: column 3, row += 4, region = 0
+ *   0x2000 right -> column++; past 2 it crosses into region 0: column 0,
+ *                   row += 4, region = 0
+ *   0x40 confirm -> func_00341708(w, D_259CC0, 3) (no cue here)
+ * Every path then stores the highlighted entry's item id in `selected`
+ * (+0x820). No return value.
+ *
+ * MATCHED on the s136os arm with a per-function override (task #2469): row
+ * `usa text/235FE8 func_00341A80 S136EXTRA=-fno-strict-aliasing` in
+ * tools/ee/s136os_functions.txt, i.e. the unit's flags minus -fno-gcse
+ * (RULING #12178). With the unit's -fno-gcse it builds 100 words, not 105
+ * (removal probe, task #2469; FACT #12193 measured the same).
+ * DEVICE, TYPED VIEW (RULING #13168): the entry table is read through
+ * g_weaponGrid3Entries, an EE-only asm-label alias of D_259CC0 typed
+ * GuiWeaponGridEntry[] (upstream's own typed extern, their MenuEntry; the code
+ * reads the halfword at +0x6 of 0xA-byte records, as func_00346878 does with
+ * its own D_259CC0 view). It names the same symbol at the same address, emits
+ * no symbol (nm of the unit object: 0) and adds no storage; native casts the
+ * unit's u8[] D_259CC0. Without it (the same body through
+ * `((GuiWeaponGridEntry *)D_259CC0)`) the function builds at the ROM's length
+ * but 14 of its 106 words differ (verify_match_unit, task #2469): the table's
+ * address and the index are allocated to other registers.
+ * The object carries one more R_MIPS_HI16(D_259CC0) than the INCLUDE_ASM object
+ * (at +0x40, where splat prints the ROM word as the constant `lui $17,0x26`);
+ * the linked word is the same 0x3C110026.
+ * GUARD: on EE this C is the image's body, compiled alone by SN 2.95.3 v1.36
+ * -fopt-stack and spliced over S136OS_SLOT by tools/ee/s136os_splice.sh; there
+ * is no asm fallback. On native it is plain C.
+ * Source: OpenRAC/rac2-decomp @b2a35115e0cf580a1fdab8dd1071b157799e590e
+ * (GPL-3.0, adopted with the authors' permission per RULINGs #10405/#12108),
+ * src/game/0033F030.c, func_00340B70 (v1.01 address; body author commit
+ * aac730b3, Flavius; the file was created by d9cbbef8, Flavius, and the body is
+ * unchanged at rac2-gc-decomp 96927f87). Respellings by ROM-encoded address:
+ * func_002E5E58 = PlayGlobalSound, func_003407F8 = func_00341708, D_001FCE0 =
+ * D_259CC0 (as the typed view g_weaponGrid3Entries). ADAPTED: (1) our
+ * signature (void *w, s32 buttons) for their (MenuState *state, unsigned int
+ * buttons), with `state` a local cast of w; (2) their MenuState (column, page,
+ * flag, value at +0x814) as our GuiWeaponGridCursor (column, row, region,
+ * selected), their MenuEntry (.value at +0x6) as our GuiWeaponGridEntry
+ * (.itemId); (3) the unit's PlayGlobalSound(s32, s32, s32) and
+ * func_00341708(void *, void *, s32) declarations for their
+ * func_002E5E58(int, unsigned int, void *) and func_003407F8(MenuState *,
+ * MenuEntry *, int); (4) their `extern MenuEntry D_001FCE0[]` as the EE-only
+ * typed view below, native casting our u8[]. Control flow and expressions are
+ * theirs.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00341A80)
+S136OS_SLOT(func_00341A80);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00341A80, unit objdiff): 48.39%,
-   97/121 insns differ. Residual: UNKNOWN-addiu + movn/movz (first differing insn: 'addiu sp, sp, -0x20' vs 'addiu sp, sp, -0x10').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
 extern u8 D_259CC0[];
 extern s32 PlayGlobalSound(s32 id, s32 a, s32 b);
 extern void func_00341708(void *w, void *table, s32 mult);
-void func_00341A80(void *w, s32 flags) {
-    s32 v, idx;
-
-    if (flags & 0x1000) {          /* up: row-- (column 0 pins row 0) */
-        s32 col = *(s32 *)((char *)w + 0x814);
-        v = *(s32 *)((char *)w + 0x818) - 1;
-        v = (v >= 0) ? v : 1;
-        if (col == 0) {
-            v = 0;
-        }
-        *(s32 *)((char *)w + 0x818) = v;
+#ifndef TARGET_NATIVE
+extern GuiWeaponGridEntry g_weaponGrid3Entries[] __asm__("D_259CC0");
+#else
+#define g_weaponGrid3Entries ((GuiWeaponGridEntry *)D_259CC0)
+#endif
+void func_00341A80(void *w, s32 buttons)
+{
+    GuiWeaponGridCursor *state = (GuiWeaponGridCursor *)w;
+    if (buttons & 0x1000) {
+        int v = state->row - 1;
+        int lower = -1;
+        v = (v > lower) ? v : 1;
+        state->row = state->column ? v : 0;
         PlayGlobalSound(3, 0, 0);
-    } else if (flags & 0x4000) {   /* down: row++ wrap to 0 (column 0 pins row 0) */
-        s32 col = *(s32 *)((char *)w + 0x814);
-        v = *(s32 *)((char *)w + 0x818) + 1;
-        v = (v >= 2) ? 0 : v;
-        if (col == 0) {
-            v = 0;
-        }
-        *(s32 *)((char *)w + 0x818) = v;
+    } else if (buttons & 0x4000) {
+        int v = state->row + 1;
+        v = (v > 1) ? 0 : v;
+        state->row = state->column ? v : 0;
         PlayGlobalSound(3, 0, 0);
-    } else if (flags & 0x8000) {   /* left: col-- (may cross to the +4 row region) */
+    } else if (buttons & 0x8000) {
+        state->column = state->column - 1;
         PlayGlobalSound(3, 0, 0);
-        v = *(s32 *)((char *)w + 0x814) - 1;
-        if (v < 0 || (v == 0 && *(s32 *)((char *)w + 0x818) == 1)) {
-            *(s32 *)((char *)w + 0x814) = 3;
-            *(s32 *)((char *)w + 0x818) = *(s32 *)((char *)w + 0x818) + 4;
-            *(s32 *)((char *)w + 0x81C) = 0;
-        } else {
-            *(s32 *)((char *)w + 0x814) = v;
+        if (state->column < 0 || (state->column == 0 && state->row == 1)) {
+            state->column = 3;
+            state->row += 4;
+            state->region = 0;
         }
-    } else if (flags & 0x2000) {   /* right: col++ (may cross to the +4 row region) */
+    } else if (buttons & 0x2000) {
+        state->column = state->column + 1;
         PlayGlobalSound(3, 0, 0);
-        v = *(s32 *)((char *)w + 0x814) + 1;
-        if (v < 3) {
-            *(s32 *)((char *)w + 0x814) = v;
-        } else {
-            *(s32 *)((char *)w + 0x814) = 0;
-            *(s32 *)((char *)w + 0x818) = *(s32 *)((char *)w + 0x818) + 4;
-            *(s32 *)((char *)w + 0x81C) = 0;
+        if (state->column >= 3) {
+            state->column = 0;
+            state->row += 4;
+            state->region = 0;
         }
-    } else if (flags & 0x40) {     /* confirm */
-        func_00341708(w, D_259CC0, 3);
+    } else if (buttons & 0x40) {
+        func_00341708(state, g_weaponGrid3Entries, 3);
     }
-
-    idx = *(s32 *)((char *)w + 0x814) + *(s32 *)((char *)w + 0x818) * 3;
-    *(s32 *)((char *)w + 0x820) = *(s16 *)&D_259CC0[idx * 0xA + 0x6];
+    state->selected = g_weaponGrid3Entries[state->column + 3 * state->row].itemId;
 }
+#ifdef TARGET_NATIVE
+#undef g_weaponGrid3Entries
+#endif
 #endif
 
 /* func_00341C28: init the screen's six embedded sub-elements at their fixed
@@ -9020,58 +9186,93 @@ s32 func_003424C8(void *screen) {
            *(s32 *)((char *)screen + selOfs + 0x1B8) * 0x14;
 }
 
-/* func_00342520: select active column `mode` (0..2) on the multi-column screen
- * `w`. Loads the column's config value (D_1AE0A0[mode] -> +0x1C4) and table row
- * (&D_2652B0[mode*0x20] -> +0x1C8), sets the column icon glyph (+0x1CC: 7/8/6),
- * (re)inits the row widget at +0x238 with the column's item count
- * (*(w+mode*4+0x1B8)) and its record pointer (*(w+0x310/314/318)), sets the
- * caption text (+0x1D0) to the column's localized string (0x2BEB/0x2BEC/0x3094)
- * and the three element alphas (w, +0x4C, +0xE4) to mode's value (0/1/2), and
- * records the selection at +0x31C. mode>=3 (unsigned) is a no-op. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342520);
+/*
+ * func_00342520(self, idx): select the active column `idx` (0..2) on the
+ * multi-column screen `self`. It loads the column's config value
+ * (D_1AE0A0[idx] -> +0x1C4) and table row (&D_2652B0[idx * 0x20] -> +0x1C8)
+ * and sets the column icon glyph (+0x1CC: 7/8/6). It re-inits the row widget at
+ * +0x238 with the column's item count (*(self + idx*4 + 0x1B8), via
+ * func_00348E50) and binds its record array (*(self + 0x310/0x314/0x318), via
+ * GuiMenuListSetRows). It sets the caption text (+0x1D0) to the column's
+ * localized string (0x2BEB/0x2BEC/0x3094) and the alpha of the screen and of its
+ * elements at +0x4C and +0xE4 to the column number as a float (0.0/1.0/2.0).
+ * Finally it records the selection at +0x31C. An idx above 2 (unsigned) does
+ * nothing. Params: self = the screen (1CA080.cpp passes g_guiInstance +
+ * 0x3C160 with idx 0), idx = column. No return value.
+ *
+ * MATCHED on the s136os arm with a per-function override (task #2469): row
+ * `usa text/235FE8 func_00342520 S136EXTRA=-fno-strict-aliasing` in
+ * tools/ee/s136os_functions.txt, i.e. the unit's flags minus -fno-gcse
+ * (RULING #12178). With the unit's -fno-gcse it builds the ROM's 84 words but
+ * 34 of them differ (verify_match_unit, removal probe, task #2469); the ROM reuses
+ * `idx << 2` across the branches, which only gcse reproduces (FACT #9207).
+ * DEVICE, ADDRESSING MODEL (RULING #12316 Q3, an undersized extern array): the
+ * ROM forms &D_1AE0A0 gp-relative (`addiu $4,$28,%gp_rel(D_1AE0A0)`), but the
+ * column table is three words, which -G8 does not treat as small data.
+ * Upstream gets the gp-relative form from its patched compiler's `sda`
+ * attribute on a scalar (`((int *)&D_001AE0C8)[idx]`). Here the EE arm
+ * declares `D_1AE0A0[2]` (8 bytes, small under -G8) and native declares the
+ * true `[3]`. It changes no executed result. With `[3]` on EE it builds 85 words, not 84
+ * (removal probe, task #2469).
+ * GUARD: on EE this C is the image's body, compiled alone by SN 2.95.3 v1.36
+ * -fopt-stack and spliced over S136OS_SLOT by tools/ee/s136os_splice.sh; there
+ * is no asm fallback. On native it is plain C.
+ * Source: OpenRAC/rac2-decomp @b2a35115e0cf580a1fdab8dd1071b157799e590e
+ * (GPL-3.0, adopted with the authors' permission per RULINGs #10405/#12108),
+ * src/us2/game/003424C8-g8.c, func_US2_00342520 (v2.00 address; author commit
+ * 5800c586, Flavius; the file is blob-identical at rac2-gc-decomp 96927f87).
+ * Respellings by ROM-encoded address: D_001AE0C8 = D_1AE0A0, D_002652F0 =
+ * D_2652B0, func_00348118 = func_00348E50, func_00348068 = GuiMenuListSetRows,
+ * func_00288FB8 = GetLocalizedString, func_00336A38 = GuiElementSetText,
+ * func_003363C0 = GuiElementSetAlpha. ADAPTED: (1) named func_00342520;
+ * (2) their `extern int D_001AE0C8 __attribute__((sda))` read as
+ * `((int *)&D_001AE0C8)[idx]` as our `D_1AE0A0[idx]` over the EE-only s32[2]
+ * device below (native s32[3]), `sda` dropped; (3) their `char D_002652F0[]`
+ * as the unit's `u8 D_2652B0[]`; (4) the unit's declarations for the callees,
+ * with `(GuiElement *)` casts on the four element arguments for their
+ * `void *` parameters: func_00348E50(void *, s32),
+ * GuiMenuListSetRows(void *, void *) for their (unsigned char *, float *),
+ * GetLocalizedString returning s32, GuiElementSetText(GuiElement *, s32) for
+ * their (void *, unsigned int), GuiElementSetAlpha(GuiElement *, f32).
+ * Signature, control flow and expressions are theirs.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00342520)
+S136OS_SLOT(func_00342520);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00342520, unit objdiff): 14.15%,
-   103/112 insns differ. Residual: UNKNOWN-addiu + movn/movz, gp/abs-mixed symbol (first differing insn: 'addiu sp, sp, -0x30' vs 'addiu sp, sp, -0x40').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
+#ifndef TARGET_NATIVE
 extern s32 D_1AE0A0[2];
+#else
+extern s32 D_1AE0A0[3];
+#endif
 extern u8 D_2652B0[];
 extern void func_00348E50(void *w, s32 v);
-void func_00342520(void *w, s32 mode) {
-    f32 alpha;
-    s32 iconId, strId;
-    void *records;
-
-    if ((u32)mode >= 3) {
-        return;   /* only columns 0, 1, 2 */
+void func_00342520(char *self, int idx)
+{
+    float *records;
+    float f;
+    unsigned char *child;
+    if ((unsigned int)idx > 2) return;
+    *(int *)(self + 0x1C4) = D_1AE0A0[idx];
+    *(int *)(self + 0x1C8) = (int)(D_2652B0 + idx * 0x20);
+    *(int *)(self + 0x1CC) = (idx == 0) ? 7 : ((idx == 1) ? 8 : 6);
+    if (idx != 0) {
+        if (idx == 2) f = 2.0f;
+        else f = 1.0f;
+    } else {
+        f = 0.0f;
     }
-
-    *(s32 *)((char *)w + 0x1C4) = D_1AE0A0[mode];
-    *(void **)((char *)w + 0x1C8) = &D_2652B0[mode * 0x20];
-
-    if (mode == 0) {
-        iconId = 7; alpha = 0.0f; strId = 0x2BEB;
-        records = *(void **)((char *)w + 0x310);
-    } else if (mode == 1) {
-        iconId = 8; alpha = 1.0f; strId = 0x2BEC;
-        records = *(void **)((char *)w + 0x314);
-    } else {   /* mode == 2 */
-        iconId = 6; alpha = 2.0f; strId = 0x3094;
-        records = *(void **)((char *)w + 0x318);
+    child = (unsigned char *)self + 0x238;
+    {
+        int *p = (int *)(self + idx * 4);
+        func_00348E50(child, p[0x6E]);
     }
-    *(s32 *)((char *)w + 0x1CC) = iconId;
-
-    func_00348E50((char *)w + 0x238, *(s32 *)((char *)w + mode * 4 + 0x1B8));
-    GuiMenuListSetRows((char *)w + 0x238, records);
-
-    GuiElementSetText((GuiElement *)((char *)w + 0x1D0), GetLocalizedString(strId));
-
-    GuiElementSetAlpha((GuiElement *)w, alpha);
-    GuiElementSetAlpha((GuiElement *)((char *)w + 0x4C), alpha);
-    GuiElementSetAlpha((GuiElement *)((char *)w + 0xE4), alpha);
-
-    *(s32 *)((char *)w + 0x31C) = mode;
+    records = (idx == 0) ? *(float **)(self + 0x310) : ((idx == 1) ? *(float **)(self + 0x314) : *(float **)(self + 0x318));
+    GuiMenuListSetRows(child, records);
+    GuiElementSetText((GuiElement *)(self + 0x1D0), GetLocalizedString((idx == 0) ? 0x2BEB : ((idx == 1) ? 0x2BEC : 0x3094)));
+    GuiElementSetAlpha((GuiElement *)self, f);
+    GuiElementSetAlpha((GuiElement *)(self + 0x4C), f);
+    GuiElementSetAlpha((GuiElement *)(self + 0xE4), f);
+    *(int *)(self + 0x31C) = idx;
 }
 #endif
 
