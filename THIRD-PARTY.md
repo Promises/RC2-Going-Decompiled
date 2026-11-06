@@ -556,6 +556,20 @@ src/assembly/sdk/library/_getRef0.c", and upstream's removed draft
 "Lombyte (MIT)" below covers it (RULING #12108); the doc comment carries the
 notice verbatim.
 
+### OpenRAC rac2-decomp at 5776dcc3, text/188858 Window X body (GPL-3.0)
+
+One C function body is taken from OpenRAC's `rac2-decomp`,
+<https://github.com/OpenRAC/rac2-decomp> at commit
+`5776dcc35045fb2320610edd1d2db4fa7660ef37` (root `LICENSE`: GNU General Public
+License, version 3), with the authors' permission (RULING #10405/#12108), task
+#2505 (#2482 row 6; the body is unchanged at upstream head `fe6adf9b`, 27
+commits later). It is adapted, with every respelling named in the function's
+`Source:` line.
+
+| Here | Upstream file | Upstream name |
+|---|---|---|
+| `UpdateSubtitleStateMachine` in `going-decompiled/src/usa/text/188858.c` (adapted: every global respelled by address to ours — `D_00254E78` → our `g_subtitleState` struct and field names, `D_001B1840` → `g_pActiveTextTable`, `D_0018C958` → the `g_subtitleHistory` rows, `D_001A63A8` → `g_fileLoadVoiceState` fields / `g_dialogVoiceId`, `D_0014B540` → `g_discToc`, `D_001A7B94` → `D_1A7B9C`, `D_001A79F0` → `g_playerProgress`, `D_001A8BB0` → `g_nGameState`, `D_00138320`/`D_00138324` → `D_138320`/`D_138324`, `D_001A7390` → `D_1A7390`; callee auto-labels to our names (`TickCountdownTimer`, `BeginSubtitleDisplay`, `func_0028AA70`, `func_002B1B48`, `StopDialogVoice`, `FindTextTableEntry`); the playing id respelled per site as the ROM has it; case order left as upstream; the audit's z2 addressing devices minimised by removal probes (RULING #8620 `.sdata`/`.data` typed views, #8036/#12316 alias externs); the state-8 latch increment's temp register pinned to `$2` by an EE-only asm register local (`SUBTITLES_LATCH_INC`; the native arm spells the plain `++`); the `RECORD_SUBTITLE_TIME` macro's opening brace moved off the `#define` line so the line-based ORPHAN_LATENT scanner's brace count stays balanced; the switch table bound to `jtbl_0026C7A0_text` by `tools/ee/jtbl_bind.sh`; s136os arm, `S136EXTRA` empty) | `src/game/00289178.c` | `func_00289178` (v1.01 address, author commit `6a0dbf0b`, bigbeno37, 2026-10-28) |
+
 ### OpenRAC rac2-gc-decomp at 96927f87, Lombyte-origin body (GPL-3.0)
 
 One more C function body is taken from OpenRAC's `rac2-gc-decomp` at commit

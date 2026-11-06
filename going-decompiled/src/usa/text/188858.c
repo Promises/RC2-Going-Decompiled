@@ -180,7 +180,10 @@ typedef struct SubtitleState {
     s32 showingHandle;  /* +0x28: voice/clip handle of the shown line */
     s32 tableCount;     /* +0x2C */
     s32 boxActiveGate;  /* +0x30: nonzero while the box is live/drawn */
-    u8  _pad34[0xC];
+    s32 enableDelay;    /* +0x34: frames since the first d-pad press; the machine arms at 120 */
+    s16 holdGate;       /* +0x38: set elsewhere; holds the last line in state 8 */
+    s16 displayLatch;   /* +0x3A: state 8's one-shot, display begun for the held line */
+    s32 countdown;      /* +0x3C: TickCountdownTimer counter behind displayLatch */
     s32 phaseTimer;     /* +0x40: per-line phase timer (cleared on arm) */
     s32 phaseFlag;      /* +0x44: per-line phase flag  (cleared on arm) */
     s32 textPixelWidth; /* +0x48: strlen(text) * 7 (BeginSubtitleDisplay) */
@@ -1976,262 +1979,356 @@ void BeginSubtitleDisplay(void) {
 }
 #endif
 
-/* UpdateSubtitleStateMachine(): per-frame tick of the subtitle/voice display
- * state machine (large dispatcher, ~0x928 bytes).
- *
- * MATCH-WALL: compiler jtbl dispatch (jtbl_0026C7A0_text) was not reproducible
- * from a C switch until tools/ee/jtbl_bind.sh (task #2247, FACT #12102), which
- * now binds a C switch's table to the ROM's jtbl_ data, so that half of this
- * wall is retired; no body has been tried since. The #ifndef arm stays INCLUDE_ASM, the #else arm is the faithful
- * functional model (engine 2.96 = no byte-match; NB it is pure integer, no FP).
- * Addressing notes: g_subtitleState is at 0x254DF8 — its fields at +0x28..+0x48
- * (the "0x254e2x" globals) are read via the FULL address (real offsets); .state
- * (+0) is also written via the %hi page base (the .s `0x4DF8($17)` sites = offset
- * 0, NOT +0x4DF8). Save table = g_health+0x66C stride 0xC. Voice-clip flags =
- * g_discToc[voice]+0x2A20. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", UpdateSubtitleStateMachine);
-#else
-extern s32 g_playerProgress;             /* 0x1A79F8 first word: save-valid flag + bit index */
-extern s32 g_gsPixelOffsetY;             /* 0x1A7354; +0x3C = current clip position value */
-extern u16 D_138320, D_138324;           /* pad button state */
-/* g_health (+0x66C save table stride 0xC), g_discToc (+0x2A20 per-voice flag
- * table), FindTextTableEntry: file-scope. */
-extern s32 g_dialogVoiceId, g_dialogVoicePhase, g_dialogVoiceActive;
-extern s32 g_pendingDialogVoiceId, g_pendingVoiceAux;
-extern void BeginSubtitleDisplay(void);
+/*
+ * The dialog-voice manager block (g_fileLoadVoiceState, 0x1A63A8) as the
+ * subtitle machine reaches it: every field through the block base, except the
+ * playing id at +0x6C, which the ROM also spells as the symbol g_dialogVoiceId
+ * at three sites (case 4's first and third tests, case 5's close test) — both
+ * spellings are kept below, site by site as the ROM has them.
+ */
+typedef struct FileLoadVoiceView {
+    u8  _pad00[0x24];
+    s32 pendingVoiceId;  /* +0x24 (g_pendingDialogVoiceId): queued clip request, -1 = none */
+    s32 pendingVoiceAux; /* +0x28 (g_pendingVoiceAux): queued request's history row */
+    u8  _pad2C[0x3C];
+    s32 voiceActive;     /* +0x68 (g_dialogVoiceActive): nonzero while a clip plays */
+    s16 playingId;       /* +0x6C (g_dialogVoiceId): the playing clip's id, 6000 band */
+    u8  _pad6E[4];
+    s16 voicePhase;      /* +0x72 (g_dialogVoicePhase): 1 start, 5/6 fade/stop */
+} FileLoadVoiceView;
+extern FileLoadVoiceView g_fileLoadVoiceState;
+
+/* Per-line subtitle history rows (0x18C958, stride 0xC), indexed by the shown
+ * line's voice handle (g_subtitleState.showingHandle). */
+typedef struct SubtitleHistory {
+    u16 playCount;   /* +0x0: times shown, saturating at 0xFFFF */
+    u16 _pad2;
+    u32 longestTime; /* +0x4: longest display time, in frames */
+    u32 seenLevels;  /* +0x8: bit per level the line was shown in, | 0x80000000 */
+} SubtitleHistory;
+
+extern s32 TickCountdownTimer(s32 *counter);
 extern void StopDialogVoice(void);
 extern void func_0028AA70(s32 id);
-extern s32 TickCountdownTimer(s32 p);
-extern void func_002B1B48(s32 a, s32 b, s32 c);
-void UpdateSubtitleStateMachine(void) {
-    u8  *ss = (u8 *)&g_subtitleState;
-    s32  slot;   /* g_subtitleState+0x28: current save-slot / voice index */
-    u8  *save;
-    s16  sVar;
-    s32  clip;
-    s32  iVar3;
 
-    /* +0x30 = "system ready" gate; +0x34 = arm timer */
-    if (*(s32 *)(ss + 0x30) == 0) {
-        if (g_playerProgress < 0) {
-            if (*(s32 *)(ss + 0x34) == 0) {
-                if ((D_138320 & 0xF000) != 0) {
-                    *(s32 *)(ss + 0x34) = 1;
-                }
-                if (*(s32 *)(ss + 0x34) == 0) {
-                    goto gate;
-                }
-            }
-            *(s32 *)(ss + 0x34) += 1;
-            if (0x77 < *(s32 *)(ss + 0x34)) {
-                *(s32 *)(ss + 0x30) = 1;
-            }
+#ifndef TARGET_NATIVE
+/* History rows through an unsized-array view: not small to cc1 at the unit's
+ * -G8, so it splits the address itself — the ROM's absolute form. */
+extern SubtitleHistory g_subtitleHistory[] __asm__("D_18C958");
+/* D_1A7390[0] is the frame counter the history time is measured against.
+ * section(".sdata") keeps it small-section to cc1, whose one-insn load macro
+ * the assembler then expands absolutely with destination reuse — the ROM's
+ * `lui $5; lw $5,%lo($5)` shape. A plain array decl makes cc1 split the
+ * address itself, in a different register pair and order (probe P2: 45
+ * differing bytes); an `.extern D_1A7390, 16' line on top of the attribute is
+ * inert (probe P8: still byte-identical), so none is shipped. */
+extern u32 D_1A7390[] __attribute__((section(".sdata")));
+/* The pad-state words are u32 scalars — small at -G8, which cc1 would address
+ * %gp_rel; section(".data") has the compiler split them absolutely (RULING
+ * #8620), as the ROM does. */
+extern u32 g_padKeyState __asm__("D_138320") __attribute__((section(".data")));
+extern u32 g_padBtnState __asm__("D_138324") __attribute__((section(".data")));
+/* The playing id (+0x6C) spelled as its own symbol at the three direct sites:
+ * an unsized array, so cc1 splits it absolutely as well. */
+extern s16 g_dialogVoiceIdPlay[] __asm__("g_dialogVoiceId");
+/* g_nGameState and g_playerProgress are read %gp_rel by later functions in
+ * this unit, so they are sized through aliases rather than directly (the
+ * #8036 construct; the relocations name the real symbols). */
+__asm__(".extern g_subGameStateAbs, 16\n\tg_subGameStateAbs = g_nGameState");
+extern s32 g_subGameStateAbs;
+__asm__(".extern g_subPlayerProgressAbs, 16\n\tg_subPlayerProgressAbs = g_playerProgress");
+extern s32 g_subPlayerProgressAbs;
+#else
+#define g_subtitleHistory ((SubtitleHistory *)((u8 *)&g_health + 0x66C))
+extern s32 g_gsPixelOffsetY;   /* 0x1A7354 */
+#define D_1A7390 ((u32 *)((u8 *)&g_gsPixelOffsetY + 0x3C))
+extern u32 D_138320, D_138324;
+#define g_padKeyState D_138320
+#define g_padBtnState D_138324
+extern s16 g_dialogVoiceId;
+#define g_dialogVoiceIdPlay ((s16 *)&g_dialogVoiceId)
+extern s32 g_playerProgress;
+#define g_subGameStateAbs g_nGameState
+#define g_subPlayerProgressAbs g_playerProgress
+#endif
+
+#ifndef TARGET_NATIVE
+/* The state-8 latch increment's temp register pinned to $2 (v0, dead after
+ * the call): cc1's free-register scan hands out $3 there and three words
+ * differ without the pin. Host compilers do not know MIPS register names,
+ * so the native arm spells the plain increment. A brace block, not
+ * do/while(0): it must expand to the exact statement cc1 matched. */
+#define SUBTITLES_LATCH_INC()                          \
+    {                                                  \
+        register s16 latchTemp __asm__("$2");          \
+        latchTemp = g_subtitleState.displayLatch;      \
+        latchTemp++;                                   \
+        g_subtitleState.displayLatch = latchTemp;      \
+    }
+#else
+#define SUBTITLES_LATCH_INC() (g_subtitleState.displayLatch++)
+#endif
+
+#define SUBTITLES_OPTION  (*(u8 *)&D_1A7B9C)
+#define SUBTITLE_VOICE_ID (g_pActiveTextTableAbs[g_subtitleState.entryIndex].voice)
+#define HAS_AUDIO(id)     (g_discTocRow[(id)][0xA88])
+/* The { opens on its own continuation line, not the #define line: the
+ * ORPHAN_LATENT scanner is line-based, counts braces only on non-directive
+ * lines, and a { on the directive line leaves the closing } unbalanced. */
+#define RECORD_SUBTITLE_TIME() \
+    { \
+        if (g_subtitleHistory[g_subtitleState.showingHandle].playCount < 65535) \
+            g_subtitleHistory[g_subtitleState.showingHandle].playCount++; \
+        if (g_subtitleHistory[g_subtitleState.showingHandle].longestTime < D_1A7390[0]) \
+            g_subtitleHistory[g_subtitleState.showingHandle].longestTime = D_1A7390[0]; \
+    }
+#define RECORD_SUBTITLE_LEVEL() \
+    (g_subtitleHistory[g_subtitleState.showingHandle].seenLevels = \
+        (g_subtitleHistory[g_subtitleState.showingHandle].seenLevels | \
+            (1u << g_subPlayerProgressAbs)) | 0x80000000u)
+
+/**
+ * Per-frame tick of the subtitle/dialog-voice display state machine
+ * (g_subtitleState.state, 0..8).
+ *
+ * Arms itself 120 frames after the first d-pad press once a save exists
+ * (g_playerProgress >= 0), then, while the game state is 0 (in-level) or 7
+ * (hide-all overlay) and the box gate is set, advances the machine:
+ *   0  wait for a pending line (showingIndex), resolve it, begin display
+ *   1/2  line showing: sync the voice clip to the line, hand the voice to
+ *        the manager when idle, watch the skip button (g_padBtnState & 0x10)
+ *        and the fade timer
+ *   3  close-animation start
+ *   4  hold while the voice still plays, else fall through to 5
+ *   5  hold for textPixelWidth frames, then commit history and close
+ *   6  close animation
+ *   7  done: clear, or (holdGate) hand to state 8
+ *   8  latched hold of the last line (one display begin behind
+ *      TickCountdownTimer), then commit history and reset
+ * Every commit records the line's play count, longest display time (against
+ * the frame counter at 0x1A7390) and a seen-level bit (1 << g_playerProgress,
+ * | 0x80000000) into its history row. No parameters, no return value.
+ *
+ * Non-obvious:
+ * - Case 5 re-reads the subtitle-sound flag as volatile twice after the
+ *   duration test with no intervening store; kept verbatim (retail reloads it
+ *   between the two decisions).
+ * - The pre-check and case 7 force the voice manager's phase to 5 when the
+ *   shown line's clip is the playing clip and the phase is not 6 or 7.
+ * - g_fileLoadVoiceState.playingId (+0x6C) is read through the block base at
+ *   the pre-check, cases 1/2, case 4's second test and case 7, but through
+ *   the symbol g_dialogVoiceId directly at case 4's first and third tests and
+ *   case 5's close test — the ROM mixes both spellings, and so does this C,
+ *   site by site.
+ *
+ * MATCHED byte-exact on the s136os arm at the unit's -O2 default (S136EXTRA
+ * "", RULING #9450; task #2505). The switch table is bound to the ROM's
+ * jtbl_0026C7A0_text by tools/ee/jtbl_bind.sh (task #2247, FACT #12102).
+ *
+ * Addressing devices (the audit's NOTE #13181 row-6 z2 set, each removed
+ * alone with everything else held): .sdata on D_1A7390 (removal: 45 differing
+ * bytes), .data on the D_138320/D_138324 views and the #8036
+ * g_subGameStateAbs/g_subPlayerProgressAbs aliases and the unsized-array
+ * g_dialogVoiceIdPlay view all hold the ROM's absolute forms (each removal:
+ * the splice FATALs on length — the gp-relative macro is one insn shorter).
+ * NOT load-bearing and not shipped: `.extern D_1A7390, 16' on top of the
+ * .sdata attr (still byte-identical), and `.data' views over g_subtitleState,
+ * the history rows or the voice-manager block (byte-neutral). One further
+ * device: the state-8 latch increment's temp register is pinned to $2 with an
+ * asm register local (SUBTITLES_LATCH_INC, EE arm only — host compilers reject
+ * MIPS register names, so TARGET_NATIVE spells the plain increment) — cc1's
+ * free-register scan hands out $3 there and three words differ without the pin.
+ *
+ * Source: ADAPTED from OpenRAC rac2-decomp @5776dcc3 src/game/00289178.c
+ * func_00289178 (6a0dbf0b, bigbeno37, 2026-10-28, GPL-3.0). Adaptations: all
+ * globals respelled by address to this repo's symbols (upstream auto-label →
+ * ours: D_00254E78 → g_subtitleState fields, D_001B1840 → g_pActiveTextTable,
+ * D_0018C958 → the history rows, D_001A63A8 → g_fileLoadVoiceState fields /
+ * g_dialogVoiceId, D_0014B540 → g_discToc, D_001A7B94 → D_1A7B9C,
+ * D_001A79F0 → g_playerProgress, D_001A8BB0 → g_nGameState, D_00138320/24 →
+ * D_138320/24, D_001A7390 → D_1A7390); callee auto-labels to their named
+ * counterparts (func_00282948 → TickCountdownTimer, func_00289020 →
+ * BeginSubtitleDisplay, func_0028A030 → func_0028AA70, func_002B0CE0 →
+ * func_002B1B48, func_002B6D28 → StopDialogVoice, func_00288F48 →
+ * FindTextTableEntry); the playing id re-spelled per site as the ROM has it
+ * (above); the case order left as upstream (dispatch is via the bound table);
+ * the state-8 latch increment wrapped in a $2-pinned register local (above,
+ * EE arm only).
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_UpdateSubtitleStateMachine)
+S136OS_SLOT(UpdateSubtitleStateMachine);
+#else
+void UpdateSubtitleStateMachine(void) {
+    if (!g_subtitleState.boxActiveGate) {
+        if (g_subPlayerProgressAbs >= 0) {
+            g_subtitleState.boxActiveGate = 1;
+            g_subtitleState.enableDelay = 120;
         } else {
-            *(s32 *)(ss + 0x34) = 0x78;
-            *(s32 *)(ss + 0x30) = 1;
+            if (!g_subtitleState.enableDelay && (g_padKeyState & 0xF000))
+                g_subtitleState.enableDelay = 1;
+            if (g_subtitleState.enableDelay) {
+                g_subtitleState.enableDelay++;
+                if (g_subtitleState.enableDelay >= 120)
+                    g_subtitleState.boxActiveGate = 1;
+            }
         }
     }
-gate:
-    if (((g_nGameState != 0) && (g_nGameState != 7)) || (*(s32 *)(ss + 0x30) == 0)) {
+    if ((g_subGameStateAbs != 0 && g_subGameStateAbs != 7) || !g_subtitleState.boxActiveGate) {
+        g_subtitleState.showingIndex = -1;
         g_subtitleState.state = 0;
         g_subtitleState.animStep = 0;
-        g_subtitleState.showingIndex = -1;
         return;
     }
-    g_subtitleState.animStep += 1;
-    if (D_1A7B9C == 0 &&
-        g_pActiveTextTable[g_subtitleState.entryIndex].voice == g_dialogVoiceId - 6000 &&
-        (u32)(g_dialogVoicePhase - 6) >= 2) {
-        g_dialogVoicePhase = 5;
+    g_subtitleState.animStep++;
+    if (!SUBTITLES_OPTION) {
+        if (SUBTITLE_VOICE_ID == g_fileLoadVoiceState.playingId - 6000 &&
+            (u16)(g_fileLoadVoiceState.voicePhase - 6) > 1)
+            g_fileLoadVoiceState.voicePhase = 5;
     }
 
-    slot = *(s32 *)(ss + 0x28);
-    save = (u8 *)&g_health + 0x66C + slot * 0xC;
-
     switch (g_subtitleState.state) {
-    case 0:
-        if (g_subtitleState.showingIndex >= 0) {
-            g_subtitleState.entryIndex = FindTextTableEntry(g_subtitleState.showingIndex);
-            func_0028AA70(g_subtitleState.showingIndex);
-            g_subtitleState.showingIndex = -1;
-            if (g_subtitleState.entryIndex >= 0) {
+    case 8:
+        if (g_subtitleState.holdGate)
+            return;
+        if (g_subtitleState.entryIndex >= 0) {
+            if (!g_subtitleState.displayLatch) {
+                if (!TickCountdownTimer(&g_subtitleState.countdown))
+                    return;
                 BeginSubtitleDisplay();
+                SUBTITLES_LATCH_INC();
+                return;
             }
+            if (g_subtitleHistory[g_subtitleState.showingHandle].playCount < 65535)
+                g_subtitleHistory[g_subtitleState.showingHandle].playCount++;
         }
+        if (g_subtitleHistory[g_subtitleState.showingHandle].longestTime < D_1A7390[0])
+            g_subtitleHistory[g_subtitleState.showingHandle].longestTime = D_1A7390[0];
+        g_subtitleState.entryIndex = -1;
+        g_subtitleState.state = 0;
+        g_subtitleState.displayLatch = 0;
+        RECORD_SUBTITLE_LEVEL();
+        break;
+    case 0:
+        if (g_subtitleState.showingIndex < 0)
+            return;
+        g_subtitleState.entryIndex = FindTextTableEntry(g_subtitleState.showingIndex);
+        func_0028AA70(g_subtitleState.showingIndex);
+        g_subtitleState.showingIndex = -1;
+        if (g_subtitleState.entryIndex >= 0)
+            BeginSubtitleDisplay();
         break;
     case 1:
     case 2:
-        if (D_1A7B9C != 0 &&
-            g_pActiveTextTable[g_subtitleState.entryIndex].voice != -1 &&
-            *(s32 *)((u8 *)g_discToc + g_pActiveTextTable[g_subtitleState.entryIndex].voice * 4 + 0x2A20) != 0 &&
-            g_dialogVoiceActive == 0 && g_pendingDialogVoiceId == -1) {
-            g_pendingVoiceAux = 0;
-            g_pendingDialogVoiceId = slot + 6000;
-        }
-        if ((D_138324 & 0x10) != 0) {
-            goto commit_state7;
-        }
-        if (g_subtitleState.animStep < 1) {
-            return;
-        }
-        if (g_dialogVoicePhase != 3 || g_dialogVoiceId < 6000) {
-            clip = g_pActiveTextTable[g_subtitleState.entryIndex].voice;
-            if (clip != -1) {
-                if (*(s32 *)((u8 *)g_discToc + clip * 4 + 0x2A20) == 0) {
-                    iVar3 = 3;
-                    goto set_state;
-                }
-                if (clip == g_dialogVoiceId - 6000) {
-                    return;
-                }
+        if (SUBTITLES_OPTION) {
+            if (SUBTITLE_VOICE_ID != -1 && HAS_AUDIO(SUBTITLE_VOICE_ID) &&
+                !g_fileLoadVoiceState.voiceActive && g_fileLoadVoiceState.pendingVoiceId == -1) {
+                g_fileLoadVoiceState.pendingVoiceAux = 0;
+                g_fileLoadVoiceState.pendingVoiceId = g_subtitleState.showingHandle + 6000;
             }
         }
-        iVar3 = 3;
-        goto set_state;
+        if (g_padBtnState & 16) {
+            RECORD_SUBTITLE_TIME();
+            g_subtitleState.state = 7;
+            g_subtitleState.animStep = 0;
+            RECORD_SUBTITLE_LEVEL();
+            return;
+        }
+        if (g_subtitleState.animStep <= 0)
+            return;
+        if ((g_fileLoadVoiceState.voicePhase == 3 && g_fileLoadVoiceState.playingId >= 6000) ||
+            SUBTITLE_VOICE_ID == -1 || !HAS_AUDIO(SUBTITLE_VOICE_ID) ||
+            SUBTITLE_VOICE_ID != g_fileLoadVoiceState.playingId - 6000) {
+            g_subtitleState.state = 3;
+            g_subtitleState.animStep = 0;
+        }
+        break;
     case 3:
         func_002B1B48(5, 0, 1);
-        if ((D_138324 & 0x10) == 0) {
-            if (g_subtitleState.animStep < 8) {
-                return;
-            }
-            g_subtitleState.state = 4;
+        if (g_padBtnState & 16) {
+            RECORD_SUBTITLE_TIME();
+            g_subtitleState.state = 7;
             g_subtitleState.animStep = 0;
+            RECORD_SUBTITLE_LEVEL();
             return;
         }
-        goto commit_state7;
-    case 4:
+        if (g_subtitleState.animStep >= 8) {
+            g_subtitleState.animStep = 0;
+            g_subtitleState.state = 4;
+        }
+        break;
+    case 4: {
+        s32 subtitles;
         func_002B1B48(5, 0, 1);
-        if ((D_138324 & 0x10) != 0) {
-            sVar = *(s16 *)(save + 0);
-            if (sVar != -1) {
-                *(s16 *)(save + 0) = sVar + 1;
-            }
-            if (*(u32 *)(save + 4) < *(u32 *)((u8 *)&g_gsPixelOffsetY + 0x3C)) {
-                *(u32 *)(save + 4) = *(u32 *)((u8 *)&g_gsPixelOffsetY + 0x3C);
-            }
+        if (g_padBtnState & 16) {
+            RECORD_SUBTITLE_TIME();
+            RECORD_SUBTITLE_LEVEL();
             g_subtitleState.state = 6;
             g_subtitleState.animStep = 4 - g_subtitleState.animStep;
-            *(u32 *)(save + 8) |= (1u << (g_playerProgress & 0x1F)) | 0x80000000;
             return;
         }
-        if (g_subtitleState.animStep < 4) {
+        if (g_subtitleState.animStep < 4)
             return;
-        }
-        clip = g_pActiveTextTable[g_subtitleState.entryIndex].voice;
-        if (clip != -1) {
-            if (*(s32 *)((u8 *)g_discToc + clip * 4 + 0x2A20) != 0 && clip != g_dialogVoiceId - 6000 &&
-                D_1A7B9C != 0) {
-                g_subtitleState.state = 5;
-                g_subtitleState.animStep = 0;
-                return;
-            }
-            if (g_pActiveTextTable[g_subtitleState.entryIndex].voice != -1 &&
-                *(s32 *)((u8 *)g_discToc + g_pActiveTextTable[g_subtitleState.entryIndex].voice * 4 + 0x2A20) != 0 &&
-                (g_dialogVoicePhase != 3 || g_dialogVoiceId < 6000) && D_1A7B9C != 0) {
-                return;
-            }
-        }
-        if (D_1A7B9C != 0) {
-            if (g_pActiveTextTable[g_subtitleState.entryIndex].voice != g_dialogVoiceId - 6000) {
-                iVar3 = 5;
-                goto set_state;
-            }
+        subtitles = SUBTITLES_OPTION;
+        if (SUBTITLE_VOICE_ID != -1 && HAS_AUDIO(SUBTITLE_VOICE_ID) &&
+            SUBTITLE_VOICE_ID != g_dialogVoiceIdPlay[0] - 6000 && subtitles)
+            goto next_phase;
+        if (SUBTITLE_VOICE_ID != -1 && HAS_AUDIO(SUBTITLE_VOICE_ID) &&
+            (g_fileLoadVoiceState.voicePhase != 3 || g_fileLoadVoiceState.playingId < 6000) &&
+            subtitles)
+            return;
+        if (subtitles && SUBTITLE_VOICE_ID == g_dialogVoiceIdPlay[0] - 6000)
             StopDialogVoice();
-        }
-        iVar3 = 5;
-        goto set_state;
+        g_subtitleState.state = 5;
+        g_subtitleState.animStep = 0;
+        break;
+    next_phase:
+        g_subtitleState.animStep = 0;
+        g_subtitleState.state = 5;
+        break;
+    }
     case 5:
         func_002B1B48(5, 0, 1);
-        if ((g_subtitleState.animStep < *(s32 *)(ss + 0x48) ||
-             (g_pActiveTextTable[g_subtitleState.entryIndex].voice != -1 &&
-              *(s32 *)((u8 *)g_discToc + g_pActiveTextTable[g_subtitleState.entryIndex].voice * 4 + 0x2A20) != 0 &&
-              D_1A7B9C != 0)) &&
-            ((D_1A7B9C == 0 ||
-              (clip = g_pActiveTextTable[g_subtitleState.entryIndex].voice, clip == -1) ||
-              *(s32 *)((u8 *)g_discToc + clip * 4 + 0x2A20) == 0 || clip == g_dialogVoiceId - 6000) &&
-             (D_138324 & 0x10) == 0)) {
+        if (g_subtitleState.animStep >= g_subtitleState.textPixelWidth) {
+            /* Retail reloads this option again below, without an intervening store. */
+            if (SUBTITLE_VOICE_ID == -1 || !HAS_AUDIO(SUBTITLE_VOICE_ID) ||
+                !*(volatile u8 *)&D_1A7B9C)
+                goto close;
+        }
+        if (*(volatile u8 *)&D_1A7B9C) {
+            if (SUBTITLE_VOICE_ID != -1 && HAS_AUDIO(SUBTITLE_VOICE_ID) &&
+                SUBTITLE_VOICE_ID != g_dialogVoiceIdPlay[0] - 6000)
+                goto close;
+        }
+        if (!(g_padBtnState & 16))
             return;
-        }
-        sVar = *(s16 *)(save + 0);
-        if (sVar != -1) {
-            *(s16 *)(save + 0) = sVar + 1;
-        }
-        if (*(u32 *)(save + 4) < *(u32 *)((u8 *)&g_gsPixelOffsetY + 0x3C)) {
-            *(u32 *)(save + 4) = *(u32 *)((u8 *)&g_gsPixelOffsetY + 0x3C);
-        }
+    close:
+        RECORD_SUBTITLE_TIME();
         g_subtitleState.state = 6;
         g_subtitleState.animStep = 0;
-        *(u32 *)(save + 8) |= (1u << (g_playerProgress & 0x1F)) | 0x80000000;
+        RECORD_SUBTITLE_LEVEL();
         break;
     case 6:
-        if (D_1A7B9C != 0 && g_subtitleState.animStep < 4 && (D_138324 & 0x10) == 0) {
+        if (D_1A7B9C && g_subtitleState.animStep < 4 && !(g_padBtnState & 16))
             return;
-        }
-        iVar3 = 7;
+        g_subtitleState.state = 7;
         g_subtitleState.animStep = 0;
-        g_subtitleState.state = iVar3;
         break;
     case 7:
         func_002B1B48(5, 0, 1);
-        if (g_pActiveTextTable[g_subtitleState.entryIndex].voice == g_dialogVoiceId - 6000 &&
-            (u32)(g_dialogVoicePhase - 6) >= 2) {
-            g_dialogVoicePhase = 5;
-        }
-        if (7 < g_subtitleState.animStep) {
-            if (*(s32 *)(ss + 0x38) == 0) {
-                g_subtitleState.state = 0;
-                g_subtitleState.entryIndex = -1;
-            } else {
-                g_subtitleState.state = 8;
-            }
-            g_subtitleState.animStep = 0;
-        }
-        break;
-    case 8:
-        if (*(s32 *)(ss + 0x38) == 0) {
-            if (g_subtitleState.entryIndex >= 0) {
-                if (*(s16 *)(ss + 0x3A) == 0) {
-                    if (TickCountdownTimer((s32)(ss + 0x3C)) == 0) {
-                        return;
-                    }
-                    BeginSubtitleDisplay();
-                    *(s16 *)(ss + 0x3A) += 1;
-                    return;
-                }
-                sVar = *(s16 *)(save + 0);
-                if (sVar != -1) {
-                    *(s16 *)(save + 0) = sVar + 1;
-                }
-            }
-            if (*(u32 *)(save + 4) < *(u32 *)((u8 *)&g_gsPixelOffsetY + 0x3C)) {
-                *(u32 *)(save + 4) = *(u32 *)((u8 *)&g_gsPixelOffsetY + 0x3C);
-            }
-            g_subtitleState.entryIndex = -1;
+        if (SUBTITLE_VOICE_ID == g_fileLoadVoiceState.playingId - 6000 &&
+            (u16)(g_fileLoadVoiceState.voicePhase - 6) > 1)
+            g_fileLoadVoiceState.voicePhase = 5;
+        if (g_subtitleState.animStep < 8)
+            return;
+        if (g_subtitleState.holdGate) {
+            g_subtitleState.state = 8;
+        } else {
             g_subtitleState.state = 0;
-            *(s16 *)(ss + 0x3A) = 0;
-            *(u32 *)(save + 8) |= (1u << (g_playerProgress & 0x1F)) | 0x80000000;
+            g_subtitleState.entryIndex = -1;
         }
+        g_subtitleState.animStep = 0;
         break;
     }
-    return;
-
-commit_state7:
-    sVar = *(s16 *)(save + 0);
-    if (sVar != -1) {
-        *(s16 *)(save + 0) = sVar + 1;
-    }
-    if (*(u32 *)(save + 4) < *(u32 *)((u8 *)&g_gsPixelOffsetY + 0x3C)) {
-        *(u32 *)(save + 4) = *(u32 *)((u8 *)&g_gsPixelOffsetY + 0x3C);
-    }
-    g_subtitleState.state = 7;
-    g_subtitleState.animStep = 0;
-    *(u32 *)(save + 8) |= (1u << (g_playerProgress & 0x1F)) | 0x80000000;
-    return;
-
-set_state:
-    g_subtitleState.animStep = 0;
-    g_subtitleState.state = iVar3;
 }
 #endif
 
