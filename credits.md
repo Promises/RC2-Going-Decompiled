@@ -646,7 +646,7 @@
     byte-exact on our ROM; its one inline `sync` is the hardware barrier
     RULING #12168 allows (task #2297).
 
-- **OpenRAC — `rac2-decomp`, commit `b2a35115`, Window X bodies (text/235FE8, text/1DFF80, text/1D54C0, cod/015180 and level program 24)** (GPL-3.0)
+- **OpenRAC — `rac2-decomp`, commit `b2a35115`, Window X bodies (text/235FE8, text/1DFF80, text/1D54C0, text/250080, cod/015180 and level program 24)** (GPL-3.0)
   <https://github.com/OpenRAC/rac2-decomp> at commit `b2a35115e0cf580a1fdab8dd1071b157799e590e`
   (the same history as `rac2-gc-decomp` above: `96927f87` is an ancestor)
 
@@ -735,6 +735,16 @@
     map cache as a cast view of our `g_mapVertexData`, `volatile` and `sda`
     on the list pointer dropped. Unit s136os arm (S136EXTRA "", task #2479),
     after splitting the 4-word debris head `func_002DC6B8` off it.
+  - **`func_00350F28`** (`0x00350F28`, the vblank field-sync waiter that arms
+    the FMV vblank flip handler) in `going-decompiled/src/usa/text/250080.cpp`,
+    from `src/game/0034CEA0.c` (`func_003501E0`, author commit `1c58727d`,
+    Louis-Philippe Le Sieur), read at `5776dcc3`, where the body is identical
+    to `b2a35115`'s. ADAPTED: our spellings by address, their volatile `sda`
+    flag arrays as volatile stores to our `s32` flags, `g_bProgressiveScan`
+    through an EE-only gp equate (RULING #9073 under #8620), the loop
+    written to break on progressive scan so the unit's RULING #8435
+    short-loop pad sits before its branch, `int` spelled `s32`. Unit s136os
+    arm (S136EXTRA "", task #2542, from audit NOTE #13181 / FACT #13187).
   - **The newlib malloc layer of `going-decompiled/src/usa/cod/015180.c`**
     (task #2498, sn2952 arm, no device; read at upstream's head `8b26d8ad`,
     where every blob is identical to `b2a35115`'s), five bodies:

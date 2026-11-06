@@ -72,6 +72,10 @@ extern s32 D_1AE790; /* GIF-DMA "frame consumed" pending flag */
 #ifndef TARGET_NATIVE
 __asm__("g_pFmvArenaBaseGp = g_pFmvArenaBase");
 extern u8 *g_pFmvArenaBaseGp;
+/* The same offset-0 gp equate for g_bProgressiveScan (task #2542): the unit
+ * sizes the real symbol 16 for OnFmvVblankFlip's absolute reads, and
+ * func_00350F28 reads it gp-relative in a branch delay slot (0x00350F44). */
+__asm__("g_bProgressiveScanGp = g_bProgressiveScan");
 #define FMV_ARENA_BASE_GP g_pFmvArenaBaseGp
 #else
 #define FMV_ARENA_BASE_GP g_pFmvArenaBase
@@ -1086,41 +1090,82 @@ s32 OnFmvGifDmaInterrupt(s32 channel) {
 }
 #endif
 
-/* func_00350F28: vblank field-sync waiter — spin while WaitVblankGetField(0) still
- * reports `targetField` and progressive-scan is off; once the field changes (or
- * progressive is on) latch D_1AE788=1 / D_1AE78C=0 and return 1.
- * Blocked on cc1 2.9: 8-byte-packed saves (s0@0x0, ra@0x8) — under 2.9 -G8 -fno-gcse
- * this C compiles a 16-byte-slot 0x20 frame; the original packs 8-byte in a 0x10 frame
- * (the genuine save-slot wall of that arm).
- * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): this member's prologue - the
- * ROM's save set at its 8-byte stride, and its frame - is reproduced exactly (NOTE #9871), so
- * the save-slot wall named above is a cc1 2.9 property and was measured false as the reason
- * this member stays unmatched (FACT #9873). Residual: SCHED (NOTE #9710; 4/20 words). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00350F28);
+/**
+ * func_00350F28 - vblank field-sync waiter: arms the FMV vblank flip handler.
+ * @param targetField  the field parity to wait out (FmvStreamFeedLoop passes 1)
+ *
+ * Spins while WaitVblankGetField(0) still reports `targetField` and
+ * progressive scan is off; once the field changes (or at once in progressive
+ * mode) it sets D_1AE788 = 1, the enable gate OnFmvVblankFlip tests before it
+ * shows a frame (FACT #5608), and clears D_1AE78C, the count that handler
+ * advances while enabled. Returns nothing: the ROM leaves 1 in $2 only because
+ * that is the stored value, and its one caller declares it void.
+ *
+ * MATCHED on the s136os arm (SN 2.95.3 v1.36 cc1plus -fopt-stack at the unit's
+ * S136EXTRA ""; row in tools/ee/s136os_functions.txt), spliced over
+ * S136OS_SLOT by tools/ee/s136os_splice.sh. No asm fallback: a build that
+ * skips the splice drops the function. On native it is plain C.
+ * Three things decide the bytes, each priced by removing it alone
+ * (objdiff_build.sh usa text/250080 + verify_match_unit.sh against the ROM;
+ * this body reads 20/20 words BYTE IDENTICAL):
+ *   - the two stores are `volatile`, as upstream declares both objects. The
+ *     flags are shared with the INTC vblank handler, so this is the objects'
+ *     real access discipline; it is also what puts the D_1AE788 store between
+ *     the two epilogue restores (`ld $16; lui/sw; ld $31`) as the ROM has it.
+ *     Plain stores: cc1 issues both restores first, 4/20 (the SCHED wall
+ *     recorded by NOTEs #9053/#9710/#9950). Writer census (USA asm, task
+ *     #2542): D_1AE788 this and func_00350F78; D_1AE78C this and
+ *     OnFmvVblankFlip;
+ *   - g_bProgressiveScan is read through g_bProgressiveScanGp, an offset-0
+ *     equate with no `.extern` size: an ADDRESSING-MODEL DEVICE (RULING #9073
+ *     under #8620, EE arm only, the relocation names g_bProgressiveScan). It
+ *     reproduces the ROM's delay-slot read
+ *     `lw $2,%gp_rel(g_bProgressiveScan)($28)` at 0x00350F44, which the
+ *     unit's `.extern g_bProgressiveScan, 16` (OnFmvVblankFlip's absolute
+ *     model) would otherwise turn absolute. Without it: LONGER, 21/20;
+ *   - R5900_SHORT_LOOP_PAD1, the ROM's short-loop pad nop at 0x00350F48
+ *     (RULING #8435 scheduling device). Without it: SHORTER, 19/20. To give
+ *     the pad a place between the progressive-scan load and its branch, the
+ *     loop is written with the test in its body (below).
+ * Supersedes the old #else (sdk29 84.05% / engine96 76.10%, task #513; s136
+ * screen 4/20, task #1382).
+ *
+ * Source: OpenRAC/rac2-decomp @5776dcc35045fb2320610edd1d2db4fa7660ef37
+ * (GPL-3.0, adopted with the authors' permission per RULING #10405/#12108),
+ * src/game/0034CEA0.c, func_003501E0 (author commit 1c58727d, Louis-Philippe
+ * Le Sieur, 2026-10-13; the body is identical at b2a35115 and at the head
+ * fe6adf9b). ADAPTED: our spellings by address (func_001261F0 =
+ * WaitVblankGetField, D_001A7BB8 = g_bProgressiveScan through the
+ * equate above, D_001AE7D0/D_001AE7D4 = D_1AE788/D_1AE78C); their
+ * `extern volatile int D[] __attribute__((sda))` objects written as
+ * volatile stores to our s32 objects (the `sda` / `.sdata` attribute is
+ * not needed: the unit's `.extern ..., 16` lines already give the ROM's
+ * absolute `lui $1; sw` form); `while (f(0) == value && D_001A7BB8 == 0) {}`
+ * written as a loop that breaks on progressive scan, for the pad.
+ * `int` written `s32`. (task #2542; audit NOTE #13181 / FACT #13187.)
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00350F28)
+S136OS_SLOT(func_00350F28);
 #else
-/* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 84.05% / engine96 76.10%. Residual: PACKED-SAVE (2 callee saves) + 9 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
-/* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee saves.
- * NEAR-MISS SCREEN (task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated
- * fields masked): 4/20 words differ, from 12/20, with the ROM's one R5900
- * short-loop pad nop before the loop's backward beqz (R5900_SHORT_LOOP_PAD1,
- * scheduling device, RULING #8435). Residual (SCHED): the ROM stores
- * D_1AE788 = 1 between the two epilogue restores (ld $16; lui/sw; ld $31); cc1
- * stores both flags after them. Both store orders give 4/20; an empty fence
- * between the stores moves it before ld $16 (3/20, still not the ROM's place). */
+/* Declarations this body needs: the s136os arm compiles this arm alone. */
 extern s32 WaitVblankGetField(s32 mode);
 extern s32 g_bProgressiveScan;
-s32 func_00350F28(s32 targetField) {
+#ifndef TARGET_NATIVE
+extern s32 g_bProgressiveScanGp; /* the equate at the top of this unit */
+#define F28_PROGRESSIVE g_bProgressiveScanGp
+#else
+#define F28_PROGRESSIVE g_bProgressiveScan
+#endif
+void func_00350F28(s32 targetField) {
     while (WaitVblankGetField(0) == targetField) {
-        s32 progressive = g_bProgressiveScan;
+        s32 progressive = F28_PROGRESSIVE;
         R5900_SHORT_LOOP_PAD1(progressive, progressive);
         if (progressive != 0) {
             break;
         }
     }
-    D_1AE788 = 1;
-    D_1AE78C = 0;
-    return 1;
+    *(volatile s32 *)&D_1AE788 = 1;
+    *(volatile s32 *)&D_1AE78C = 0;
 }
 #endif
 

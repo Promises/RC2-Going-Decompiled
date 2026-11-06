@@ -1788,7 +1788,7 @@ extern s32 func_0012EB30(void *ctx, void *buf, s32 n, void *base, s32 x);
 extern s32 func_003513B8(void *base, s32 n);
 extern s32 func_00352BA0(void *q);
 extern s32 func_00350120(void);
-extern void func_00350F28(s32 a); /* DECL-LEVER(#2429): defined s32; declared void, the s32 return moves the next g_pFmvArenaBase load from $2 to $3 (image cmp 3 bytes at 0x34FFCC..0x34FFE0) */
+extern void func_00350F28(s32 a); /* void, as defined since task #2542 (250080.cpp). Keep it void: an s32 declaration moves the next g_pFmvArenaBase load from $2 to $3 (image cmp 3 bytes at 0x34FFCC..0x34FFE0, task #2429) */
 extern void func_00350608(void *q);
 extern s32 func_00352620(void *ctx);
 extern void func_00132888(s32 slot, s32 value);

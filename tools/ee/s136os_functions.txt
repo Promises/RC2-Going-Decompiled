@@ -770,3 +770,4 @@ usa text/235FE8 func_00339F98 S136EXTRA=-fno-strict-aliasing
 usa text/235FE8 func_003418D8 S136EXTRA=-fno-strict-aliasing
 usa text/235FE8 func_00341A80 S136EXTRA=-fno-strict-aliasing
 usa text/235FE8 func_00342520 S136EXTRA=-fno-strict-aliasing
+usa text/250080 func_00350F28
