@@ -3949,64 +3949,99 @@ s32 func_002DC520(MenuWidget *obj) {
  * (task #2479). */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DC6B8);
 
-/* Build the galactic-map level-select list: for each available level (from
- * g_anAvailableLevelOrder, up to 0x1C entries) fill a 0xC-stride list entry in
- * g_levelSelectListItems (icon/name from the D_262BA0 caption table,
- * sub-mode 3, target screen &D_25E660); zero the entry past the last. Then mark
- * the widget dirty (obj->0x30 |= 0x8000), clear obj->0x40, and scan the active
- * level-id list (g_pLevelOrder) for the current map level (g_mapVertexData+0x230),
- * storing its row into obj->0x40. Returns 0.
- * The init slot of the level-select widget D_0025E608 (data word 0x25E610);
- * until task #2479 this body sat under func_002DC6B8 behind 4 words of debris
- * (split above). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DC6C8);
+/* func_002DC6C8(widget): init handler of the galactic-map level-select list
+ * widget D_0025E608 (its third slot, data word 0x25E610; reached by no jal).
+ * Rebuilds the list in g_levelSelectListItems (0x210AA0, the widget's list
+ * pointer word 0x25E63C): one 12-byte item per level of
+ * g_anAvailableLevelOrder, at most 28 and stopping at the first 0, each with
+ * kind 3, the level-detail screen D_25E660 as its descriptor, and the id and
+ * value string ids of that level's D_262BA0 caption record. The item after
+ * the last gets id 0 (the terminator). It then clears widget+0x40, sets bit
+ * 0x8000 in widget+0x30, and scans the 0-terminated level-order list
+ * (g_pLevelOrder) for the map cache's current level (g_mapVertexData+0x230),
+ * storing the matching row index in widget+0x40. Param: the widget. Returns 0.
+ * Until task #2479 this body sat under func_002DC6B8 behind 4 words of
+ * debris (split above).
+ *
+ * MATCHED on the s136os arm, 1D54C0's S136EXTRA "" (SN 2.95.3 v1.36
+ * cc1plus -O2 -G8 -fopt-stack, gcse on), task #2479; no device.
+ * The 2.9 arm and -fno-gcse build 66 words (FACT #13142).
+ * One spelling is load-bearing, measured by removal in the real pipeline
+ * (build.sh usa): the map cache's current level is read as a FIELD of a
+ * typed view (LevelSelectMapView). Read as a byte offset of the same symbol it
+ * builds 66 words, not 68: cc1 folds +0x230 into %lo, where the ROM keeps the
+ * base in $5 and loads 0x230($2). Also measured, not needed: upstream's
+ * `volatile` on the list pointer (the ROM re-reads g_pLevelOrder through $gp
+ * each step without it), a C++-specific loop spelling (NOTE #13148's
+ * respelling; upstream's own loop closes here), and the 0x210AA0 symbol
+ * (reading the items as g_pLevelSelectListEntries + 0xA8 also closes; the
+ * symbol is kept because two ROM references name 0x210AA0 itself).
+ * GUARD: on EE this C is the image's body, compiled alone by SN 2.95.3 v1.36
+ * -fopt-stack and spliced over S136OS_SLOT by tools/ee/s136os_splice.sh; there
+ * is no asm fallback. On native it is the same plain C.
+ * Source: OpenRAC/rac2-decomp @b2a35115e0cf580a1fdab8dd1071b157799e590e
+ * (GPL-3.0, adopted with the authors' permission per RULINGs #10405/#12108),
+ * src/game/002DB988-init-g8.c, func_002DB988 (v1.01 address; author commit
+ * a96d3126, Louis-Philippe Le Sieur). Respellings by ROM-encoded address:
+ * D_00139948 = g_anAvailableLevelOrder, D_00210AF0 = g_levelSelectListItems,
+ * D_0025E680 = D_25E660, D_00262BE0 = D_262BA0, D_001AA4F0 = g_pLevelOrder,
+ * D_001C4FA0 = g_mapVertexData.
+ * ADAPTED: (1) our signature (MenuWidget *widget), their `char *object` kept
+ * as a local; (2) their MenuEntry/SourceEntry as LevelSelectListItem/
+ * LevelSelectCaption, fields as theirs; (3) their struct-typed D_001C4FA0 as a
+ * LevelSelectMapView cast of the unit's u8[] g_mapVertexData, field
+ * `selected` as currentLevel; (4) `volatile` and `__attribute__((sda))` on
+ * D_001AA4F0 dropped (the unit's -G8 makes g_pLevelOrder gp-relative);
+ * (5) s32/u32/u16/u8 for int/unsigned int/unsigned short/char. Statements and
+ * control flow are theirs. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002DC6C8)
+S136OS_SLOT(func_002DC6C8);
 #else
-/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
- * objdiff): sdk29 35.88% / engine96 24.88%; better arm sdk29; 67 differing
- * rows on it, class STRUCTURAL; first differing insn: ROM `sw t3,64(v1)` vs
- * `lui t0,0x0  [HI16 0x00139948]`. Not iterated in t495. */
-    /* TODO(match): functional equivalent - not byte-exact. */
-s32 func_002DC6C8(MenuWidget *obj) {
-    extern s32 g_anAvailableLevelOrder[];
-    extern u8  D_262BA0[];                /* level caption table (stride 0xC) */
-    extern u8  g_pLevelSelectListEntries[];
-    extern u8  D_25E660[];                /* level-detail screen instance */
-    extern s32 *D_1AA510;                 /* active level-id list */
-    extern u8  g_mapVertexData[];
-    u8 *o = (u8 *)obj;
-    u8 *e = g_pLevelSelectListEntries + 0xA8;
-    s32 n = 0;
-    s32 lvl = g_anAvailableLevelOrder[0];
-    if (lvl != 0) {
-        do {
-            u8 *cap = D_262BA0 + lvl * 0xC;
-            *(s16 *)(e + 2) = 3;
-            *(s32 *)(e + 4) = (s32)D_25E660;
-            *(s16 *)(e + 8) = *(u16 *)(cap + 4);
-            *(s16 *)(e + 0) = *(u16 *)(cap + 0);
-            n++;
-            e += 0xC;
-            if (n >= 0x1C) break;
-            lvl = g_anAvailableLevelOrder[n];
-        } while (lvl != 0);
+/* One 12-byte level-select list item (g_levelSelectListItems). */
+typedef struct {
+    u16 id;            /* +0x0 caption string id; 0 terminates the list */
+    u16 kind;          /* +0x2 entry kind, 3 = level */
+    void *descriptor;  /* +0x4 screen opened on confirm */
+    u16 value;         /* +0x8 second caption string id */
+    u16 reserved;      /* +0xA */
+} LevelSelectListItem;
+/* One 12-byte record of the level-caption table at 0x262BA0. */
+typedef struct {
+    u16 id;            /* +0x0 */
+    u16 reserved;      /* +0x2 */
+    u16 value;         /* +0x4 */
+    u8 rest[6];
+} LevelSelectCaption;
+extern s32 g_anAvailableLevelOrder[];
+extern LevelSelectListItem g_levelSelectListItems[];
+extern s32 *g_pLevelOrder;
+extern LevelSelectCaption D_262BA0[];
+/* The map cache's current-level word (g_mapVertexData+0x230). */
+typedef struct {
+    u8 pad[0x230];
+    s32 currentLevel;  /* +0x230 */
+} LevelSelectMapView;
+extern u8 g_mapVertexData[];
+
+s32 func_002DC6C8(MenuWidget *widget) {
+    u8 *object = (u8 *)widget;
+    s32 i, entry;
+    s32 *list;
+
+    for (i = 0; i < 28 && g_anAvailableLevelOrder[i]; i++) {
+        g_levelSelectListItems[i].kind = 3;
+        g_levelSelectListItems[i].descriptor = D_25E660;
+        g_levelSelectListItems[i].id = D_262BA0[g_anAvailableLevelOrder[i]].id;
+        g_levelSelectListItems[i].value = D_262BA0[g_anAvailableLevelOrder[i]].value;
     }
-    *(s16 *)(g_pLevelSelectListEntries + 0xA8 + n * 0xC) = 0;
-    *(s32 *)(o + 0x40) = 0;
-    *(s32 *)(o + 0x30) |= 0x8000;
-    {
-        s32 *list = D_1AA510;
-        s32 cur = *(s32 *)(g_mapVertexData + 0x230);
-        s32 i = 0;
-        if (list[0] != 0) {
-            for (;;) {
-                if (list[i] == cur) {
-                    *(s32 *)(o + 0x40) = i;
-                    break;
-                }
-                i++;
-                if (list[i] == 0) break;
-            }
+    list = g_pLevelOrder;
+    g_levelSelectListItems[i].id = 0;
+    *(s32 *)(object + 0x40) = 0;
+    *(u32 *)(object + 0x30) |= 0x8000;
+    for (i = 0, entry = list[0]; entry; entry = g_pLevelOrder[++i]) {
+        if (((LevelSelectMapView *)g_mapVertexData)->currentLevel == entry) {
+            *(s32 *)(object + 0x40) = i;
+            break;
         }
     }
     return 0;
@@ -4524,8 +4559,9 @@ s32 func_002DCDC0(char *s0) {
  *     (daddu $2,$16,$0), but void and s32 compile identically for this body,
  *     so it keeps the void every other declaration in the unit uses.
  * The record view reaches D_262BA0 through an asm-label alias because another
- * arm of this unit declares D_262BA0 as u8[], and C++ (the native build)
- * rejects two block-scope declarations of one name with different types. */
+ * arm of this unit declares D_262BA0 with another type (func_002DC6C8's
+ * LevelSelectCaption[]; u8[] before task #2479), and C++ (the native build)
+ * rejects two declarations of one name with different types. */
 #if !defined(TARGET_NATIVE) && !defined(S136OS_func_002DCF58)
 S136OS_SLOT(func_002DCF58);
 #else

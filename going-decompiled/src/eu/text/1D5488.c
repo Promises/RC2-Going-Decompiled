@@ -2205,7 +2205,10 @@ s32 func_002DC4E8(MenuWidget *obj) {
 }
 #endif
 
-/* func_002DC680: EU twin of USA func_002DC6B8 — rebuild the level-select list.
+/* func_002DC680: EU twin of USA func_002DC6B8 + func_002DC6C8 — rebuild the level-select list.
+ * Like USA it opens with the same 4 words of dead debris (sw $11,0x40($3); nop;
+ * addiu $sp,0x20; nop); USA task #2479 split those off as the INCLUDE_ASM_FRAGMENT
+ * func_002DC6B8 and matched the real body at USA 0x2DC6C8 (EU 0x2DC690, not split here).
  * Walks g_anAvailableLevelOrder (NUL-terminated, capped at 0x1C entries); for each
  * level writes a list entry (stride 0xC) at g_pLevelSelectListEntries+0xA8: type 3,
  * the level-detail screen instance (D_25E420), plus the caption id/icon copied from
@@ -2213,7 +2216,7 @@ s32 func_002DC4E8(MenuWidget *obj) {
  * (+0x40), sets the "rebuilt" flag (+0x30 |= 0x8000), then selects the row whose
  * level-id list (D_1AA590) entry equals the current map level (g_mapVertexData+0x230).
  * Returns 0. Matching arm stays INCLUDE_ASM; #else is the structure model.
- * Word-verified vs USA func_002DC6B8 (no callees): data relocs only —
+ * Word-verified vs USA func_002DC6B8 as it stood before that split (no callees): data relocs only —
  * D_262BA0->D_262960 & D_25E660->D_25E420 (both -0x240), D_1AA510->D_1AA590 (+0x80,
  * gp-rel), plus the +0x80 %lo shift of the named globals; no constant/struct delta. */
 #ifndef TARGET_NATIVE

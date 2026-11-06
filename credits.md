@@ -602,7 +602,7 @@
     byte-exact on our ROM; its one inline `sync` is the hardware barrier
     RULING #12168 allows (task #2297).
 
-- **OpenRAC — `rac2-decomp`, commit `b2a35115`, Window X bodies (text/235FE8 and level program 24)** (GPL-3.0)
+- **OpenRAC — `rac2-decomp`, commit `b2a35115`, Window X bodies (text/235FE8, text/1DFF80, text/1D54C0 and level program 24)** (GPL-3.0)
   <https://github.com/OpenRAC/rac2-decomp> at commit `b2a35115e0cf580a1fdab8dd1071b157799e590e`
   (the same history as `rac2-gc-decomp` above: `96927f87` is an ancestor)
 
@@ -656,6 +656,14 @@
     is `u8 *[]`), their `nosda` attribute not carried, an unused local
     dropped, local names ours. Per-function `S136EXTRA=` override (gcse ON
     in a `-fno-gcse` unit, RULING #12178, task #2470).
+  - **`func_002DC6C8`** (`0x002DC6C8`, the level-select list widget's init
+    handler) in `going-decompiled/src/usa/text/1D54C0.cpp`, from
+    `src/game/002DB988-init-g8.c` (`func_002DB988`, author commit
+    `a96d3126`, Louis-Philippe Le Sieur). ADAPTED: our symbol names per the
+    ROM's relocations, our signature and record types, their struct-typed
+    map cache as a cast view of our `g_mapVertexData`, `volatile` and `sda`
+    on the list pointer dropped. Unit s136os arm (S136EXTRA "", task #2479),
+    after splitting the 4-word debris head `func_002DC6B8` off it.
 
 - **OpenRAC — `rac2-decomp`, commit `b2a35115`, text/178E88 Window X bodies** (GPL-3.0)
   <https://github.com/OpenRAC/rac2-decomp> at commit `b2a35115e0cf580a1fdab8dd1071b157799e590e`
