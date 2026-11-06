@@ -680,6 +680,15 @@
       `src/sdk/library/_decodeOrSkipFrame.c` (`_decodeOrSkipFrame`).
     - **`func_0012FEC0`** (`0x0012FEC0`, `cod/022FA8.c`), adapted, from
       `src/sdk/library/_decodeOrSkipField.c` (`_decodeOrSkipField`).
+  - **`func_00129DA8`** (`0x00129DA8`, `cod/022FA8.c`, libmpeg's `_getRef0`),
+    VERBATIM (no edits), taken via OpenRAC `rac2-decomp` at
+    `b2a35115e0cf580a1fdab8dd1071b157799e590e` (`src/core/00129450.c`, author
+    commit `bf067513e`, bigbeno37, 2026-11-01), whose file notice reads
+    "func_00129DA8 is Lombyte (MIT) src/assembly/sdk/library/_getRef0.c"; their
+    removed draft `nonmatching/core/func_00129DA8.c` names that Lombyte source
+    at commit `5ccfa1fb314e9cb43f6ff9a43249523e1c4a5310`. Adopted byte-exact on
+    our ROM with the operator's "adopt all" (RULING #12108, task #2475); the
+    doc comment carries the notice verbatim and the `Source:` line.
 
 - **OpenRAC — `rac2-decomp`, commit `b2a35115`, us2 body** (GPL-3.0)
   <https://github.com/OpenRAC/rac2-decomp> at commit `b2a35115e0cf580a1fdab8dd1071b157799e590e`

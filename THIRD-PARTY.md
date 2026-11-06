@@ -297,6 +297,28 @@ line.
 |---|---|---|
 | `func_00280EC8` in `going-decompiled/src/usa/text/178E88.cpp` (adapted: our callee spellings func_002859E0 / func_0027B858 / AppendGsRegPacket for their func_00285030 / func_0027B2F8 / func_002FC560, their `D_001A65EE` read as `*(s16 *)(g_gsScreenContext + 0x16E)`, `int`/`float` spelled `s32`/`f32`; s136os arm with one RULING #8549 Ps2EeAs dli row at 0x280F88) | `src/game/0027F128.c` | `func_00280510` (author commit `bf067513e`, bigbeno37) |
 
+### OpenRAC rac2-decomp at b2a35115, cod/022FA8 Window X bodies (GPL-3.0)
+
+One C function body is taken from OpenRAC's `rac2-decomp`,
+<https://github.com/OpenRAC/rac2-decomp> at commit
+`b2a35115e0cf580a1fdab8dd1071b157799e590e` (root `LICENSE`: GNU General Public
+License, version 3), with the authors' permission (RULING #10405/#12108), task
+#2475. It is VERBATIM: no edits, because every spelling the body uses was
+already this file's (landed with task #2206's `func_001296A0`).
+
+| Here | Upstream file | Upstream name |
+|---|---|---|
+| `func_00129DA8` in `going-decompiled/src/usa/cod/022FA8.c` (verbatim, plain sdk29 `-O2 -G0` arm, no devices) | `src/core/00129450.c` | `func_00129DA8` (author commit `bf067513e`, bigbeno37, 2026-11-01) |
+
+The GPL-2.0-or-later note in the section "OpenRAC rac2-gc-decomp (GPL-3.0)"
+above applies to this body too. The body is Lombyte-origin: the upstream file's
+notice reads verbatim "func_00129DA8 is Lombyte (MIT)
+src/assembly/sdk/library/_getRef0.c", and upstream's removed draft
+`nonmatching/core/func_00129DA8.c` names that Lombyte source at commit
+`5ccfa1fb314e9cb43f6ff9a43249523e1c4a5310`. The MIT notice reproduced under
+"Lombyte (MIT)" below covers it (RULING #12108); the doc comment carries the
+notice verbatim.
+
 ### OpenRAC rac2-gc-decomp at 96927f87, Lombyte-origin body (GPL-3.0)
 
 One more C function body is taken from OpenRAC's `rac2-gc-decomp` at commit
