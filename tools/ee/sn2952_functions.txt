@@ -21,3 +21,4 @@ usa cod/015180 IntegerToAscii
 usa cod/015180 BufferedWrite128
 usa cod/015180 VfprintfDispatch
 usa cod/015180 BufferedWrite128Secondary
+usa cod/015180 VfprintfInteger

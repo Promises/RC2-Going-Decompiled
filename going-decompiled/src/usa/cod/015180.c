@@ -471,16 +471,27 @@ s32 BufferedWrite128(s32 fd, char *src, u32 len, s32 flush) {
 }
 #endif
 
-/* The one field of newlib's FILE (struct __sFILE) the dispatcher reads: _data,
- * the struct _reent * at +0x54 (sprintf's stack FILE sets it to _impure_ptr,
- * D_00133E74). EE layout; nothing else of the FILE is named here. */
+/* The fields of newlib's FILE (struct __sFILE) the printf code reads, EE
+ * layout. VfprintfInteger uses the head: the write cursor _p, and _flags/_file
+ * (status; it tests the whole word for zero as well as the halves). Flag 0x200
+ * (__SSTR) marks a string stream: output is copied to @cursor instead of being
+ * written to fd @file. The dispatcher reads _data, the struct _reent * at +0x54
+ * (sprintf's stack FILE sets it to _impure_ptr, D_00133E74). Nothing else of
+ * the FILE is named here. */
 typedef struct PrintfStream {
-    char pad[0x54];
-    void *data;
+    unsigned char *cursor;          /* +0x00 _p */
+    int readCount;                  /* +0x04 _r */
+    int writeCount;                 /* +0x08 _w */
+    union {
+        int word;
+        struct { short flags; short file; } fields;
+    } status;                       /* +0x0C _flags, +0x0E _file */
+    char pad[0x54 - 0x10];
+    void *data;                     /* +0x54 _data */
 } PrintfStream;
 
 extern s32 VfprintfFloat(void *reent, void *fp, char *fmt, void *ap);
-extern s32 VfprintfInteger(void *reent, void *fp, char *fmt, void *ap);
+extern s32 VfprintfInteger(void *reent, PrintfStream *fp, const char *fmt0, char *ap);
 
 /**
  * VfprintfDispatch - newlib's split vfprintf: pick the printf engine from
@@ -596,7 +607,337 @@ s32 BufferedWrite128Secondary(s32 fd, char *src, u32 len, s32 flush) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00119BC8);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", VfprintfInteger);
+/* VfprintfInteger's data: the space and zero pad strings (16 of each), the
+ * lower/upper hex digit tables, "(null)", and the "bug in vfprintf: bad base"
+ * text (all in .rodata), and D_00133B80, the MB_CUR_MAX newlib passes to
+ * _mbtowc_r. */
+extern int D_00133B80;
+extern char D_0013A730[];
+extern char D_0013A740[];
+extern char D_0013A750[];
+extern char D_0013A768[];
+extern char D_0013A770[];
+extern char D_0013A788[];
+/* newlib _mbtowc_r (0x115FC0, INCLUDE_ASM above) and memchr (0x115250,
+ * cod/015180h, still func_00115250). */
+extern int _mbtowc_r(void *reent, int *pwc, const char *s, unsigned int n, int *state);
+extern void *func_00115250(const void *s, int c, unsigned int n);
+#ifndef TARGET_NATIVE
+extern unsigned int strlen(const char *s); /* linked newlib strlen, 0x1157AC */
+#endif
+
+/* Output @len bytes at @ptr: copied into a string stream's buffer, or staged
+ * for fd @file (1 when the stream's flags/file word is still zero). */
+#define PRINT(ptr, len) { \
+    if (fp->status.fields.flags & 0x200) { \
+        __builtin_memcpy(fp->cursor, (ptr), (len)); \
+        fp->cursor += (len); \
+    } else { \
+        if (fp->status.word == 0) fp->status.fields.file = 1; \
+        BufferedWrite128Secondary(fp->status.fields.file, (ptr), (len), 0); \
+    } \
+}
+/* Output @howmany characters of the 16-character pad string @with. */
+#define PAD(howmany, with) { \
+    if ((n = (howmany)) > 0) { \
+        while (n > 16) { PRINT((with), 16); n -= 16; } \
+        PRINT((with), n); \
+    } \
+}
+/* Fetch the next argument: every argument occupies an 8-byte slot. */
+#define GET(type) (*(type *)((ap += 8) - 8))
+#define SARG() (flags & 0x20 ? GET(long long) : flags & 0x10 ? GET(long) : flags & 0x40 ? (long)(short)GET(int) : (long)GET(int))
+#define UARG() (flags & 0x20 ? GET(unsigned long long) : flags & 0x10 ? GET(unsigned long) : flags & 0x40 ? (unsigned long)(unsigned short)GET(int) : (unsigned long)GET(unsigned int))
+
+/**
+ * VfprintfInteger - the integer-only printf engine of SCE's split vfprintf:
+ * newlib's 1999 _vfprintf_r with every floating-point conversion removed.
+ *
+ * @reent: the caller's struct _reent * (fp->data). Never read: the multibyte
+ *         scan passes the global _impure_ptr (D_00133E74) instead (NOTE #5546).
+ * @fp:    the stream. A string stream (flag 0x200, sprintf's) is written
+ *         through @fp->cursor with memcpy; any other stream goes to
+ *         BufferedWrite128Secondary on fd @fp->status.fields.file (forced to 1
+ *         when the flags/file word is zero), which is flushed at the end.
+ * @fmt0:  the format string, scanned with _mbtowc_r.
+ * @ap:    the argument area; every argument takes an 8-byte slot.
+ *
+ * Returns the number of characters output. Conversions: c d i D o O p s u U
+ * x X n and %%, flags ' ' # * - + . 0 and width digits, size h l ll q.
+ * VfprintfDispatch calls it when the format has no E G L e f g conversion.
+ * Any other character (including '%') is printed as itself. Non-obvious
+ * behaviour (NOTE #5546): D/O/U are accepted as long forms; an impossible
+ * base EMITS "bug in vfprintf: bad base" as output text rather than aborting.
+ * A zero value at precision 0 prints no digits.
+ *
+ * MATCHED on the sn2952 arm (held SN 2.95.2 v2.73a cc1, RULING #12157;
+ * selector row in tools/ee/sn2952_functions.txt): byte-exact there and on no
+ * build arm (sdk29 and s136 measured LEN/24-word residuals, FACT #13100).
+ * Device: tools/ee/jtbl_bind.sh binds the compiled switch table to the ROM's
+ * 89-entry jtbl_0013A7B0 (the format-character switch, ' ' .. 'x').
+ * Task #2465.
+ *
+ * Source: OpenRAC/rac2-decomp @b2a35115e0cf580a1fdab8dd1071b157799e590e
+ * (GPL-3.0, adopted with the authors' permission per RULINGs #10405/#12108),
+ * src/core/00119BF8.c, func_00119BF8 (same address on their v2.00 build;
+ * author commit bf067513, bigbeno37, "match 23 boot functions"). Their header
+ * says it was reconstructed from retail control flow and the newlib 1999
+ * implementation in rac1-decomp src/core/00116FA0.c. ADAPTED: named
+ * VfprintfInteger, returning `s32`, first parameter `reent` (their `data`);
+ * their `PrintFile` view merged into the unit's PrintfStream (same EE offsets:
+ * cursor +0, status +0xC; field names readCount/writeCount for read_count/
+ * write_count); callees respelled to our symbols by address: func_00115FC0 ->
+ * _mbtowc_r, func_00119AC0 -> BufferedWrite128Secondary, their
+ * memchr/strlen/memcpy asm labels -> func_00115250 / strlen / memcpy (the
+ * builtin's call); D_00133E74 is the unit's `s32` extern, so it is passed as
+ * `(void *)D_00133E74`; their `const` dropped from the pad-string externs
+ * (BufferedWrite128Secondary takes `char *`); macro and data comments added,
+ * their header comment replaced by this one. Statements, locals, macros and
+ * control flow are theirs.
+ */
+#if !defined(TARGET_NATIVE) && !defined(SN2952_VfprintfInteger)
+SN2952_SLOT(VfprintfInteger);
+#else
+s32 VfprintfInteger(void *reent, PrintfStream *fp, const char *fmt0, char *ap)
+{
+    register char *fmt;
+    register int ch;
+    register int n, m;
+    register char *cp;
+    register int flags;
+    int ret;
+    int width;
+    int prec;
+    char sign;
+    int wc;
+    u64 value;
+    enum { OCT, DEC, HEX } base;
+    int dprec;
+    int size;
+    char *xdigs;
+    int *wide_char;
+    int *mbstate;
+    char buf[40];
+    char ox[2];
+    int state = 0;
+
+    fmt = (char *)fmt0;
+    ret = 0;
+    wide_char = &wc;
+    mbstate = &state;
+    for (;;) {
+        cp = fmt;
+        while ((n = _mbtowc_r((void *)D_00133E74, wide_char, fmt, D_00133B80, mbstate)) > 0) {
+            fmt += n;
+            if (wc == '%') {
+                fmt--;
+                break;
+            }
+        }
+        if ((m = fmt - cp) != 0) {
+            PRINT(cp, m);
+            ret += m;
+        }
+        if (n <= 0)
+            goto done;
+        fmt++;
+        flags = 0;
+        dprec = 0;
+        width = 0;
+        prec = -1;
+        sign = '\0';
+    rflag:
+        ch = *fmt++;
+    reswitch:
+        switch (ch) {
+        case ' ':
+            if (!sign) sign = ' ';
+            goto rflag;
+        case '#':
+            flags |= 0x001;
+            goto rflag;
+        case '*':
+            if ((width = GET(int)) >= 0) goto rflag;
+            width = -width;
+        case '-':
+            flags |= 0x004;
+            goto rflag;
+        case '+':
+            sign = '+';
+            goto rflag;
+        case '.':
+            if ((ch = *fmt++) == '*') {
+                n = GET(int);
+                prec = n < 0 ? -1 : n;
+                goto rflag;
+            }
+            n = 0;
+            while ((unsigned)(ch - '0') <= 9) {
+                n = 10 * n + (ch - '0');
+                ch = *fmt++;
+            }
+            prec = n < 0 ? -1 : n;
+            goto reswitch;
+        case '0':
+            flags |= 0x080;
+            goto rflag;
+        case '1': case '2': case '3': case '4': case '5':
+        case '6': case '7': case '8': case '9':
+            n = 0;
+            do {
+                n = 10 * n + (ch - '0');
+                ch = *fmt++;
+            } while ((unsigned)(ch - '0') <= 9);
+            width = n;
+            goto reswitch;
+        case 'h':
+            flags |= 0x040;
+            goto rflag;
+        case 'l':
+            if (*fmt == 'l') {
+                fmt++;
+                flags |= 0x020;
+            } else {
+                flags |= 0x010;
+            }
+            goto rflag;
+        case 'q':
+            flags |= 0x020;
+            goto rflag;
+        case 'c':
+            *(cp = buf) = GET(int);
+            size = 1;
+            sign = '\0';
+            break;
+        case 'D':
+            flags |= 0x010;
+        case 'd': case 'i':
+            value = SARG();
+            if ((s64)value < 0) {
+                value = -value;
+                sign = '-';
+            }
+            base = DEC;
+            goto number;
+        case 'n':
+            if (flags & 0x020) *GET(long long *) = ret;
+            else if (flags & 0x010) *GET(long *) = ret;
+            else if (flags & 0x040) *GET(short *) = ret;
+            else *GET(int *) = ret;
+            continue;
+        case 'O':
+            flags |= 0x010;
+        case 'o':
+            value = UARG();
+            base = OCT;
+            goto nosign;
+        case 'p':
+            value = (s64)(int)GET(void *);
+            base = HEX;
+            xdigs = D_0013A750;
+            flags |= 0x002;
+            ch = 'x';
+            goto nosign;
+        case 's':
+            if ((cp = GET(char *)) == 0) cp = D_0013A768;
+            if (prec >= 0) {
+                char *p = func_00115250(cp, 0, prec);
+                if (p != 0) {
+                    size = p - cp;
+                    if (size > prec) size = prec;
+                } else size = prec;
+            } else size = strlen(cp);
+            sign = '\0';
+            break;
+        case 'U':
+            flags |= 0x010;
+        case 'u':
+            value = UARG();
+            base = DEC;
+            goto nosign;
+        case 'X':
+            xdigs = D_0013A770;
+            goto hex;
+        case 'x':
+            xdigs = D_0013A750;
+        hex:
+            value = UARG();
+            base = HEX;
+            if (flags & 0x001 && value != 0) flags |= 0x002;
+        nosign:
+            sign = '\0';
+        number:
+            if ((dprec = prec) >= 0) flags &= ~0x080;
+            cp = buf + 40;
+            if (value != 0 || prec != 0) {
+                switch (base) {
+                case OCT:
+                    do {
+                        *--cp = (value & 7) + '0';
+                        value >>= 3;
+                    } while (value);
+                    if (flags & 0x001 && *cp != '0') *--cp = '0';
+                    break;
+                case DEC:
+                    while (value >= 10) {
+                        *--cp = (value % 10) + '0';
+                        value /= 10;
+                    }
+                    *--cp = value + '0';
+                    break;
+                case HEX:
+                    do {
+                        *--cp = xdigs[value & 15];
+                        value >>= 4;
+                    } while (value);
+                    break;
+                default:
+                    cp = D_0013A788;
+                    size = strlen(cp);
+                    goto skipsize;
+                }
+            }
+            size = buf + 40 - cp;
+        skipsize:
+            break;
+        default:
+            if (ch == '\0') goto done;
+            cp = buf;
+            *cp = ch;
+            size = 1;
+            sign = '\0';
+            break;
+        }
+        {
+            int realsz = dprec > size ? dprec : size;
+            if (sign) realsz++;
+            else if (flags & 0x002) realsz += 2;
+            if ((flags & 0x084) == 0) PAD(width - realsz, D_0013A730);
+            if (sign) {
+                PRINT(&sign, 1);
+            } else if (flags & 0x002) {
+                ox[0] = '0';
+                ox[1] = ch;
+                PRINT(ox, 2);
+            }
+            if ((flags & 0x084) == 0x080) PAD(width - realsz, D_0013A740);
+            PAD(dprec - size, D_0013A740);
+            PRINT(cp, size);
+            if (flags & 0x004) PAD(width - realsz, D_0013A730);
+            ret += width > realsz ? width : realsz;
+        }
+    }
+ done:
+    if (!(fp->status.fields.flags & 0x200))
+        BufferedWrite128Secondary(fp->status.fields.file, 0, 0, 1);
+    return ret;
+}
+#endif
+#undef PRINT
+#undef PAD
+#undef GET
+#undef SARG
+#undef UARG
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011A7F8);
 

@@ -174,6 +174,12 @@ License, version 3; the repository carries `rac2-gc-decomp`'s history, with
 | `func_00346878` in `going-decompiled/src/usa/text/235FE8.c` (adapted: our symbol names, signature and `PlayGlobalSound` prototype; their owner struct as our `GuiGridCursor` view; their `.sdata` `g_inventoryOwned` and their typed grid array as EE-only asm-label aliases; `sda` dropped), task #2467 | `src/us2/game/00346878-g8.c` | `func_US2_00346878` (v2.00 address) |
 | `func_00346CD8` in `going-decompiled/src/usa/text/235FE8.c` (adapted: our symbol spellings and the unit's declaration types, `s32`/`u8` for their `int`/`unsigned char`; two through EE-only asm-label aliases, a typed view (RULING #13168) replacing their typed array and the `la` alias (RULING #8620) replacing their `section(".sdata")`; their `sda` dropped; struct views renamed and retyped, their material record as our `GuiWeaponTableEntry`; signature ours with a local cast), task #2468 | `src/us2/game/00346CD8-pad-g8.c` (author commit `13388073`, Flavius) | `func_US2_00346CD8` (v2.00 address) |
 | `func_L24_0034D598` in `going-decompiled/levels/usa/L24/src/func_L24_0034D598.c`, level program 24 (adapted: our name at the v2.00 place, the boot's `g_anAvailableLevelOrder`, four level symbols renamed to the v2.00 ROM's relocation targets, `volatile` and `sda` dropped as measured inert, `include_asm.h` dropped; the blob is identical at the repository's head `5833be5b716983046be737d85080b96bc9f1435a`), task #2495 | `src/levels/24_ship_shack/L24_0034C450-init-g8.c` | `func_L24_0034C450` (v1.01 address) |
+| `VfprintfInteger` in `going-decompiled/src/usa/cod/015180.c` (adapted: our name, `s32` return, `reent` for their `data`; their `PrintFile` view merged into the unit's `PrintfStream`; callees respelled by address to `_mbtowc_r`, `BufferedWrite128Secondary`, `func_00115250` (their `memchr` label), `strlen` and `memcpy`; `(void *)D_00133E74` for the unit's `s32` extern; `const` dropped from the pad-string externs; its switch table bound to the ROM's by `tools/ee/jtbl_bind.sh`; sn2952 arm), task #2465 | `src/core/00119BF8.c` (author commit `bf067513`, bigbeno37) | `func_00119BF8` |
+
+`VfprintfInteger`'s upstream file is named by neither upstream's
+`THIRD_PARTY_NOTICES.md` nor its `CREDITS.md`; its header says it was
+reconstructed from retail control flow and the newlib 1999 implementation in
+rac1-decomp `src/core/00116FA0.c`.
 
 The GPL-2.0-or-later note in the section "OpenRAC rac2-gc-decomp (GPL-3.0)" above applies to these bodies too.
 

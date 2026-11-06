@@ -405,6 +405,30 @@
     through a `PrintfStream` view. Its switch's jump table is bound to the
     ROM's `jtbl_0013A4B0` by `tools/ee/jtbl_bind.sh`.
 
+- **OpenRAC — `rac2-decomp`, commit `b2a35115`, core body** (GPL-3.0)
+  <https://github.com/OpenRAC/rac2-decomp> at commit `b2a35115e0cf580a1fdab8dd1071b157799e590e`
+
+  One core C body, adopted with the authors' permission (held by the
+  operator, RULINGs #10405 and #12108) and re-checked byte-exact against our
+  v2.00 ROM on the per-function SN 2.95.2 arm (RULING #12157), task #2465,
+  from Window X audit NOTE #13099 row A1. Contributor: bigbeno37. The doc
+  comment carries the `Source:` line, which names every change beyond extern
+  spellings.
+
+  Used so far:
+  - **`VfprintfInteger`** (`0x00119BF8`, the integer-only engine of the split
+    vfprintf) in `going-decompiled/src/usa/cod/015180.c`, from
+    `src/core/00119BF8.c` (`func_00119BF8`, author commit `bf067513`,
+    bigbeno37), whose header says it was reconstructed from retail control
+    flow and the newlib 1999 implementation in rac1-decomp
+    `src/core/00116FA0.c`. ADAPTED: our name, `s32` return; their `PrintFile`
+    view merged into the unit's `PrintfStream`; callees respelled by address
+    to our `_mbtowc_r`, `BufferedWrite128Secondary`, `func_00115250` (their
+    `memchr` label), `strlen` and `memcpy`; `(void *)D_00133E74` for the
+    unit's `s32` extern; `const` dropped from two pad-string externs. Its
+    switch's jump table is bound to the ROM's `jtbl_0013A7B0` by
+    `tools/ee/jtbl_bind.sh`.
+
 - **OpenRAC — `rac2-gc-decomp`, commit `96927f87`, boundary-split bodies** (GPL-3.0, and MIT for one carried file)
   <https://github.com/OpenRAC/rac2-gc-decomp> at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`
 
