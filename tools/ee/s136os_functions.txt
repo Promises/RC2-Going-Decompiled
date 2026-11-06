@@ -762,3 +762,6 @@ usa text/178E88 InitScreenGeometry
 usa text/178E88 func_0027B858
 usa text/178E88 RecomputeScreenViewportFromGsContext
 usa text/178E88 func_0027DB38
+usa text/178E88 func_00279F08 S136EXTRA=
+usa text/178E88 func_0027DC40 S136EXTRA=
+usa text/178E88 SetupGsDisplayBuffers S136EXTRA=

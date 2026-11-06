@@ -783,9 +783,9 @@
   permission (held by the operator, RULING #10405/#12108) and re-checked
   byte-exact against our v2.00 ROM on the s136os arm (tasks #2471 and #2472,
   from the Window X boot audit NOTE #13122 / FACT #13116; task #2459, from
-  NOTE #13117 / FACT #13102; task #2503, from the Window X audit NOTE
-  #13181, read at `5776dcc3`, where its four files are identical to
-  `b2a35115`'s). Each doc comment carries the `Source:` line,
+  NOTE #13117 / FACT #13102; tasks #2503 and #2504, from the Window X
+  re-screen NOTE #13181 / FACT #13187, read at `5776dcc3`, where their files
+  are identical to `b2a35115`'s). Each doc comment carries the `Source:` line,
   which names every change beyond symbol spellings.
 
   Used so far:
@@ -873,6 +873,43 @@
     prototyped to its definition's five-`s32` shape with a `(s32)text`
     cast, their int-valued `long` (64-bit on the EE) written `s32` (RULING
     #13282), and `unsigned char *` written `u8 *`.
+  - **`func_00279F08`** (`0x00279F08`, advance the text-run cursor to the
+    next run group) in `going-decompiled/src/usa/text/178E88.cpp`, on the
+    s136os arm with gcse ON via the per-function `S136EXTRA=` override
+    (RULING #12178), from `src/game/00274128.c` (`func_002799A8`, author
+    commit `65ef3209`, ThorpenCodes, 2026-10-21; read at `5776dcc3`, the file
+    blob identical at `b2a35115`). ADAPTED: their index holder, item table
+    and per-level `sda` state word as our `g_textRunCursor`
+    (`g_cameraSlotActive + 0xD0`), `g_textRunTable` and a sized equate
+    `g_textSequenceMode = g_cameraCallbackCount + 0x80` (EE arm, RULING
+    #8620); `func_002798A0` as our `func_00279E00`; struct and local names;
+    `int`/`short` spelled `s32`/`s16` (task #2504, from the Window X
+    re-screen NOTE #13181 / FACT #13187).
+  - **`func_0027DC40`** (`0x0027DC40`, draw this frame's timed subtitle) in
+    `going-decompiled/src/usa/text/178E88.cpp`, on the s136os arm with gcse
+    ON via the per-function `S136EXTRA=` override, from
+    `src/game/0027B948.c` (`func_0027D5C0`, author commit `bf067513`,
+    bigbeno37, 2026-11-01; read at `5776dcc3`, where the body is unchanged
+    from `b2a35115`; the file credits the layout to OpenRAC `rac1-decomp`
+    `src/game/draw.c` `draw_subtitles`, GPL-3.0). ADAPTED: data and callees
+    by address to our names; their `sda` / `volatile` externs as EE-only
+    RULING #8620 / #12316 / #13168 / #8404 devices; two EE-only asm-label
+    prototype views of `func_00280C98` (int parameters) and `func_00280BB8`
+    (u64 colour); `long` / `unsigned long` written `s64` / `u64` (RULING
+    #13197) (task #2504).
+  - **`SetupGsDisplayBuffers`** (`0x0027BAA0`, VRAM layout and GS display
+    environment by video mode, optional VRAM clear) in
+    `going-decompiled/src/usa/text/178E88.cpp`, on the s136os arm with gcse
+    ON via the per-function `S136EXTRA=` override, from
+    `src/game/00274128.c` (`func_0027B440`, author commit `00ebb44e`,
+    bigbeno37, 2026-11-03; read at `5776dcc3`, the file blob identical at
+    `b2a35115`; upstream credits it as adapted from RAC1 `SetPalMode` and
+    from Lombyte's `src/video/display/set_pal_mode.c`, both GPL-3.0).
+    ADAPTED: their `long long` u64/s64 as our `long`-based u64/s64 (RULING
+    #13197); every scalar through an EE-only sized zero-offset alias and
+    `.data` on the two u64 ZBUF images (RULING #8620); their `ScreenExtent`
+    struct spelled as its eight fields' own symbols; struct and parameter
+    names (task #2504).
 
 - **Forja contributors** (MIT, © 2026 Forja contributors), via OpenRAC
   `rac2-gc-decomp` at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`

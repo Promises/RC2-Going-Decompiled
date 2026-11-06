@@ -2,7 +2,7 @@
 # storage symbol: g_dataArena  ==  __gamedata_start (linker)
 # seed: memcpy snapshot[rom_addr] -> g_dataArena[rom_addr - base]
 #       for rom_addr in [base, base+span).
-# base 0x133B80  span 0x14AD80  placed 1767  (const 11)
+# base 0x133B80  span 0x14AD80  placed 1774  (const 11)
 # columns: <symbol> <rom_addr> <arena_offset> [const]
 #   'const' tag = static rodata/string literal (see data_const.txt);
 #   NOT mutable state - the tester's effect-diff must EXCLUDE these.
@@ -389,6 +389,10 @@ g_vramFrameBufA 0x1A72D8 0x73758
 g_vramFrameBufB 0x1A72DC 0x7375C
 g_vramZBuffer 0x1A72E0 0x73760
 g_vramTextureBase 0x1A72E4 0x73764
+D_1A72E8 0x1A72E8 0x73768
+D_1A72EC 0x1A72EC 0x7376C
+D_1A72F0 0x1A72F0 0x73770
+D_1A72F4 0x1A72F4 0x73774
 g_vramTextureBase_28 0x1A730C 0x7378C
 D_001A7318 0x1A7318 0x73798
 D_1A7318 0x1A7318 0x73798
@@ -402,6 +406,8 @@ g_gsPixelOffsetX 0x1A7350 0x737D0
 g_nGsPixelOffsetX 0x1A7350 0x737D0
 g_gsPixelOffsetY 0x1A7354 0x737D4
 g_nGsPixelOffsetY 0x1A7354 0x737D4
+D_1A7358 0x1A7358 0x737D8
+D_1A735C 0x1A735C 0x737DC
 D_001A7360 0x1A7360 0x737E0
 g_saveClock 0x1A7360 0x737E0
 g_itemEquipSlotTable 0x1A7398 0x73818
@@ -540,6 +546,7 @@ D_1A8770 0x1A8770 0x74BF0
 g_screenGrabTex0Full 0x1A8780 0x74C00
 g_screenGrabTex0Half 0x1A8788 0x74C08
 D_1A8790 0x1A8790 0x74C10
+D_1A8998 0x1A8998 0x74E18
 D_1A89B0 0x1A89B0 0x74E30
 D_1A8A60 0x1A8A60 0x74EE0
 D_1A8A64 0x1A8A64 0x74EE4

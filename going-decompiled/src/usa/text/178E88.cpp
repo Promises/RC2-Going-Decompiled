@@ -419,83 +419,147 @@ void func_00279EE8(void) {
     __asm__ __volatile__("");
 }
 
-/* func_00279F08 - advance a table-driven sequence cursor one step and report whether the
- * step "settled". State lives at g_cameraSlotActive: a s16 cursor (+0xF0) + sub-position
- * (+0xF2), a 0x28-stride entry table (+0x458, entry.field0 at +0x00, entry.scroll at +0x1C),
- * an entry count (+0x958), and a mode word at g_cameraCallbackCount+0x80.
- *   - cursor == -1 (uninitialised): reset to 0; if mode==1, jump to row 4 and set mode=2.
- *   - else: run func_00279E00 on the current entry's scroll field (it returns whether a new
- *     index/cursor was produced and writes them out). If it produced one AND the entry's
- *     scroll field is non-zero, adopt that (index,cursor) pair and return 1. Otherwise step
- *     the cursor forward, skipping runs of entries whose field0 matches the one we left
- *     (dedup); return 1 iff we stopped on a DIFFERENT entry (allSame^1). Special-case: if we
- *     land on row 4 with mode==0, back up to row 3, set mode=1, return 0.
- *
- * UN-PARK of a premature #70: the park's only cited blocker was "needs a careful control-flow
- * trace" - done here, cross-checked Ghidra against the .s (real body @ this glabel) branch by
- * branch. Engine region - faithful #else, not a byte match. FORMER-PARK: dual-gated (tester
- * oracle) + d2 heads-up per the un-park guardrails. */
-/* TODO(match) t493: sdk29 46.37% / engine96 0.00% (unit objdiff, objdiff_build.sh +
- * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
- * every other remaining arm). Residual on the better arm (sdk29): MACRO-AT (first differing insn:
- * ROM `addiu sp,sp,-64` vs built `addiu sp,sp,-128`). */
+/* The text-run cursor inside the streaming directory at g_cameraSlotActive+0xD0
+ * (0x1B7F00): the start index (+0x20) and base advance (+0x22) that
+ * func_00279E00 seeds its walk from. Upstream's OozlaIndex_001B7F80. */
+typedef struct {
+    u8  pad[0x20];
+    u16 startIndex;     /* +0x20 current run index (read as s16) */
+    u16 baseAdvance;    /* +0x22 cursor within that run (read as s16) */
+} TextRunCursor;
+#define g_textRunCursor ((TextRunCursor *)(g_cameraSlotActive + 0xD0))
+extern u8 g_cameraCallbackCount[];
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00279F08);
+/* ADDRESSING-MODEL DEVICE (RULING #8620 / #9574, the g_textRunTable equate's
+ * class): g_textSequenceMode = g_cameraCallbackCount + 0x80, the s32 sequence
+ * mode word at 0x1B1500 that splat names by its nearest symbol. It emits
+ * nothing and the relocations name g_cameraCallbackCount+0x80, as the ROM's
+ * do. As a symbol of its own cc1 emits the one-insn `lw/sw` macro that GNU as
+ * expands into the ROM's `lui; lw %lo` and `lui $at; sw %lo($at)` pairs;
+ * spelled as the cast *(s32 *)(g_cameraCallbackCount + 0x80) cc1 splits the
+ * address itself and reorders the cursor resets: 72/108, built 107 (solo
+ * s136os compile of this unit, gcse on, word compare against the ROM .s,
+ * relocated fields masked). The `.extern ,16` size is load-bearing only in
+ * the spliced unit: without it the splice carries cc1's `.extern
+ * g_textSequenceMode, 4` into the 2.9 unit, GNU as goes $gp-relative and the
+ * spliced body is 104 words against the ROM's 108 (s136os_splice LENGTH
+ * refusal, build.sh usa); the solo compile reads 0/108 either way. Used only
+ * by func_00279F08 in this unit. */
+__asm__(".extern g_textSequenceMode, 16\n\tg_textSequenceMode = g_cameraCallbackCount + 0x80");
+extern s32 g_textSequenceMode;
 #else
-/* Declarations this body needs whose only other declarations sit in other
- * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+/* Native: the same word by the unit's (and text/1CA080's) adjacency
+ * spelling, so every native reader and writer reaches one object. */
+#define g_textSequenceMode (*(s32 *)(g_cameraCallbackCount + 0x80))
+#endif
+
+/** func_00279F08 — advance the subtitle/text-run cursor to the next group of
+ *  runs. No params.
+ *  @return 1 when the cursor moved onto a new entry (or was just
+ *          initialised), 0 when it stays where it was
+ *  State: g_textRunCursor (start index / base advance at
+ *  g_cameraSlotActive+0xD0), g_textRunTable (0x28-byte runs, group key in
+ *  f[0], a scroll amount in f[7] at +0x1C) and g_textSequenceMode (0x1B1500).
+ *  - Uninitialised cursor (index -1): reset it to run 0; when the mode is 1
+ *    (armed) jump to run 4 and set mode 2. Returns 1.
+ *  - Otherwise first try func_00279E00 with the current run's scroll amount;
+ *    when it lands inside a run and that scroll amount is nonzero, adopt the
+ *    index/cursor it produced. Returns 1.
+ *  - Else step past every following run that shares the current run's group
+ *    key and return 1 iff a run with a different key was reached. Landing on
+ *    run 4 while the mode is 0 instead backs up to run 3, arms the mode (1)
+ *    and returns 0.
+ *  Non-obvious: the cursor fields are re-read through the global on every
+ *  test (no local copy), as the ROM does.
+ *
+ *  MATCHED byte-exact on the s136os arm (SN 2.95.3 v1.36 cc1plus -O2 -G8
+ *  -fopt-stack) with gcse ON for this function only: the per-function
+ *  `S136EXTRA=` (empty) override in tools/ee/s136os_functions.txt (RULING
+ *  #12178); the unit stays -fno-gcse. With the unit's -fno-gcse the body reads
+ *  95/108, built 107 (solo s136os compile, masked word compare). One device,
+ *  the sized g_textSequenceMode equate above. The audit's section(".sdata")
+ *  on the mode word is not load-bearing (removed: 0/108, and the spliced
+ *  unit builds without it).
+ *
+ *  Source: OpenRAC rac2-decomp @ 5776dcc35045fb2320610edd1d2db4fa7660ef37
+ *  (unchanged at fe6adf9b), src/game/00274128.c, func_002799A8 (author commit
+ *  65ef3209, ThorpenCodes, 2026-10-21; GPL-3.0, with the authors' permission,
+ *  RULINGs #10405 / #12108). ADAPTED: (1) data by address to our names:
+ *  OozlaHolder (their Fd8e166aa_D_001B7F80) is g_textRunCursor at
+ *  g_cameraSlotActive+0xD0, their D_001B8308 table our g_textRunTable
+ *  (entry .key / .ptr are .f[0] / .f[7], the same offsets and int type),
+ *  their sda ref_L00_002E38F0_00 our g_textSequenceMode equate (their sda
+ *  attribute dropped, measured above); (2) func_002798A0 is our
+ *  func_00279E00; (3) OozlaIndex_001B7F80 is TextRunCursor with idx/idx2
+ *  named startIndex/baseAdvance, OozlaEntry_001B8308 our CamSlotRecord;
+ *  (4) int/short/unsigned short spelled s32/s16/u16; locals t1/t2/g renamed
+ *  nextIndex/nextCursor/cursor. Statements otherwise as upstream wrote them. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00279F08)
+S136OS_SLOT(func_00279F08);
+#else
+/* Defined behind its own S136OS guard above, so the s136os compile of this
+ * function sees only this declaration. */
 extern s32 func_00279E00(s32 scroll, s32 *pIndex, s32 *pCursor);
-/* (end of this body's declarations) */
-extern u8 g_cameraCallbackCount[];   /* +0x80 = sequence mode word (0/1/2) */
 
-s32 func_00279F08(void) {
-    s16 *cursor = (s16 *)(g_cameraSlotActive + 0xF0);   /* sequence row cursor */
-    s16 *sub    = (s16 *)(g_cameraSlotActive + 0xF2);   /* sub-position */
-    s32 *mode   = (s32 *)(g_cameraCallbackCount + 0x80);
-    u8  *table  = g_cameraSlotActive + 0x458;           /* 0x28-stride entry table */
-    s32  count  = *(s32 *)(g_cameraSlotActive + 0x958);
-    s32  status;
+s32 func_00279F08(void)
+{
+    s32 nextIndex, nextCursor;
+    TextRunCursor *cursor = g_textRunCursor;
+    s32 key, found, count;
 
-    if (*cursor == -1) {
-        status = 1;
-        *cursor = 0;
-        *sub = 0;
-        if (*mode == 1) {
-            *mode = 2;
-            *cursor = 4;
-            *sub = 0;
+    if ((s16)cursor->startIndex == -1) {
+        cursor->startIndex = 0;
+        cursor->baseAdvance = 0;
+        if (g_textSequenceMode == 1) {
+            g_textSequenceMode = 2;
+            cursor->startIndex = 4;
+            cursor->baseAdvance = 0;
         }
-    } else {
-        s32 idx, cur;
-        s32 produced = func_00279E00(*(s32 *)(table + *cursor * 0x28 + 0x1C), &idx, &cur);
-        if (produced == 0 || *(s32 *)(table + *cursor * 0x28 + 0x1C) == 0) {
-            s16 prev = *cursor;
-            s32 allSame = 1;
-            *cursor = *cursor + 1;
-            *sub = 0;
-            if (*cursor < count) {
-                do {
-                    if (*(s32 *)(table + *cursor * 0x28) == *(s32 *)(table + prev * 0x28)) {
-                        *cursor = *cursor + 1;
-                    } else {
-                        allSame = 0;
-                    }
-                } while (*cursor < count && allSame);
-            }
-            status = allSame ^ 1;
-            if (*cursor == 4 && *mode == 0) {
-                *cursor = 3;
-                status = 0;
-                *mode = 1;
-            }
-        } else {
-            *cursor = (s16)idx;
-            *sub = (s16)cur;
-            status = 1;
+        return 1;
+    }
+    if (func_00279E00(g_textRunTable.runs[(s16)cursor->startIndex].f[7], &nextIndex, &nextCursor)) {
+        if (g_textRunTable.runs[(s16)cursor->startIndex].f[7] != 0) {
+            cursor->startIndex = (u16)nextIndex;
+            cursor->baseAdvance = (u16)nextCursor;
+            return 1;
         }
     }
-    return status;
+    {
+        CamSlotRecord *e = &g_textRunTable.runs[(s16)g_textRunCursor->startIndex];
+
+        found = 1;
+        count = g_textRunTable.count;
+        key = e->f[0];
+        g_textRunCursor->baseAdvance = 0;
+        g_textRunCursor->startIndex = g_textRunCursor->startIndex + 1;
+        if ((s16)g_textRunCursor->startIndex < count) {
+            do {
+                if (g_textRunTable.runs[(s16)g_textRunCursor->startIndex].f[0] != key) {
+                    found = 0;
+                } else {
+                    g_textRunCursor->startIndex = g_textRunCursor->startIndex + 1;
+                }
+            } while ((s16)g_textRunCursor->startIndex < count && found);
+        }
+        if ((s16)g_textRunCursor->startIndex == 4 && g_textSequenceMode == 0) {
+            g_textRunCursor->startIndex = 3;
+            g_textSequenceMode = 1;
+            return 0;
+        }
+    }
+    return !found;
 }
+#endif
+
+/* Inter-function padding at 0x27A0B8..0x27A0C7: the four zero words retail
+ * places between func_00279F08 and the func_0027A0C8 fragment. They exist only
+ * after `endlabel func_00279F08` in its nonmatchings .s, which is no longer
+ * included now that the s136os arm supplies the body; without them every later
+ * function lands 0x10 bytes low (build.sh usa: DIFF 742533 bytes, first unit
+ * word 0x278ECC's jal off by 0x10, task #2504). Not a codegen device: layout
+ * data (RULING #8467). */
+#ifndef TARGET_NATIVE
+__asm__(".word 0\n\t.word 0\n\t.word 0\n\t.word 0");
 #endif
 
 /* func_0027A0C8: 8 bytes of dead pad (addiu $sp,0x20; nop) carved off the real
@@ -1241,170 +1305,269 @@ void RecomputeScreenViewportFromGsContext(void) {
 }
 #endif
 
-/* SetupGsDisplayBuffers(clearVram) — bring up the GS display/draw environment.
- *
- * Selects the VRAM framebuffer / Z-buffer / texture-base layout by video mode:
- *   - NTSC   (pal==0, prog==0): Zbuf 0x118000, FrameBufB 0x1E8000, tex 0x2C0000,
- *                               BuildScreenDrawPackets(0x200,0x1A0,0x200,0x1C0,0,0)
- *   - 480p   (pal==0, prog!=0): Zbuf 0x118000, FrameBufB 0x1E8000, tex 0x2C0000,
- *                               BuildScreenDrawPackets(0x200,0x1A0,0x280,0x1C0,0,0)
- *   - PAL    (pal!=0):          Zbuf 0x100000, FrameBufB 0x1E0000, tex 0x2C0000,
- *                               BuildScreenDrawPackets(0x200,0x1C0,0x200,0x200,4,0)
- * FrameBufA is always 0. Then derives the screen dims / half-extents from the GS
- * screen-context display size (g_gsScreenContext +0x150 width, +0x152 height),
- * publishes the fixed-point GS window offsets (centred on 0x800, <<4) and packs
- * the GS DISPFB/FRAME/SCISSOR/XYOFFSET register images into the D_139120 block
- * (+0x10..+0x80, with the +0x20/+0x40/+0x60/+0xA0 aliases mirroring their
- * neighbours) plus the PTR aliases at D_139310 (ZBUF) and D_139380 (ZBUF+PSM).
- * The texture sub-carves land at g_vramTextureBase+4/+8/+C/+10 (base, +0x1000,
- * +0x1400, +0x1800).
- *
- * When clearVram is nonzero it also wipes VRAM: rebuild the dynamic-alloc cursor,
- * flush the draw-env / clear packets, then loop 0x20x0x20 image-upload/kick
- * blits of the zeroed g_collHitTriVert2+0x10 (0x1BAF80) scratch across the whole
- * framebuffer (count = ctx.width * ctx.height >> 10, stepping 0x100000 bytes).
- *
- * Engine region — faithful #else, whole-.s traced (Ghidra-complete; 0 lq/sq, all
- * 64-bit register images built in s64 so the <<0x10/<<0x20/<<0x30 packs don't
- * overflow native 32-bit long). The matching arm keeps the shipped bytes. */
-/* TODO(match) t493: sdk29 52.08% / engine96 46.83% (unit objdiff, objdiff_build.sh +
- * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
- * every other remaining arm). Residual on the better arm (sdk29): GPREL-FORM (first differing
- * insn: ROM `addiu sp,sp,-160` vs built `addiu sp,sp,-272`). Levers: cc1-small/absolute globals
- * model RUN: 43.94% (engine96); engine96 with sched1 MEASURED (flag not landed): 45.56%. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", SetupGsDisplayBuffers);
-#else
-extern s32 g_bPalMode;         /* 0x1A7B98 PAL flag (USA hard-codes 0) */
-extern s32 g_bProgressiveScan; /* 0x1A7BC0 480p flag */
-extern s32 g_vramZBuffer;      /* 0x1A72E0 VRAM Z-buffer base */
-extern s32 g_vramFrameBufA;    /* 0x1A72D8 front framebuffer base (always 0) */
-extern s32 g_vramFrameBufB;    /* 0x1A72DC back framebuffer base */
-extern u8  g_vramTextureBase[];/* 0x1A72E4 static texture base; +4/+8/+C/+10 carves */
-extern s32 g_vramAllocCursor;  /* 0x1A72D0 dynamic VRAM bump cursor */
-
-/* GS register-image / packet blocks (absolute %hi/%lo; 64-bit sd targets). */
-extern u8 D_139120[];          /* DISPFB/FRAME/SCISSOR/XYOFFSET register images */
-extern u8 D_139310[];          /* ZBUF PTR-reg image alias */
-extern u8 D_139380[];          /* ZBUF+PSM PTR-reg image alias */
-/* Zeroed VRAM-clear source scratch (g_collHitTriVert2 vec4 + 0x10 == 0x1BAF80). */
+/* SetupGsDisplayBuffers state. The GS draw-environment register images at
+ * D_139120 (each 64-bit value followed by its register address) and the two
+ * ZBUF PTR-register images at D_139310 / D_139380. */
+typedef struct {
+    u64 pad0[2];
+    u64 frame1;         /* +0x10 FRAME_1 */
+    u64 pad18;
+    u64 frame2;         /* +0x20 FRAME_2 */
+    u64 pad28;
+    u64 zbuf1;          /* +0x30 ZBUF_1 */
+    u64 pad38;
+    u64 zbuf2;          /* +0x40 ZBUF_2 */
+    u64 pad48;
+    u64 xyoffset1;      /* +0x50 XYOFFSET_1 */
+    u64 pad58;
+    u64 xyoffset2;      /* +0x60 XYOFFSET_2 */
+    u64 pad68;
+    u64 scissor1;       /* +0x70 SCISSOR_1 */
+    u64 pad78;
+    u64 scissor2;       /* +0x80 SCISSOR_2 */
+} GsDrawEnvRegs;
+/* The display-buffer record in g_gsScreenContext: display size at +0x150,
+ * storage size at +0x158 (upstream's FsAaBuf). */
+typedef struct {
+    u8  dispAndContexts[0x150];
+    s16 displayWidth;   /* +0x150 */
+    s16 displayHeight;  /* +0x152 */
+    s16 psm;
+    s16 fbp0;
+    s16 storageWidth;   /* +0x158 */
+    s16 storageHeight;  /* +0x15A */
+} GsDisplayBuffer;
+typedef struct { u8 b[0x60]; } GsLoadImage;   /* func_00126288's image-upload packet */
+#define g_gsDisplayBuffer (*(GsDisplayBuffer *)g_gsScreenContext)
+/* Zeroed scratch the VRAM clear uploads from (0x1BAF80; text/191238 reaches
+ * it the same way). */
+#define g_vramClearScratch (g_collHitTriVert2 + 0x10)
 extern u8 g_collHitTriVert2[];
+extern s32 g_screenCenterDefaultX, g_screenCenterDefaultY;   /* 0x1A7348 / 0x1A734C */
+extern s32 D_1A7358, D_1A735C;   /* right / bottom GS window edges (12.4) */
+extern s32 g_bPalMode;           /* 0x1A7B98 PAL flag */
+extern s32 g_bProgressiveScan;   /* 0x1A7BC0 480p flag */
+extern s32 g_vramAllocCursor;    /* 0x1A72D0 dynamic VRAM bump cursor */
+extern s32 g_vramFrameBufA;      /* 0x1A72D8 front framebuffer base (always 0) */
+extern s32 g_vramFrameBufB;      /* 0x1A72DC back framebuffer base */
+extern s32 g_vramZBuffer;        /* 0x1A72E0 Z-buffer base */
+extern s32 g_vramTextureBase;    /* 0x1A72E4 static texture base */
+extern s32 D_1A72E8, D_1A72EC, D_1A72F0, D_1A72F4;   /* texture base +0/+0x1000/+0x1400/+0x1800 */
+#ifndef TARGET_NATIVE
+/* ADDRESSING-MODEL DEVICES (RULING #8620, FACT #8036's zero-offset equate,
+ * as the unit's other `...Abs` aliases) for SetupGsDisplayBuffers: every
+ * scalar it touches is read and written through an alias sized 16, so cc1
+ * emits the one-insn `lw/sw` macro and GNU as expands it into the ROM's
+ * absolute `lui; lw %lo` / `lui $at; sw %lo($at)` pair. They emit nothing and
+ * the relocations name the real symbols. Each was removed alone (solo s136os
+ * compile, gcse on, word compare against the ROM .s, relocated fields masked;
+ * the alias -> the plain name, and separately only its `.extern ,16` size,
+ * cost the same): g_bPalMode 219/232, g_bProgressiveScan 200, g_vramFrameBufA
+ * 199, g_vramFrameBufB 196, g_vramZBuffer 199, g_vramTextureBase 199,
+ * g_vramAllocCursor 63, g_vramDynamicBase 66, D_1A72E8 80, D_1A72EC 94,
+ * D_1A72F0 92, D_1A72F4 90, g_screenCenterDefaultX 74, g_screenCenterDefaultY
+ * 72, D_1A7358 88, D_1A735C 86. g_vramDynamicBaseAbs, g_vramAllocCursorAbs
+ * and g_vramZBufferAbs repeat the identical equates declared further down
+ * (GNU as accepts a repeated `=`); g_vramFrameBufBAbs is the HUD's
+ * one-member struct view, so the scalar here is g_vramBackBufferAbs.
+ * g_screenWidthAbs / g_screenHeightAbs / g_gsPixelOffsetXAbs /
+ * g_gsPixelOffsetYAbs are the unit's own, declared above. */
+__asm__(".extern g_bPalModeAbs, 16\n\tg_bPalModeAbs = g_bPalMode");
+__asm__(".extern g_bProgressiveScanAbs, 16\n\tg_bProgressiveScanAbs = g_bProgressiveScan");
+__asm__(".extern g_vramAllocCursorAbs, 16\n\tg_vramAllocCursorAbs = g_vramAllocCursor");
+__asm__(".extern g_vramDynamicBaseAbs, 16\n\tg_vramDynamicBaseAbs = g_vramDynamicBase");
+__asm__(".extern g_vramFrameBufAAbs, 16\n\tg_vramFrameBufAAbs = g_vramFrameBufA");
+__asm__(".extern g_vramBackBufferAbs, 16\n\tg_vramBackBufferAbs = g_vramFrameBufB");
+__asm__(".extern g_vramZBufferAbs, 16\n\tg_vramZBufferAbs = g_vramZBuffer");
+__asm__(".extern g_vramTextureBaseAbs, 16\n\tg_vramTextureBaseAbs = g_vramTextureBase");
+__asm__(".extern D_1A72E8Abs, 16\n\tD_1A72E8Abs = D_1A72E8");
+__asm__(".extern D_1A72ECAbs, 16\n\tD_1A72ECAbs = D_1A72EC");
+__asm__(".extern D_1A72F0Abs, 16\n\tD_1A72F0Abs = D_1A72F0");
+__asm__(".extern D_1A72F4Abs, 16\n\tD_1A72F4Abs = D_1A72F4");
+__asm__(".extern g_screenCenterDefaultXAbs, 16\n\tg_screenCenterDefaultXAbs = g_screenCenterDefaultX");
+__asm__(".extern g_screenCenterDefaultYAbs, 16\n\tg_screenCenterDefaultYAbs = g_screenCenterDefaultY");
+__asm__(".extern D_1A7358Abs, 16\n\tD_1A7358Abs = D_1A7358");
+__asm__(".extern D_1A735CAbs, 16\n\tD_1A735CAbs = D_1A735C");
+extern s32 g_bPalModeAbs, g_bProgressiveScanAbs, g_vramAllocCursorAbs, g_vramDynamicBaseAbs;
+extern s32 g_vramFrameBufAAbs, g_vramBackBufferAbs, g_vramZBufferAbs, g_vramTextureBaseAbs;
+extern s32 D_1A72E8Abs, D_1A72ECAbs, D_1A72F0Abs, D_1A72F4Abs;
+extern s32 g_screenCenterDefaultXAbs, g_screenCenterDefaultYAbs, D_1A7358Abs, D_1A735CAbs;
+#else
+#define g_bPalModeAbs g_bPalMode
+#define g_bProgressiveScanAbs g_bProgressiveScan
+#define g_vramAllocCursorAbs  g_vramAllocCursor
+#define g_vramDynamicBaseAbs  g_vramDynamicBase
+#define g_vramFrameBufAAbs g_vramFrameBufA
+#define g_vramBackBufferAbs g_vramFrameBufB
+#define g_vramZBufferAbs g_vramZBuffer
+#define g_vramTextureBaseAbs g_vramTextureBase
+#define D_1A72E8Abs D_1A72E8
+#define D_1A72ECAbs D_1A72EC
+#define D_1A72F0Abs D_1A72F0
+#define D_1A72F4Abs D_1A72F4
+#define g_screenCenterDefaultXAbs g_screenCenterDefaultX
+#define g_screenCenterDefaultYAbs g_screenCenterDefaultY
+#define D_1A7358Abs D_1A7358
+#define D_1A735CAbs D_1A735C
+#endif
 
+/** SetupGsDisplayBuffers — lay out VRAM for the video mode and build the GS
+ *  display/draw environment; optionally clear all of VRAM.
+ *  @param clearVram  nonzero: also reset the dynamic VRAM cursor, flush the
+ *                    draw-env and clear packets, and zero VRAM in 32x32 blits
+ *  No return.
+ *  Mode layouts (FACT #5666/#5943), framebuffer A always 0, texture base
+ *  0x2C0000 with three carves at +0x1000/+0x1400/+0x1800:
+ *    - PAL (g_bPalMode):   Z 0x100000, FB B 0x1E0000,
+ *                          BuildScreenDrawPackets(0x200,0x1C0,0x200,0x200,4,0)
+ *    - 480p (progressive): Z 0x118000, FB B 0x1E8000, (0x200,0x1A0,0x280,0x1C0,0,0)
+ *    - NTSC:               Z 0x118000, FB B 0x1E8000, (0x200,0x1A0,0x200,0x1C0,0,0)
+ *  Then publishes the screen size, half size and the four GS window edges
+ *  (<<4 around 0x800) from the GS display buffer, and packs FRAME, ZBUF,
+ *  XYOFFSET and SCISSOR for both contexts into D_139120 plus the two ZBUF PTR
+ *  images (D_139380 with bit 33 set). The clear runs
+ *  storageWidth*storageHeight/1024 uploads of the zeroed scratch, one per 16
+ *  pages (dbp = i << 4).
+ *
+ *  MATCHED byte-exact on the s136os arm (SN 2.95.3 v1.36 cc1plus -O2 -G8
+ *  -fopt-stack) with gcse ON for this function only: the per-function
+ *  `S136EXTRA=` (empty) override in tools/ee/s136os_functions.txt (RULING
+ *  #12178); with the unit's -fno-gcse it reads 57/232, built 230 (solo
+ *  s136os compile of this unit, masked word compare). EE-only devices, each
+ *  removed alone: the sized aliases above; section(".data") on the two u64
+ *  PTR images (RULING #8620: as 8-byte objects under -G8 cc1 would address
+ *  them $gp-relative; D_139310 214/232, D_139380 213/232, built 229). The
+ *  audit's section(".sdata") on the aliases is not load-bearing (all
+ *  removed: 0/232). TARGET_NATIVE reads the true objects by name.
+ *
+ *  Source: OpenRAC rac2-decomp @ 5776dcc35045fb2320610edd1d2db4fa7660ef37
+ *  (unchanged at fe6adf9b), src/game/00274128.c, func_0027B440 (author commit
+ *  00ebb44e, bigbeno37, 2026-11-03; GPL-3.0, with the authors' permission,
+ *  RULINGs #10405 / #12108; the file credits it as adapted from RAC1
+ *  SetPalMode and from Lombyte's project src/video/display/set_pal_mode.c,
+ *  both GPL-3.0). ADAPTED: (1) their u64/s64 are `unsigned long long` /
+ *  `long long`, ours `unsigned long` / `long` on EE (common.h): the audit's
+ *  z264 respelling, the same 64-bit type to cc1, and int64_t on native
+ *  (RULING #13197); (2) data by address to our names, through the aliases
+ *  above: D_001A7B90 g_bPalMode, D_001A7BB8 g_bProgressiveScan, D_001A72D0
+ *  g_vramAllocCursor, D_001A72D4 g_vramDynamicBase, D_001A72D8/DC/E0/E4
+ *  g_vramFrameBufA/g_vramFrameBufB/g_vramZBuffer/g_vramTextureBase,
+ *  D_001A72E8..F4 D_1A72E8..F4, D_00139120/310/380 D_139120/310/380,
+ *  FsAaBuffer (D_001A6480) g_gsDisplayBuffer (g_gsScreenContext), D_001BB000
+ *  g_vramClearScratch (g_collHitTriVert2 + 0x10); their ScreenExtent struct
+ *  at D_001A7340 is spelled as its eight fields' own symbols
+ *  (g_screenWidth, g_screenHeight, g_screenCenterDefaultX/Y,
+ *  g_gsPixelOffsetX/Y, D_1A7358, D_1A735C) so every relocation names the
+ *  field as the ROM's does (a struct view of g_screenWidthAbs also builds
+ *  0/232, with relocations g_screenWidth+N); (3) callees by address:
+ *  func_0011AEA0 (kept), func_001244B8 WaitGsPathsIdle, func_00284268
+ *  BuildScreenDrawPackets, func_00284EA8 AppendDrawEnvContext1, func_00284F40
+ *  AppendScreenClearPacket, func_00284E80 ApplyGsDisplayEnv, func_00282A60
+ *  FillMemory32, func_00126288 (kept), func_001265B0 KickGifImageUpload;
+ *  (4) FsAaBuf -> GsDisplayBuffer with camelCase fields, int/short spelled
+ *  s32/s16, parameter clear -> clearVram. Statements otherwise as upstream
+ *  wrote them. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_SetupGsDisplayBuffers)
+S136OS_SLOT(SetupGsDisplayBuffers);
+#else
+#ifndef TARGET_NATIVE
+extern GsDrawEnvRegs g_gsDrawEnvRegs __asm__("D_139120");
+extern u64 g_gsZbufPtrImage __asm__("D_139310") __attribute__((section(".data")));
+extern u64 g_gsZbufPsmPtrImage __asm__("D_139380") __attribute__((section(".data")));
+#else
+extern u8 D_139120[];
+extern u64 D_139310, D_139380;
+#define g_gsDrawEnvRegs (*(GsDrawEnvRegs *)D_139120)
+#define g_gsZbufPtrImage D_139310
+#define g_gsZbufPsmPtrImage D_139380
+#endif
+extern void func_0011AEA0(s32 mode);   /* FlushCache */
+#ifndef TARGET_NATIVE
+/* Upstream's int return: declared void (the unit's native spelling) the
+ * s136os compile reads 2/232 (solo, masked word compare). */
+extern s32 WaitGsPathsIdle(s32 a, s32 b);
+#else
+extern void WaitGsPathsIdle(s32 a, s32 b);
+#endif
 extern void BuildScreenDrawPackets(s32 dw, s32 dh, s32 sw, s32 sh, s32 a, s32 b);
 extern void ApplyGsDisplayEnv(void);
-extern s32 KickGifImageUpload(void *packet, void *src);
-extern void WaitGsPathsIdle(s32 a, s32 b);
-extern void FlushCache(s32 mode);                       /* func_0011AEA0 */
-extern void BuildGsImageUploadPacket(void *packet, s32 dbp, s32 psm, s32 c,
-                                     s32 d, s32 e, s32 w, s32 h); /* func_00126288 */
+extern s32 func_00126288(GsLoadImage *image, s16 dbp, s16 dbw, s16 psm, s16 x, s16 y,
+                         s16 w, s16 h);
+extern s32 KickGifImageUpload(GsLoadImage *image, u8 *src);
 
-void SetupGsDisplayBuffers(long clearVram) {
-    u8 *ctx = g_gsScreenContext;
-    u8  packet[0x60];
-    s32 w16, h16;
-    s32 screenWidth, screenHeight;
-    s32 centerX, centerY;
-    s32 fbw;
-    s32 zbuf;
-    s64 frame, zbufPack;
+void SetupGsDisplayBuffers(s32 clearVram) {
+    GsLoadImage image;
+    s32 n;
+    s32 i;
+    u64 zbuf;
+    u64 frame;
+    u64 scissor;
+    s16 w;
 
-    FlushCache(0);
-
-    if (g_bPalMode == 0) {
-        if (g_bProgressiveScan == 0) {
-            *(s32 *)g_vramTextureBase = 0x2C0000;
-            g_vramZBuffer = 0x118000;
-            g_vramFrameBufB = 0x1E8000;
-            g_vramFrameBufA = 0;
-            BuildScreenDrawPackets(0x200, 0x1A0, 0x200, 0x1C0, 0, 0);
-        } else {
-            g_vramZBuffer = 0x118000;
-            g_vramFrameBufB = 0x1E8000;
-            *(s32 *)g_vramTextureBase = 0x2C0000;
-            g_vramFrameBufA = 0;
-            BuildScreenDrawPackets(0x200, 0x1A0, 0x280, 0x1C0, 0, 0);
-        }
-    } else {
-        g_vramZBuffer = 0x100000;
-        g_vramFrameBufB = 0x1E0000;
-        *(s32 *)g_vramTextureBase = 0x2C0000;
-        g_vramFrameBufA = 0;
+    func_0011AEA0(0);
+    if (g_bPalModeAbs != 0) {
+        g_vramZBufferAbs = 0x100000;
+        g_vramBackBufferAbs = 0x1E0000;
+        g_vramFrameBufAAbs = 0;
+        g_vramTextureBaseAbs = 0x2C0000;
         BuildScreenDrawPackets(0x200, 0x1C0, 0x200, 0x200, 4, 0);
+    } else if (g_bProgressiveScanAbs != 0) {
+        g_vramZBufferAbs = 0x118000;
+        g_vramBackBufferAbs = 0x1E8000;
+        g_vramFrameBufAAbs = 0;
+        g_vramTextureBaseAbs = 0x2C0000;
+        BuildScreenDrawPackets(0x200, 0x1A0, 0x280, 0x1C0, 0, 0);
+    } else {
+        g_vramZBufferAbs = 0x118000;
+        g_vramBackBufferAbs = 0x1E8000;
+        g_vramFrameBufAAbs = 0;
+        g_vramTextureBaseAbs = 0x2C0000;
+        BuildScreenDrawPackets(0x200, 0x1A0, 0x200, 0x1C0, 0, 0);
     }
-
-    /* Derive screen geometry + GS window offsets from the context display dims. */
-    w16 = *(u16 *)(ctx + 0x150);
-    h16 = *(u16 *)(ctx + 0x152);
-    screenWidth  = (s32)((u32)w16 << 16) >> 16;
-    screenHeight = (s32)((u32)h16 << 16) >> 16;
-    centerX = (s32)((u32)w16 << 16) >> 17;
-    centerY = (s32)((u32)h16 << 16) >> 17;
-    fbw     = (s32)((u32)w16 << 16) >> 22;
-
-    g_gsPixelOffsetY[0] = (0x800 - centerY) << 4;
-    g_gsPixelOffsetX[0] = (0x800 - centerX) << 4;
-
-    zbuf = g_vramZBuffer;
-    frame    = ((s64)(g_vramFrameBufB >> 13)) | ((s64)fbw << 16);
-    zbufPack = ((s64)(zbuf >> 13)) | 0x1000000LL;
-
-    /* SCISSOR (max = screen-1) and XYOFFSET (window origin) register images. */
-    {
-        s64 scissorMax = ((s64)(screenWidth - 1) << 16) | ((s64)(screenHeight - 1) << 48);
-        s64 xyOffset   = (s64)g_gsPixelOffsetX[0] | ((s64)g_gsPixelOffsetY[0] << 32);
-        u8 *tex = g_vramTextureBase;
-
-        *(s64 *)(D_139120 + 0x80) = scissorMax;
-        *(s64 *)D_139380          = ((s64)(zbuf >> 13)) | 0x101000000LL;
-
-        g_gsPixelOffsetY[1] = (centerX + 0x800) << 4;
-        g_gsPixelOffsetY[2] = (centerY + 0x800) << 4;
-        *(s32 *)(tex + 0x8)  = *(s32 *)tex + 0x1000;
-        *(s32 *)(tex + 0xC)  = *(s32 *)tex + 0x1400;
-        *(s32 *)(tex + 0x10) = *(s32 *)tex + 0x1800;
-
-        *(s64 *)(D_139120 + 0x20) = frame;
-        *(s64 *)(D_139120 + 0x50) = xyOffset;
-        *(s64 *)(D_139120 + 0x60) = xyOffset;
-        *(s64 *)D_139310          = zbufPack;
-        *(s32 *)(tex + 0x4)  = *(s32 *)tex;
-        g_screenWidth[0]  = screenWidth;
-        g_screenHeight[0] = screenHeight;
-        g_screenHeight[1] = centerX;   /* g_screenCenterDefaultX */
-        g_screenHeight[2] = centerY;   /* g_screenCenterDefaultY */
-        *(s64 *)(D_139120 + 0x10) = frame;
-        *(s64 *)(D_139120 + 0x30) = zbufPack;
-        *(s64 *)(D_139120 + 0x40) = zbufPack;
-        *(s64 *)(D_139120 + 0x70) = scissorMax;
-    }
-
-    if (clearVram != 0) {
-        s32 tileCount, tile;
-
-        g_vramDynamicBase = *(s32 *)g_vramTextureBase;
-        g_vramAllocCursor = *(s32 *)g_vramTextureBase;
-        FlushCache(0);
+    D_1A72E8Abs = g_vramTextureBaseAbs;
+    D_1A72ECAbs = g_vramTextureBaseAbs + 0x1000;
+    D_1A72F0Abs = g_vramTextureBaseAbs + 0x1400;
+    D_1A72F4Abs = g_vramTextureBaseAbs + 0x1800;
+    w = g_gsDisplayBuffer.displayWidth;
+    g_screenWidthAbs = w;
+    g_screenHeightAbs = g_gsDisplayBuffer.displayHeight;
+    g_screenCenterDefaultXAbs = w >> 1;
+    g_screenCenterDefaultYAbs = g_screenHeightAbs >> 1;
+    g_gsPixelOffsetXAbs = (0x800 - g_screenCenterDefaultXAbs) << 4;
+    g_gsPixelOffsetYAbs = (0x800 - g_screenCenterDefaultYAbs) << 4;
+    D_1A7358Abs = (g_screenCenterDefaultXAbs + 0x800) << 4;
+    D_1A735CAbs = (g_screenCenterDefaultYAbs + 0x800) << 4;
+    frame = (g_vramBackBufferAbs >> 13) | ((u64)(g_screenWidthAbs >> 6) << 16);
+    g_gsDrawEnvRegs.frame1 = frame;
+    zbuf = (g_vramZBufferAbs >> 13) | 0x1000000;
+    g_gsDrawEnvRegs.frame2 = frame;
+    g_gsDrawEnvRegs.xyoffset1 = g_gsPixelOffsetXAbs | ((u64)g_gsPixelOffsetYAbs << 32);
+    g_gsDrawEnvRegs.zbuf1 = zbuf;
+    g_gsDrawEnvRegs.zbuf2 = zbuf;
+    g_gsDrawEnvRegs.xyoffset2 = g_gsPixelOffsetXAbs | ((u64)g_gsPixelOffsetYAbs << 32);
+    scissor = ((u64)(g_screenWidthAbs - 1) << 16) | ((u64)(g_screenHeightAbs - 1) << 48);
+    g_gsZbufPtrImage = zbuf;
+    g_gsDrawEnvRegs.scissor1 = scissor;
+    g_gsDrawEnvRegs.scissor2 = scissor;
+    g_gsZbufPsmPtrImage = zbuf | ((u64)0x8000 << 17);
+    if (clearVram) {
+        g_vramAllocCursorAbs = g_vramTextureBaseAbs;
+        g_vramDynamicBaseAbs = g_vramTextureBaseAbs;
+        func_0011AEA0(0);
         WaitGsPathsIdle(0, 0);
-        FlushCache(0);
+        func_0011AEA0(0);
         AppendDrawEnvContext1();
         AppendScreenClearPacket(0);
-        FlushCache(0);
+        func_0011AEA0(0);
         WaitGsPathsIdle(0, 0);
         ApplyGsDisplayEnv();
-        FillMemory32(g_collHitTriVert2 + 0x10, 0, 0x1000);
-
-        tileCount = (s32)(*(s16 *)(ctx + 0x158) * *(s16 *)(ctx + 0x15A)) >> 10;
-        if (tileCount > 0) {
-            s32 addr = 0;
-            tile = 0;
-            do {
-                tile = tile + 1;
-                BuildGsImageUploadPacket(packet, addr >> 16, 1, 0, 0, 0, 0x20, 0x20);
-                FlushCache(0);
-                KickGifImageUpload(packet, g_collHitTriVert2 + 0x10);
-                WaitGsPathsIdle(0, 0);
-                addr = tile << 20;
-            } while (tile < tileCount);
+        FillMemory32(g_vramClearScratch, 0, 0x1000);
+        n = (g_gsDisplayBuffer.storageWidth * g_gsDisplayBuffer.storageHeight) >> 10;
+        for (i = 0; i < n; i++) {
+            func_00126288(&image, i << 4, 1, 0, 0, 0, 32, 32);
+            func_0011AEA0(0);
+            KickGifImageUpload(&image, g_vramClearScratch);
+            WaitGsPathsIdle(0, 0);
         }
     }
 }
@@ -2305,10 +2468,200 @@ void func_0027DB38(void) {
 }
 #endif
 
-/* func_0027DC40: PARKED #70 — a debug-overlay draw routine (DrawDebugString + the
- * func_00280BB8/func_00280C98 font wrappers, func_0027F208). Modest but multi-callee with
- * layout logic; needs the string/arg wiring traced before a confident #else. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027DC40);
+#ifndef TARGET_NATIVE
+/* ADDRESSING-MODEL DEVICE (RULING #12316 `.extern X,N`) for func_0027DC40:
+ * sized 16 so GNU as expands the one-insn `lbu` of the fade-suppress flag
+ * into the ROM's absolute `lui; lbu %lo` pair. Removing it: 147/208, built
+ * 206 (solo s136os compile, gcse on, masked word compare). Emits nothing; no
+ * other EE-compiled body in this unit reads D_1A7BB9 (func_0027DB38 and
+ * DrawLetterboxBars are INCLUDE_ASM on EE). */
+__asm__(".extern D_1A7BB9, 16");
+#endif
+
+/* One timed subtitle record: frames [start, end] and a text offset per
+ * language (six slots, read at index 0 or language-1). Terminated by a
+ * negative start. */
+typedef struct { s16 start, end, text[6]; } SubtitleRecord;
+/* The scene block at g_cameraSlotActive+0x990 as the subtitle drawer reads
+ * it: the scene frame counter at +0x34 and the subtitle blob at +0x4C (the
+ * record list, followed by the strings the text offsets index). */
+typedef struct { u8 pad[0x34]; s32 time; u8 gap[0x14]; u8 *subs; } SubtitleState;
+#define g_subtitleState (*(SubtitleState *)(g_cameraSlotActive + 0x990))
+#ifndef TARGET_NATIVE
+#define g_subtitleFrame (g_subtitleState.time)
+#define g_subtitleList  (g_subtitleState.subs)
+#else
+/* Native reads the block's two fields as the true objects (RULING #13197). */
+extern s32 g_sceneFrame;          /* 0x1B87F4 = block +0x34 */
+extern u8 *g_sceneSubtitleList;   /* 0x1B880C = block +0x4C */
+#define g_subtitleFrame g_sceneFrame
+#define g_subtitleList  g_sceneSubtitleList
+#endif
+
+/** func_0027DC40 — draw this frame's timed subtitle (DrawTimedSubtitles,
+ *  NOTE #5697). No params, no return.
+ *  Picks the language column (index language-1 for languages 2..5, else 0)
+ *  and walks the scene's subtitle records until a negative start, skipping
+ *  records whose [start, end] frame window does not contain the scene frame.
+ *  A text starting '*' is a caption: '**' draws it at x 0x20 (y 0x40, or 0x18
+ *  when the fade-suppress flag D_1A7BB9 is set) with DrawDebugString, a single
+ *  '*' centred at 0x100,0xD0 with func_00280250, else y is screen height -
+ *  0xC8; its alpha ramps in and out over the first and last 0x12 frames. Any
+ *  other text is skipped unless the subtitles flag D_1A7B9E is set; otherwise
+ *  it goes in one text box (func_00280C98 layout, func_00280BB8 text, a
+ *  func_0027F208 backing panel kept above the screen bottom), with the
+ *  0x96-character fallback string D_1A8998 for texts that long, and the
+ *  function returns after that box: one box subtitle per frame.
+ *
+ *  MATCHED byte-exact on the s136os arm (SN 2.95.3 v1.36 cc1plus -O2 -G8
+ *  -fopt-stack) with gcse ON for this function only: the per-function
+ *  `S136EXTRA=` (empty) override in tools/ee/s136os_functions.txt (RULING
+ *  #12178); with the unit's -fno-gcse it reads 199/208, built 204. Every
+ *  figure here is a solo s136os compile of this unit, word compare against
+ *  the ROM .s with relocated fields masked; each device was removed alone.
+ *  EE-only devices (TARGET_NATIVE reads the true objects):
+ *    - the file-scope `.extern D_1A7BB9, 16` above (147/208 without);
+ *    - section(".sdata") on D_1A7B9E (RULING #8620): cc1 emits the one-insn
+ *      `lbu` that GNU as expands absolutely (3/208 without);
+ *    - g_subtitleLanguage, a volatile .sdata TYPED VIEW (RULING #13168) of the
+ *      unit's g_currentLanguageAbs (= g_currentLanguage): the ROM reads the
+ *      language byte twice. The volatile is a CODEGEN DEVICE under RULING
+ *      #8404, not a claim that the byte changes asynchronously; its one
+ *      writer is MenuScreenDoAction (sb at 0x2D69EC, the only store through
+ *      %lo or %gp_rel of g_currentLanguage in asm/usa; its #else arm in
+ *      text/1D54C0 is the same store), a menu action called from front-end
+ *      menu handlers, never from an interrupt or callback path. Without the
+ *      volatile 24/208, without .sdata 19/208, as the plain g_currentLanguageAbs
+ *      scalar 24/208;
+ *    - g_subtitleScreenExtent, a .sdata TYPED VIEW (RULING #13168, the
+ *      DrawLensFlare form) of the unit's g_screenWidthAbs read at [1]: the
+ *      screen height is read as base+4, as upstream's D_001A7340[1] does, so
+ *      the four relocations name g_screenWidth+4 where splat says
+ *      g_screenHeight (same address, 0x1A7344). Without .sdata 202/208,
+ *      built 211; as the g_screenHeightAbs scalar 156/208; as a .sdata view of
+ *      g_screenHeightAbs at [0] 156/208;
+ *    - two asm-label PROTOTYPE VIEWS of callees (EE arm only; they emit
+ *      nothing and the jal still names the real function, the GuiIconScreenInit2
+ *      memset / ZeroQuadVoid / WaitGsPathsIdle2 form): InitSubtitleBox is
+ *      func_00280C98 with int parameters (as s16 parameters the caller
+ *      narrows them: 214/208, built 216), DrawTextBoxString is func_00280BB8
+ *      with the colour as u64 (the ROM builds 0x80B0B0B0 zero-extended,
+ *      ori/dsll/ori; as s32: 89/208, built 205).
+ *  The audit's other z2 devices were removed, none load-bearing:
+ *  `.extern D_1A7B9E,16` 0/208, .data on the scene block 0/208 (and the
+ *  block needs no equate: the cast view is 0/208), .sdata on D_1A7BB9 0/208,
+ *  .data on D_1A8998 0/208; func_00280250/DrawDebugString keep our
+ *  prototypes (their long/u64 colour: 0/208 either way).
+ *
+ *  Source: OpenRAC rac2-decomp @ 5776dcc35045fb2320610edd1d2db4fa7660ef37
+ *  (unchanged at fe6adf9b), src/game/0027B948.c, func_0027D5C0 (author commit
+ *  bf067513, bigbeno37, 2026-11-01; GPL-3.0, with the authors' permission,
+ *  RULINGs #10405 / #12108; the file credits the layout to OpenRAC
+ *  rac1-decomp src/game/draw.c draw_subtitles, GPL-3.0). ADAPTED: (1) data by
+ *  address to our names: D_001B8840 -> g_subtitleState (g_cameraSlotActive +
+ *  0x990), D_001A7BB4 -> g_subtitleLanguage (g_currentLanguage), D_001A7B96
+ *  -> D_1A7B9E, D_001A7BB1 -> D_1A7BB9, D_001A7340 -> g_subtitleScreenExtent
+ *  (g_screenWidth), D_001A8998 -> D_1A8998; (2) callees by our names, matched
+ *  by call order and argument shape: func_0027FB40 -> func_00280250,
+ *  func_0027F5B8 -> DrawDebugString, func_002802E0 -> InitSubtitleBox
+ *  (func_00280C98), func_00280200 -> DrawTextBoxString (func_00280BB8),
+ *  func_0027EB88 -> func_0027F208, func_001157AC -> strlen; (3)
+ *  func_00280250/DrawDebugString called with our s32 prototypes (str cast),
+ *  and strlen's argument cast `(const char *)&g_subtitleList[...]` for our
+ *  prototype;
+ *  (4) `long` respelled s64 and `unsigned long` u64 (RULING #13197);
+ *  int/short/unsigned char/unsigned short spelled s32/s16/u8/u16; (5) their
+ *  sda/nosda attributes are the devices listed above. Statements otherwise
+ *  as upstream wrote them. On native the scene block's frame counter and list
+ *  pointer are read by their own names, g_sceneFrame and g_sceneSubtitleList
+ *  (RULING #13197); the EE arm keeps the block view, the ROM's single
+ *  g_cameraSlotActive+0x990 base. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0027DC40)
+S136OS_SLOT(func_0027DC40);
+#else
+extern u8 D_1A7BB9;     /* fade-suppress flag byte */
+extern u8 D_1A8998[];   /* fallback text for a subtitle of 0x96+ characters */
+/* Callees defined behind their own S136OS guards (or later in the unit). */
+extern s32 func_00280250(s32 x, s32 arg1, s32 arg2, const char *str, s32 maxChars);
+extern void DrawDebugString(s32 a, s32 b, s32 c, s32 d, s32 e);
+extern void func_0027F208(s32 y0, s32 y1, s32 x0, s32 x1, s32 colorHi, s32 colorLo);
+#ifndef TARGET_NATIVE
+extern volatile u8 g_subtitleLanguage[] __asm__("g_currentLanguageAbs")
+    __attribute__((section(".sdata")));
+extern s32 g_subtitleScreenExtent[] __asm__("g_screenWidthAbs")
+    __attribute__((section(".sdata")));
+#define g_subtitleScreenHeight (g_subtitleScreenExtent[1])
+extern u8 D_1A7B9E[] __attribute__((section(".sdata")));  /* subtitles-enabled flag byte */
+extern void InitSubtitleBox(u16 *layout, s32 clipX0, s32 clipX1, s32 left, s32 right,
+                            s32 anchorX, s32 y, s32 lineHeight, s32 flags)
+    __asm__("func_00280C98");
+extern void DrawTextBoxString(u16 *layout, u64 color, u8 *str, s32 maxChars)
+    __asm__("func_00280BB8");
+#else
+#define g_subtitleLanguage ((volatile u8 *)&g_currentLanguage)
+#define g_subtitleScreenHeight (g_screenHeight[0])
+extern u8 D_1A7B9E[];   /* subtitles-enabled flag byte */
+extern void func_00280C98(s16 *layout, s16 clipX0, s16 clipX1, s16 left, s16 right,
+                          s16 anchorX, s16 y, s16 lineHeight, s32 flags);
+extern void func_00280BB8(s32 a, s32 b, s32 c, s32 d);
+#define InitSubtitleBox(l, x0, x1, lf, rt, ax, y, lh, fl) \
+    func_00280C98((s16 *)(l), x0, x1, lf, rt, ax, y, lh, fl)
+#define DrawTextBoxString(l, col, str, max) \
+    func_00280BB8((s32)(l), (s32)(col), (s32)(str), max)
+#endif
+
+void func_0027DC40(void)
+{
+    SubtitleRecord *p;
+    s32 idx;
+    if (!g_subtitleList) return;
+    idx = 0;
+    if ((u32)(g_subtitleLanguage[0] - 2) < 4) idx = g_subtitleLanguage[0] - 1;
+    for (p = (SubtitleRecord *)g_subtitleList; p->start >= 0; ++p) {
+        if (g_subtitleFrame < p->start) continue;
+        if (p->end < g_subtitleFrame) continue;
+        if (!D_1A7B9E[0] && g_subtitleList[p->text[idx]] != '*') continue;
+        if (g_subtitleList[p->text[idx]] == '*') {
+            s32 y = 0x40;
+            s32 alpha = 0xB0000000;
+            u8 *str;
+            if (g_subtitleList[p->text[idx] + 1] != '*') y = g_subtitleScreenHeight - 0xC8;
+            else if (D_1A7BB9) y = 0x18;
+            if (p->end - g_subtitleFrame < 0x12)
+                alpha = (s32)(p->end - (s64)(g_subtitleFrame - 1)) << 27;
+            else if (g_subtitleFrame - p->start < 0x12)
+                alpha = (s32)(g_subtitleFrame - (s64)(p->start - 1)) << 27;
+            str = g_subtitleList + p->text[idx];
+            if (str[1] != '*')
+                func_00280250(0x100, 0xD0, alpha | 0xE0E0E0, (const char *)str, -1);
+            else
+                DrawDebugString(0x20, y, alpha | 0xE0E0E0, (s32)str, -1);
+        } else {
+            u16 win[16];
+            s16 w, h;
+            s32 hw, hh;
+            s32 extent = g_subtitleScreenHeight;
+            InitSubtitleBox(win, 0xC8, 0x1A4, 0x28, 0x1D8, 0x100,
+                            D_1A7BB9 ? extent - 0x36 : extent - 0x64, 0x12, 7);
+            DrawTextBoxString(win, 0x80B0B0B0UL, &g_subtitleList[p->text[idx]], -1);
+            win[5] -= 4;
+            w = win[6];
+            h = win[7];
+            hh = (h >> 1) + 5;
+            hw = (w >> 1) + 10;
+            if ((s16)win[5] + hh > g_subtitleScreenHeight - 0x14)
+                win[5] = g_subtitleScreenHeight - ((h >> 1) + 0x19);
+            func_0027F208((s16)win[5] - hh, (s16)win[5] + hh, 0x100 - hw, 0x100 + hw, 0x60, 0x40404);
+            win[9] &= ~4;
+            if (strlen((const char *)&g_subtitleList[p->text[idx]]) < 0x96)
+                DrawTextBoxString(win, 0x80B0B0B0UL, &g_subtitleList[p->text[idx]], -1);
+            else
+                DrawTextBoxString(win, 0x80B0B0B0UL, D_1A8998, -1);
+            return;
+        }
+    }
+}
+#endif
 
 extern u8 D_1A7BB9;   /* fade-suppress flag byte */
 extern u8 D_1AC860[]; /* GIFtag template A (16 bytes) */
