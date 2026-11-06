@@ -174,7 +174,7 @@ usa      func_002E07F8  0x002E0858  $14,0x1000000000000001   340e8000 000e737c 3
 usa      func_002E07F8  0x002E087C  $11,0x2400000000000001   340b9000 000b5bbc 356b0001
 #
 # func_00280EC8 (text/178E88) is compiled from C on the s136os arm (OpenRAC
-# body, task #2471). Its site is the reg-0x42 SCISSOR value 0x8000000044 in
+# body, task #2471). Its site is the reg-0x42 (ALPHA_1) value 0x8000000044 in
 # $5 (the same constant as func_0027C020's, func_0027E368's and
 # FadeOutToBlackBlocking's rows), in reorder mode and followed by `li $4,0x42`
 # and a noreorder `jal AppendGsRegPacket`. GNU as gives `li 128; dsll32;

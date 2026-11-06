@@ -3884,7 +3884,7 @@ void AppendVu1SphereMapContext(void) {
 /**
  * func_00280EC8 — bind the offscreen render target for menu-widget
  * render-to-texture: point the GS at a (1<<width) x (1<<height) draw region
- * and set its frame-buffer base, viewport and TEST/SCISSOR registers.
+ * and set its frame-buffer base, viewport and the GS TEST/ALPHA registers.
  *
  * Params/return: width/height are log2 dimensions; use_saved != 0 reuses the
  * target base already recorded in the GS screen context (the s16 at
@@ -3897,8 +3897,10 @@ void AppendVu1SphereMapContext(void) {
  * VRAM byte address — FRAME.FBP = a2>>13, TEX0.TBP0 = a2>>8 — and this is one
  * of its two ROM callers, FACT #8727). func_0027B858 then rebuilds the
  * viewport for the target dimensions (fixed 524288/255 params), and two
- * AppendGsRegPacket calls emit TEST (0x47, alpha ref 0x30000 unless reusing
- * the saved target) and SCISSOR (0x42, the 0x8000000044 full-region value).
+ * AppendGsRegPacket calls emit TEST_1 (0x47, value 0x30000 = ZTE 1 with
+ * ZTST ALWAYS, unless reusing the saved target) and ALPHA_1 (0x42, value
+ * 0x8000000044 = A 0, B 1, C 0, D 1, FIX 0x80: a blend equation, per
+ * include/rtl/ee/eestruct.h's SCE_GS_ALPHA_1 0x42; SCISSOR_1 is 0x40).
  *
  * MATCHED on the s136os arm (SN 2.95.3 v1.36 cc1plus -fopt-stack, the unit's
  * -fno-gcse pin unchanged; row in tools/ee/s136os_functions.txt), spliced over
