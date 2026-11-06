@@ -206,7 +206,7 @@ the release tag nearest the ROM's "newlib 1999", `newlib-2000-02-17` (commit
 tag exists), and again at HEAD `5aa0a116d1a3e4bf3be150e5eaaa8e2ed07637f5`.
 **`sbrkr.c` and `malloc.c` carry no in-file copyright notice at either ref**
 (`newlib/libc/stdlib/strtol.c` at the same tag carries one, so the absence is
-real; the same holds for `newlib/libc/stdlib/abort.c`, `newlib/libc/assert.c`
+real; the same holds for `newlib/libc/stdlib/abort.c`, `newlib/libc/stdlib/assert.c`
 and `newlib/libc/stdlib/atoi.c`, the origins of `abort`, `AssertFail` (newlib
 `__assert`) and `func_00115E68` (newlib `atoi`), also in `cod/015180.c`, adopted
 via OpenRAC `rac2-decomp` at `5833be5b`, task #2499; `abort` is SCE-modified,

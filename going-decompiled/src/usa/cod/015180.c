@@ -171,7 +171,7 @@ INCLUDE_ASM_ALIAS(func_00115E28, abort);
  * permission per RULING #10405; identical at the audit pin b2a35115),
  * src/core/00115200.c, func_00115E38 (same address on their v2.00 build; author
  * commit 2e9774a09c0c8e0877b909b3f62bbe7c7d9c9f18, Louis-Philippe Le Sieur).
- * Newlib origin: newlib/libc/assert.c, __assert (their diagnostic body prints
+ * Newlib origin: newlib/libc/stdlib/assert.c, __assert (their diagnostic body prints
  * this format via fiprintf) at newlib-cygwin tag newlib-2000-02-17 — no
  * in-file copyright notice at that tag or at HEAD; THIRD-PARTY.md carries the
  * applicable COPYING.NEWLIB section. ADAPTED: callee func_00115E28 spelled
