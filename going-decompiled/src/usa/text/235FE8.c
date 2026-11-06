@@ -2466,7 +2466,267 @@ s32 func_00337DA0(u32 idx) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337DC8);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003380B8);
+/*
+ * func_003380B8(grid): draw a pause-menu item grid (weapon / gadget icons).
+ * For every cell (row-major, `columns` x `rows`) not listed in the -1
+ * terminated `hidden` index list (at most 10 entries) it resets the shared
+ * background/sprite/meter elements, places and draws the cell background,
+ * then:
+ *   - type-2 cells: the cell's own icon/frame on the sprite;
+ *   - item cells that are owned, or item 7, or item 55 when any of the
+ *     D_1395B8[0x84/0x86/0x89] flags is set: the item's icon from its
+ *     g_weaponTable variant (0xEA85 kept as is; item 55 greyed 0x80808080
+ *     while unowned; item 7 shows item 49's icon while 49 is owned and 7 is
+ *     not, else hidden), the equipped-item highlight 0x80FFDE8D when the
+ *     cell's item is the g_menuScreenBlock+0x40 slot `equippedSet` names, the
+ *     caption for the selected item (its text id; item 49's when the sprite
+ *     shows 49's icon; for unowned item 55 one of D_1ADAF8's ids counted by
+ *     the three flags), and the experience meter (max = maxExperience,
+ *     value = g_weaponXp[item] >> 5, colours from func_00337DC8; 100/100
+ *     when the item has no levels; skipped for the 0xEA7E icon, greyed);
+ * and finally draws the sprite and the background. With `showSelection`, the
+ * selection frame is placed on (selectedColumn, selectedRow). Element draws go
+ * through the element's vtable (+0x30: this-adjust at +8, draw at +0xC).
+ * Param: params = the GuiItemGrid descriptor (func_00337C10 / func_00337E30
+ * build it). No return value.
+ *
+ * MATCHED on the s136os arm with a per-function override (task #2501):
+ * row `usa text/235FE8 func_003380B8 S136EXTRA=-fno-strict-aliasing` in
+ * tools/ee/s136os_functions.txt, i.e. the unit's flags minus -fno-gcse
+ * (RULING #12178).
+ * DEVICES (EE arm only; native reads the true objects):
+ * - g_inventoryOwned is read through g_inventoryOwnedSdata, the EE-only
+ *   `section(".sdata")` asm-label alias (RULING #8620, as func_00346878);
+ *   with the unit's `.extern g_inventoryOwned, 16` it assembles to the ROM's
+ *   absolute `lui; lbu %lo`.
+ * - D_1ADB08 (the 8-byte meter offset pair) carries `section(".data")`
+ *   (RULING #8620): cc1 -G8 would address it $gp-relative where the ROM
+ *   splits %hi/%lo.
+ * ABLATION (task #2501, each removed alone, image build): without the
+ * `.sdata` alias 627 words, not 625; without D_1ADB08's `.data` 624; without
+ * the override (the unit's -fno-gcse) 622. The audit's other z2 devices
+ * (`.data` on D_1395B8, g_menuScreenBlock, g_weaponXp) were not needed: those
+ * are unsized or larger than -G8, so cc1 already splits their addresses.
+ * GUARD: on EE this C is the image's body, compiled alone by SN 2.95.3 v1.36
+ * -fopt-stack and spliced over S136OS_SLOT by tools/ee/s136os_splice.sh; there
+ * is no asm fallback. On native it is plain C.
+ * Source: OpenRAC/rac2-decomp @5776dcc35045fb2320610edd1d2db4fa7660ef37
+ * (GPL-3.0, adopted with the authors' permission per RULINGs #10405/#12108),
+ * src/game/00337210.c, func_00337210 (author commit 2e9774a0, Louis-Philippe
+ * Le Sieur; the file notes it was adapted from the public RAC1 pause-menu
+ * grid renderer, GPL-3.0); file unchanged at upstream head f3cc4dbf.
+ * Respellings by ROM-encoded address: func_00335E20 = GuiElementGetColor,
+ * func_00335E38 = GuiElementSetPos, func_00335E68 = GuiElementSetVisible,
+ * func_00335E88 = GuiElementIsVisible, func_00336920 = GuiSpriteSetTexture,
+ * func_00336950 = func_00337758, func_00336A38 = GuiElementSetText,
+ * func_00336B90 = GuiListSetItemCount, func_00336B98 = GuiListSetScrollPos,
+ * func_00336498 = GuiListSetColorPair0, func_00336F20 = func_00337DC8,
+ * func_00288FB8 = GetLocalizedString; D_001A7AF8 = g_inventoryOwned,
+ * D_00139568 = g_itemEquippedSlot, D_001395B8 = D_1395B8, D_00239BA0 =
+ * g_weaponTable, D_001F2840 = g_menuScreenBlock, D_00139868 = g_weaponXp,
+ * D_001ADB18 = D_1ADAF8, D_001ADB28 = D_1ADB08.
+ * ADAPTED: (1) their Grid/GridCell/GridWeapon/GridEquipped/GridLabels/
+ * GridOffset/GridVTable types renamed GuiItemGrid/GuiItemGridCell/
+ * GuiGridWeapon/GuiGridEquipped/GuiGridLabels/GuiGridOffset/GuiDrawVtable,
+ * layouts unchanged; (2) `(int)grid->label` passed to func_00336A38 as
+ * `(GuiElement *)grid->label`, and the `void *` element pointers converted to
+ * the unit's GuiElement * prototypes; (3) func_00336F20's `unsigned int *`
+ * outputs passed as `(s32 *)` to the unit's func_00337DC8 prototype; (4)
+ * their `sda` g_inventoryOwned on the EE-only alias above; (5) int/unsigned
+ * int/unsigned short/short/float as s32/u32/u16/s16/f32; (6) our signature
+ * (void *params) with their Grid * as the local `grid`. Control flow,
+ * macros (POSITION/DRAW/WEAPON/WEAPON_AT) and expressions are theirs.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_003380B8)
+S136OS_SLOT(func_003380B8);
+#else
+extern s32 *GuiElementGetColor(GuiElement *e);
+extern void GuiElementSetPos(GuiElement *e, f32 x, f32 y, f32 z, f32 w);
+extern s32 GuiElementIsVisible(GuiElement *e);
+extern void GuiSpriteSetTexture(GuiElement *e, s32 u, s32 v);
+extern s32 func_00337758(void *p);
+extern void GuiElementSetText(GuiElement *e, s32 text);
+extern void GuiListSetItemCount(GuiElement *e, s32 count);
+extern void GuiListSetScrollPos(GuiElement *e, s32 pos);
+extern void GuiListSetColorPair0(GuiElement *e, s32 c0, s32 c1);
+extern void func_00337DC8(s32 itemId, s32 *listC0, s32 *listC1, s32 *iconRgb);
+extern u8 D_1395B8[];                  /* progress flags; [0x84/0x86/0x89] gate item 55 */
+/* One 0xE0-byte g_weaponTable record, as the grid reads it. */
+typedef struct {
+    s32 exists, unknown4, textId;
+    char pad0C[48];
+    u16 icon;            /* +0x3C */
+    char pad3E[46];
+    s32 maxExperience;   /* +0x6C */
+    char pad70[112];
+} GuiGridWeapon;
+typedef struct { char pad[0x40]; s32 item[4]; } GuiGridEquipped;
+extern u8 g_menuScreenBlock[];        /* +0x40: the equipped item per set (GuiGridEquipped) */
+extern s32 g_weaponXp[];               /* itemId -> accumulated weapon XP */
+extern s32 D_1ADAF8[4];                /* caption ids by item-55 flag count */
+#ifndef TARGET_NATIVE
+extern s32 D_1ADB08[2] __attribute__((section(".data"))); /* meter offset (x, y) */
+extern u8 g_inventoryOwnedSdata[] __asm__("g_inventoryOwned") __attribute__((section(".sdata")));
+#else
+extern s32 D_1ADB08[2];
+#define g_inventoryOwnedSdata g_inventoryOwned
+#endif
+
+typedef struct { s32 value[4]; } GuiGridLabels;
+typedef struct { s32 x, y; } GuiGridOffset;
+
+typedef struct {
+    u16 icon;
+    s16 frame, type, item, unused;
+} GuiItemGridCell;
+typedef struct {
+    GuiItemGridCell *cells;
+    s32 columns, rows, selectedColumn, selectedRow;
+    f32 *iconStep, *iconOrigin, *cellStep, *cellOrigin, *labelOrigin;
+    void *background, *cellBackground, *selection, *meter;
+    s32 equippedSet;
+    void *sprite;
+    s32 unknown40;
+    void *label;
+    f32 *origin;
+    s32 selectedItem;
+    s32 *hidden;
+    s32 showSelection, highlightEquipped;
+} GuiItemGrid;
+
+#define POSITION(node, step, base, col, row) \
+    GuiElementSetPos(node, ((step)[0] * (f32)(col) + (base)[0]) + grid->origin[0], \
+                           ((step)[1] * (f32)(row) + (base)[1]) + grid->origin[1], 0.0f, 0.0f)
+typedef struct {
+    s32 reserved[2];
+    s16 adjustment, pad;
+    void (*draw)(void *);
+} GuiDrawVtable;
+#define DRAW(node) { \
+    char *drawObject = (char *)(node); \
+    GuiDrawVtable *vtable = *(GuiDrawVtable **)(drawObject + 0x30); \
+    drawObject += vtable->adjustment; \
+    vtable->draw(drawObject); \
+}
+#define WEAPON(item) (&((GuiGridWeapon *)g_weaponTable)[g_itemEquippedSlot[item]])
+#define WEAPON_AT(item) ((GuiGridWeapon *)((char *)g_weaponTable + g_itemEquippedSlot[item] * size))
+
+void func_003380B8(void *params)
+{
+    GuiItemGrid *grid = (GuiItemGrid *)params;
+    s32 row, col;
+    s32 size = 0xE0;
+    if (grid->background) *(s32 *)GuiElementGetColor(grid->background) = 0x30F0C070;
+    GuiElementSetVisible(grid->label, 0);
+    for (row = 0; row < grid->rows; row++) {
+        u32 grey = 0x80808080;
+        u32 disabledColor = grey;
+        for (col = 0; col < grid->columns; col++) {
+            s32 index = row * grid->columns + col;
+            s32 hide = 0;
+            s32 i;
+            if (grid->hidden) {
+                for (i = 0; grid->hidden[i] >= 0 && i < 10; i++) {
+                    if (index == grid->hidden[i]) { hide = 1; break; }
+                }
+            }
+            if (hide) continue;
+            if (grid->meter) GuiElementSetVisible(grid->meter, 0);
+            if (grid->background) *(s32 *)GuiElementGetColor(grid->background) = 0x30F0C070;
+            GuiElementSetVisible(grid->sprite, 0);
+            if (grid->cellBackground) {
+                POSITION(grid->cellBackground, grid->cellStep, grid->cellOrigin, col, row);
+                DRAW(grid->cellBackground);
+            }
+            if (grid->cells[index].type == 2) {
+                GuiSpriteSetTexture(grid->sprite, grid->cells[index].icon, grid->cells[index].frame);
+                GuiElementSetVisible(grid->sprite, 1);
+                POSITION(grid->sprite, grid->iconStep, grid->iconOrigin, col, row);
+            } else if (g_inventoryOwnedSdata[grid->cells[index].item] || grid->cells[index].item == 7 ||
+                       (grid->cells[index].item == 55 &&
+                        (D_1395B8[0x84] || D_1395B8[0x86] || D_1395B8[0x89]))) {
+                POSITION(grid->sprite, grid->iconStep, grid->iconOrigin, col, row);
+                GuiElementSetVisible(grid->sprite, 1);
+                *(s32 *)GuiElementGetColor(grid->sprite) = 0x60F0F0B0;
+                if (grid->cells[index].icon == 0xEA85) {
+                    GuiSpriteSetTexture(grid->sprite, 0xEA85, 0);
+                } else {
+                    s32 item = grid->cells[index].item;
+                    if (item == 55) {
+                        GuiSpriteSetTexture(grid->sprite, WEAPON_AT(item)->icon, 0);
+                        if (!g_inventoryOwnedSdata[55]) *(s32 *)GuiElementGetColor(grid->sprite) = disabledColor;
+                    } else if (item == 7) {
+                        s32 icon = 0xEA9A;
+                        if (!g_inventoryOwnedSdata[7]) {
+                            if (g_inventoryOwnedSdata[49]) icon = WEAPON_AT(49)->icon;
+                            else GuiElementSetVisible(grid->sprite, 0);
+                        }
+                        GuiSpriteSetTexture(grid->sprite, icon, 0);
+                    } else {
+                        GuiSpriteSetTexture(grid->sprite, WEAPON_AT(item)->icon, 0);
+                    }
+                }
+                if (grid->equippedSet != 2 &&
+                    ((GuiGridEquipped *)g_menuScreenBlock)->item[grid->equippedSet] == grid->cells[index].item &&
+                    grid->highlightEquipped && grid->background)
+                    *(s32 *)GuiElementGetColor(grid->background) = 0x80FFDE8D;
+                if (grid->cells[index].item && grid->cells[index].item == grid->selectedItem &&
+                    GuiElementIsVisible(grid->sprite)) {
+                    s32 count;
+                    GuiElementSetText((GuiElement *)grid->label, GetLocalizedString(WEAPON(grid->cells[index].item)->textId));
+                    if (func_00337758(grid->sprite) == WEAPON(49)->icon)
+                        GuiElementSetText((GuiElement *)grid->label, GetLocalizedString(WEAPON(49)->textId));
+                    if (func_00337758(grid->sprite) == WEAPON(55)->icon && !g_inventoryOwnedSdata[55]) {
+                        count = !!D_1395B8[0x84] + !!D_1395B8[0x86] + !!D_1395B8[0x89];
+                        if (count > 0) {
+                            GuiGridLabels labels = *(GuiGridLabels *)D_1ADAF8;
+                            GuiElementSetText((GuiElement *)grid->label, GetLocalizedString(labels.value[count]));
+                        }
+                    }
+                    GuiElementSetPos(grid->label, grid->labelOrigin[0] + grid->origin[0],
+                                     grid->labelOrigin[1] + grid->origin[1], 0.0f, 0.0f);
+                    GuiElementSetVisible(grid->label, 1);
+                    DRAW(grid->label);
+                }
+                if (grid->meter && WEAPON(grid->cells[index].item)->exists) {
+                    if (WEAPON(grid->cells[index].item)->icon == 0xEA7E) {
+                        *(s32 *)GuiElementGetColor(grid->sprite) = disabledColor;
+                    } else {
+                        GuiGridOffset offset = *(GuiGridOffset *)D_1ADB08;
+                        u32 a, b, color;
+                        GuiListSetItemCount(grid->meter, WEAPON(grid->cells[index].item)->maxExperience);
+                        GuiListSetScrollPos(grid->meter, g_weaponXp[grid->cells[index].item] >> 5);
+                        GuiElementSetPos(grid->meter,
+                            ((grid->iconStep[0] * (f32)col + grid->iconOrigin[0]) + (f32)offset.x) + grid->origin[0],
+                            ((grid->iconStep[1] * (f32)row + grid->iconOrigin[1]) + (f32)offset.y) + grid->origin[1], 0.0f, 0.0f);
+                        GuiElementSetVisible(grid->meter, 1);
+                        a = 0; b = 0; color = 0;
+                        func_00337DC8(grid->cells[index].item, (s32 *)&a, (s32 *)&b, (s32 *)&color);
+                        GuiListSetColorPair0(grid->meter, a, b);
+                        *(s32 *)GuiElementGetColor(grid->sprite) = color;
+                        if (WEAPON(grid->cells[index].item)->maxExperience <= 0) {
+                            GuiListSetItemCount(grid->meter, 100);
+                            GuiListSetScrollPos(grid->meter, 100);
+                        }
+                        DRAW(grid->meter);
+                    }
+                }
+            }
+            if (grid->background) POSITION(grid->background, grid->cellStep, grid->cellOrigin, col, row);
+            DRAW(grid->sprite);
+            if (grid->background) DRAW(grid->background);
+        }
+    }
+    if (grid->showSelection) {
+        GuiElementSetVisible(grid->selection, 1);
+        POSITION(grid->selection, grid->cellStep, grid->cellOrigin, grid->selectedColumn, grid->selectedRow);
+    }
+}
+#undef POSITION
+#undef DRAW
+#undef WEAPON
+#undef WEAPON_AT
+#endif
 
 /* func_00338A80: init two embedded type-B GUI elements (at p+0x10 and p+0x5C),
  * return the object. */
