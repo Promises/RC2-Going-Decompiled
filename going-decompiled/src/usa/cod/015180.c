@@ -628,7 +628,8 @@ extern unsigned int strlen(const char *s); /* linked newlib strlen, 0x1157AC */
 
 /* Output @len bytes at @ptr: copied into a string stream's buffer, or staged
  * for fd @file (1 when the stream's flags/file word is still zero). */
-#define PRINT(ptr, len) { \
+#define PRINT(ptr, len) \
+{ \
     if (fp->status.fields.flags & 0x200) { \
         __builtin_memcpy(fp->cursor, (ptr), (len)); \
         fp->cursor += (len); \
@@ -638,7 +639,8 @@ extern unsigned int strlen(const char *s); /* linked newlib strlen, 0x1157AC */
     } \
 }
 /* Output @howmany characters of the 16-character pad string @with. */
-#define PAD(howmany, with) { \
+#define PAD(howmany, with) \
+{ \
     if ((n = (howmany)) > 0) { \
         while (n > 16) { PRINT((with), 16); n -= 16; } \
         PRINT((with), n); \
