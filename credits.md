@@ -646,6 +646,16 @@
     `D_00139948`, four level symbols renamed to the v2.00 ROM's relocation
     targets, `volatile` and `sda` dropped (both measured inert),
     `include_asm.h` dropped. s136os arm at -G8, no device (task #2495).
+  - **`PatchShrubPacketTex0`** (`0x002E1ED0`, patches the TEX0 TBP fields
+    of the visible shrubs' draw packets) in
+    `going-decompiled/src/usa/text/1DFF80.cpp`, from `src/game/002E10B8.c`
+    (`func_002E10B8`, v1.01 address, author commit `7fccf735`, Flavius).
+    ADAPTED: our symbol names by address, their {short, short} table entry
+    as our `ShrubTexVramPair` view, `int`/`short`/`unsigned char` spelled
+    `s32`/`s16`/`u8`, an `(s32 *)` cast on `g_shrubClassTable[*list]` (ours
+    is `u8 *[]`), their `nosda` attribute not carried, an unused local
+    dropped, local names ours. Per-function `S136EXTRA=` override (gcse ON
+    in a `-fno-gcse` unit, RULING #12178, task #2470).
 
 - **OpenRAC — `rac2-decomp`, commit `b2a35115`, text/178E88 Window X bodies** (GPL-3.0)
   <https://github.com/OpenRAC/rac2-decomp> at commit `b2a35115e0cf580a1fdab8dd1071b157799e590e`

@@ -889,54 +889,76 @@ void CloseShrubDrawSegment(void) {
 }
 #endif
 
-/* Patch the GS TEX0 texture-base-pointer (TBP) fields in every visible shrub's
- * draw packets with the VRAM addresses resolved by UploadShrubTextures. Walks
- * the -1-terminated g_shrubVisibleClassList; for each class record, over its
- * nItems (+0x28) sub-packets (ptr array at +0x40, stride 8); for each packet,
- * over its nTags giftags (base = packet+0x20 + (packet[0x14]<<4), stride 0x40);
- * looks up the giftag's texture id (byte +0x13) in g_shrubTexVramTable (stride
- * 4: {tbp_lo, tbp_hi}) and, when non-zero, splices the 14-bit TBP into the TEX0
- * AD-data words at +0x30 (TEX0_1) and +0x20 (TEX0_2), preserving the upper bits
- * (mask 0xFFFFC000). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", PatchShrubPacketTex0);
+/**
+ * PatchShrubPacketTex0 - patch the GS TEX0 texture-base-pointer (TBP) fields in
+ * every visible shrub's draw packets with the VRAM addresses resolved by
+ * UploadShrubTextures. No params, no return.
+ *
+ * Walks the -1-terminated g_shrubVisibleClassList; for each class record (from
+ * g_shrubClassTable), over its packet count (s16 at +0x28) and its packet
+ * pointer array (+0x40, stride 8); for each packet, over its giftag count (word
+ * +0x10), the first giftag at packet + 0x20 + (word +0x14 << 4), stride 0x40.
+ * Each giftag's texture id (byte +0x13) indexes g_shrubTexVramTable, read as
+ * {tbpLo, tbpHi} pairs; a NON-ZERO half is spliced into the low 14 bits of the
+ * TEX0 AD-data word at +0x30 (tbpLo) or +0x20 (tbpHi), keeping the upper bits
+ * (mask 0xFFFFC000). A zero half leaves its word untouched.
+ *
+ * MATCHED on the s136os arm (task #2470): compiled alone by SN 2.95.3 v1.36
+ * -fopt-stack and spliced over the S136OS_SLOT line (tools/ee/s136os_splice.sh,
+ * row in tools/ee/s136os_functions.txt); plain C on native. Device:
+ *   - a per-function S136EXTRA override, `S136EXTRA=` (the -O2 default, gcse
+ *     ON) on its selector row (RULING #12178). The unit compiles with
+ *     -fno-gcse, which this function does not: without the override the splice
+ *     refuses it on LENGTH (61 vs 65 words, FACT #12193). The unit cannot drop
+ *     -fno-gcse instead, since func_002E6D98 needs it (NOTE #12173).
+ * Source: OpenRAC/rac2-decomp @b2a35115e0cf580a1fdab8dd1071b157799e590e
+ * (GPL-3.0, adopted with the authors' permission per RULINGs #10405/#12108),
+ * src/game/002E10B8.c, func_002E10B8 (v1.01 address; author commit 7fccf735,
+ * Flavius; the body is unchanged since). ADAPTED: (1) our names, by address:
+ * D_L04_00220D60 = g_shrubVisibleClassList (upstream's `nosda` int; our
+ * unsized array is likewise not gp-relative), D_L04_0021F2E0 =
+ * g_shrubClassTable, D_L04_00220860 = g_shrubTexVramTable read through
+ * ShrubTexVramPair (upstream's Rac2Native_..._T2, fields a/b -> tbpLo/tbpHi);
+ * (2) int spelled s32 (the same type on EE); (3) upstream's unused local `k`
+ * dropped (it emits nothing); (4) local names ours (wp, ent, arr, pe, base, e,
+ * s -> list, classRec, packets, packet, header, giftag, vram). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_PatchShrubPacketTex0)
+S136OS_SLOT(PatchShrubPacketTex0);
 #else
-void PatchShrubPacketTex0(void) {
-    s32 *listPtr = g_shrubVisibleClassList;
-    s32 classIdx = listPtr[0];
+typedef struct ShrubTexVramPair {
+    s16 tbpLo;   /* -> TEX0 AD-data word at giftag +0x30 */
+    s16 tbpHi;   /* -> TEX0 AD-data word at giftag +0x20 */
+} ShrubTexVramPair;
 
-    if (classIdx < 0) {
-        return;
-    }
-    do {
-        u8 *classRec = g_shrubClassTable[classIdx];
-        s32 nItems = *(s16 *)(classRec + 0x28);
-        s32 i;
+void PatchShrubPacketTex0(void)
+{
+    s32 *list;
+    s32 *classRec;
+    s32 i;
+    s32 j;
+    s32 *packets;
+    s32 *packet;
+    s32 *header;
+    s32 *giftag;
 
-        listPtr++;
-        for (i = 0; i < nItems; i++) {
-            u8 *packet = *(u8 **)(classRec + 0x40 + i * 8);
-            s32 nTags = *(s32 *)(packet + 0x10);
-            u8 *giftag = packet + 0x20 + (*(s32 *)(packet + 0x14) << 4);
-            s32 k;
-
-            for (k = 0; k < nTags; k++) {
-                s16 *vram = &g_shrubTexVramTable[giftag[0x13] * 2];
-                s16 lo = vram[0];
-                s16 hi;
-
-                if (lo != 0) {
-                    *(u32 *)(giftag + 0x30) = (*(u32 *)(giftag + 0x30) & 0xFFFFC000) | (u32)lo;
-                }
-                hi = vram[1];
-                if (hi != 0) {
-                    *(u32 *)(giftag + 0x20) = (*(u32 *)(giftag + 0x20) & 0xFFFFC000) | (u32)hi;
-                }
-                giftag += 0x40;
+    for (list = g_shrubVisibleClassList; *list >= 0; list++) {
+        classRec = (s32 *)g_shrubClassTable[*list];
+        for (i = 0; i < *(s16 *)((char *)classRec + 40); i++) {
+            packets = classRec + 16;
+            packet = *(s32 **)((char *)packets + (i << 3));
+            header = packet + 4;
+            giftag = (s32 *)((char *)header + (header[1] << 4)) + 4;
+            for (j = 0; j < header[0]; j++) {
+                ShrubTexVramPair *vram =
+                    &((ShrubTexVramPair *)g_shrubTexVramTable)[((u8 *)giftag)[19]];
+                if (vram->tbpLo != 0)
+                    giftag[12] = (giftag[12] & 0xFFFFC000) | vram->tbpLo;
+                if (vram->tbpHi != 0)
+                    giftag[8] = (giftag[8] & 0xFFFFC000) | vram->tbpHi;
+                giftag += 16;
             }
         }
-        classIdx = *listPtr;
-    } while (classIdx >= 0);
+    }
 }
 #endif
 
