@@ -282,6 +282,19 @@ All are in `going-decompiled/src/usa/cod/022FA8.c`:
 The GPL-2.0-or-later note in the section "OpenRAC rac2-gc-decomp (GPL-3.0)"
 above applies to these bodies too.
 
+### OpenRAC rac2-decomp at b2a35115, text/178E88 Window X bodies (GPL-3.0)
+
+One C function body is taken from OpenRAC's `rac2-decomp`,
+<https://github.com/OpenRAC/rac2-decomp> at commit
+`b2a35115e0cf580a1fdab8dd1071b157799e590e` (root `LICENSE`: GNU General Public
+License, version 3), with the authors' permission (RULING #10405/#12108), task
+#2471. It is adapted, with every respelling named in the function's `Source:`
+line.
+
+| Here | Upstream file | Upstream name |
+|---|---|---|
+| `func_00280EC8` in `going-decompiled/src/usa/text/178E88.cpp` (adapted: our callee spellings func_002859E0 / func_0027B858 / AppendGsRegPacket for their func_00285030 / func_0027B2F8 / func_002FC560, their `D_001A65EE` read as `*(s16 *)(g_gsScreenContext + 0x16E)`, `int`/`float` spelled `s32`/`f32`; s136os arm with one RULING #8549 Ps2EeAs dli row at 0x280F88) | `src/game/0027F128.c` | `func_00280510` (author commit `bf067513e`, bigbeno37) |
+
 ### OpenRAC rac2-gc-decomp at 96927f87, Lombyte-origin body (GPL-3.0)
 
 One more C function body is taken from OpenRAC's `rac2-gc-decomp` at commit

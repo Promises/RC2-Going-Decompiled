@@ -3882,57 +3882,73 @@ void AppendVu1SphereMapContext(void) {
 #endif
 
 /**
- * func_00280EC8 — configure the GS draw region / depth + alpha for a
- * (1<<zNearBits) x (1<<lo) render target.
+ * func_00280EC8 — bind the offscreen render target for menu-widget
+ * render-to-texture: point the GS at a (1<<width) x (1<<height) draw region
+ * and set its frame-buffer base, viewport and TEST/SCISSOR registers.
  *
- * Sets the depth mapping (func_002859E0): in mode!=0 the z-scale comes from the
- * screen context (g_gsScreenContext+0x16E)<<13, else from the log2 formula
- * ((0x3FF000 - 4<<clamp(zNearBits+lo,16)) >> 13) << 13. Rebuilds the viewport
- * for the target dimensions (func_0027B858, with fixed 524288/255 params), then
- * emits the GS TEST (0x47, alpha ref 0x30000 when mode==0) and SCISSOR (0x42)
- * register packets.
+ * Params/return: width/height are log2 dimensions; use_saved != 0 reuses the
+ * target base already recorded in the GS screen context (the s16 at
+ * g_gsScreenContext+0x16E, <<13 into a byte address), else the base is carved
+ * from the top of VRAM (0x3FF000 - 4<<clamp16(width+height), re-aligned to an
+ * 8 KiB granule by >>13<<13); scale is the viewport scale passed through to
+ * func_0027B858. Returns nothing.
+ *
+ * The bind goes through func_002859E0 (FACT #5662: its third argument is the
+ * VRAM byte address — FRAME.FBP = a2>>13, TEX0.TBP0 = a2>>8 — and this is one
+ * of its two ROM callers, FACT #8727). func_0027B858 then rebuilds the
+ * viewport for the target dimensions (fixed 524288/255 params), and two
+ * AppendGsRegPacket calls emit TEST (0x47, alpha ref 0x30000 unless reusing
+ * the saved target) and SCISSOR (0x42, the 0x8000000044 full-region value).
+ *
+ * MATCHED on the s136os arm (SN 2.95.3 v1.36 cc1plus -fopt-stack, the unit's
+ * -fno-gcse pin unchanged; row in tools/ee/s136os_functions.txt), spliced over
+ * S136OS_SLOT by tools/ee/s136os_splice.sh. There is no asm fallback: a build
+ * that skips the splice drops the function. On native it is plain C.
+ * Device: ONE RULING #8549 dli row (0x280F88, `dli $5,0x8000000044`) — cc1's
+ * GNU-as expansion (`ori 0x80; dsll32 16; ori 0x44`) differs from the ROM's
+ * Ps2EeAs form (`ori 0x8000; dsll 24; ori 0x44`) at exactly those two words;
+ * the row rewrites them at assembly, in tools/ee/ps2eeas_dli_sites.txt.
+ * Supersedes the t493 #else (sdk29 59.72%, unit objdiff) and our own-C s136os
+ * near-miss (NOTE #12194, 7/60).
+ *
+ * Source: OpenRAC/rac2-decomp @b2a35115e0cf580a1fdab8dd1071b157799e590e
+ * (GPL-3.0, adopted with the authors' permission per RULING #10405/#12108),
+ * src/game/0027F128.c, func_00280510 (author commit bf067513e, bigbeno37,
+ * 2026-11-01). ADAPTED: our callee spellings (their func_00285030 = our
+ * func_002859E0, their func_0027B2F8 = our func_0027B858, declared in this
+ * arm, their func_002FC560 = our AppendGsRegPacket); their `D_001A65EE` read
+ * as `*(s16 *)(g_gsScreenContext + 0x16E)` (same address 0x1A65EE: the
+ * unsized u8[] extern keeps the ROM's lui/lh, where a 2-byte scalar extern
+ * goes gp-relative at -G8); and `int`/`float` spelled `s32`/`f32`. Statements
+ * as upstream wrote them. (task #2471; audit NOTE #13122 / FACT #13116.)
  */
-/* TODO(match) t493: sdk29 59.72% / engine96 57.27% (unit objdiff, objdiff_build.sh +
- * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
- * every other remaining arm). Residual on the better arm (sdk29): SIBCALL (first differing insn:
- * ROM `addiu sp,sp,-48` vs built `addiu sp,sp,-80`). Levers: sibcall guard RUN: sdk29 78.40% /
- * engine96 61.18%; engine96 with sched1 MEASURED (flag not landed): 54.98%. */
-/* DLI lever MEASURED (task #1220; unit objdiff report, objdiff_build.sh, this #else body promoted
- * SOLO, sdk29 arm, colima-ee-x86; every other row in the unit unchanged). cc1 emits
- * `dli $5,0x8000000044` (ROM: Ps2EeAs form at 0x280F88) AND two `li.d` (soft-float double
- * literals), which GNU as rejects for r5900, so the solo base does not assemble (objdiff_build.sh
- * rc 1) with or without an allowlist row. Residual class: LI.D (FACT #7952: GNU as rejects li.d
- * for r5900 and asm_unit.sh expands li.s only; RULING #8172 clause 4 keeps li.d out of
- * asm_unit.sh). That is an assembly blocker, so nothing past it was measured: the dli site is not
- * a measured second residual. Not scored. */
-/* TODO(match) t2292, s136os arm (solo screen NOTE #12195, reloc-masked, not the gate): 7/60 with
- * the body in NOTE #12194. One variable serves as both the clamped shift and z, the clamp is
- * spelled `if (z >= 17) z = 16;` (the ROM's movz; a ternary gives movn), the final `<< 13` sits
- * at the join, and an EE_REG pin puts z in $3. 2 of the 7 words are the dli at 0x280F88
- * ($5,0x8000000044), which a RULING #8549 row would fix. The other 5: the else-branch subtract
- * lands in $2 (ROM $6) and the join's sll issues after the argument moves (ROM before). Class:
- * ALLOCATION/SCHEDULE. Same with gcse on. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280EC8);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00280EC8)
+S136OS_SLOT(func_00280EC8);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern void func_0027B858(s32 width, s32 height, f32 fa, f32 fb, f32 fc, f32 fd, f32 fe);
 /* (end of this body's declarations) */
-void func_00280EC8(s32 zNearBits, s32 lo, s32 mode, f32 fa) {
-    s32 zScale;
+void func_00280EC8(s32 width, s32 height, s32 use_saved, f32 scale)
+{
+    s32 address;
 
-    if (mode != 0) {
-        zScale = *(s16 *)(g_gsScreenContext + 0x16E) << 13;
+    if (use_saved) {
+        address = *(s16 *)(g_gsScreenContext + 0x16E) << 13;
     } else {
-        s32 sum = zNearBits + lo;
-        s32 shift = (sum < 17) ? sum : 16;
-        zScale = ((0x3FF000 - (4 << shift)) >> 13) << 13;
+        s32 shift = width + height;
+        if (shift > 16) shift = 16;
+        address = 0x3FF000 - (4 << shift);
+        address = (address >> 13) << 13;
     }
-    func_002859E0(zNearBits, lo, zScale, 0);
-    func_0027B858(1 << zNearBits, 1 << lo, fa, 0.0f, 524288.0f, 255.0f, 0.0f);
-    AppendGsRegPacket(0x47, (mode != 0) ? 0 : 0x30000);
-    AppendGsRegPacket(0x42, 0x0000008000000044ULL);
+    func_002859E0(width, height, address, 0);
+    func_0027B858(1 << width, 1 << height, scale, 0.0f, 524288.0f, 255.0f, 0.0f);
+    if (use_saved) {
+        AppendGsRegPacket(0x47, 0UL);
+    } else {
+        AppendGsRegPacket(0x47, 0x30000UL);
+    }
+    AppendGsRegPacket(0x42, 0x8000000044UL);
 }
 #endif
 

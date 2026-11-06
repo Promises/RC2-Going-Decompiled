@@ -584,6 +584,26 @@
     function `S136EXTRA=-fno-strict-aliasing` override (RULING #12178,
     task #2467).
 
+- **OpenRAC — `rac2-decomp`, commit `b2a35115`, text/178E88 Window X bodies** (GPL-3.0)
+  <https://github.com/OpenRAC/rac2-decomp> at commit `b2a35115e0cf580a1fdab8dd1071b157799e590e`
+
+  One engine C body in text/178E88, adopted with the authors' permission
+  (held by the operator, RULING #10405/#12108) and re-checked byte-exact
+  against our v2.00 ROM on the s136os arm (task #2471, from the Window X
+  boot audit NOTE #13122 / FACT #13116). The doc comment carries the
+  `Source:` line, which names every change beyond symbol spellings.
+
+  Used so far:
+  - **`func_00280EC8`** (`0x00280EC8`, the offscreen render-target bind for
+    menu-widget render-to-texture) in `going-decompiled/src/usa/text/178E88.cpp`,
+    on the s136os arm with one RULING #8549 Ps2EeAs dli row (0x280F88), from
+    `src/game/0027F128.c` (`func_00280510`, author commit `bf067513e`,
+    bigbeno37, 2026-11-01). ADAPTED: our callee spellings (their
+    func_00285030 / func_0027B2F8 / func_002FC560 = our func_002859E0 /
+    func_0027B858 / AppendGsRegPacket), their `D_001A65EE` read as
+    `*(s16 *)(g_gsScreenContext + 0x16E)` (same address), and `int`/`float`
+    spelled `s32`/`f32`.
+
 - **Forja contributors** (MIT, © 2026 Forja contributors), via OpenRAC
   `rac2-gc-decomp` at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`
 
