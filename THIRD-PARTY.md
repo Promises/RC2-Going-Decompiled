@@ -159,6 +159,22 @@ License, version 3), with the authors' permission (RULING #10405), task #2240:
 
 The GPL-2.0-or-later note in the section "OpenRAC rac2-gc-decomp (GPL-3.0)" above applies to this body too.
 
+### OpenRAC rac2-decomp at b2a35115 (GPL-3.0)
+
+C function bodies are taken from OpenRAC's `rac2-decomp`,
+<https://github.com/OpenRAC/rac2-decomp> at commit
+`b2a35115e0cf580a1fdab8dd1071b157799e590e` (root `LICENSE`: GNU General Public
+License, version 3; the repository carries `rac2-gc-decomp`'s history, with
+`96927f87` an ancestor), with the authors' permission (RULINGs #10405 and
+#12108). Each is adapted, with every respelling named in the function's
+`Source:` line. The source file below carries no notice of its own.
+
+| Here | Upstream file | Upstream name |
+|---|---|---|
+| `func_00346878` in `going-decompiled/src/usa/text/235FE8.c` (adapted: our symbol names, signature and `PlayGlobalSound` prototype; their owner struct as our `GuiGridCursor` view; their `.sdata` `g_inventoryOwned` and their typed grid array as EE-only asm-label aliases; `sda` dropped), task #2467 | `src/us2/game/00346878-g8.c` | `func_US2_00346878` (v2.00 address) |
+
+The GPL-2.0-or-later note in the section "OpenRAC rac2-gc-decomp (GPL-3.0)" above applies to these bodies too.
+
 ### Forja contributors (MIT), carried by OpenRAC rac2-gc-decomp
 
 The C body of `func_00336B48` in `going-decompiled/src/usa/text/235FE8.c` is

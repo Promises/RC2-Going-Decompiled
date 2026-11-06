@@ -11377,96 +11377,143 @@ void GuiMapScreenInit(void *w, GuiPool *pool) {
 }
 #endif
 
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00346878);
+/*
+ * func_00346878(w, buttons): the state-0 sub-builder that GuiMapScreenTick
+ * forwards (w, mode) to while w+0x508 == 0. A d-pad / confirm handler for a
+ * 3-column, 2-row grid over the D_259CC0 slot table (grid index = column +
+ * 3 * row, 0xA-byte GuiGridSlot records). Each held direction in
+ * `buttons` plays the wheel cue PlayGlobalSound(3, 0, 0) first:
+ *   0x1000 up    -> row--; below 0 it clamps to row 0 and sets state = 1
+ *   0x4000 down  -> from row 0: row 1 (column 0 becomes column 1); from row 1:
+ *                   state = 3, back to row 0, column--
+ *   0x8000 left  -> column--, wrapping to 2 (below 0 on row 0, below 1 on row 1)
+ *   0x2000 right -> column++, wrapping past 2 to 0 on row 0, to 1 on row 1
+ *   0x40   confirm (no cue first) -> for a nonzero, owned item: accept cue
+ *                   (4), store the item id in g_menuTransitionMode+0x24 and in
+ *                   `selected`; otherwise the deny cue (5)
+ * Every path then re-reads the highlighted item into `selected` and, if it is
+ * owned, sets D_1ADAF0 to that item's equipped variant's g_weaponTable
+ * halfword +0x06 (the weapon-name string id). Params: w = the screen object
+ * (cursor fields at +0x4FC..+0x508, GuiGridCursor), buttons = pad mask.
+ * No return value.
+ *
+ * MATCHED on the s136os arm with a per-function override (task #2467):
+ * row `usa text/235FE8 func_00346878 S136EXTRA=-fno-strict-aliasing` in
+ * tools/ee/s136os_functions.txt, i.e. the unit's flags minus -fno-gcse
+ * (RULING #12178). With the unit's -fno-gcse it builds 152 words, not 159
+ * (FACT #13097); gcse is what keeps `lui $18,%hi(D_259CC0)` on every path.
+ * DEVICE, ADDRESSING MODEL (RULING #8620; same mechanism as func_00343E80's
+ * g_inventoryOwnedLa): g_inventoryOwned is read through g_inventoryOwnedSdata,
+ * an EE-only asm-label alias with upstream's `section(".sdata")`. cc1 then
+ * believes it small and emits the one-insn `la` macro, which the file-scope
+ * `.extern g_inventoryOwned, 16` makes the assembler expand to the ROM's
+ * adjacent absolute `lui $2; addiu $2,$2`. It moves no data and emits nothing.
+ * DEVICE, TYPED VIEW: the grid table is read through g_gridSlots, an EE-only
+ * asm-label alias of D_259CC0 typed GuiGridSlot[] (upstream's own typed
+ * extern). Reading it as `((GuiGridSlot *)D_259CC0)[i]` through the unit's
+ * u8[] declaration builds the same length but allocates the slot-address
+ * registers differently at 0x3469F8 and 0x346A6C (24 bytes of image, task
+ * #2467). It names the same symbol and emits nothing; native casts the u8[].
+ * GUARD: on EE this C is the image's body, compiled alone by SN 2.95.3 v1.36
+ * -fopt-stack and spliced over S136OS_SLOT by tools/ee/s136os_splice.sh; there
+ * is no asm fallback. On native it is plain C (the alias is the real array).
+ * Source: OpenRAC/rac2-decomp @b2a35115e0cf580a1fdab8dd1071b157799e590e
+ * (GPL-3.0, adopted with the authors' permission per RULINGs #10405/#12108),
+ * src/us2/game/00346878-g8.c, func_US2_00346878 (author commit 37ee1b19,
+ * Flavius). Respellings by ROM-encoded address: func_002E5E58 =
+ * PlayGlobalSound, D_001A7AF8 = g_inventoryOwned, D_00139568 =
+ * g_itemEquippedSlot, D_00239BA0 = g_weaponTable, D_001ADB10 = D_1ADAF0,
+ * D_00259CE0 = D_259CC0, D_001F2880[0] = g_menuTransitionMode+0x24.
+ * ADAPTED: (1) our signature (void *w, s32 buttons), with their
+ * SelectionOwner as our GuiGridCursor view through the local `owner`;
+ * (2) their SelectionEntry kept as GuiGridSlot, its D_00259CE0 array as the
+ * EE-only typed alias g_gridSlots above; their SelectionMaterial .material
+ * read as the unit's GuiWeaponTableEntry .nameStringId (the s16 at +0x06);
+ * (3) their int array D_001F2880 written as the s32 at
+ * g_menuTransitionMode+0x24;
+ * (4) their `.sdata` g_inventoryOwned carried on the EE-only alias above;
+ * their `sda` attribute on D_001ADB10 dropped (the unit's -G8 already makes
+ * D_1ADAF0 gp-relative); (5) our PlayGlobalSound(s32, s32, s32) prototype.
+ * Control flow and expressions are theirs.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00346878)
+S136OS_SLOT(func_00346878);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00346878, unit objdiff): 34.25%,
-   164/206 insns differ. Residual: UNKNOWN-daddu + movn/movz (first differing insn: '' vs 'daddu s0, a0, zero').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
-extern u8   D_259CC0[];              /* 2D grid entry table, stride 0xA, +6 = s16 item id */
+/* The cursor fields of the grid screen object GuiMapScreenTick drives. */
+typedef struct {
+    u8  _pad0[0x4FC];
+    s32 column;   /* 0x4FC: 0..2 */
+    s32 row;      /* 0x500: 0..1 */
+    s32 selected; /* 0x504: item id under the cursor */
+    s32 state;    /* 0x508: screen state (1 = leave up, 3 = leave down) */
+} GuiGridCursor;
+/* One 0xA-byte D_259CC0 grid slot as five halfwords (upstream's SelectionEntry
+ * shape); v[3] (+0x06) is the item id. */
+typedef struct { s16 v[5]; } GuiGridSlot;
+extern u8   D_259CC0[];              /* grid slot table, GuiGridSlot[6] (native view) */
 extern u8   g_menuTransitionMode[];  /* 0x1F27DC - +0x24 receives the activated item id */
 extern s32 PlayGlobalSound(s32 id, s32 a, s32 b);
-/*
- * func_00346878(w, flags) — the mode-0 sub-builder: a 2D-grid cursor/confirm
- * handler for the D_259CC0 select grid `w` (3 columns wide; grid index =
- * w+0x4FC column [0..2] + 3 * w+0x500 row, record stride 0xA). Held-button
- * `flags` move the cursor, each with the wheel cue PlayGlobalSound(3):
- *   0x1000 up    -> row--, underflow clamps row to 0 and sets w+0x508=1
- *   0x4000 down  -> from row 0: enter row 1 (seeding col if col==0); from row 1:
- *                   set w+0x508=3, back to row 0 and col--
- *   0x8000 left  -> col-- with wrap to 2 (row 0 keeps col 0, row!=0 wraps at 0)
- *   0x2000 right -> col++ with wrap (>2 -> 0 on row 0, -> 1 on row!=0)
- *   0x40  confirm-> owned highlighted item: accept cue (4), record in
- *                   g_menuTransitionMode+0x24 and w+0x504; else deny cue (5)
- * Every path then refreshes w+0x504 and, for an owned item, its weapon-name
- * caption id D_1ADAF0 = g_weaponTable[g_itemEquippedSlot[entry]*0xE0 + 6].
- */
-void func_00346878(void *w, s32 flags) {
-    s16 entry;
-    s32 idx;
+#ifndef TARGET_NATIVE
+extern u8 g_inventoryOwnedSdata[] __asm__("g_inventoryOwned") __attribute__((section(".sdata")));
+extern GuiGridSlot g_gridSlots[] __asm__("D_259CC0");
+#else
+#define g_inventoryOwnedSdata g_inventoryOwned
+#define g_gridSlots ((GuiGridSlot *)D_259CC0)
+#endif
+void func_00346878(void *w, s32 buttons)
+{
+    GuiGridCursor *owner = (GuiGridCursor *)w;
 
-    if (flags & 0x1000) {
-        s32 v;
+    if (buttons & 0x1000) {
+        int row;
         PlayGlobalSound(3, 0, 0);
-        v = *(s32 *)((char *)w + 0x500) - 1;
-        *(s32 *)((char *)w + 0x500) = v;
-        if (v < 0) {
-            *(s32 *)((char *)w + 0x500) = 0;
-            *(s32 *)((char *)w + 0x508) = 1;
+        row = owner->row - 1;
+        owner->row = row;
+        if (row < 0) {
+            owner->row = 0;
+            owner->state = 1;
         }
-    } else if (flags & 0x4000) {
-        s32 s500;
+    } else if (buttons & 0x4000) {
         PlayGlobalSound(3, 0, 0);
-        s500 = *(s32 *)((char *)w + 0x500);
-        if (s500 == 0) {
-            if (*(s32 *)((char *)w + 0x4FC) == 0) {
-                *(s32 *)((char *)w + 0x500) = 1;
-                *(s32 *)((char *)w + 0x4FC) = 1;
-            } else {
-                *(s32 *)((char *)w + 0x500) = 1;
-            }
-        } else if (s500 == 1) {
-            *(s32 *)((char *)w + 0x508) = 3;
-            *(s32 *)((char *)w + 0x500) = 0;
-            *(s32 *)((char *)w + 0x4FC) -= 1;
+        if (owner->row == 0) {
+            if (owner->column == 0) {
+                owner->column = 1;
+                owner->row = 1;
+            } else
+                owner->row = 1;
+        } else if (owner->row == 1) {
+            owner->state = 3;
+            owner->row = 0;
+            owner->column--;
         }
-    } else if (flags & 0x8000) {
-        s32 c;
+    } else if (buttons & 0x8000) {
         PlayGlobalSound(3, 0, 0);
-        c = *(s32 *)((char *)w + 0x4FC) - 1;
-        if (*(s32 *)((char *)w + 0x500) == 0) {
-            *(s32 *)((char *)w + 0x4FC) = (c >= 0) ? c : 2;
-        } else {
-            *(s32 *)((char *)w + 0x4FC) = (c > 0) ? c : 2;
-        }
-    } else if (flags & 0x2000) {
-        s32 c;
+        --owner->column;
+        if (owner->row == 0)
+            owner->column = owner->column < 0 ? 2 : owner->column;
+        else
+            owner->column = owner->column < 1 ? 2 : owner->column;
+    } else if (buttons & 0x2000) {
         PlayGlobalSound(3, 0, 0);
-        c = *(s32 *)((char *)w + 0x4FC) + 1;
-        if (*(s32 *)((char *)w + 0x500) == 0) {
-            *(s32 *)((char *)w + 0x4FC) = (c <= 2) ? c : 0;
-        } else {
-            *(s32 *)((char *)w + 0x4FC) = (c <= 2) ? c : 1;
-        }
-    } else if (flags & 0x40) {
-        s16 sel;
-        idx = *(s32 *)((char *)w + 0x4FC) + 3 * *(s32 *)((char *)w + 0x500);
-        sel = *(s16 *)&D_259CC0[idx * 0xA + 6];
-        if (sel == 0 || g_inventoryOwned[sel] == 0) {
-            PlayGlobalSound(5, 0, 0);
-        } else {
+        ++owner->column;
+        if (owner->row == 0)
+            owner->column = owner->column > 2 ? 0 : owner->column;
+        else
+            owner->column = owner->column > 2 ? 1 : owner->column;
+    } else if (buttons & 0x40) {
+        int id = g_gridSlots[owner->column + owner->row * 3].v[3];
+        if (id && g_inventoryOwnedSdata[id]) {
             PlayGlobalSound(4, 0, 0);
-            *(s32 *)&g_menuTransitionMode[0x24] = sel;
-            *(s32 *)((char *)w + 0x504) = sel;
-        }
+            *(s32 *)&g_menuTransitionMode[0x24] = id;
+            owner->selected = id;
+        } else
+            PlayGlobalSound(5, 0, 0);
     }
-
-    idx = *(s32 *)((char *)w + 0x4FC) + 3 * *(s32 *)((char *)w + 0x500);
-    entry = *(s16 *)&D_259CC0[idx * 0xA + 6];
-    *(s32 *)((char *)w + 0x504) = entry;
-    if (entry != 0 && g_inventoryOwned[entry] != 0) {
-        D_1ADAF0 = *(s16 *)&g_weaponTable[g_itemEquippedSlot[entry] * 0xE0 + 6];
+    {
+        int id = g_gridSlots[owner->column + owner->row * 3].v[3];
+        owner->selected = id;
+        if (id && g_inventoryOwnedSdata[id])
+            D_1ADAF0 = ((GuiWeaponTableEntry *)(g_weaponTable + g_itemEquippedSlot[id] * 0xE0))->nameStringId;
     }
 }
 #endif

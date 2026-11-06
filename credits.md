@@ -564,6 +564,26 @@
     byte-exact on our ROM; its one inline `sync` is the hardware barrier
     RULING #12168 allows (task #2297).
 
+- **OpenRAC — `rac2-decomp`, commit `b2a35115`, text/235FE8 Window X bodies** (GPL-3.0)
+  <https://github.com/OpenRAC/rac2-decomp> at commit `b2a35115e0cf580a1fdab8dd1071b157799e590e`
+  (the same history as `rac2-gc-decomp` above: `96927f87` is an ancestor)
+
+  Engine C bodies from upstream's `src/us2/` (their USA v2.00 port), adopted
+  with the authors' permission (held by the operator, RULINGs #10405 and
+  #12108) and re-checked byte-exact against our v2.00 ROM on the s136os arm.
+  Each doc comment carries the `Source:` line, which names every respelling.
+
+  Used so far:
+  - **`func_00346878`** (`0x00346878`, a grid-cursor input handler) in
+    `going-decompiled/src/usa/text/235FE8.c`, from
+    `src/us2/game/00346878-g8.c` (`func_US2_00346878`, author commit
+    `37ee1b19`, Flavius). ADAPTED: our symbol names per the ROM's
+    relocations, our signature and `PlayGlobalSound` prototype, their owner
+    struct as our `GuiGridCursor` view, their `.sdata` `g_inventoryOwned` and
+    their typed grid array as EE-only asm-label aliases, `sda` dropped. Per-
+    function `S136EXTRA=-fno-strict-aliasing` override (RULING #12178,
+    task #2467).
+
 - **Forja contributors** (MIT, © 2026 Forja contributors), via OpenRAC
   `rac2-gc-decomp` at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`
 
