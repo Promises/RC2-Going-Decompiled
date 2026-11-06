@@ -2602,12 +2602,13 @@ typedef struct {
     s16 adjustment, pad;
     void (*draw)(void *);
 } GuiDrawVtable;
-#define DRAW(node) { \
-    char *drawObject = (char *)(node); \
+/* The braces sit on continuation lines, not the #define line, so
+ * tools/ee/blanket_orphans.py's brace count stays balanced (task #2501). */
+#define DRAW(node) \
+    { char *drawObject = (char *)(node); \
     GuiDrawVtable *vtable = *(GuiDrawVtable **)(drawObject + 0x30); \
     drawObject += vtable->adjustment; \
-    vtable->draw(drawObject); \
-}
+    vtable->draw(drawObject); }
 #define WEAPON(item) (&((GuiGridWeapon *)g_weaponTable)[g_itemEquippedSlot[item]])
 #define WEAPON_AT(item) ((GuiGridWeapon *)((char *)g_weaponTable + g_itemEquippedSlot[item] * size))
 
@@ -3040,7 +3041,9 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
  * func_0027F208, func_US2_00339398 = func_00339398.
  * ADAPTED: (1) their `sda` int array D_001A7340 read at [1] through the
  * EE-only view above (native: g_screenHeight); (2) their
- * short/int/unsigned long/unsigned char as s16/s32/u64/char (RULING #13197);
+ * short/int/unsigned char as s16/s32/char (RULING #13197), and their
+ * `unsigned long` style parameters as the definitions' s32, except
+ * func_00280B48's u64 (DECL-LEVER on its declaration);
  * (3) their func_US2_00339398(object, 96, 0x55F0C070, top, bottom, left,
  * right) called through the unit's own prototype (x0, y0, x1, y1, base,
  * packByte, color): the four floats travel in $f12-$f15 and the three words
@@ -3053,9 +3056,10 @@ S136OS_SLOT(func_00338F88);
 #else
 extern u8 D_1ADB38[], D_1ADB48[], D_1ADB58[], D_1ADB70[], D_1ADB90[], D_1ADB98[],
           D_1ADBA8[];                /* the seven caption format strings */
+/* DECL-LEVER(#2501): defined s32 colour (178E88); u64 so it agrees with func_0033D070's declaration in the native TU, where the u64 is load-bearing (u32 there: 83/84 words); u32 here is byte-neutral (measured MATCH) */
 extern void func_00280B48(void *layout, u64 style, const char *text, s32 length);
-extern void func_00280BB8(void *layout, u64 style, const char *text, s32 length);
-extern void func_00280C28(void *layout, u64 style, const char *text, s32 length);
+extern void func_00280BB8(void *layout, s32 style, const char *text, s32 length);
+extern void func_00280C28(void *layout, s32 style, const char *text, s32 length);
 extern void func_0027F208(s32 top, s32 bottom, s32 left, s32 right, s32 alpha,
                           s32 color);
 extern void func_00339398(f32 x0, f32 y0, f32 x1, f32 y1, s32 base, s32 packByte,
@@ -5402,7 +5406,7 @@ S136OS_SLOT(func_0033D070);
 extern s32 func_002801B8(s32 x, s32 y, u64 color, const char *text, s32 flag); /* DECL-LEVER(#1877): defined s32 colour; u64 kept so this unit's four declarations agree — the other two are load-bearing u64 (func_0033D3C0/func_0033ED18), and mixed u32/u64 block-scope declarations fail the native C compile */
 extern void func_00280C98(void *layout, s32 x, s32 y, s32 a, s32 b, s32 c, s32 d,
                           s32 e, s32 f);
-extern void func_00280B48(void *layout, u64 style, const char *text, s32 length);
+extern void func_00280B48(void *layout, u64 style, const char *text, s32 length); /* DECL-LEVER(#2501): defined s32 colour; the ROM passes 0x80F0F0F0 zero-extended as a 64-bit value, u32 builds 83/84 words (task #2501) */
 extern u8 D_1ADDB0[];
 extern s32 g_screenWidth;
 extern s32 g_bProgressiveScan;
