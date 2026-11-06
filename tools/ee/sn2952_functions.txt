@@ -28,3 +28,6 @@ usa cod/015180 VfprintfInteger
 usa cod/015180 abort
 usa cod/015180 AssertFail
 usa cod/015180 func_00115E68
+usa cod/015180 func_00115C90
+usa cod/015180 malloc
+usa cod/015180 func_00115F78

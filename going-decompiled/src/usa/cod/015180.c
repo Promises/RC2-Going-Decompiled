@@ -43,11 +43,53 @@ extern s32 D_00133E74;
  * each doc comment instead. Do not "fix" either side. EU keeps func_ names for
  * the same addresses (RULING #5339). */
 
-/* func_00115C90: clears D_00133E78, calls func_0011B270(arg1); on failure
- * (-1) writes the resulting D_00133E78 error code back through arg0. Logic
- * matches but NOT byte-exact: the original saves $16/$17/$31 with 128-bit `sq`
- * while this cc1 emits `sd` for callee-saves. Left as INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115C90);
+/* The errno word the EE system-call layer (func_0011B270, sbrk) sets. */
+extern s32 D_00133E78;
+/* sbrk: grows the heap by @incr bytes; returns the old break or 0xFFFFFFFF. */
+extern u32 func_0011B270(s32 incr);
+
+/**
+ * func_00115C90 — newlib's _sbrk_r (newlib libc/reent/sbrkr.c: _sbrk_r).
+ *
+ * @reent: the reentrancy block; its first word is its errno (_errno).
+ * @incr:  bytes to grow the heap by, passed to sbrk (func_0011B270).
+ *
+ * Returns sbrk's result. Clears the global errno D_00133E78, calls sbrk, and
+ * when sbrk returns (void *)-1 with errno set, copies errno into @reent.
+ * Name kept (never rename a matched function): the _sbrk_r identity lives
+ * here. Its caller is the dlmalloc heap-extension path.
+ *
+ * MATCHED on the sn2952 arm (held SN 2.95.2 v2.73a cc1, RULING #12157;
+ * selector row in tools/ee/sn2952_functions.txt). The ROM saves $16/$17/$31
+ * with TImode `sq`, which neither cc1 2.9 nor the s136os arm emits for this
+ * body (FACT #12152). Task #2498, RULING #13179 (Newlib-identity bodies
+ * adoptable with notices). No device.
+ *
+ * Source: OpenRAC/rac2-decomp @8b26d8adeb0b5515a962f83230df4bf909fd0cf5
+ * (GPL-3.0, adopted with the authors' permission per RULING #10405; blob
+ * identical at the audit pin b2a35115), src/core/00115C90.c, func_00115C90
+ * (same address on their v2.00 build; author commit 399c57d5, Louis-Philippe
+ * Le Sieur). Newlib origin: newlib/libc/reent/sbrkr.c, _sbrk_r, at
+ * newlib-cygwin tag newlib-2000-02-17 — no in-file copyright notice at that
+ * tag or at HEAD; THIRD-PARTY.md carries the applicable COPYING.NEWLIB
+ * section. ADAPTED: `int` written `s32`; parameters named reent/incr for
+ * their arg0/arg1. Statements, externs and control flow are theirs.
+ */
+#if !defined(TARGET_NATIVE) && !defined(SN2952_func_00115C90)
+SN2952_SLOT(func_00115C90);
+#else
+u32 func_00115C90(s32 *reent, u32 incr) {
+    u32 result;
+
+    D_00133E78 = 0;
+    result = func_0011B270(incr);
+    if (result == 0xFFFFFFFF) {
+        if (D_00133E78 != 0)
+            *reent = D_00133E78;
+    }
+    return result;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115CF0);
 
@@ -197,10 +239,95 @@ s32 func_00115E68(s32 str) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", exit_runAtexitHandlers);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", malloc);
+/* The malloc lock pair (defined below at 0x116300 / 0x116360), dlmalloc's
+ * _malloc_r (0x1166C8) and _free_r (0x116E10). Each takes the reentrancy
+ * block D_00133E74 first, as newlib's do. */
+extern s32 func_00116300(s32 reent);
+extern void func_00116360(s32 reent);
+extern void *func_001166C8(s32 reent, u32 size);
+extern void _free_r(s32 reent, s32 ptr);
+
+/**
+ * malloc — newlib's malloc (newlib libc/stdlib/malloc.c: malloc), with an SCE
+ * lock pair added.
+ *
+ * @size: bytes to allocate.
+ *
+ * Returns the block from _malloc_r (func_001166C8), or 0. Newlib's malloc is
+ * the bare cover `return _malloc_r(_REENT, nbytes);`; this build brackets it
+ * with __malloc_lock / __malloc_unlock (func_00116300 / func_00116360), so
+ * the cover-function shape is newlib's and the lock pair is SCE's.
+ * D_00133E74 (_REENT) is re-read after every call, as the ROM does.
+ *
+ * MATCHED on the sn2952 arm (held SN 2.95.2 v2.73a cc1, RULING #12157;
+ * selector row in tools/ee/sn2952_functions.txt): the ROM saves $16/$17/$31
+ * with TImode `sq` (FACT #12152). Task #2498, RULING #13179. No device.
+ *
+ * Source: OpenRAC/rac2-decomp @8b26d8adeb0b5515a962f83230df4bf909fd0cf5
+ * (GPL-3.0, adopted with the authors' permission per RULING #10405; blob
+ * identical at the audit pin b2a35115), src/core/00115F28.c, func_00115F28
+ * (same address on their v2.00 build; author commit 399c57d5, Louis-Philippe
+ * Le Sieur). Newlib origin: newlib/libc/stdlib/malloc.c, malloc, at
+ * newlib-cygwin tag newlib-2000-02-17 — no in-file copyright notice at that
+ * tag or at HEAD; THIRD-PARTY.md carries the applicable COPYING.NEWLIB
+ * section. ADAPTED: named malloc (our symbol; INCLUDE_ASM_ALIAS keeps
+ * func_00115F28); their `int` return and `int` size written newlib's own
+ * `void *` / unsigned (`u32`, size_t under -m32), and func_001166C8 declared
+ * to match, because the native arm compiles against the host <stdlib.h>
+ * malloc; their `void *` D_00133E74 and the reent parameters written as this
+ * unit's s32 model (its D_00133E74 is `s32`); callees declared once above for
+ * the five bodies. Statements are theirs.
+ */
+#if !defined(TARGET_NATIVE) && !defined(SN2952_malloc)
+SN2952_SLOT(malloc);
+#else
+void *malloc(u32 size) {
+    void *result;
+
+    func_00116300(D_00133E74);
+    result = func_001166C8(D_00133E74, size);
+    func_00116360(D_00133E74);
+    return result;
+}
+#endif
 INCLUDE_ASM_ALIAS(func_00115F28, malloc);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115F78);
+/**
+ * func_00115F78 — newlib's free (newlib libc/stdlib/malloc.c: free), with an
+ * SCE lock pair added.
+ *
+ * @ptr: the block to release (0 is passed through to _free_r).
+ *
+ * Newlib's free is the bare cover `_free_r(_REENT, aptr);`; this build
+ * brackets it with __malloc_lock / __malloc_unlock (func_00116300 /
+ * func_00116360). Name kept (never rename a matched function).
+ *
+ * MATCHED on the sn2952 arm (held SN 2.95.2 v2.73a cc1, RULING #12157;
+ * selector row in tools/ee/sn2952_functions.txt): the ROM saves $16/$17/$31
+ * with TImode `sq` (FACT #12152). Task #2498, RULING #13179. No device.
+ *
+ * Source: OpenRAC/rac2-decomp @8b26d8adeb0b5515a962f83230df4bf909fd0cf5
+ * (GPL-3.0, adopted with the authors' permission per RULING #10405; blob
+ * identical at the audit pin b2a35115), src/core/00115F78.c, func_00115F78
+ * (same address on their v2.00 build; author commit 0f740805, Louis-Philippe
+ * Le Sieur). Newlib origin: newlib/libc/stdlib/malloc.c, free, at
+ * newlib-cygwin tag newlib-2000-02-17 — no in-file copyright notice at that
+ * tag or at HEAD; THIRD-PARTY.md carries the applicable COPYING.NEWLIB
+ * section. ADAPTED: callee func_00116E10 spelled _free_r (our symbol for
+ * 0x116E10); their `__asm__("func_0011630x")` label-bound lock prototypes
+ * dropped for the shared declarations above (same symbols); `int` written
+ * `s32`; their `void *` D_00133E74 and callee parameters written as this
+ * unit's s32 model; parameter named ptr for their arg0. Statements are theirs.
+ */
+#if !defined(TARGET_NATIVE) && !defined(SN2952_func_00115F78)
+SN2952_SLOT(func_00115F78);
+#else
+void func_00115F78(s32 ptr) {
+    func_00116300(D_00133E74);
+    _free_r(D_00133E74, ptr);
+    func_00116360(D_00133E74);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", _mbtowc_r);
 
