@@ -758,3 +758,4 @@ usa text/235FE8 func_00346AF8 S136EXTRA=-fno-strict-aliasing
 usa text/235FE8 func_00338F88
 usa text/235FE8 func_0033D070
 usa text/235FE8 func_003380B8 S136EXTRA=-fno-strict-aliasing
+usa text/178E88 InitScreenGeometry

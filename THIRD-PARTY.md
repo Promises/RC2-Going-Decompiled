@@ -520,6 +520,19 @@ src/assembly/sdk/library/_getRef0.c", and upstream's removed draft
 "Lombyte (MIT)" below covers it (RULING #12108); the doc comment carries the
 notice verbatim.
 
+### OpenRAC rac2-decomp at 5776dcc3, text/178E88 Window X screen-geometry bodies (GPL-3.0)
+
+One C function body is taken from OpenRAC's `rac2-decomp`,
+<https://github.com/OpenRAC/rac2-decomp> at commit
+`5776dcc35045fb2320610edd1d2db4fa7660ef37` (root `LICENSE`: GNU General Public
+License, version 3), with the authors' permission (RULING #10405/#12108), task
+#2503. It is adapted, with every respelling named in the function's `Source:`
+line.
+
+| Here | Upstream file | Upstream name |
+|---|---|---|
+| `InitScreenGeometry` in `going-decompiled/src/usa/text/178E88.cpp` (adapted: their `D_001A6480` view as `g_gsScreenContextDims` over `g_gsScreenContext`, their `D_001A7340` as the `g_screenExtent` view over `g_screenWidth` with sda respelled `section(".sdata")`, their `D_001B9040` as the cast `(ScreenState *)(g_sceneActorMobys + 0x674)`, their `func_00283CE0` as `IntToFloat`, `int`/`short`/`float` spelled `s32`/`s16`/`f32`; s136os arm at the unit's pinned S136EXTRA) | `src/game/00274128.c` | `func_0027A9F0` (author commit `7dc80be1`, bigbeno37) |
+
 ### OpenRAC rac2-gc-decomp at 96927f87, Lombyte-origin body (GPL-3.0)
 
 One more C function body is taken from OpenRAC's `rac2-gc-decomp` at commit

@@ -985,56 +985,117 @@ void UpdateOcclusionVisMask(void) {
     }
 }
 
+/* Screen-geometry typed views shared by InitScreenGeometry, func_0027B858 and
+ * RecomputeScreenViewportFromGsContext (RULING #13168 asm-label views; upstream
+ * rac2-decomp 00274128.c / 0027B858.c spell these D_001A6480, D_001A7340 and
+ * D_001B9040):
+ *  - ScreenExtent at g_screenWidth (0x1A7340; x arm: upstream's sda attribute
+ *    respelled section(".sdata")): at -G8 cc1 emits each field store as a
+ *    one-insn bare-symbol macro and GNU as expands it to the ROM's adjacent
+ *    `lui $at,%hi(sym); sw %lo(sym)($at)` pair - the 32-byte object is not
+ *    small data, so cc1's own end-of-TU `.extern g_screenWidth, 32` (with the
+ *    complete-object view) pins the ABSOLUTE expansion.
+ *  - ScreenDimensions at g_gsScreenContext (0x1A6480): no attribute; the
+ *    0x154-byte object is not small, so cc1 itself emits the ROM's absolute
+ *    `lui $17,%hi(g_gsScreenContext); addiu $17,%lo` pair for &dimensions.
+ *  - the camera/projection scratch (upstream D_001B9040, 0x1B8FC0) needs no
+ *    device: (ScreenState *)(g_sceneActorMobys + 0x674) through the file-scope
+ *    u8[] base above, whose incomplete-array size keeps the +0x674 absolute. */
+typedef struct {
+    /* g_screenWidth, g_screenHeight, g_screenCenterDefaultX/Y (0x1A7340..C) */
+    s32 width, height, half_width, half_height;
+    /* g_gsPixelOffsetX, g_gsPixelOffsetY, D_1A7358, D_1A735C: the 12.4 GS-window
+     * edges centred on 0x800 */
+    s32 left, top, right, bottom;
+} ScreenExtent;
+typedef struct { char pad[0x150]; s16 width, height; } ScreenDimensions;
+typedef struct {
+    char pad[0xA0];
+    f32 fA0, fA4;
+    char gap[8];
+    f32 fB0;                          /* +0xB0: g_cameraProjScale */
+    char gapB4[0x14C];
+    f32 f200, f204, f208, f20C;
+    char gap210[8];
+    f32 f218, f21C;
+    char gap220[8];
+    f32 f228, f22C;
+    s32 color[3];                     /* tail unused by these bodies */
+} ScreenState;
+#ifndef TARGET_NATIVE
+extern ScreenExtent g_screenExtent __asm__("g_screenWidth") __attribute__((section(".sdata")));
+extern ScreenDimensions g_gsScreenContextDims __asm__("g_gsScreenContext");
+#else
+#define g_screenExtent (*(ScreenExtent *)&g_screenWidth[0])
+#define g_gsScreenContextDims (*(ScreenDimensions *)&g_gsScreenContext[0])
+#endif
+
 /* InitScreenGeometry: one-time screen-geometry + projection-viewport init from
  * the GS screen context pixel dims (g_gsScreenContext +0x150 width / +0x152
  * height). Sibling of RecomputeScreenViewportFromGsContext (same idioms): publishes width/height + the
- * two half-extents to g_screenWidth / g_screenHeight[0..2], the four 12.4
- * fixed-point GS-window offsets (centred on 0x800) to g_gsPixelOffsetX[0] /
- * g_gsPixelOffsetY[0..2], and the float viewport scale + half-extents into the
- * camera/projection scratch (g_sceneActorMobys+0x674 = D_1B8FC0). Unlike
- * RecomputeScreenViewportFromGsContext it also seeds the fixed projection constants (+0xA0 32, +0xA4
- * 2^20, +0x1DC 2^19, +0x1E8 255) and does NOT call func_0027A550. The matching
- * build keeps the asm. */
-/* TODO(match) t493: sdk29 0.00% / engine96 26.37% (unit objdiff, objdiff_build.sh +
- * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
- * every other remaining arm). Residual on the better arm (engine96): MACRO-AT (first differing
- * insn: ROM `addiu a2,zero,2048` vs built `lui v0,0x0  [HI16 0x001A6480]`). Levers:
- * cc1-small/absolute globals model RUN: 34.69% (engine96); engine96 with sched1 MEASURED (flag not
- * landed): 0.00%. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", InitScreenGeometry);
+ * two half-extents to the extent record at g_screenWidth (g_screenWidth /
+ * g_screenHeight / g_screenCenterDefaultX / g_screenCenterDefaultY), the four 12.4
+ * fixed-point GS-window offsets (centred on 0x800) to g_gsPixelOffsetX /
+ * g_gsPixelOffsetY / D_1A7358 / D_1A735C, and the float viewport scale +
+ * half-extents into the camera/projection scratch (g_sceneActorMobys+0x674 =
+ * D_1B8FC0). Unlike RecomputeScreenViewportFromGsContext it also seeds the fixed projection
+ * constants (+0xA0 32, +0xA4 2^20, +0x21C 2^19, +0x228 255) and does NOT call
+ * func_0027A550. No params, no return; the height operand of its second
+ * IntToFloat call is re-read from the context, as the ROM does.
+ *
+ * MATCHED on the s136os arm (SN 2.95.3 v1.36 cc1plus -fopt-stack, the unit's
+ * -fno-gcse pin unchanged; row in tools/ee/s136os_functions.txt), spliced over
+ * S136OS_SLOT by tools/ee/s136os_splice.sh: `built 83 words = ROM 83 words`,
+ * byte-identical .rom (landing_gate usa --strict). There is no asm fallback: a
+ * build that skips the splice drops the function. On native it is plain C.
+ * Devices: the g_screenExtent .sdata view above (the x arm); removing the
+ * section attribute alone makes cc1 emit its own 2-insn absolute stores in a
+ * GPR (no $at macro pair) and the words diverge. Supersedes the t493 #else
+ * (sdk29 0.00% / engine96 26.37%, unit objdiff).
+ *
+ * Source: OpenRAC/rac2-decomp @5776dcc35045fb2320610edd1d2db4fa7660ef37
+ * (GPL-3.0, adopted with the authors' permission per RULING #10405/#12108),
+ * src/game/00274128.c, func_0027A9F0 (author commit 7dc80be1, bigbeno37,
+ * 2026-10-29). ADAPTED: our spellings by address - their D_001A6480 view as
+ * g_gsScreenContextDims over g_gsScreenContext, their D_001A7340 as the
+ * g_screenExtent view over g_screenWidth with sda respelled section(".sdata")
+ * (the x arm), their D_001B9040 as the cast (ScreenState
+ * *)(g_sceneActorMobys + 0x674) (same address 0x1B8FC0), their func_00283CE0
+ * as IntToFloat; int/short/float spelled s32/s16/f32. Statements as upstream
+ * wrote them. (task #2503; audit NOTE #13181.) */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_InitScreenGeometry)
+S136OS_SLOT(InitScreenGeometry);
 #else
 void InitScreenGeometry(void) {
-    u8 *vp = g_sceneActorMobys + 0x674; /* D_1B8FC0 camera/projection scratch */
-    s32 w16 = *(s16 *)(g_gsScreenContext + 0x150);
-    s32 h16 = *(s16 *)(g_gsScreenContext + 0x152);
-    s32 halfW = w16 >> 1;
-    s32 halfH = h16 >> 1;
-    f32 wHalf, hHalf;
+    ScreenDimensions *dimensions = &g_gsScreenContextDims;
+    ScreenState *view = (ScreenState *)(g_sceneActorMobys + 0x674);
+    s16 width = dimensions->width;
+    s16 height = dimensions->height;
+    s32 half_width = width >> 1;
+    s32 half_height = height >> 1;
+    f32 half_height_f;
 
-    g_screenWidth[0] = w16;
-    g_screenHeight[0] = h16;
-    g_screenHeight[1] = halfW;   /* g_screenCenterDefaultX 0x1A7348 */
-    g_screenHeight[2] = halfH;   /* g_screenCenterDefaultY 0x1A734C */
-    g_gsPixelOffsetX[0] = (0x800 - halfW) << 4;
-    g_gsPixelOffsetY[0] = (0x800 - halfH) << 4;
-    g_gsPixelOffsetY[1] = (halfW + 0x800) << 4;   /* scissor max X 0x1A7358 */
-    g_gsPixelOffsetY[2] = (halfH + 0x800) << 4;   /* scissor max Y 0x1A735C */
+    g_screenExtent.width = width;
+    g_screenExtent.height = height;
+    g_screenExtent.half_width = half_width;
+    g_screenExtent.half_height = half_height;
+    g_screenExtent.left = (2048 - half_width) << 4;
+    g_screenExtent.top = (2048 - half_height) << 4;
+    g_screenExtent.right = (half_width + 2048) << 4;
+    g_screenExtent.bottom = (half_height + 2048) << 4;
 
-    wHalf = IntToFloat(w16) * 0.5f;
-    hHalf = IntToFloat(h16) * 0.5f;
-
-    *(f32 *)(vp + 0xA0)  = 32.0f;        /* 0x42000000 */
-    *(f32 *)(vp + 0xA4)  = 1048576.0f;   /* 0x49800000 */
-    *(f32 *)(vp + 0xB0)  = 0.62f;        /* 0x3F1EB852 - g_cameraProjScale init */
-    *(f32 *)(vp + 0x200) = wHalf;
-    *(f32 *)(vp + 0x204) = hHalf;
-    *(f32 *)(vp + 0x208) = wHalf * 4.0f;
-    *(f32 *)(vp + 0x20C) = hHalf * 4.0f;
-    *(s32 *)(vp + 0x218) = 0;
-    *(f32 *)(vp + 0x21C) = 524288.0f;    /* 0x49000000 */
-    *(f32 *)(vp + 0x228) = 255.0f;       /* 0x437F0000 */
-    *(s32 *)(vp + 0x22C) = 0;
+    view->fA0 = 32.0f;
+    view->fA4 = 1048576.0f;
+    view->fB0 = 0.62f;
+    view->f200 = IntToFloat(width) * 0.5f;
+    half_height_f = IntToFloat(dimensions->height) * 0.5f;
+    view->f204 = half_height_f;
+    view->f208 = view->f200 * 4.0f;
+    view->f20C = half_height_f * 4.0f;
+    view->f218 = 0.0f;
+    view->f21C = 524288.0f;
+    view->f228 = 255.0f;
+    view->f22C = 0.0f;
 }
 #endif
 
