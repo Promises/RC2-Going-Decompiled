@@ -3941,23 +3941,33 @@ s32 func_002DC520(MenuWidget *obj) {
 #undef DRAW_RIGHT_LABEL
 #endif
 
+/* Dead debris ahead of func_002DC6C8: `sw $11,0x40($3); nop; addiu $sp,$sp,0x20;
+ * nop` after func_002DC520's jr and its pad. No prologue and no jr of its own,
+ * and no jal, j, branch, data word or hi/lo in the ROM names any of the four
+ * words, so it is not a function body and cannot be C. Split off by a
+ * symbol_addrs size pin; the data word at 0x25E610 points past it, at 0x2DC6C8
+ * (task #2479). */
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DC6B8);
+
 /* Build the galactic-map level-select list: for each available level (from
- * g_anAvailableLevelOrder, up to 0x1C entries) fill a 0xC-stride list entry at
- * g_pLevelSelectListEntries+0xA8 (icon/name from the D_262BA0 caption table,
+ * g_anAvailableLevelOrder, up to 0x1C entries) fill a 0xC-stride list entry in
+ * g_levelSelectListItems (icon/name from the D_262BA0 caption table,
  * sub-mode 3, target screen &D_25E660); zero the entry past the last. Then mark
  * the widget dirty (obj->0x30 |= 0x8000), clear obj->0x40, and scan the active
- * level-id list (D_1AA510) for the current map level (g_mapVertexData+0x230),
+ * level-id list (g_pLevelOrder) for the current map level (g_mapVertexData+0x230),
  * storing its row into obj->0x40. Returns 0.
- * Wall: leading splat mis-split fragment + draw-loop schedule. Bare. */
+ * The init slot of the level-select widget D_0025E608 (data word 0x25E610);
+ * until task #2479 this body sat under func_002DC6B8 behind 4 words of debris
+ * (split above). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DC6B8);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DC6C8);
 #else
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 35.88% / engine96 24.88%; better arm sdk29; 67 differing
  * rows on it, class STRUCTURAL; first differing insn: ROM `sw t3,64(v1)` vs
  * `lui t0,0x0  [HI16 0x00139948]`. Not iterated in t495. */
     /* TODO(match): functional equivalent - not byte-exact. */
-s32 func_002DC6B8(MenuWidget *obj) {
+s32 func_002DC6C8(MenuWidget *obj) {
     extern s32 g_anAvailableLevelOrder[];
     extern u8  D_262BA0[];                /* level caption table (stride 0xC) */
     extern u8  g_pLevelSelectListEntries[];
