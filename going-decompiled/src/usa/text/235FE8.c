@@ -11611,82 +11611,140 @@ void func_00346AF8(void *w, s32 flags) {
 }
 #endif
 
-/* func_00346CD8: d-pad + confirm handler for the weapon-select screen `w`.
- * `flags` (held-button bits) drives the single-axis cursor at +0x4FC over the
- * 3-entry D_1AA8B8 table: up (0x1000) decrements clamped at 0 (and resets the
- * +0x500 sub-state, sets +0x508=3); down (0x4000) just resets +0x500/+0x508;
- * left (0x8000) decrements wrapping to 2; right (0x2000) increments wrapping to
- * 0. Confirm (0x40): if the cursor's entry is owned, play the accept sound and
- * toggle it as the selected weapon (g_menuScreenBlock+0x44) while refreshing the
- * caption id D_1ADAF0; otherwise play the deny sound. Every path then refreshes
- * +0x504 = current entry and, when owned, the caption id from
- * g_weaponTable[g_itemEquippedSlot[entry]*0xE0 + 0x6]. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00346CD8);
+/* func_00346CD8: d-pad + confirm handler for state 1 of the map screen `w`
+ * (GuiMapScreenTick's case 1), a single row of three entries from the label
+ * table D_1AA8B8.
+ *
+ * w        the map screen; its cursor block sits at +0x4FC (column, row,
+ *          selected item, sub-state).
+ * buttons  pad bits: up 0x1000, down 0x4000, left 0x8000, right 0x2000,
+ *          confirm 0x40. No return.
+ *
+ * Up decrements the column (clamped at 0), resets the row to 0 and sets
+ * sub-state 3. Down resets the row to 0 and the sub-state to 0. Left and right wrap the
+ * column over 0..2. Confirm on an owned entry plays the accept cue, sets the
+ * caption id D_1ADAF0 from the PREVIOUSLY selected item's weapon record (the
+ * +0x504 value, not the new entry: the ROM does this, line for line), and
+ * toggles the entry in g_menuScreenBlock+0x44; on an empty or unowned entry it
+ * plays the deny cue. Every path then stores the cursor's item at +0x504 and,
+ * when owned, refreshes the caption id from that item's equipped weapon
+ * record (nameStringId, +0x6 of the 0xE0-byte g_weaponTable row).
+ *
+ * MATCHED on the s136os arm with a per-function override (task #2468):
+ * row `usa text/235FE8 func_00346CD8 S136EXTRA=-fno-strict-aliasing` in
+ * tools/ee/s136os_functions.txt, i.e. the unit's -fno-gcse -fno-strict-aliasing
+ * with gcse ON (RULING #12178). Under the unit's own flags (gcse off) the body
+ * builds shorter than the ROM's 134 words (FACT #13097: 129), so the override
+ * is load-bearing. Two EE-only spellings, both emitting nothing and each
+ * load-bearing (removal probes, task #2468):
+ *  - ADDRESSING-MODEL DEVICE (RULING #8620), as func_00343E80 above:
+ *    g_inventoryOwned is read through g_inventoryOwnedLa, an asm-label alias
+ *    declared 8 bytes, so cc1 emits the one-insn `la` and the file-scope
+ *    `.extern g_inventoryOwned, 16` makes the assembler expand it absolute
+ *    (the ROM's adjacent lui/addiu after the `beqz` slot). Through the
+ *    unit's unsized g_inventoryOwned[] cc1 splits %hi/%lo itself and hoists
+ *    the lui into that slot: 133 words, SHORTER. Upstream gets the same `la`
+ *    from `section(".sdata")` on its declaration; on a redeclaration of our
+ *    g_inventoryOwned cc1 ignores that attribute (measured: still split).
+ *  - g_mapRowLabels, an asm-label alias typing D_1AA8B8 as MapRowLabel[]
+ *    (upstream's typed SelectionEntry array). Indexing the unit's u8
+ *    D_1AA8B8 through a cast instead swaps the registers of the two row
+ *    lookups: 10 words differ at 0x346DD4 and 0x346E78, same length.
+ *  Native reads both through macros over the real symbols.
+ * GUARD: compiled alone by SN 2.95.3 v1.36 -fopt-stack and spliced over the
+ * S136OS_SLOT line (tools/ee/s136os_splice.sh); plain C on native.
+ * Source: OpenRAC/rac2-decomp @b2a35115e0cf580a1fdab8dd1071b157799e590e,
+ * src/us2/game/00346CD8-pad-g8.c, func_US2_00346CD8 (author commit 13388073,
+ * Flavius, "wip e1"; GPL-3.0, OpenRAC contributors' own C, adopted with the
+ * authors' permission, RULINGs #10405 and #12108). ADAPTED: (1) symbols by our
+ * names at the same ROM addresses: func_002E5E58 -> PlayGlobalSound (the
+ * unit's s32 prototype; theirs is void), D_001A7AF8 -> g_inventoryOwned (as
+ * g_inventoryOwnedLa, above), D_00139568 -> g_itemEquippedSlot, D_00239BA0 ->
+ * g_weaponTable, D_001ADB10 -> D_1ADAF0, D_001AA898 -> D_1AA8B8 (as
+ * g_mapRowLabels, above), D_001F2840 -> g_menuScreenBlock; (2) types: their
+ * SelectionEntry/SelectionOwner/EquipmentState are MapRowLabel/MapRowCursor/
+ * MapRowMenuBlock here, with the field `v` named `field`; their MaterialRecord
+ * is the unit's GuiWeaponTableEntry (field `material` = nameStringId);
+ * g_itemEquippedSlot, g_weaponTable and g_menuScreenBlock keep the unit's u8
+ * declarations and are reached through casts; (3) their `section(".sdata")`
+ * and `sda` attributes are dropped: the alias above replaces the first, and
+ * the unit's file-scope `extern s32 D_1ADAF0` already gives the ROM's
+ * %gp_rel store; (4) our signature (void *w, s32 buttons) with a local cast
+ * to the owner view, as the unit prototypes it; (5) their MATERIAL macro is
+ * MAP_ROW_CAPTION. Control flow and statement order are theirs. */
+typedef struct { s16 field[5]; } MapRowLabel;  /* 10-byte D_1AA8B8 row; item id at +0x6 */
+typedef struct { u8 _pad[0x4FC]; s32 column, row, selected, state; } MapRowCursor;
+typedef struct { u8 _pad[0x44]; s32 selected; } MapRowMenuBlock;  /* g_menuScreenBlock view */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00346CD8)
+S136OS_SLOT(func_00346CD8);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00346CD8, unit objdiff): 13.55%,
-   162/186 insns differ. Residual: UNKNOWN-addiu + movn/movz, gp/abs-mixed symbol (first differing insn: 'addiu sp, sp, -0x20' vs 'addiu sp, sp, -0x30').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
+#ifndef TARGET_NATIVE
+extern u8 g_inventoryOwnedLa[8] __asm__("g_inventoryOwned");
+extern MapRowLabel g_mapRowLabels[] __asm__("D_1AA8B8");
+#else
+#define g_inventoryOwnedLa g_inventoryOwned
 extern u8 D_1AA8B8[];
+#define g_mapRowLabels ((MapRowLabel *)D_1AA8B8)
+#endif
 extern u8 g_menuScreenBlock[];
 extern s32 PlayGlobalSound(s32 id, s32 a, s32 b);
-void func_00346CD8(void *w, s32 flags) {
-    s32 entry;
+#define MAP_ROW_CAPTION(id) \
+    ((GuiWeaponTableEntry *)(g_itemEquippedSlot[id] * 224 + (char *)g_weaponTable))->nameStringId
+void func_00346CD8(void *w, s32 buttons)
+{
+    MapRowCursor *o = (MapRowCursor *)w;
+    int id, column;
 
-    if (flags & 0x1000) {          /* up: decrement, clamp at 0 */
-        s32 v;
+    if (buttons & 0x1000) {
+        int next;
+
         PlayGlobalSound(3, 0, 0);
-        *(s32 *)((char *)w + 0x500) = 0;
-        *(s32 *)((char *)w + 0x508) = 3;
-        v = *(s32 *)((char *)w + 0x4FC) - 1;
-        if (v < 0) {
-            v = 0;
-        }
-        *(s32 *)((char *)w + 0x4FC) = v;
-    } else if (flags & 0x4000) {   /* down: reset sub-state only */
+        column = o->column;
+        next = column - 1;
+        o->row = 0;
+        o->state = 3;
+        if (next < 0)
+            next = 0;
+        o->column = next;
+    } else if (buttons & 0x4000) {
         PlayGlobalSound(3, 0, 0);
-        *(s32 *)((char *)w + 0x500) = 0;
-        *(s32 *)((char *)w + 0x508) = 0;
-    } else if (flags & 0x8000) {   /* left: decrement, wrap to 2 */
-        s32 v;
+        o->row = 0;
+        o->state = 0;
+    } else if (buttons & 0x8000) {
         PlayGlobalSound(3, 0, 0);
-        v = *(s32 *)((char *)w + 0x4FC) - 1;
-        if (v < 0) {
-            v = 2;
-        }
-        *(s32 *)((char *)w + 0x4FC) = v;
-    } else if (flags & 0x2000) {   /* right: increment, wrap to 0 */
-        s32 v;
+        column = o->column;
+        column--;
+        o->column = column;
+        if (column < 0)
+            o->column = 2;
+    } else if (buttons & 0x2000) {
         PlayGlobalSound(3, 0, 0);
-        v = *(s32 *)((char *)w + 0x4FC) + 1;
-        if (v >= 3) {
-            v = 0;
-        }
-        *(s32 *)((char *)w + 0x4FC) = v;
-    } else if (flags & 0x40) {     /* confirm: toggle-select the entry */
-        entry = *(s16 *)&D_1AA8B8[*(s32 *)((char *)w + 0x4FC) * 0xA + 0x6];
-        if (entry != 0 && g_inventoryOwned[entry] != 0) {
-            s32 slot = g_itemEquippedSlot[*(s32 *)((char *)w + 0x504)];
+        column = o->column;
+        column++;
+        o->column = column;
+        if (column >= 3)
+            o->column = 0;
+    } else if (buttons & 0x40) {
+        id = g_mapRowLabels[o->column].field[3];
+        if (id != 0 && g_inventoryOwnedLa[id] != 0) {
             PlayGlobalSound(4, 0, 0);
-            D_1ADAF0 = *(s16 *)&g_weaponTable[slot * 0xE0 + 0x6];
-            if (*(s32 *)((char *)g_menuScreenBlock + 0x44) == entry) {
-                *(s32 *)((char *)g_menuScreenBlock + 0x44) = 0;
-            } else {
-                *(s32 *)((char *)g_menuScreenBlock + 0x44) = entry;
-            }
+            D_1ADAF0 = MAP_ROW_CAPTION(o->selected);
+            if (((MapRowMenuBlock *)g_menuScreenBlock)->selected == id)
+                ((MapRowMenuBlock *)g_menuScreenBlock)->selected = 0;
+            else
+                ((MapRowMenuBlock *)g_menuScreenBlock)->selected = id;
         } else {
             PlayGlobalSound(5, 0, 0);
         }
     }
-
-    /* tail (all paths): refresh the current entry + caption id */
-    entry = *(s16 *)&D_1AA8B8[*(s32 *)((char *)w + 0x4FC) * 0xA + 0x6];
-    *(s32 *)((char *)w + 0x504) = entry;
-    if (entry != 0 && g_inventoryOwned[entry] != 0) {
-        D_1ADAF0 = *(s16 *)&g_weaponTable[g_itemEquippedSlot[entry] * 0xE0 + 0x6];
+    {
+        int selected = g_mapRowLabels[o->column].field[3];
+        o->selected = selected;
+        if (selected != 0 && g_inventoryOwnedLa[selected] != 0)
+            D_1ADAF0 = MAP_ROW_CAPTION(selected);
     }
 }
+#undef MAP_ROW_CAPTION
 #endif
 
 /* GuiMapScreenTick: per-frame tick for the map screen `w`. Latches the current

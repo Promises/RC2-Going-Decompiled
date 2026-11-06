@@ -585,6 +585,18 @@
     their typed grid array as EE-only asm-label aliases, `sda` dropped. Per-
     function `S136EXTRA=-fno-strict-aliasing` override (RULING #12178,
     task #2467).
+  - **`func_00346CD8`** (`0x00346CD8`, the map screen's state-1 row input) in
+    `going-decompiled/src/usa/text/235FE8.c`, from
+    `src/us2/game/00346CD8-pad-g8.c` (`func_US2_00346CD8`, author commit
+    `13388073`, Flavius; the file carries no notice of its own). ADAPTED: our
+    symbols, `D_1AA8B8` and `g_inventoryOwned` through EE-only asm-label
+    aliases (a typed row array, RULING #13168, and the unit's
+    `g_inventoryOwnedLa` `la` alias, RULING #8620) in place of their typed
+    array and `section(".sdata")`, their `sda` dropped, their struct views
+    renamed and their material record read as the unit's
+    `GuiWeaponTableEntry`; our signature with a local cast. Per-function
+    gcse-ON override (RULING #12178, task #2468, from audit NOTE #13103 /
+    FACT #13097).
   - **`func_L24_0034D598`** (level program 24, Ship Shack, at `0x0034D598`:
     builds the level-ordered menu rows and selects the current owner's entry)
     in `going-decompiled/levels/usa/L24/src/func_L24_0034D598.c`, the first

@@ -351,6 +351,20 @@ Both files carry this notice, reproduced verbatim:
     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
     SOFTWARE.
 
+### OpenRAC rac2-decomp at b2a35115 (GPL-3.0)
+
+One C function body is taken from OpenRAC's `rac2-decomp`,
+<https://github.com/OpenRAC/rac2-decomp> at commit
+`b2a35115e0cf580a1fdab8dd1071b157799e590e` (root `LICENSE`: GNU General Public
+License, version 3; the file carries no notice of its own), with the authors'
+permission (RULINGs #10405 and #12108), task #2468:
+
+| Here | Upstream file | Upstream name |
+|---|---|---|
+| `func_00346CD8` in `going-decompiled/src/usa/text/235FE8.c` (adapted: our symbol spellings, two through EE-only asm-label aliases replacing their typed array and `section(".sdata")`; their `sda` dropped; struct views renamed, their material record as our `GuiWeaponTableEntry`; signature ours with a local cast) | `src/us2/game/00346CD8-pad-g8.c` (author commit `13388073`, Flavius) | `func_US2_00346CD8` |
+
+The GPL-2.0-or-later note in the section "OpenRAC rac2-gc-decomp (GPL-3.0)" above applies to this body too.
+
 ### Lombyte (MIT)
 
 Seven C function bodies are taken from Lombyte,
