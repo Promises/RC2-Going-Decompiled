@@ -196,7 +196,7 @@ __asm__(".extern g_audioStereoMode, 16");
 __asm__(".extern g_bProgressiveScan, 16");
 __asm__(".extern g_currentLanguage, 16");
 __asm__(".extern g_equippedArmor, 16");
-__asm__(".extern g_inventoryOwned, 16"); /* func_00343E80 only: see its g_inventoryOwnedLa */
+__asm__(".extern g_inventoryOwned, 16"); /* func_00343E80 and func_00346878: see their doc comments */
 __asm__(".extern g_gameTime, 16");
 __asm__(".extern g_mapCurrentLevel, 16");
 __asm__(".extern g_miscExtras, 16");
@@ -11433,8 +11433,10 @@ void GuiMapScreenInit(void *w, GuiPool *pool) {
  * g_menuTransitionMode+0x24;
  * (4) their `.sdata` g_inventoryOwned carried on the EE-only alias above;
  * their `sda` attribute on D_001ADB10 dropped (the unit's -G8 already makes
- * D_1ADAF0 gp-relative); (5) our PlayGlobalSound(s32, s32, s32) prototype.
- * Control flow and expressions are theirs.
+ * D_1ADAF0 gp-relative); (5) our PlayGlobalSound(s32, s32, s32) prototype;
+ * (6) their char[] D_00239BA0 read as our u8[] g_weaponTable. The g_gridSlots
+ * view is RULING #13168's EE-only asm-label typed view (24 bytes differ
+ * without it). Control flow and expressions are theirs.
  */
 #if !defined(TARGET_NATIVE) && !defined(S136OS_func_00346878)
 S136OS_SLOT(func_00346878);
