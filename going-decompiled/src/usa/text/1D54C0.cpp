@@ -4130,7 +4130,9 @@ s32 func_002DC8A8(void) {
  *     cross-jump to one GetLocalizedString call (NOTE #12323: 138 -> 47).
  *   - `layout` in an inner block: cc1 then reuses its stack slot for the
  *     colour temp at sp+0x20, as the ROM does (NOTE #12323).
- *   - DC940_RECT_X2, the OFFSET-VIEW device (below): 39/156 without it.
+ *   - DC940_RECT_X2, the OFFSET-VIEW device (below, RULING #12394): without
+ *     it the splice refuses on length (155 words plain, 157 with
+ *     `.extern D_1ABBF0, 16`; the gate pipeline, task #2463).
  *   - DC940_COLOR_PIN, the EE_REG("$2") pin on the colour value: 7/156.
  *   - one empty volatile barrier between the c1 and c2 colour stores gives
  *     the ROM's store order c3,c0,c1,c2: 4/156 with no barrier (the pin
@@ -4145,7 +4147,8 @@ s32 func_002DC8A8(void) {
  * macro (`lui $5; lw $5,%lo(D_1ABBEC)($5)`), never gp-relatively; x1
  * (D_1ABBE8) is a true -G8 small-data word. At FILE SCOPE, outside the guard,
  * so the unit's 2.9 TU sees them before the spliced block too. D_1ABBEC's
- * size also covers DC940_RECT_X2's read of D_1ABBEC+4. */
+ * 16-byte size also makes gas emit DC940_RECT_X2's read of D_1ABBEC+4 as an
+ * absolute lui/lw pair rather than gp-relatively. */
 #ifndef TARGET_NATIVE
 __asm__(".extern D_1ABBEC, 16");
 __asm__(".extern D_1ABBF4, 16");
@@ -4189,15 +4192,25 @@ typedef struct CardMsgBoxColors { s32 c[4]; } CardMsgBoxColors;
 extern s32 g_rainFallAccel;
 #define s_cardMsgColorsInit (*(s32 *)((u8 *)&g_rainFallAccel + 0x50))
 #define s_cardMsgColors (*(CardMsgBoxColors *)((u8 *)&g_rainFallAccel + 0x40))
-/* OFFSET-VIEW DEVICE (EE only; NOT yet ruled, see task #2424's report): the
- * x2 word D_1ABBF0 is read as element 1 of D_1ABBEC, i.e. `lw $6,D_1ABBEC+4`.
- * cc1 2.95 costs a symbol+offset load at 2 insns even when the symbol is
- * small (simple_memory_operand never accepts a CONST address), so reorg does
- * not take it for func_0027F168's jal slot and takes the gp-relative
- * D_1ABBE8 load instead, as the ROM does. Spelled D_1ABBF0, cc1 costs it at
- * one insn, puts it in the slot, and asm_unit hoists the 2-insn macro back
- * out, leaving a nop: 39/156. The bytes and the address are D_1ABBF0's; the
- * relocation names D_1ABBEC with addend 4 where splat's .s names D_1ABBF0. */
+/* OFFSET-VIEW DEVICE (RULING #12394; EE arm only, the native arm below names
+ * D_1ABBF0 directly). A = D_1ABBEC (rect y1), B = D_1ABBF0 (rect x2), offset
+ * +4: B is read as `(&D_1ABBEC)[1]`, so cc1 prints `lw $6,D_1ABBEC+4`.
+ * The file-scope `.extern D_1ABBEC, 16` above makes gas expand that into the
+ * ROM's absolute same-register pair at 0x2DCB1C/0x2DCB20,
+ * `lui $6,%hi(..); lw $6,%lo(..)($6)`: R_MIPS_HI16 + R_MIPS_LO16 against
+ * D_1ABBEC with addend 4, where splat's .s names D_1ABBF0 with addend 0. The
+ * address (0x1ABBF0) and the bytes are the same; only the relocation's
+ * symbol name differs.
+ * Why it is load-bearing: cc1 2.95 costs a symbol+offset load at 2 insns
+ * even for a small symbol (simple_memory_operand never accepts a CONST
+ * address). So reorg does not take it for func_0027F168's jal slot and takes
+ * the gp-relative D_1ABBE8 load, as the ROM does (0x2DCB28).
+ * The two other spellings fail the splice's length check (ROM 156 words):
+ *   - plain `D_1ABBF0`: a -G8 small word costed at 1 insn. cc1 puts it in
+ *     the jal slot as a one-word gp-relative load, 155 words.
+ *   - `D_1ABBF0` plus `.extern D_1ABBF0, 16`: still costed at 1 insn and put
+ *     in the slot, but gas's 2-insn macro does not fit there, so it is
+ *     hoisted out and the slot gets a nop, 157 words. */
 #define DC940_RECT_X2 ((&D_1ABBEC)[1])
 /* REGISTER-PIN DEVICE (RULING #8598): the ROM loads the colour into $2 and
  * the cache flag's 1 into $3; cc1 colours them the other way round. */
