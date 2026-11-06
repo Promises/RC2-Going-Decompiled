@@ -741,8 +741,10 @@
     callee spellings (the flare block read through a struct view of our
     `g_pLensFlareSource`, `g_cameraPos` through an unaligned view, and
     upstream's `sda` screen-centre array as one RULING #8620 + #12316
-    `.sdata` extern device spanning our four screen scalars, EE arm only);
-    struct fields renamed (timer->intensity, texture->texId,
+    `.sdata` extern device spanning our four screen scalars, EE arm only,
+    with the native arm reading the true `g_nGsPixelOffsetX`/`g_nGsPixelOffsetY`,
+    RULING #13197); the 64-bit `long` written `s64` (RULING #13197); struct
+    fields renamed (timer->intensity, texture->texId,
     interpolation->offset); the statements and locals are upstream's.
 
 - **Forja contributors** (MIT, © 2026 Forja contributors), via OpenRAC

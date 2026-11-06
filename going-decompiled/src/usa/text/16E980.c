@@ -2917,16 +2917,23 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/16E980", func_0
  * scalars through the device above; (2) our callee spellings: func_00282E48
  * = Vec3DistVu0 (0x2837F8), func_00283CE0 = IntToFloat (0x284690),
  * func_00279BD8 = func_0027A138 (0x27A138), func_0027C878 = GetUiTextureTex0
- * (0x27CED8; upstream's `long` return kept - `long` is the 64-bit EE type),
+ * (0x27CED8; upstream's 64-bit `long` return written s64, RULING #13197a),
  * func_00282C48 = GetFloatAbs
  * (0x2835F8), func_00283CF0 = FloatToInt (0x2846A0), func_0027E018 =
  * DrawGlyphQuad (0x27E698; ADAPTED: its last two args are declared u64, not
  * upstream's `long`, to agree with the unit's own definition in
  * text/178E88.cpp - on EE u64 is unsigned long, the same 64-bit convention,
  * so the call sites compile identically); (3) int/float/unsigned int spelled
- * s32/f32/u32, the same types on EE. The statements are upstream's. On
- * native, GetUiTextureTex0 keeps the unit's u64 prototype and the screen
- * scalars are declared individually.
+ * s32/f32/u32, the same types on EE; (4) long->s64 (RULING #13197a): the
+ * GetUiTextureTex0 return and the `texture` local, upstream's `long`, are
+ * spelled s64 - `long` on EE (common.h), so the EE bytes are unchanged, and
+ * int64_t on native, where -m32 `long` is 32 bits and dropped the TEX0 high
+ * word (FACT #37690); (5) native reads g_nGsPixelOffsetX/Y (RULING #13197b):
+ * on native g_screenCentre is a compound literal of the four TRUE objects
+ * (g_screenCenterDefaultX/Y, g_nGsPixelOffsetX/Y), read by name at each use,
+ * not by adjacency past g_screenCenterDefaultX; the adjacency view stays the
+ * EE-only device above. The statements are upstream's. On native,
+ * GetUiTextureTex0 keeps the unit's u64 prototype.
  */
 #if !defined(TARGET_NATIVE) && !defined(S136OS_DrawLensFlare)
 S136OS_SLOT(DrawLensFlare);
@@ -2951,7 +2958,7 @@ extern LensFlareSource g_pLensFlareSource;
 extern s32 g_screenCentre[] __asm__("g_screenCenterDefaultX") __attribute__((section(".sdata")));
 extern LensFlareVec g_cameraPosVec __asm__("g_cameraPos");
 extern f32 IntToFloat(s32 x);
-extern long GetUiTextureTex0(s32 texId);
+extern s64 GetUiTextureTex0(s32 texId);
 extern f32 GetFloatAbs(f32 x);
 #else
 /* Native arm: the true objects and the unit's prototype. The pixel offsets
@@ -2964,7 +2971,12 @@ extern s32 g_nGsPixelOffsetY;      /* 0x1A7354, alias g_gsPixelOffsetY */
 extern Vec4 g_cameraPos;
 extern u64 GetUiTextureTex0(s32 texId);
 #define g_cameraPosVec (*(LensFlareVec *)&g_cameraPos)
-#define g_screenCentre ((s32 *)&g_screenCenterDefaultX)
+/* RULING #13197b: the four true objects, named, in the device's [0..3]
+ * order - no read past g_screenCenterDefaultX by arena adjacency. Kept on
+ * ONE line: tools/ee/blanket_orphans.py skips `#` lines but counts braces on
+ * a backslash-continuation line, so a split macro drove its brace depth to
+ * -1 and grew ORPHAN_LATENT by three tokens later in this file. */
+#define g_screenCentre ((const s32[4]){ g_screenCenterDefaultX, g_screenCenterDefaultY, g_nGsPixelOffsetX, g_nGsPixelOffsetY })
 #endif
 /* Callees the unit declares only later in the file (FloatToInt, far below)
  * or not at all (Vec3DistVu0, func_0027A138): declared here, before this
@@ -2996,7 +3008,7 @@ void DrawLensFlare(void) {
     delta[0] = centre[0] - projected.x;
     delta[1] = centre[1] - projected.y;
     for (i = 0; i < 16; ++i) {
-        long texture = GetUiTextureTex0(g_pLensFlareSource.texId[i] + 6);
+        s64 texture = GetUiTextureTex0(g_pLensFlareSource.texId[i] + 6);
         s32 width = i ? 32 : 64;
         s32 size, x, y;
         f32 fade = distance - 5.0f;
