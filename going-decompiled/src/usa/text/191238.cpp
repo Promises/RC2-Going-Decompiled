@@ -4610,115 +4610,205 @@ void func_00295478(s32 classId, void *dest) {
     }
     __asm__ __volatile__("");
 }
-/**
- * func_002954F0 — allocate VRAM for a texture and queue its upload.
+/* The texture upload queue that func_002954F0 and QueueGsTextureUpload fill:
+ * up to 0x40 records of 0x10 bytes in g_texUploadQueue, g_texUploadCount of
+ * them pending. OpenRAC spells the record twice (TexSlot in 00294BC8.c,
+ * GsTextureUploadSlot in 00294D80.c); this is the one type both bodies use.
  *
- * Reserves a VRAM region from g_vramAllocCursor (a 0x400-byte header page plus
- * 2^(log2W+log2H) for the texel data), builds the 64-bit GS TEX0 register for it
- * (same packing as QueueGsTextureUpload: TBP0 = cursor2>>8, TBW/TW/TH from the log2
- * dims, plus the fixed 0x1300000 / 0x8000<<19 / sign bits), and — when the
- * upload queue has room (<0x40) — appends a descriptor to g_texUploadQueue
- * (source at desc+0x20, dest at desc+0x420, both VRAM cursors, and the log2
- * dims). Returns the packed GS TEX0 register.
- */
-#ifndef TARGET_NATIVE
-/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
- * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 27.06% PACKED-SAVE /
- * engine96 38.38% GPREL-DECL; best arm engine96, first differing insn there: 'addiu sp, sp,
- * -0x70' vs 'addiu sp, sp, -0x20'
- * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
- * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
- * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
- * property and was measured false as the reason this member stays unmatched (FACT #9873).
- * Residual: the saved-register set; the rest UNMEASURED. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002954F0);
-#else
-/* Prototypes this body needs whose declarations sit in other guarded arms:
- * the s136os arm compiles this arm alone, so it must see them here. */
-extern s32 Log2Floor(s32 v);
-extern s32 g_vramAllocCursor;
-extern s32 g_texUploadQueue[];
+ * ADDRESSING-MODEL DEVICE (RULING #12316 file-scope `.extern X,N`, EE only):
+ * the ROM reads and writes g_texUploadCount absolutely (lui/lw, and lui $1/sw
+ * for the store) in both functions. A 4-byte extern is small data at the
+ * unit's -G8, so GNU as would address it gp-relative; sizing it 16 makes it
+ * expand the absolute form. Without it QueueGsTextureUpload builds 47 words
+ * against the ROM's 49 (s136os_splice LENGTH). It emits nothing and moves no
+ * data. OpenRAC's `sda` attribute on their D_001B15FC is not carried: a plain
+ * declaration with this sizing is byte-identical (measured, task #2540). */
+typedef struct {
+    u32 clutAddr;   /* +0x0: source of the 0x400-byte CLUT block (a2 in QueueGsTextureUpload) */
+    u16 pad4;       /* +0x4: always written 0 */
+    u16 cbp;        /* +0x6: CLUT VRAM block (VRAM byte cursor >> 8) */
+    u32 pixelAddr;  /* +0x8: source of the texels (a3 in QueueGsTextureUpload) */
+    u8  tw;         /* +0xC: log2 width */
+    u8  th;         /* +0xD: log2 height */
+    u16 tbp;        /* +0xE: texel VRAM block */
+} GsTextureUploadSlot;
+extern GsTextureUploadSlot g_texUploadQueue[];
 extern s32 g_texUploadCount;
-
-u64 func_002954F0(void *descArg) {
-    u8 *desc = (u8 *)descArg;
-    s32 logW = Log2Floor(*(s32 *)(desc + 0x8));
-    s32 logH = Log2Floor(*(s32 *)(desc + 0xC));
-    s32 cursor = g_vramAllocCursor;
-    s32 cursor2 = cursor + 0x400;
-    s32 shift = (logW < 6) ? 0 : (logW - 6);
-    u64 packed = (u64)(u32)(cursor2 >> 8)
-               | ((u64)(u32)(1 << shift) << 14)
-               | (((u64)(u32)logW << 26) | 0x1300000)
-               | ((u64)(u32)logH << 30)
-               | ((u64)(u32)(cursor >> 8) << 37)
-               | ((u64)0x8000 << 19)
-               | ((u64)-1 << 63);
-
-    g_vramAllocCursor = cursor2 + (1 << (logW + logH));
-
-    if (g_texUploadCount < 0x40) {
-        s32 *e = &g_texUploadQueue[g_texUploadCount * 4];
-        e[0] = (s32)(desc + 0x20);
-        *(s16 *)((u8 *)e + 0x6) = (s16)(cursor >> 8);
-        *(s16 *)((u8 *)e + 0x4) = 0;
-        e[2] = (s32)(desc + 0x420);
-        *(s16 *)((u8 *)e + 0xE) = (s16)(cursor2 >> 8);
-        *(u8 *)((u8 *)e + 0xC) = (u8)logW;
-        *(u8 *)((u8 *)e + 0xD) = (u8)logH;
-        g_texUploadCount++;
-    }
-    return packed;
-}
+#ifndef TARGET_NATIVE
+__asm__(".extern g_texUploadCount, 16");
 #endif
 
-#ifndef TARGET_NATIVE
-/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
- * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 22.29% GPREL-DECL /
- * engine96 43.94% GPREL-DECL; best arm engine96, first differing insn there: 'daddu a7, a0,
- * zero' vs 'daddu a6, a0, zero' */
-/* TODO(match): functional equivalent - not byte-exact (22%); 64-bit shift wall -
- * the pinned cc1 lowers each `(u64)x << n` field shift to a `dsll32`+`dsrl` pair
- * where the original emits a single `dsll`/`dsll32`, plus the gp_rel/absolute
- * divergence on g_texUploadCount (-G8 small-data vs original absolute lui/%lo).
- * Pure scalar GS-register packing; semantics verified against the asm. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", QueueGsTextureUpload);
-#else
+/* TexDesc: the header of a 256-colour texture file as func_002954F0 reads it
+ * into a stack copy (OpenRAC's type, field names theirs). */
+typedef struct {
+    char *clut;
+    char *pix;
+    char pad08[0xC];
+    int clutSize;
+    char pad18[0x34];
+    int tw;
+    int th;
+    char pad54[0xC];
+} TexDesc;
+
 /*
- * QueueGsTextureUpload — build a GS texture-register word from the texel-format fields
- * and, if the upload queue has room (< 0x40 entries), append a 0x10-byte
- * descriptor to g_texUploadQueue. The 64-bit word packs the width-log2 (clamped
- * so the shift floor is 6), the width-log2 field (a0<<26 | 0x1300000 base), the
- * height-log2 field (a1<<30), the texel halfwords (a4>>8 at bit 37) and the
- * fixed 0x8000<<19 + top sign bit. The queue entry mirrors a2/a3 as raw words
- * and a0/a1/(a4>>8)/(a5>>8) as the byte/halfword fields. Returns the packed word
- * whether or not the entry was queued.
+ * func_002954F0(p) — take VRAM for a 256-colour texture file and queue its upload.
+ *   p: the loaded file. Width at +0x8, height at +0xC, the 16x16 CLUT
+ *      (0x400 bytes) at +0x20 and the 8-bit texels right after it.
+ * Returns the texture's GS TEX0 register value.
+ *
+ * Reserves 0x400 bytes for the CLUT and then 2^(log2 w + log2 h) bytes for
+ * the texels at g_vramAllocCursor, and advances the cursor past both. The
+ * TEX0 word packs TBP0 = texel block, TBW = max(1, 2^(log2 w - 6)), PSM 0x13
+ * (8-bit indexed), TW/TH, TCC 1 (bit 34), CBP = CLUT block at bit 37, and CLD
+ * 4 at bit 61 (written `4 << 61`, which sets bit 63). If fewer than 0x40
+ * uploads are pending, it appends one to g_texUploadQueue: CLUT and texel
+ * sources and blocks plus log2 width/height. The return value is the same
+ * either way.
+ *
+ * MATCHED on the s136os arm (SN 2.95.3 v1.36 -fopt-stack, the unit's
+ * S136EXTRA "", -G8; task #2540, from audit NOTE #13181 / FACT #13187, which
+ * measured 2/80). Devices, each removed alone with the result named:
+ *  - the RULING #8549 allowlist row for the bit-63 constant at 0x2955A0
+ *    (tools/ee/ps2eeas_dli_sites.txt). Without it GNU as gives `ori 0x8000;
+ *    dsll32 16` where the ROM has Ps2EeAs's `addiu -1; dsll32 31`: 2/80
+ *    words.
+ *  - the unit's g_vramAllocCursorAbs equate (RULING #8620, FACT #8036's size-12
+ *    form, declared with func_002938B0) for their sda D_001A72D0 word. Read
+ *    through plain g_vramAllocCursor instead, the function builds 78 words.
+ *  - the `.extern g_texUploadCount, 16` sizing above.
+ * GUARD: compiled alone by the s136os arm and spliced over the S136OS_SLOT
+ * line (tools/ee/s136os_splice.sh, row in tools/ee/s136os_functions.txt);
+ * plain C on native.
+ * Source: OpenRAC/rac2-decomp @5776dcc35045fb2320610edd1d2db4fa7660ef37
+ * (GPL-3.0, adopted with the authors' permission per RULINGs #10405/#12108;
+ * blob identical at b2a35115 and at head fe6adf9b), src/game/00294BC8.c,
+ * func_00294C40 (v1.01 address), author commit ec07f377 (bigbeno37).
+ * ADAPTED: (1) our spellings by address: func_00282A18 = Log2Floor,
+ * D_001A72D0[0] = g_vramAllocCursorAbs (above), D_001B15FC[0] =
+ * g_texUploadCount and D_001B9340 = g_texUploadQueue (their v1.01 addresses
+ * are 0x80 higher); (2) `long` written s64 (RULING #13197); (3) their TexSlot
+ * record is the unit's GsTextureUploadSlot, so `.addr/.unk4/.unk8/.tbp` read
+ * `.clutAddr/.pad4/.pixelAddr/.tbp`; (4) `sda` not carried; (5) the name is
+ * func_002954F0. The rest of the body is theirs, including their comment's
+ * point that the casts keep retail's OR order.
  */
-extern s32 g_texUploadQueue[];
-extern s32 g_texUploadCount;
-u64 QueueGsTextureUpload(s32 a0, s32 a1, s32 a2, s32 a3, s32 a4, s32 a5) {
-    s32 shift = (a0 < 6) ? 0 : (a0 - 6);
-    u64 packed = (u64)(u32)(a5 >> 8)
-               | ((u64)(u32)(1 << shift) << 14)
-               | (((u64)(u32)a0 << 26) | 0x1300000)
-               | ((u64)(u32)a1 << 30)
-               | ((u64)(u32)(a4 >> 8) << 37)
-               | ((u64)0x8000 << 19)
-               | ((u64)-1 << 63);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002954F0)
+S136OS_SLOT(func_002954F0);
+#else
+extern s32 Log2Floor(s32 v);
+s64 func_002954F0(char *p)
+{
+    TexDesc t;
+    int w;
+    int cbp;
+    int tbp;
+    int addr;
+    s64 reg;
+
+    t.clut = p + 0x20;
+    t.clutSize = 0x400;
+    t.tw = Log2Floor(*(int *)(p + 8));
+    t.th = Log2Floor(*(int *)(p + 0xC));
+    t.pix = p + 0x20 + t.clutSize;
+    addr = g_vramAllocCursorAbs;
+    cbp = addr >> 8;
+    addr += 0x400;
+    tbp = addr >> 8;
+    g_vramAllocCursorAbs = addr + (1 << (t.tw + t.th));
+    w = t.tw - 6;
+    if (w < 0) {
+        w = 0;
+    }
+    w = 1 << w;
+    reg = (s64)((u64)((s64)tbp | ((s64)w << 14) | ((s64)0x13 << 20)
+                                 | ((s64)t.tw << 26))
+                 | ((u64)t.th << 30) | ((u64)1 << 34)
+                 | ((u64)cbp << 37))
+        | ((s64)4 << 61);
     if (g_texUploadCount < 0x40) {
-        s32 *e = &g_texUploadQueue[g_texUploadCount * 4];
-        e[0] = a2;
-        *(s16 *)((u8 *)e + 6) = (s16)(a4 >> 8);
-        *(s16 *)((u8 *)e + 4) = 0;
-        e[2] = a3;
-        *(s16 *)((u8 *)e + 0xE) = (s16)(a5 >> 8);
-        *(u8 *)((u8 *)e + 0xC) = (u8)a0;
-        *(u8 *)((u8 *)e + 0xD) = (u8)a1;
+        g_texUploadQueue[g_texUploadCount].clutAddr = (int)t.clut;
+        g_texUploadQueue[g_texUploadCount].cbp = cbp;
+        g_texUploadQueue[g_texUploadCount].pad4 = 0;
+        g_texUploadQueue[g_texUploadCount].pixelAddr = (int)t.pix;
+        g_texUploadQueue[g_texUploadCount].tw = t.tw;
+        g_texUploadQueue[g_texUploadCount].th = t.th;
+        g_texUploadQueue[g_texUploadCount].tbp = tbp;
         g_texUploadCount++;
     }
-    return packed;
+    return reg;
 }
 #endif
+
+/*
+ * QueueGsTextureUpload(a0, a1, a2, a3, arg5, arg6) — build a GS TEX0 value for
+ * a texture whose VRAM is already placed, and queue its upload.
+ *   a0, a1:     log2 width and log2 height (TW, TH; also the record's tw/th).
+ *   a2, a3:     source addresses of the CLUT and the texels (record +0x0/+0x8).
+ *   arg5, arg6: VRAM byte addresses of the CLUT and the texels; >> 8 gives the
+ *               CBP and TBP0 blocks.
+ * Returns the TEX0 value: TBP0, TBW = max(1, 2^(a0 - 6)), PSM 0x13, TW, TH,
+ * TCC (0x400000000) and CBP at bit 37, with bit 63 set. If fewer than 0x40
+ * uploads are pending it also appends a g_texUploadQueue record, the same
+ * shape func_002954F0 writes.
+ *
+ * MATCHED on the s136os arm (the unit's S136EXTRA "", -G8; task #2540, from
+ * audit NOTE #13181 / FACT #13187, 2/49). Devices, each removed alone:
+ *  - the RULING #8549 allowlist row for the bit-63 constant at 0x29569C
+ *    (without it: 2/49 words, GNU as's `ori 0x8000; dsll32 16`);
+ *  - the `.extern g_texUploadCount, 16` sizing above (without it: 47 words).
+ * GUARD: s136os arm, as func_002954F0.
+ * Source: OpenRAC/rac2-decomp @5776dcc35045fb2320610edd1d2db4fa7660ef37
+ * (GPL-3.0, RULINGs #10405/#12108; blob identical at b2a35115 and head
+ * fe6adf9b), src/game/00294D80.c, func_00294D80 (v1.01 address), author
+ * commit 8daa0d46 (Flavius). ADAPTED: (1) D_001B15FC = g_texUploadCount,
+ * declared s32 where they declare u32 (it is only read into their `int
+ * count`; measured byte-identical), and D_001B9340 = g_texUploadQueue; (2)
+ * their GsTextureUploadSlot fields `word0/half4/half6/word8/byteC/byteD/halfE`
+ * read `clutAddr/pad4/cbp/pixelAddr/tw/th/tbp`; (3) `ULL` written `UL` (the
+ * same 64-bit type on EE; s136 cc1plus rejects `long long` constants here);
+ * (4) `sda` not carried; (5) the name is QueueGsTextureUpload.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_QueueGsTextureUpload)
+S136OS_SLOT(QueueGsTextureUpload);
+#else
+u64 QueueGsTextureUpload(int a0, int a1, u32 a2, u32 a3, int arg5, int arg6)
+{
+    int shift;
+    u64 value;
+    u64 term;
+    u64 term2;
+    u64 result;
+    int count;
+
+    shift = a0 - 6;
+    shift = (shift >= 0) ? shift : 0;
+    shift = 1 << shift;
+    value = (u64)shift << 14;
+    value |= (u64)(arg6 >> 8);
+    term = (u64)a0 << 26;
+    term |= 0x01300000;
+    value |= term;
+    value |= (u64)a1 << 30;
+    term2 = (u64)(arg5 >> 8) << 37;
+    term2 |= 0x400000000UL;
+    value |= term2;
+    result = value | 0x8000000000000000UL;
+    count = g_texUploadCount;
+    if (count < 0x40) {
+        g_texUploadQueue[count].clutAddr = a2;
+        g_texUploadQueue[count].cbp = arg5 >> 8;
+        g_texUploadQueue[count].pad4 = 0;
+        g_texUploadQueue[count].pixelAddr = a3;
+        g_texUploadQueue[count].tw = a0;
+        g_texUploadQueue[count].th = a1;
+        g_texUploadQueue[count].tbp = arg6 >> 8;
+        g_texUploadCount = count + 1;
+    }
+    return result;
+}
+#endif
+
 
 /*
  * func_002956F8(level) — mark a level discovered on the galactic map and return
