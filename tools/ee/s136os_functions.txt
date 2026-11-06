@@ -760,3 +760,4 @@ usa text/235FE8 func_0033D070
 usa text/235FE8 func_003380B8 S136EXTRA=-fno-strict-aliasing
 usa text/178E88 InitScreenGeometry
 usa text/178E88 func_0027B858
+usa text/178E88 RecomputeScreenViewportFromGsContext

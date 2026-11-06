@@ -851,6 +851,19 @@
     `section(".sdata")` (the x arm), their `func_00283CE0` as `IntToFloat`,
     their `func_0027AB40` as `BuildCameraProjection`, and `int`/`float`
     spelled `s32`/`f32`.
+  - **`RecomputeScreenViewportFromGsContext`** (`0x0027B988`, 70 words,
+    re-derive the display geometry / 2D draw viewport from the GS screen
+    context pixel dims, then run `func_0027A550`) in
+    `going-decompiled/src/usa/text/178E88.cpp`, on the s136os arm at the
+    unit's pinned S136EXTRA, from `src/us2/game/0027B858.c`
+    (`func_US2_0027B988`, author commit `ac7e1a2e`, bigbeno37, 2026-11-06,
+    body unchanged to the pin). ADAPTED: their `D_001A6480` as
+    `&g_gsScreenContextDims` over `g_gsScreenContext`, their `D_001A7340`
+    as the `g_screenExtent` view over `g_screenWidth` with sda respelled
+    `section(".sdata")` (the x arm), their `D_001B9040` as the cast
+    `(ScreenState *)(g_sceneActorMobys + 0x674)` (same address 0x1B8FC0),
+    their `func_00283CE0` as `IntToFloat`, their `func_00279FF0` as
+    `func_0027A550`, and `short`/`int`/`float` spelled `s16`/`s32`/`f32`.
 
 - **Forja contributors** (MIT, © 2026 Forja contributors), via OpenRAC
   `rac2-gc-decomp` at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`
