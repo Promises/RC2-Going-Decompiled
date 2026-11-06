@@ -330,7 +330,7 @@ extern Rec2552B0 D_2552B0[];   /* 13-entry record table (0x2552B0) */
  *  (func_0028D720 0x28DA58 `beq $2,$7`: a change plays the nav cue). Every one
  *  of these reads it as a slot index. So the init's -2 is a starting "no
  *  selection yet" value that differs from the -1 a reset writes; nothing tests
- *  for -2 itself. The counter draw func_0028E640 reads +0x74 (0x28E6DC) as
+ *  for -2 itself. The counter draw func_0028E680 reads +0x74 (0x28E6DC) as
  *  the value it scales and draws.
  * +0x78 on the wheel kinds: the low bytes count the reset delay down from the
  *  init's 0x1E, and the high byte (+0x7B) is an "armed" flag, 0 while the
@@ -5612,11 +5612,15 @@ s32 func_0028DC28(HudElement *hud) {
 #undef CLUT16
 #endif
 
-/* func_0028E640(...): HUD widget helper (~0x15C bytes).
- *
- * WALL: callee-saves + jal gates; register colouring not reproducible from C.
- * Left INCLUDE_ASM (not yet fully traced). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028E640);
+/* func_0028E640: 16 words of epilogue debris (addiu-sp/nop residues, then
+ * `sw $2,0x6C($4)` and a nop) ahead of func_0028E680. No jal, j, branch,
+ * pointer word or %hi/%lo pair reaches 0x28E640..0x28E67C (FACT #9489,
+ * FACT #10349). Split off its real entry at 0x28E680 by a symbol_addrs
+ * size:0x40 pin on the head and a type:func pin on the body (task #2473);
+ * kept as layout asm. */
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028E640);
+
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028E680);
 
 /* Seed a HUD widget record's geometry (+0x5C/+0x58 = 0x20), start its +0x7C
  * show timer at 0x96 frames, then re-init it via func_0028C390 (empty-asm guard
@@ -5876,7 +5880,7 @@ s32 func_0028EAC8(void) {
  *   - otherwise (no ammo weapon): if the sound-bank state byte
  *     g_soundBankHandlesBlk[0x22B4] == 2 it first tears down any live widget
  *     (func_0028C108(handle, 0)) then spawns the generic bank widget (id 0xFFFF,
- *     priority 0xC8, callbacks func_0028C490 / func_0028C4C8 / func_0028E640+0x40),
+ *     priority 0xC8, callbacks func_0028C490 / func_0028C4C8 / func_0028E680),
  *     stashing that handle at g_soundBankHandlesBlk[0x1878]; if the byte != 2 it
  *     just tears the live widget down.
  * D_1A8FB8 == -1 means "no live widget", so the teardown is skipped in that case.
@@ -5914,7 +5918,7 @@ extern void func_0028C4C8(HudElement *w);
 extern s32 D_1A8FBC;                  /* gp hard-disable gate (0x1A8FBC) */
 extern u8  g_soundBankHandlesBlk[];   /* g_soundBankHandles+0x20 (0x189E20) */
 extern void func_002907C0(HudElement *w); /* ammo-vendor widget tick callback (task #2240 split) */
-extern void func_0028E640(void);      /* generic-bank widget draw callback (INCLUDE_ASM) */
+extern s32 func_0028E680(u8 *w);     /* generic-bank widget draw callback (task #2473 split) */
 /* EE codegen device (RULING #8404), see above; plain store on native. */
 #ifndef TARGET_NATIVE
 #define AMMO_HUD_HANDLE (*(volatile s32 *)&D_1A8FB8)
@@ -5964,7 +5968,7 @@ void func_0028EB10(void) {
         *(s16 *)(g_soundBankHandlesBlk + 0x1878) =
             (s16)func_0028BE10(0x10, 0xFFFF,
                                (s32)&func_0028C490, (s32)&func_0028C4C8,
-                               (s32)&func_0028E640 + 0x40,
+                               (s32)&func_0028E680,
                                (s32)(g_soundBankHandlesBlk + 0x1874), 0xC8);
     } else {
         s32 handle = D_1A8FB8;

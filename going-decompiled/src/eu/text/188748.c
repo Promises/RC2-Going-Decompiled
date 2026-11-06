@@ -3239,7 +3239,8 @@ s32 func_0028EAE0(void) {
  * INCLUDE_ASM; #else is the structure model. Word-verified vs USA func_0028EB10:
  * D_1A8FBC->D_1A906C, D_1A8FB0->D_1A9060, D_1A8FB4->D_1A9064, D_1A8FB8->D_1A9068;
  * func_0028EAC8->func_0028EAE0, func_0028BE10->func_0028BD98, func_0028C108->func_0028C090;
- * callbacks func_0028E7A0/E7D0/C490/C4C8/E640 -> func_0028E7B8/E7E8/C418/C450/E658;
+ * callbacks func_0028E7A0/E7D0/C490/C4C8/E680 -> func_0028E7B8/E7E8/C418/C450/E658+0x40
+ * (USA's func_0028E640+0x40 until task #2473's split; EU keeps the unsplit symbol);
  * func_002907C0 (the USA inner label D_002907C0 until task #2240's split)->D_002907D8;
  * g_soundBankHandlesBlk->g_sndChannelVolumes+0x1778. */
 #ifndef TARGET_NATIVE
