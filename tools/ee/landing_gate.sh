@@ -1671,7 +1671,10 @@ selftest() {
 #            MISSING on the 2.9 arm" — the byte-identical case;
 #     splice every 1B4218 s136 line given -fno-gcse (the splice fed CC1EXTRA):
 #            one table mismatch AND one "s136 arm still pinned" per line;
-#     1DFF80 its s136 lines unpinned: mismatch + floor, per line;
+#     1DFF80 its s136 lines unpinned: mismatch + floor, per line — per line
+#            WITHOUT a per-function S136EXTRA= override: the floor holds
+#            override rows to their own field (RULING #12178), so a row whose
+#            override drops the pin fires nothing here (task #2462);
 #   usa only, RULING #9070 (task #1385): both and splice again for 191238,
 #            whose floor #1405 added and no arm seeded; each FAIL must name
 #            191238, so 1B4218's seed firing is no evidence about it;
@@ -1719,8 +1722,15 @@ selftest_cc1args() {
     ns=$(awk -F'\t' '$1 == "s136" && $2 ~ /\/usa\/text\/1DFF80\.(c|cpp)$/' "$L" | wc -l | tr -d ' ')
     FAILED=0; check_cc1args "$T/cc1_1dff80.tsv" "$HERE/build.sh" "$start" > "$T/cc1_1dff80.txt"
     np=$(/usr/bin/grep -c '^ *FAIL (floor) usa/text/1DFF80 s136 .* -> -fno-gcse MISSING on the s136 arm$' "$T/cc1_1dff80.txt" || true)
-    if [ "$FAILED" = 1 ] && [ "$ns" -ge 1 ] && [ "$np" = "$ns" ]; then ok "fired: 1DFF80 s136 unpinned -> ${np}x '-fno-gcse MISSING on the s136 arm'"
-    else say "SELFTEST-FAIL (26) the 1DFF80 seed: FAILED=$FAILED, $np floor lines for $ns s136 compiles"; b=1; fi
+    # the floor exempts override rows (cc1_arglog_check.py floor_unit), so the
+    # seed fires once per 1DFF80 s136 compile minus the unit's live override
+    # rows; counted with arm (32)'s row rule (3 or 4 fields, a 4th only as
+    # S136EXTRA=). Task #2462: #2348's two DrawSkyPieces rows were the first
+    # live 1DFF80 overrides and read "23 floor lines for 25 s136 compiles".
+    no=$(awk '{ sub(/#.*/, "") } $1 == "usa" && $2 == "text/1DFF80" && NF == 4 && $4 ~ /^S136EXTRA=/ { n++ } END { print n + 0 }' "$HERE/s136os_functions.txt")
+    nf=$((ns - no))
+    if [ "$FAILED" = 1 ] && [ "$nf" -ge 1 ] && [ "$np" = "$nf" ]; then ok "fired: 1DFF80 s136 unpinned -> ${np}x '-fno-gcse MISSING on the s136 arm' ($ns s136 compiles - $no live override rows)"
+    else say "SELFTEST-FAIL (26) the 1DFF80 seed: FAILED=$FAILED, $np floor lines for $ns s136 compiles - $no live override rows = $nf"; b=1; fi
   fi
   # generic: the first sdk29 line carrying a table flag beyond -O2 -G<n> loses its last word
   local gl gu; gl=$(awk -F'\t' '$1 == "sdk29" && split($3, w, " ") > 2 { print NR; exit }' "$L")
