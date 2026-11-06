@@ -706,6 +706,18 @@
     func_0033D070 on the s136os arm as the unit is; func_00346AF8 and
     func_003380B8 with the per-function `S136EXTRA=-fno-strict-aliasing`
     override (RULING #12178). Task #2501.
+  - **`func_00337DC8`** (`0x00337DC8`, the colours of one item's cell in
+    the pause-menu item grid) in `going-decompiled/src/usa/text/235FE8.c`,
+    from `src/game/00336A78-g16.c` (`func_00336F20`, v1.01 address, author
+    commit `77eabfa9`, bigbeno37). The blob is identical at `b2a35115`,
+    `5776dcc3` and the head `fe6adf9b`; it carries no notice of its own.
+    ADAPTED: our symbols per the ROM's relocations, our prototype, their
+    `ItemRow` array as a cast view of our `u8[]` `g_weaponTable`, their
+    `sda` dropped (the unit's -G8 and its existing 8-byte `D_1ADAD8`
+    declaration keep both tables gp-relative). Per-function
+    `S136EXTRA=-fno-strict-aliasing` override (RULING #12178); its three
+    switch tables are bound to the ROM's by `tools/ee/jtbl_bind.sh`, once
+    that tool counts a function's tables separately (task #2550).
   - **`func_00339740`** (`0x00339740`, the fade and fit-to-width layout of a
     measured text box) in `going-decompiled/src/usa/text/235FE8.c`, from
     `src/us2/game/00339740-g8.c` (`func_US2_00339740`, author commit
