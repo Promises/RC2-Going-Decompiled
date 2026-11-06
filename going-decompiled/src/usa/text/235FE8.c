@@ -10759,60 +10759,102 @@ void func_003451B8(void *w, s32 flags) {
 }
 #endif
 
-/* func_00345298: read the 16-bit field_0x42 of the weapon variant currently
- * selected on the weapon-select screen `w`, dispatched by screen mode (+0x4B8):
- *   mode 0: id = selection (+0x4B4) -> generic owned-variant lookup.
- *   mode 1: fixed item 6 (only if owned).
- *   mode 2: id = selection; the item-7 special case (id==7, owns item 0x31 but
- *           not item 7) reads the 0x31 variant instead, else the generic lookup.
- *   mode 3: category-table entry D_1AE238[selection], returned directly.
- *   otherwise, or unowned: 0.
- * The owned-variant lookup mirrors func_003453D0:
- * g_weaponTable[g_itemEquippedSlot[id]*0xE0 + 0x42] (signed 16-bit). */
-/* task #1522 (s136os arm, verify_match_unit vs ROM; not promoted): #else rewritten as
- * the ROM's 4-case switch with the D_1AE238 table copied to the stack (a local
- * initialised array). Built length now equals the ROM's 78 words (was 64);
- * residual 52/78: cross-jumping keeps case 2's copy of the shared generic lookup
- * where the ROM keeps case 0's. */
+/*
+ * func_00345298(w): the 16-bit stat (+0x42 of the 0xE0-byte g_weaponTable
+ * record) of the weapon variant highlighted on the weapon-select screen `w`,
+ * dispatched by the screen mode at w+0x4B8:
+ *   mode 0: id = selection (w+0x4B4) -> the owned-variant lookup below.
+ *   mode 1: fixed item 6.
+ *   mode 2: id = selection; when id == 7, item 0x31 is owned and item 7 is not,
+ *           it reads item 0x31's variant instead; otherwise the mode-0 lookup.
+ *   mode 3: entry `selection` of the 4-word stringId table D_1AE238, copied
+ *           to the stack first.
+ *   other modes: 0.
+ * The owned-variant lookup is g_weaponTable[g_itemEquippedSlot[id]].stat42
+ * when g_inventoryOwned[id] != 0, else 0. Param: w = the screen object.
+ * Returns the (sign-extended) stat, or 0. Called by func_002CE830 (1CA080).
+ * Non-obvious: mode 2 reaches the shared lookup by `goto common` into case
+ * 0's body and the one `return 0` sits after case 2, because the ROM keeps
+ * both there (upstream's own note); a plain switch builds 52/78 (task #1522).
+ *
+ * MATCHED on the unit's plain cc1 2.9 arm (-G8 -fno-gcse -fno-strict-aliasing),
+ * no selector row (task #2501).
+ * DEVICE, ADDRESSING MODEL (RULING #8620; same mechanism as func_00346878):
+ * g_inventoryOwned is read through g_inventoryOwnedSdata, an EE-only
+ * asm-label alias carrying upstream's `section(".sdata")`. cc1 then emits the
+ * one-insn `lbu $r,sym+N` macro, which the unit's file-scope
+ * `.extern g_inventoryOwned, 16` makes the assembler expand to the ROM's
+ * absolute `lui; lbu %lo` pair. It moves no data and emits nothing; native
+ * reads g_inventoryOwned itself.
+ * Source: OpenRAC/rac2-decomp @5776dcc35045fb2320610edd1d2db4fa7660ef37
+ * (GPL-3.0, adopted with the authors' permission per RULINGs #10405/#12108),
+ * src/us2/game/003448C0.c, func_US2_00345298 (author commit cb63d202,
+ * bigbeno37); body unchanged at upstream head f3cc4dbf. Respellings by
+ * ROM-encoded address: D_001A7AF8 = g_inventoryOwned, D_00139568 =
+ * g_itemEquippedSlot, D_00239BA0 = g_weaponTable, D_001AE260 = D_1AE238.
+ * ADAPTED: (1) our signature (void *w), with their DobboGridState312 as the
+ * GuiWeaponSelectCursor view through the local `state`; (2) their Entry224
+ * read as the unit's GuiWeaponTableEntry (.field42 = .stat42, the s16 at
+ * +0x42); (3) their Ids_00344378 object D_001AE260 read as the unit's
+ * GuiStringIdTable copied from the s32[] D_1AE238; (4) their `sda`
+ * g_inventoryOwned carried on the EE-only alias above; (5) their unsigned
+ * char/short/int as u8/s16/s32. Control flow and expressions are theirs.
+ */
+/* The cursor fields of the weapon-select screen object (upstream's
+ * DobboGridState312); the mode-0..3 handlers write them. */
+typedef struct {
+    u8  _pad0[0x4AC];
+    s32 column;    /* 0x4AC */
+    s32 row;       /* 0x4B0 */
+    s32 selection; /* 0x4B4: item id under the cursor */
+    s32 mode;      /* 0x4B8: 0..3 */
+} GuiWeaponSelectCursor;
+extern s32 D_1AE238[];   /* 4-entry stringId table (mode 3), GuiStringIdTable */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00345298);
+extern u8 g_inventoryOwnedSdata[] __asm__("g_inventoryOwned") __attribute__((section(".sdata")));
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00345298, unit objdiff): 11.86%,
-   97/101 insns differ. Residual: UNKNOWN-addiu (first differing insn: 'addiu sp, sp, -0x10' vs '').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
-extern s32 D_1AE238[];
-s32 func_00345298(void *w) {
-    GuiStringIdTable table = *(GuiStringIdTable *)D_1AE238;
-    s32 id;
-
-    switch (*(s32 *)((char *)w + 0x4B8)) {
-    case 0:
-        id = *(s32 *)((char *)w + 0x4B4);
-        if (g_inventoryOwned[id] == 0) {
-            return 0;
-        }
-        return ((GuiWeaponTableEntry *)g_weaponTable)[g_itemEquippedSlot[id]].stat42;
-    case 1:
-        if (g_inventoryOwned[6] == 0) {
-            return 0;
-        }
-        return ((GuiWeaponTableEntry *)g_weaponTable)[g_itemEquippedSlot[6]].stat42;
-    case 2:
-        id = *(s32 *)((char *)w + 0x4B4);
-        if (id == 7 && g_inventoryOwned[0x31] != 0 && g_inventoryOwned[7] == 0) {
-            return ((GuiWeaponTableEntry *)g_weaponTable)[g_itemEquippedSlot[0x31]].stat42;
-        }
-        if (g_inventoryOwned[id] == 0) {
-            return 0;
-        }
-        return ((GuiWeaponTableEntry *)g_weaponTable)[g_itemEquippedSlot[id]].stat42;
-    case 3:
-        return table.id[*(s32 *)((char *)w + 0x4B4)];
-    }
-    return 0;
-}
+#define g_inventoryOwnedSdata g_inventoryOwned
 #endif
+s32 func_00345298(void *w)
+{
+    GuiWeaponSelectCursor *state = (GuiWeaponSelectCursor *)w;
+    GuiStringIdTable table = *(GuiStringIdTable *)D_1AE238;
+    s32 value;
+    s32 index;
+
+    switch (state->mode) {
+    case 0:
+        index = state->selection;
+common:
+        if (g_inventoryOwnedSdata[index] != 0) {
+            value = ((GuiWeaponTableEntry *)g_weaponTable)[g_itemEquippedSlot[index]].stat42;
+            break;
+        }
+        goto none;
+    case 1:
+        if (g_inventoryOwnedSdata[6] != 0) {
+            value = ((GuiWeaponTableEntry *)g_weaponTable)[g_itemEquippedSlot[6]].stat42;
+            break;
+        }
+        goto none;
+    case 2:
+        index = state->selection;
+        if (index == 7 && g_inventoryOwnedSdata[0x31] != 0 && g_inventoryOwnedSdata[7] == 0) {
+            value = ((GuiWeaponTableEntry *)g_weaponTable)[g_itemEquippedSlot[0x31]].stat42;
+            break;
+        }
+        goto common;
+none:
+        return 0;
+    case 3:
+        value = table.id[state->selection];
+        break;
+    default:
+        value = 0;
+        break;
+    }
+    return value;
+}
 
 /* Build the weapon-select screen. Reset the selection (+0x4B4), clear the caption
  * id (D_1ADAF0=-1), apply the equipped-armor upgrade slot, then dispatch on the
