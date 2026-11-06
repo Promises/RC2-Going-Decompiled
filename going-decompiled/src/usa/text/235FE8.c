@@ -3343,7 +3343,166 @@ f32 func_003396E8(s32 unused, s32 sel) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00339740);
+/*
+ * func_00339740: per-frame fade and layout of a text-box widget whose rows are
+ * measured. It is func_00339A88's mode-0 sub-updater.
+ *   object  the widget. Returns nothing.
+ *
+ * Widget words, as read here:
+ *   +0x4    pointer to the live word, which is cleared when the fade reaches 0
+ *   +0x8    pointer to colour word 1; its alpha byte (+3) is the current fade
+ *   +0xC    pointer to colour word 2
+ *   +0x10   element A (vertical: its colour and the height factor)
+ *   +0x5C   element B (horizontal: its colour and the width factor)
+ *   +0x1A8  box width; +0x1AC box height
+ *   +0x1B0  row count; +0x1D8 array of row string pointers
+ *   +0x1B8  fade-in frames remaining
+ *   +0x1BC  horizontal padding; +0x1C0 vertical padding
+ *   +0x1C4  scale level: 0..2 set the padding, 3 skips the layout
+ *   +0x1D0  output: height factor * 306 + 23.5
+ *   +0x1D4  widest row, in pixels
+ *
+ * Behaviour:
+ *  - Fade: while the fade-in counter runs, alpha rises by 8 per frame (clamped
+ *    to 0x60) and the counter drops by 1. After that, alpha falls by 8 per
+ *    frame (clamped to 0). At 0, the live word is cleared and the function
+ *    returns. Otherwise the alpha is written into the top byte of both colour
+ *    words and of both elements' colours (GuiElementGetColor).
+ *  - Fit: while the widest row is 470 (0x1D6) or more and the scale level is
+ *    above 0, step the level down. If the row array exists, re-measure every
+ *    row with func_0027F900 at the scale that func_003396E8 maps the new
+ *    level to, and keep the widest.
+ *  - Layout: set the padding for the level, then the box size from the widest
+ *    row and the row count (16 px per row, halved). Then set B's and A's
+ *    factors through GuiElementSetAlpha. Each gets a re-set to the floor
+ *    D_1ADBAC / D_1ADBB0 when 0.0 compares below / at or below that floor.
+ *    The compare is against a 0.0 local and not against the computed factor;
+ *    the ROM tests it that way (c.lt.s / c.le.s on $f21 = 0).
+ *
+ * MATCHED on the s136os arm (task #2466; audit #2448, NOTE #13103, FACT
+ * #13097). SN 2.95.3 v1.36 -fopt-stack compiles this body byte-exact with gcse
+ * ON. That is a per-function override, the selector row's
+ * `S136EXTRA=-fno-strict-aliasing` (RULING #12178): the unit's
+ * `-fno-gcse -fno-strict-aliasing` without `-fno-gcse`. Under the unit's own
+ * -fno-gcse the s136os arm builds 194 words against the ROM's 208, and the
+ * splice refuses it. No other device.
+ * GUARD: compiled alone by SN 2.95.3 v1.36 -fopt-stack and spliced over the
+ * S136OS_SLOT line (tools/ee/s136os_splice.sh); plain C on native. There is no
+ * asm fallback: a build that skips the splice drops the function.
+ * Source: OpenRAC/rac2-decomp @b2a35115e0cf580a1fdab8dd1071b157799e590e,
+ * src/us2/game/00339740-g8.c, func_US2_00339740 (author commit 22fbd608,
+ * bigbeno37, 2026-11-06, "feat(us2): carry 20 functions, 0027FCB0.c to
+ * L01_0041264C.c"; GPL-3.0, OpenRAC's own, adopted with the authors'
+ * permission, RULINGs #10405, #12108 and #13082). Upstream describes it as the
+ * USA v2.00 copy of their func_00338810, with the fit step added. ADAPTED:
+ * (1) callees by our names and prototypes: their func_00335E20 /
+ * func_003363C0 / func_0027F288 / func_US2_003396E8 are our
+ * GuiElementGetColor / GuiElementSetAlpha / func_0027F900 / func_003396E8
+ * (ROM jal targets 0x336C28 / 0x3371C8 / 0x27F900 / 0x3396E8). So the element
+ * pointers are cast to GuiElement *, the row string to const char *, and the
+ * widget to s32 for func_003396E8's ignored first argument. (2) Data by our
+ * names: their `float ref_L00_00338810_02/_03 __attribute__((sda))` are our
+ * plain `extern f32 D_1ADBAC, D_1ADBB0`. They are gp-relative under the unit's
+ * -G8 (4 bytes), as in the ROM, so their sda attribute is not needed.
+ * (3) Our function name.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00339740)
+S136OS_SLOT(func_00339740);
+#else
+extern s32 func_0027F900(const char *str, s32 maxChars, f32 scale); /* 178E88 */
+extern f32 D_1ADBAC, D_1ADBB0;  /* width / height factor floors (gp-relative) */
+void func_00339740(void *object)
+{
+    char *obj = (char *)object;
+    u32 *c1;
+    u32 *c2;
+    u32 *c3;
+    u32 *c4;
+    u32 fade;
+    int counter = *(int *)(obj + 0x1B8);
+    int alpha = *(u8 *)((u8 *)*(u32 **)(obj + 8) + 3);
+    int v0;
+    int v1;
+    int i;
+    float f0;
+    float f20;
+    float f21;
+
+    if (counter > 0) {
+        alpha += 8;
+        counter--;
+        alpha = (alpha < 0x61) ? alpha : 0x60;
+        *(int *)(obj + 0x1B8) = counter;
+    } else {
+        alpha = (alpha - 8 >= 0) ? alpha - 8 : 0;
+    }
+
+    if (alpha == 0) {
+        *(int *)*(int *)(obj + 4) = 0;
+        return;
+    }
+
+    fade = alpha << 24;
+
+    c1 = *(u32 **)(obj + 8);
+    *c1 = (*c1 & 0x00FFFFFF) | fade;
+    c2 = *(u32 **)(obj + 0xC);
+    *c2 = (*c2 & 0x00FFFFFF) | fade;
+    c3 = (u32 *)GuiElementGetColor((GuiElement *)(obj + 0x10));
+    *c3 = (*c3 & 0x00FFFFFF) | fade;
+    c4 = (u32 *)GuiElementGetColor((GuiElement *)(obj + 0x5C));
+    *c4 = (*c4 & 0x00FFFFFF) | fade;
+
+    while (*(int *)(obj + 0x1D4) >= 0x1D6 && *(int *)(obj + 0x1C4) != 0) {
+        *(int *)(obj + 0x1C4) = *(int *)(obj + 0x1C4) - 1;
+        if (*(u8 **)(obj + 0x1D8) != 0) {
+            *(int *)(obj + 0x1D4) = 0;
+            for (i = 0; i < *(int *)(obj + 0x1B0); i++) {
+                int width = func_0027F900((const char *)((u8 **)(obj + 0x1D8))[i], -1,
+                        func_003396E8((s32)obj, *(int *)(obj + 0x1C4)));
+                int widest = *(int *)(obj + 0x1D4);
+
+                if (widest < width)
+                    widest = width;
+                *(int *)(obj + 0x1D4) = widest;
+            }
+        }
+    }
+
+    switch (*(int *)(obj + 0x1C4)) {
+    case 0:
+        *(int *)(obj + 0x1BC) = 5;
+        *(int *)(obj + 0x1C0) = 5;
+        break;
+    case 1:
+        *(int *)(obj + 0x1BC) = 6;
+        *(int *)(obj + 0x1C0) = 5;
+        break;
+    case 2:
+        *(int *)(obj + 0x1BC) = 8;
+        *(int *)(obj + 0x1C0) = 6;
+        break;
+    }
+
+    if (*(int *)(obj + 0x1C4) == 3)
+        return;
+
+    f21 = 0.0f;
+    v1 = (*(int *)(obj + 0x1D4) >> 1) + *(int *)(obj + 0x1BC);
+    v0 = ((*(int *)(obj + 0x1B0) << 4) >> 1) + *(int *)(obj + 0x1C0);
+    *(int *)(obj + 0x1A8) = v1;
+    *(int *)(obj + 0x1AC) = v0;
+    GuiElementSetAlpha((GuiElement *)(obj + 0x5C), ((float)v1 - 40.0f) * 0.004950495f * 0.5675f + 0.005f);
+    if (f21 < D_1ADBAC)
+        GuiElementSetAlpha((GuiElement *)(obj + 0x5C), D_1ADBAC);
+    f0 = (float)*(int *)(obj + 0x1AC);
+    f20 = (f0 - 14.0f) * 0.0065789474f;
+    GuiElementSetAlpha((GuiElement *)(obj + 0x10), f20 * 0.85f + 0.03f);
+    if (f21 <= D_1ADBB0)
+        GuiElementSetAlpha((GuiElement *)(obj + 0x10), D_1ADBB0);
+    *(float *)(obj + 0x1D0) = f20 * 306.0f + 23.5f;
+}
+#endif
 
 /* func_00339A80: no-op stub (empty body - registered/overridable hook). Its one
  * caller, func_00339A88, passes the widget in $a0, so it takes the widget. */

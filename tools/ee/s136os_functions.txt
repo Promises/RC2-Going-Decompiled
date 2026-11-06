@@ -774,3 +774,4 @@ usa text/250080 func_00350F28
 usa text/188858 UpdateSubtitleStateMachine
 usa text/191238 SetupMemoryArenaTable
 usa text/188858 func_0028E680
+usa text/235FE8 func_00339740 S136EXTRA=-fno-strict-aliasing

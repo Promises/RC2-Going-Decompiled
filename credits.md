@@ -706,6 +706,16 @@
     func_0033D070 on the s136os arm as the unit is; func_00346AF8 and
     func_003380B8 with the per-function `S136EXTRA=-fno-strict-aliasing`
     override (RULING #12178). Task #2501.
+  - **`func_00339740`** (`0x00339740`, the fade and fit-to-width layout of a
+    measured text box) in `going-decompiled/src/usa/text/235FE8.c`, from
+    `src/us2/game/00339740-g8.c` (`func_US2_00339740`, author commit
+    `22fbd608`, bigbeno37; audit NOTE #13103 / FACT #13097). ADAPTED: our
+    callee names and prototypes (`GuiElementGetColor`, `GuiElementSetAlpha`,
+    `func_0027F900`, `func_003396E8`, with `GuiElement *`, `const char *`
+    and `s32` casts) and our data names `D_1ADBAC` / `D_1ADBB0` for their
+    `sda` floats; the unit's -G8 makes those gp-relative without the
+    attribute. Per-function `S136EXTRA=-fno-strict-aliasing` override
+    (RULING #12178, RULING #13082, task #2466).
   - **`func_L24_0034D598`** (level program 24, Ship Shack, at `0x0034D598`:
     builds the level-ordered menu rows and selects the current owner's entry)
     in `going-decompiled/levels/usa/L24/src/func_L24_0034D598.c`, the first
