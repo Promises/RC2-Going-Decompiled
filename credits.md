@@ -840,6 +840,44 @@
     unit's `u8[]` string buffers. s136os arm as the unit is (S136EXTRA "");
     its six switch tables are bound to the ROM's by `tools/ee/jtbl_bind.sh`.
     Task #2551.
+  - **The display-model loaders and texture-upload queue of
+    `going-decompiled/src/usa/text/191238.cpp`** (task #2540, s136os arm at
+    the unit's flags; the six upstream blobs are identical at `b2a35115`,
+    `5776dcc3` and the head `fe6adf9b`). The ROM's 64-bit `dli` constants
+    use RULING #8549 allowlist rows (one per function). Six bodies:
+    - **`LoadPlayerDisplayTextures`** (`0x00292928`), from
+      `src/us2/game/00292928.c` (`func_US2_00292928`, author commit
+      `f0f860b7`, bigbeno37). ADAPTED: our names by address; their
+      fixed-address macros defined over EE-only `.sdata` views of our
+      symbols (`g_pPlayerModelBuffer` [0]/[1], `g_cheatFlags` +2/+9/+0xA/+0xB,
+      the VRAM block words); `ULL` written `UL`; one empty `"+m"`/`"m"` asm
+      fence (RULINGs #13208 and #13379).
+    - **`LoadHeldItemDisplayModel`** (`0x00292CB8`), from
+      `src/game/00292408.c` (`func_00292408`, author commit `e14fe0f3`,
+      bigbeno37). ADAPTED: our names by address, `long` written `s64`,
+      EE-only views for the buffer pointer (`.data`), the VRAM words and
+      the descriptor table.
+    - **`LoadShipDisplayModel`** (`0x00292EA0`), from
+      `src/game/002925F0-g8.c` (`func_002925F0`, author commit `34e66dc9`,
+      Flavius; their header says it was carried from rac3-decomp). ADAPTED:
+      our names by address, the unit's callee prototypes with two casts,
+      EE-only views of `g_shipModelBufferBase` and `D_1A91E0`.
+    - **`LoadShipDisplayTexture`** (`0x00292F68`), from
+      `src/game/00291758.c` (`func_002926B8`, author commit `e14fe0f3`,
+      bigbeno37). ADAPTED: our names by address, `long` written `s64`,
+      EE-only views of the frame-arena pair and the VRAM words.
+    - **`func_002954F0`** (`0x002954F0`), from `src/game/00294BC8.c`
+      (`func_00294C40`, author commit `ec07f377`, bigbeno37). ADAPTED: our
+      names by address, `long` written `s64`, the unit's
+      `g_vramAllocCursorAbs` equate, their queue record as our
+      `GsTextureUploadSlot`.
+    - **`QueueGsTextureUpload`** (`0x00295630`), from `src/game/00294D80.c`
+      (`func_00294D80`, author commit `8daa0d46`, Flavius). ADAPTED: our
+      names by address, `ULL` written `UL`, the record's fields renamed,
+      the count declared `s32`.
+    Each function's doc comment carries the full `Source:` line and the
+    removal probe for each device. None of the six source files carries a
+    notice of its own.
 
   - **`UpdateSubtitleStateMachine`** (`0x00289BB8`) in
     `going-decompiled/src/usa/text/188858.c`, from `src/game/00289178.c`
