@@ -1596,6 +1596,7 @@ g_pHudAssetHeader
 g_pHudIconMap
 g_pHudTextureSlots
 g_pLastOcclusionMask
+g_pLensFlareSource
 g_pLevelOrder
 g_pLevelSelectListEntries
 g_pLoadedSegment

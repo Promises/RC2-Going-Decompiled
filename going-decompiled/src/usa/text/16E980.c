@@ -2917,10 +2917,13 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/16E980", func_0
  * scalars through the device above; (2) our callee spellings: func_00282E48
  * = Vec3DistVu0 (0x2837F8), func_00283CE0 = IntToFloat (0x284690),
  * func_00279BD8 = func_0027A138 (0x27A138), func_0027C878 = GetUiTextureTex0
- * (0x27CED8; upstream's `long` return and DrawGlyphQuad's two `long` args
- * kept - `long` is the 64-bit EE type), func_00282C48 = GetFloatAbs
+ * (0x27CED8; upstream's `long` return kept - `long` is the 64-bit EE type),
+ * func_00282C48 = GetFloatAbs
  * (0x2835F8), func_00283CF0 = FloatToInt (0x2846A0), func_0027E018 =
- * DrawGlyphQuad (0x27E698); (3) int/float/unsigned int spelled
+ * DrawGlyphQuad (0x27E698; ADAPTED: its last two args are declared u64, not
+ * upstream's `long`, to agree with the unit's own definition in
+ * text/178E88.cpp - on EE u64 is unsigned long, the same 64-bit convention,
+ * so the call sites compile identically); (3) int/float/unsigned int spelled
  * s32/f32/u32, the same types on EE. The statements are upstream's. On
  * native, GetUiTextureTex0 keeps the unit's u64 prototype and the screen
  * scalars are declared individually.
@@ -2972,7 +2975,7 @@ extern f32 Vec3DistVu0(LensFlareVec *a, LensFlareVec *b);
 extern void func_0027A138(LensFlareVec *out, LensFlareVec *in);
 extern s32 FloatToInt(f32 x);
 extern void DrawGlyphQuad(s32 x, s32 y, s32 width, s32 height, s32 u, s32 v,
-                          s32 uw, s32 vh, long colour, long texture);
+                          s32 uw, s32 vh, u64 colour, u64 texture);
 void DrawLensFlare(void) {
     LensFlareVec projected;
     f32 centre[2], delta[2], scaled[2], point[2];
