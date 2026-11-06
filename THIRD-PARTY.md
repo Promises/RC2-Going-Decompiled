@@ -502,3 +502,48 @@ notice that applies is therefore the 3-clause form above, compatible with this
 project's GPL-2.0-or-later. The head file also carries a 2002 Red Hat notice for
 positional-argument support, code that is not in the tag's file and not in this
 body.
+
+### Newlib C bodies adopted via OpenRAC rac2-decomp at 5833be5b — notice-less Newlib origin files (task #2499, RULING #13179; watcher-2 answer 2026-11-06)
+
+Three C bodies in `going-decompiled/src/usa/cod/015180.c` reconstruct
+Newlib C-library code as SCE built it: `abort` (Newlib
+`libc/stdlib/abort.c`; SCE replaced the raise-loop with a single call to
+the exit thunk), `AssertFail` (Newlib `__assert`, `libc/assert.c`) and
+`func_00115E68` (Newlib `atoi`, `libc/stdlib/atoi.c`). Adopted per
+RULING #13179. Their Newlib origin files were read in a fresh clone of
+<https://sourceware.org/git/newlib-cygwin.git> at the release tag nearest
+"newlib 1999" — `newlib-2000-02-17`, the earliest release tag; no 1999
+tag exists — and again at HEAD: **`abort.c`, `assert.c` and `atoi.c`
+carry no in-file copyright notice of their own at either ref**
+(`libc/stdlib/strtol.c` in the same tag tree does carry one, so the
+absence is real, not a clone artefact). `COPYING.NEWLIB` is absent from
+that tag's tree, so the text below is quoted from HEAD `5aa0a116`, whose
+preamble reads: "Each file may have its own copyright/license that is
+embedded in the source file. Unless otherwise noted in the body of the
+source file(s), the following copyright notices will apply to the
+contents of the newlib subdirectory." For a notice-less file that
+default therefore applies; this section records it as Newlib's default
+for notice-less files. A Newlib origin file that carries its OWN in-file
+notice (e.g. `libc/stdlib/strtol.c` at this tag) uses that notice
+instead. The applicable notice is section (1), quoted verbatim:
+
+    (1) Red Hat Incorporated
+
+    Copyright (c) 1994-2009  Red Hat, Inc. All rights reserved.
+
+    This copyrighted material is made available to anyone wishing to use,
+    modify, copy, or redistribute it subject to the terms and conditions
+    of the BSD License.   This program is distributed in the hope that 
+    it will be useful, but WITHOUT ANY WARRANTY expressed or implied, 
+    including the implied warranties of MERCHANTABILITY or FITNESS FOR 
+    A PARTICULAR PURPOSE.  A copy of this license is available at 
+    http://www.opensource.org/licenses. Any Red Hat trademarks that are
+    incorporated in the source code or documentation are not subject to
+    the BSD License and may only be used or replicated with the express
+    permission of Red Hat, Inc.
+
+The reconstructor credit is in credits.md (OpenRAC rac2-decomp,
+GPL-3.0, RULING #10405 — the GPL-2.0-or-later note in the section
+"OpenRAC rac2-gc-decomp (GPL-3.0)" above applies to the adopted C text
+as for the other OpenRAC bodies); this section records Newlib's notice,
+which covers the reconstructed behaviour those bodies re-implement.

@@ -793,3 +793,33 @@
   share shapes that are largely forced by the assembly; whether the draft was
   consulted is not recorded, so it is credited here as possible prior art
   (validator #2512).
+
+- **OpenRAC — `rac2-decomp` at `5833be5b`, Newlib-identity bodies in cod/015180** (GPL-3.0; the bodies reconstruct Newlib code, whose notice is carried in THIRD-PARTY.md's section "Newlib C bodies adopted via OpenRAC rac2-decomp at 5833be5b — notice-less Newlib origin files")
+  <https://github.com/OpenRAC/rac2-decomp> at commit `5833be5b` (read at
+  HEAD; `src/core/00115200.c` and `src/core/00115E68.c` are identical at the
+  audit pin `b2a35115e0cf580a1fdab8dd1071b157799e590e`)
+
+  Three Newlib-identity C bodies, adopted per RULING #13179 and re-checked
+  byte-exact against our v2.00 ROM on the per-function SN 2.95.2 arm
+  (RULING #12157, task #2499). Contributor: Louis-Philippe Le Sieur
+  (llesieur99). Newlib's notice for the reconstructed code is carried in
+  THIRD-PARTY.md ("Newlib C bodies adopted via OpenRAC rac2-decomp at
+  5833be5b — notice-less Newlib origin files"): the origin files carry no
+  in-file notice, so COPYING.NEWLIB's default section (1) applies. Each
+  doc comment carries the `Source:` line, which names every change.
+
+  Used so far:
+  - **`abort`** (`0x00115E28`, Newlib `abort`, SCE-modified: the raise-loop
+    replaced by one call to `_exitThunk`) and **`AssertFail`**
+    (`0x00115E38`, Newlib `__assert`), both in
+    `going-decompiled/src/usa/cod/015180.c`, from `src/core/00115200.c`
+    (`func_00115E28` / `func_00115E38`, author commit `2e9774a0`,
+    Louis-Philippe Le Sieur). ADAPTED: `func_00131CA8` spelled
+    `_exitThunk` and `func_00115E28` spelled `abort` (our symbols), their
+    `(char *)` pointer arithmetic kept in this unit's `s32` model, `int`
+    written `s32`.
+  - **`func_00115E68`** (`0x00115E68`, Newlib `atoi`) in
+    `going-decompiled/src/usa/cod/015180.c`, from `src/core/00115E68.c`
+    (`func_00115E68`, author commit `7b023993`, Louis-Philippe Le Sieur).
+    ADAPTED: callee `func_001175F0` keeps its name (this unit's own
+    symbol), `long` written `s64`, `int` written `s32`, `NULL` written 0.
