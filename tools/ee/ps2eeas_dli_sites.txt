@@ -197,3 +197,23 @@ usa      func_00280EC8  0x00280F88  $5,0x8000000044          34058000 00052e38 3
 usa      FmvStreamFeedLoop  0x0034FE9C  $4,0x8000000000f  34048000 00042738 3484000f
 usa      DrawRotatedSprite2d  0x0027ED6C  $5,0xb400000000008001  3405b400 00052c3c 34a58001
 usa      DrawRotatedSprite2d  0x0027ED78  $6,0x53535353106       3406a6a6 00063438 34c6a6a6 000632f8 34c60106
+#
+# Six text/191238 functions compiled from C on the s136os arm (OpenRAC bodies,
+# task #2540), each in reorder mode with no branch after the site.
+# LoadPlayerDisplayTextures, LoadHeldItemDisplayModel, LoadShipDisplayTexture,
+# func_002954F0 and QueueGsTextureUpload each build a GS TEX0 word whose CLD
+# field sets bit 63. GNU as gives `ori 0x8000; dsll32 16` for that value; the
+# ROM has Ps2EeAs's `addiu -1; dsll32 31` (func_0026FC88's form). The site is
+# followed by an `or` in four of them and by `lw` in LoadHeldItemDisplayModel.
+# LoadShipDisplayModel's site is the fixed GS register word 0x40000400004000,
+# followed by an `sd`. GNU as gives 4 words (`lui 0x40; ori 4; dsll32; ori
+# 0x4000`, NOTE #9664) and the ROM has Ps2EeAs's 5, so without the row the
+# function is one word short. The 0x400000000 (TCC) constant in the five TEX0
+# builders needs no row: GNU as already emits the ROM's `ori 0x8000; dsll 19`.
+#
+usa      LoadPlayerDisplayTextures  0x00292B38  $3,0x8000000000000000  2403ffff 00031ffc
+usa      LoadHeldItemDisplayModel   0x00292E48  $2,0x8000000000000000  2402ffff 000217fc
+usa      LoadShipDisplayModel       0x00292F1C  $2,0x40000400004000    34028000 00021538 34428000 000214f8 34424000
+usa      LoadShipDisplayTexture     0x00293100  $5,0x8000000000000000  2405ffff 00052ffc
+usa      func_002954F0              0x002955A0  $2,0x8000000000000000  2402ffff 000217fc
+usa      QueueGsTextureUpload       0x0029569C  $3,0x8000000000000000  2403ffff 00031ffc
