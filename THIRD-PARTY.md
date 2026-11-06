@@ -167,11 +167,12 @@ C function bodies are taken from OpenRAC's `rac2-decomp`,
 License, version 3; the repository carries `rac2-gc-decomp`'s history, with
 `96927f87` an ancestor), with the authors' permission (RULINGs #10405 and
 #12108). Each is adapted, with every respelling named in the function's
-`Source:` line. The source file below carries no notice of its own.
+`Source:` line. Neither source file below carries a notice of its own.
 
 | Here | Upstream file | Upstream name |
 |---|---|---|
 | `func_00346878` in `going-decompiled/src/usa/text/235FE8.c` (adapted: our symbol names, signature and `PlayGlobalSound` prototype; their owner struct as our `GuiGridCursor` view; their `.sdata` `g_inventoryOwned` and their typed grid array as EE-only asm-label aliases; `sda` dropped), task #2467 | `src/us2/game/00346878-g8.c` | `func_US2_00346878` (v2.00 address) |
+| `func_L24_0034D598` in `going-decompiled/levels/usa/L24/src/func_L24_0034D598.c`, level program 24 (adapted: our name at the v2.00 place, the boot's `g_anAvailableLevelOrder`, four level symbols renamed to the v2.00 ROM's relocation targets, `volatile` and `sda` dropped as measured inert, `include_asm.h` dropped; the blob is identical at the repository's head `5833be5b716983046be737d85080b96bc9f1435a`), task #2495 | `src/levels/24_ship_shack/L24_0034C450-init-g8.c` | `func_L24_0034C450` (v1.01 address) |
 
 The GPL-2.0-or-later note in the section "OpenRAC rac2-gc-decomp (GPL-3.0)" above applies to these bodies too.
 

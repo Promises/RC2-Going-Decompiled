@@ -564,13 +564,15 @@
     byte-exact on our ROM; its one inline `sync` is the hardware barrier
     RULING #12168 allows (task #2297).
 
-- **OpenRAC — `rac2-decomp`, commit `b2a35115`, text/235FE8 Window X bodies** (GPL-3.0)
+- **OpenRAC — `rac2-decomp`, commit `b2a35115`, Window X bodies (text/235FE8 and level program 24)** (GPL-3.0)
   <https://github.com/OpenRAC/rac2-decomp> at commit `b2a35115e0cf580a1fdab8dd1071b157799e590e`
   (the same history as `rac2-gc-decomp` above: `96927f87` is an ancestor)
 
-  Engine C bodies from upstream's `src/us2/` (their USA v2.00 port), adopted
-  with the authors' permission (held by the operator, RULINGs #10405 and
-  #12108) and re-checked byte-exact against our v2.00 ROM on the s136os arm.
+  C bodies from upstream's `src/us2/` (their USA v2.00 port) and
+  `src/levels/` (their level programs), adopted with the authors' permission
+  (held by the operator, RULINGs #10405 and #12108) and re-checked byte-exact
+  against our v2.00 ROM (the boot ELF, or the level program off the disc) on
+  the s136os arm.
   Each doc comment carries the `Source:` line, which names every respelling.
 
   Used so far:
@@ -583,6 +585,17 @@
     their typed grid array as EE-only asm-label aliases, `sda` dropped. Per-
     function `S136EXTRA=-fno-strict-aliasing` override (RULING #12178,
     task #2467).
+  - **`func_L24_0034D598`** (level program 24, Ship Shack, at `0x0034D598`:
+    builds the level-ordered menu rows and selects the current owner's entry)
+    in `going-decompiled/levels/usa/L24/src/func_L24_0034D598.c`, the first
+    level function built from C. From
+    `src/levels/24_ship_shack/L24_0034C450-init-g8.c` (`func_L24_0034C450`,
+    author commit `a96d3126`, Louis-Philippe Le Sieur), read at the head
+    `5833be5b`, where the blob is identical to `b2a35115`'s. ADAPTED: our
+    name at the v2.00 place, the boot's `g_anAvailableLevelOrder` for
+    `D_00139948`, four level symbols renamed to the v2.00 ROM's relocation
+    targets, `volatile` and `sda` dropped (both measured inert),
+    `include_asm.h` dropped. s136os arm at -G8, no device (task #2495).
 
 - **OpenRAC — `rac2-decomp`, commit `b2a35115`, text/178E88 Window X bodies** (GPL-3.0)
   <https://github.com/OpenRAC/rac2-decomp> at commit `b2a35115e0cf580a1fdab8dd1071b157799e590e`
