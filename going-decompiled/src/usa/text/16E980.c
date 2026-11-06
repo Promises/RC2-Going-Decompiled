@@ -2876,13 +2876,153 @@ s32 func_00272560(f32 *out, const Vec4 *from, const Vec4 *to) {
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/16E980", func_002725D8);
 
-/* DrawLensFlare: project the sun/light source to screen space and draw the
- * lens-flare sprite chain. The ROM has seventeen callee-saves at 8-byte slot
- * spacing (the packed-save frame cc1 2.9 cannot produce; a cc1 2.9 property,
- * not a wall on the s136os arm: FACT #9873 / NOTE #9871) and interleaved
- * projection/draw fp math; 0x10C bytes. Left INCLUDE_ASM: it has no C arm, so
- * the s136os arm has never been tried. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", DrawLensFlare);
+/* DrawLensFlare: draw the 16-element lens-flare chain. No parameters, no
+ * return. Does nothing unless g_pLensFlareSource.active is exactly 1, the
+ * source moby is not hidden (state bit 0x80 at +0x20) and the block's
+ * intensity (+0x8) is > 0; otherwise the source position (+0x10) is
+ * projected to screen space and each element i is drawn by DrawGlyphQuad at
+ * centre + (centre - projected) * offset[i], sized scale[i] * (64 for
+ * element 0, else 32), its alpha byte FloatToInt(alpha[i] * clamp(distance -
+ * 5, 0, 1) * two screen-edge falloffs) over the block colour's low 24 bits.
+ * The intensity is cleared after the chain; the writer that re-arms it each
+ * frame is overlay-side. (Mechanism: NOTE #5515.)
+ *
+ * ADOPTED from OpenRAC (RULING #10405; audit NOTE #13117 / FACT #13102,
+ * task #2453; landed by task #2459). MATCHED on the s136os arm as the unit
+ * is today (S136EXTRA "", gcse on): FACT #13102 measured 0/239 words
+ * in-unit and through the real s136os_splice, 28/28 relocations GOOD. The
+ * 2.9 arm keeps the ROM asm via the slot (its packed-save wall does not
+ * apply to the spliced body, NOTE #9871).
+ * DEVICE: g_screenCentre below - ONE unsized s32 array aliased to
+ * g_screenCenterDefaultX with section(".sdata") (a RULING #8620
+ * addressing-model device plus a RULING #12316 undersized extern array),
+ * read [0..3] for upstream's __attribute__((sda)) D_001A7348[]: the four
+ * consecutive scalars g_screenCenterDefaultX/Y (+0/+4) and g_gsPixelOffsetX/Y
+ * (+8/+0xC, 0x1A7348..0x1A7354). EE arm only; the native arm declares the
+ * true objects. Without the attribute the body builds LEN 237/239 and the
+ * splice REFUSES it; four separate sized .sdata scalars instead of the one
+ * array read LEN 235/239 (FACT #13102).
+ * GUARD: on EE this C is compiled alone by SN 2.95.3 v1.36 -fopt-stack
+ * (tools/ee/s136os_functions.txt) and spliced over the S136OS_SLOT line by
+ * tools/ee/s136os_splice.sh; on native it is plain C.
+ * Source: OpenRAC/rac2-decomp @b2a35115e0cf580a1fdab8dd1071b157799e590e
+ * (GPL-3.0, adopted with the authors' permission per RULING #10405),
+ * src/game/0026EA00.c, func_002725E0 (author commit d4ac4036, bigbeno37,
+ * 2026-10-29). ADAPTED: (1) our data spellings, resolved by address:
+ * D_001B5640 = g_pLensFlareSource (0x1B55C0, read through the
+ * LensFlareSource struct view below; its fields renamed timer->intensity,
+ * texture->texId, interpolation->offset), D_001B5340 = g_cameraPos (0x1B52C0,
+ * through the unaligned LensFlareVec view g_cameraPosVec - the unit's Vec4
+ * is aligned(16) and would move the frame), D_001A7348[0..3] = the screen
+ * scalars through the device above; (2) our callee spellings: func_00282E48
+ * = Vec3DistVu0 (0x2837F8), func_00283CE0 = IntToFloat (0x284690),
+ * func_00279BD8 = func_0027A138 (0x27A138), func_0027C878 = GetUiTextureTex0
+ * (0x27CED8; upstream's `long` return and DrawGlyphQuad's two `long` args
+ * kept - `long` is the 64-bit EE type), func_00282C48 = GetFloatAbs
+ * (0x2835F8), func_00283CF0 = FloatToInt (0x2846A0), func_0027E018 =
+ * DrawGlyphQuad (0x27E698); (3) int/float/unsigned int spelled
+ * s32/f32/u32, the same types on EE. The statements are upstream's. On
+ * native, GetUiTextureTex0 keeps the unit's u64 prototype and the screen
+ * scalars are declared individually.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_DrawLensFlare)
+S136OS_SLOT(DrawLensFlare);
+#else
+typedef struct { f32 x, y, z, w; } LensFlareVec;
+/* The g_pLensFlareSource block, 0x110 bytes at 0x1B55C0. */
+typedef struct LensFlareSource {
+    u8 *target;     /* +0x00 source moby; position at +0x10, hidden bit 0x80 at +0x20 */
+    s32 active;     /* +0x04 must be exactly 1 to draw; cleared here otherwise */
+    f32 intensity;  /* +0x08 must be > 0; cleared after the chain is drawn */
+    s32 reserved;   /* +0x0C */
+    s16 alpha[16];  /* +0x10 per-element brightness */
+    s16 texId[16];  /* +0x30 UI texture id, +6 when fed to GetUiTextureTex0 */
+    u32 colour[16]; /* +0x50 low 24 bits kept under the alpha byte */
+    f32 offset[16]; /* +0x90 position along the centre->source line */
+    f32 scale[16];  /* +0xD0 per-element size scale */
+} LensFlareSource;
+extern LensFlareSource g_pLensFlareSource;
+#ifndef TARGET_NATIVE
+/* EE arm: the device view of the four screen scalars (see the comment
+ * above) and the externs as measured by the audit. */
+extern s32 g_screenCentre[] __asm__("g_screenCenterDefaultX") __attribute__((section(".sdata")));
+extern LensFlareVec g_cameraPosVec __asm__("g_cameraPos");
+extern f32 IntToFloat(s32 x);
+extern long GetUiTextureTex0(s32 texId);
+extern f32 GetFloatAbs(f32 x);
+#else
+/* Native arm: the true objects and the unit's prototype. The pixel offsets
+ * carry this unit's own native #else spellings (g_nGsPixelOffsetX/Y, the
+ * same 0x1A7350/0x1A7354 as the canonical g_gsPixelOffsetX/Y). */
+extern s32 g_screenCenterDefaultX; /* 0x1A7348 */
+extern s32 g_screenCenterDefaultY; /* 0x1A734C */
+extern s32 g_nGsPixelOffsetX;      /* 0x1A7350, alias g_gsPixelOffsetX */
+extern s32 g_nGsPixelOffsetY;      /* 0x1A7354, alias g_gsPixelOffsetY */
+extern Vec4 g_cameraPos;
+extern u64 GetUiTextureTex0(s32 texId);
+#define g_cameraPosVec (*(LensFlareVec *)&g_cameraPos)
+#define g_screenCentre ((s32 *)&g_screenCenterDefaultX)
+#endif
+/* Callees the unit declares only later in the file (FloatToInt, far below)
+ * or not at all (Vec3DistVu0, func_0027A138): declared here, before this
+ * body, so BOTH arms see a prototype — without them the native arm would
+ * call them implicitly and then clash with the unit's own later FloatToInt
+ * declaration. Identical redeclarations are compatible C. */
+extern f32 Vec3DistVu0(LensFlareVec *a, LensFlareVec *b);
+extern void func_0027A138(LensFlareVec *out, LensFlareVec *in);
+extern s32 FloatToInt(f32 x);
+extern void DrawGlyphQuad(s32 x, s32 y, s32 width, s32 height, s32 u, s32 v,
+                          s32 uw, s32 vh, long colour, long texture);
+void DrawLensFlare(void) {
+    LensFlareVec projected;
+    f32 centre[2], delta[2], scaled[2], point[2];
+    f32 distance;
+    s32 i;
+
+    if (g_pLensFlareSource.active != 1 || (g_pLensFlareSource.target[0x20] & 0x80)) {
+        g_pLensFlareSource.active = 0;
+        return;
+    }
+    if (g_pLensFlareSource.intensity <= 0.0f) return;
+    distance = Vec3DistVu0(&g_cameraPosVec, (LensFlareVec *)(g_pLensFlareSource.target + 0x10));
+    centre[0] = IntToFloat(g_screenCentre[0]);
+    centre[1] = IntToFloat(g_screenCentre[1]);
+    func_0027A138(&projected, (LensFlareVec *)(g_pLensFlareSource.target + 0x10));
+    projected.x = (projected.x - IntToFloat(g_screenCentre[2])) * 0.0625f;
+    projected.y = (projected.y - IntToFloat(g_screenCentre[3])) * 0.0625f;
+    delta[0] = centre[0] - projected.x;
+    delta[1] = centre[1] - projected.y;
+    for (i = 0; i < 16; ++i) {
+        long texture = GetUiTextureTex0(g_pLensFlareSource.texId[i] + 6);
+        s32 width = i ? 32 : 64;
+        s32 size, x, y;
+        f32 fade = distance - 5.0f;
+        f32 fade_x, fade_y, radius;
+        u32 colour;
+        scaled[0] = delta[0] * g_pLensFlareSource.offset[i];
+        scaled[1] = delta[1] * g_pLensFlareSource.offset[i];
+        point[0] = centre[0] + scaled[0];
+        point[1] = centre[1] + scaled[1];
+        if (fade > 1.0f) fade = 1.0f;
+        else if (fade < 0.0f) fade = 0.0f;
+        fade_x = GetFloatAbs(delta[0]) / centre[0] * -5.0f + 5.5f;
+        if (fade_x > 1.0f) fade_x = 1.0f;
+        else if (fade_x < 0.0f) fade_x = 0.0f;
+        fade_y = GetFloatAbs(delta[1]) / centre[1] * -5.0f + 5.5f;
+        if (fade_y > 1.0f) fade_y = 1.0f;
+        else if (fade_y < 0.0f) fade_y = 0.0f;
+        fade *= fade_x * fade_y;
+        colour = (FloatToInt(fade * (f32)g_pLensFlareSource.alpha[i]) << 24) |
+                 (g_pLensFlareSource.colour[i] & 0xFFFFFF);
+        size = FloatToInt((f32)width * g_pLensFlareSource.scale[i]);
+        radius = (f32)(size >> 1);
+        x = FloatToInt(point[0] - radius);
+        y = FloatToInt(point[1] - radius);
+        DrawGlyphQuad(x, y, size, size, 0, 0, width, width, (s32)colour, texture);
+    }
+    g_pLensFlareSource.intensity = 0.0f;
+}
+#endif
 
 /* DrawScreenSpriteFxEntry(x, y, fx): render one queued screen-sprite effect at
  * screen position (x,y), 40px-per-unit scale. mode 0 = radial burst (repeat

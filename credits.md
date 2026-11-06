@@ -705,14 +705,15 @@
     `func_00116360` implement newlib's `__malloc_lock` / `__malloc_unlock`
     hook (`newlib/libc/stdlib/mlock.c`) but carry SCE's body, not newlib's.
 
-- **OpenRAC — `rac2-decomp`, commit `b2a35115`, text/178E88 Window X bodies** (GPL-3.0)
+- **OpenRAC — `rac2-decomp`, commit `b2a35115`, text/178E88 and text/16E980 Window X bodies** (GPL-3.0)
   <https://github.com/OpenRAC/rac2-decomp> at commit `b2a35115e0cf580a1fdab8dd1071b157799e590e`
 
-  Engine C bodies in text/178E88, adopted with the authors' permission
-  (held by the operator, RULING #10405/#12108) and re-checked byte-exact
-  against our v2.00 ROM on the s136os arm (task #2471, from the Window X
-  boot audit NOTE #13122 / FACT #13116). The doc comment carries the
-  `Source:` line, which names every change beyond symbol spellings.
+  Engine C bodies in text/178E88 and text/16E980, adopted with the authors'
+  permission (held by the operator, RULING #10405/#12108) and re-checked
+  byte-exact against our v2.00 ROM on the s136os arm (tasks #2471 and #2472,
+  from the Window X boot audit NOTE #13122 / FACT #13116; task #2459, from
+  NOTE #13117 / FACT #13102). Each doc comment carries the `Source:` line,
+  which names every change beyond symbol spellings.
 
   Used so far:
   - **`func_00280EC8`** (`0x00280EC8`, the offscreen render-target bind for
@@ -733,6 +734,16 @@
     written as the cast view of our `g_sceneActorMobys + 0x44` (0x1B894C +
     0x44 = 0x1B8990, the address the ROM relocates, which their name does not
     spell), `int`/`float`/`short` written `s32`/`f32`/`s16` (task #2472).
+  - **`DrawLensFlare`** (`0x002725F0`) in
+    `going-decompiled/src/usa/text/16E980.c`, from `src/game/0026EA00.c`
+    (`func_002725E0`, author commit `d4ac4036`, bigbeno37; the body is
+    unchanged in that repo since commit `96927f87`). ADAPTED: our data and
+    callee spellings (the flare block read through a struct view of our
+    `g_pLensFlareSource`, `g_cameraPos` through an unaligned view, and
+    upstream's `sda` screen-centre array as one RULING #8620 + #12316
+    `.sdata` extern device spanning our four screen scalars, EE arm only);
+    struct fields renamed (timer->intensity, texture->texId,
+    interpolation->offset); the statements and locals are upstream's.
 
 - **Forja contributors** (MIT, © 2026 Forja contributors), via OpenRAC
   `rac2-gc-decomp` at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`
