@@ -1698,11 +1698,12 @@ s32 PlayFmvMovie(void *a, void *b, s32 aspect, u8 *arena, void *engineCtx, void 
  *   - `volatile` on the g_playerProgress and D_1A7A10 aliases is a CODEGEN DEVICE
  *     (RULING #8404 terms), NOT a claim that another agent writes them during the
  *     loop: it keeps cc1 from moving the two loads, which gives the ROM's empty
- *     slots. Writer census (task #2429, asm/usa + src/usa at 34e2187ae): no
- *     named store to D_1A7A10; named stores to g_playerProgress only in
- *     CommitProgressCheckpoint and func_00299BF8. Both words lie in the save
- *     block at 0x1A79F8, so whole-block copies write them too (not
- *     enumerated). Native reads the plain symbols.
+ *     slots. Writer census (task #2429, asm/usa + src/usa at 34e2187ae; FACT
+ *     #12400 added the third): no named store to D_1A7A10; named `%lo` stores
+ *     to g_playerProgress in CommitProgressCheckpoint, func_00299BF8 and
+ *     RunLevelTransition (0x2ED724, in the whole-unit asm/usa/text/1E6ED0.s).
+ *     Both words lie in the save block at 0x1A79F8, so whole-block copies
+ *     write them too (not enumerated). Native reads the plain symbols.
  * Removal probes on the landed form (s136 screen, task #2429; the full arm reads
  * 0): plain symbols instead of the aliases 7 words (216 built), the two
  * volatiles dropped 11. */
@@ -1722,7 +1723,12 @@ extern volatile u32 D_1A7A10Fmv;
  *   FMV_SCHED_BARRIER: an empty volatile asm, which sched treats as using and
  *     clobbering everything, so nothing in the block crosses it.
  *   FMV_AFTER_STORE(p, m): `p` is rewritten after a read of `m`, so whatever
- *     consumes `p` is scheduled after the store to `m`. */
+ *     consumes `p` is scheduled after the store to `m`.
+ *     RULING Q9b (memory input operand) pending: RULING #8483 names empty
+ *     operand-tied fences, but none names the `"m"(m)` memory INPUT operand,
+ *     and it is that operand which is load-bearing (task #2437: "m" dropped or
+ *     fence removed both leave 3 words at 0x34FEC4/0x34FEE0/0x34FEE8; "+r"
+ *     alone does nothing). This device is not ruled. */
 #define FMV_SCHED_BARRIER() __asm__ __volatile__("")
 #define FMV_AFTER_STORE(p, m) __asm__("" : "+r"(p) : "m"(m))
 #else
@@ -1854,7 +1860,9 @@ s32 FmvStreamFeedLoop(void *ctx, void *base, void *addq) {
              * The two barriers fence the arena load and the offset; the
              * FMV_AFTER_STORE edge keeps the argument add after the store, so
              * reorg puts it in the jal slot (and the branch above becomes the
-             * ROM's bnel). The $2 pin (RULING #8598) is the ROM's arena register.
+             * ROM's bnel). That edge's "m" input is RULING Q9b (memory input
+             * operand), pending. The $2 pin (RULING #8598) is the ROM's arena
+             * register.
              * Removal probes on the landed form (s136 screen, full arm 0):
              * first barrier 2 words, second 4, FMV_AFTER_STORE 5, the $2 pin 5. */
             register u8 *arena EE_REG("$2") = g_pFmvArenaBase;
