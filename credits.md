@@ -684,3 +684,14 @@
   - **`BuildCheatMenuItemList`** (`0x002CD510`) in
     `going-decompiled/src/usa/text/1CA080.cpp`, from `src/us2/game/002CD510.c`
     (`func_US2_002CD510`, author commit `c4928ea3`, Flavius).
+
+- **OpenRAC — `rac2-decomp`, nonmatching draft, possible prior art** (GPL-3.0)
+  <https://github.com/OpenRAC/rac2-decomp> at commit `3e72fa2d`
+
+  Our `FmvStreamFeedLoop` (`0x0034FD90`, `going-decompiled/src/usa/text/24D728.cpp`,
+  task #2429) was decompiled from our ROM. OpenRAC had published a nonmatching
+  draft of the same function, `nonmatching/game/func_0034F048.c` (author
+  "Fromnowhere", 2026-10-30), about 16 hours before our first draft. The two
+  share shapes that are largely forced by the assembly; whether the draft was
+  consulted is not recorded, so it is credited here as possible prior art
+  (validator #2512).

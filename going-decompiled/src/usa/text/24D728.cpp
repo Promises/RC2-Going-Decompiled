@@ -1724,11 +1724,10 @@ extern volatile u32 D_1A7A10Fmv;
  *     clobbering everything, so nothing in the block crosses it.
  *   FMV_AFTER_STORE(p, m): `p` is rewritten after a read of `m`, so whatever
  *     consumes `p` is scheduled after the store to `m`.
- *     RULING Q9b (memory input operand) pending: RULING #8483 names empty
- *     operand-tied fences, but none names the `"m"(m)` memory INPUT operand,
- *     and it is that operand which is load-bearing (task #2437: "m" dropped or
- *     fence removed both leave 3 words at 0x34FEC4/0x34FEE0/0x34FEE8; "+r"
- *     alone does nothing). This device is not ruled. */
+ *     Its `"m"(m)` memory INPUT operand is the load-bearing part (task #2437:
+ *     "m" dropped or fence removed both leave 3 words at 0x34FEC4/0x34FEE0/
+ *     0x34FEE8; "+r" alone does nothing). Ruled allowed by RULING #13208
+ *     (Q9b, extending #8483): empty template, EE only, no-op on native. */
 #define FMV_SCHED_BARRIER() __asm__ __volatile__("")
 #define FMV_AFTER_STORE(p, m) __asm__("" : "+r"(p) : "m"(m))
 #else
@@ -1745,12 +1744,19 @@ extern u32 D_1A7A10;
 /* GUARD (task #2429): on EE this C is the image's FmvStreamFeedLoop, compiled
  * alone by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810) with gcse ON
  * (its selector row carries `S136EXTRA=`, RULING #12178; under the unit's
- * -fno-gcse the same body reads 76 words off, NOTE #12334) and spliced over
+ * -fno-gcse the landed body builds 221 words, one LONGER than the ROM's 220, and
+ * the splice refuses it - validators #2437/#2512) and spliced over
  * S136OS_SLOT by tools/ee/s136os_splice.sh. No asm fallback. On native it is
  * plain C. The `dli $4,0x8000000000f` at 0x34FE9C needs its RULING #8549 row in
  * tools/ee/ps2eeas_dli_sites.txt (2 words without it).
  * History: NOTE #12255 / #12306 / #12334 / #12354 (15 -> 7 words), closed by the
- * FmvRequestStop-block devices below (task #2429). */
+ * FmvRequestStop-block devices below (task #2429).
+ * Prior art: OpenRAC rac2-decomp published a nonmatching draft of this function,
+ * nonmatching/game/func_0034F048.c @3e72fa2d (author "Fromnowhere",
+ * 2026-10-30, GPL-3.0), about 16 h before our first draft (task #2340). This body
+ * was decompiled from our ROM; the shared shapes are largely forced by the asm,
+ * and whether that draft was consulted is not recorded, so it is credited here
+ * as possible prior art (validator #2512 Q1; credits.md). */
 #if !defined(TARGET_NATIVE) && !defined(S136OS_FmvStreamFeedLoop)
 S136OS_SLOT(FmvStreamFeedLoop);
 #else
@@ -1860,8 +1866,8 @@ s32 FmvStreamFeedLoop(void *ctx, void *base, void *addq) {
              * The two barriers fence the arena load and the offset; the
              * FMV_AFTER_STORE edge keeps the argument add after the store, so
              * reorg puts it in the jal slot (and the branch above becomes the
-             * ROM's bnel). That edge's "m" input is RULING Q9b (memory input
-             * operand), pending. The $2 pin (RULING #8598) is the ROM's arena
+             * ROM's bnel). That edge's "m" input is ruled allowed by
+             * RULING #13208 (Q9b). The $2 pin (RULING #8598) is the ROM's arena
              * register.
              * Removal probes on the landed form (s136 screen, full arm 0):
              * first barrier 2 words, second 4, FMV_AFTER_STORE 5, the $2 pin 5. */
