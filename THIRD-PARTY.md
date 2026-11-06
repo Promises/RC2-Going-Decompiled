@@ -451,13 +451,13 @@ game's copy of newlib's `_vfiprintf_r`: newlib's `libc/stdio/vfprintf.c`
 compiled with `-DINTEGER_ONLY` (newlib's own `libc/stdio/Makefile.am` rule for
 `vfiprintf.o`), with Sony's output layer in place of newlib's `__sprint`/uio.
 The format scanning, conversion and padding logic derive from that file, so its
-notice is reproduced here verbatim, as published at newlib-cygwin
-(<https://sourceware.org/git/newlib-cygwin.git>) tag `newlib-2000-02-17`
-(commit `061afe83dc04a43321d69b5f04860e5de799665c`), path
-`newlib/libc/stdio/vfprintf.c`, RULING #13179, task #2500:
+notice is reproduced here verbatim in its current form, as published at
+newlib-cygwin (<https://sourceware.org/git/newlib-cygwin.git>) commit
+`5aa0a116d1a3` (read 2026-11-06), path `newlib/libc/stdio/vfprintf.c`,
+RULING #13179, task #2500:
 
 ```
-/*-
+/*
  * Copyright (c) 1990 The Regents of the University of California.
  * All rights reserved.
  *
@@ -472,11 +472,7 @@ notice is reproduced here verbatim, as published at newlib-cygwin
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
- * 3. All advertising materials mentioning features or use of this software
- *    must display the following acknowledgement:
- *	This product includes software developed by the University of
- *	California, Berkeley and its contributors.
- * 4. Neither the name of the University nor the names of its contributors
+ * 3. Neither the name of the University nor the names of its contributors
  *    may be used to endorse or promote products derived from this software
  *    without specific prior written permission.
  *
@@ -494,16 +490,15 @@ notice is reproduced here verbatim, as published at newlib-cygwin
  */
 ```
 
-That tag is the earliest newlib snapshot in the repository (no 1999 release is
-tagged there; its `newlib/README` is the one for the newlib-1.8.2 release), so
-it is the nearest to the "newlib 1999 implementation" the upstream file's
-header names. At the repository's head (`5aa0a116d1a3`, read 2026-11-06) the
-same notice is the 3-clause form: clause 3 (the advertising acknowledgement,
-"All advertising materials mentioning features or use of this software must
-display the following acknowledgement: This product includes software developed
-by the University of California, Berkeley and its contributors.") is removed
-and clause 4 is renumbered 3, by newlib commit
-`9042d0ce65533a26fc3264206db5828d5692332c` (Keith Packard, 2020-01-29, "Use
-remove-advertising-clause script to edit BSD licenses"). The head file also
-carries a 2002 Red Hat notice for positional-argument support, code that is not
-in the tag's file and not in this body.
+The code itself derives from the older copy at tag `newlib-2000-02-17` (commit
+`061afe83dc04a43321d69b5f04860e5de799665c`), the earliest newlib snapshot in the
+repository (its `newlib/README` is the newlib-1.8.2 release's), whose notice
+still carried a clause 3 requiring advertising materials to acknowledge the
+University of California. The University rescinded that advertising clause for
+all software copyrighted by its Regents in 1999, and newlib removed it from the
+file in commit `9042d0ce65533a26fc3264206db5828d5692332c` (Keith Packard,
+2020-01-29, "Use remove-advertising-clause script to edit BSD licenses"). The
+notice that applies is therefore the 3-clause form above, compatible with this
+project's GPL-2.0-or-later. The head file also carries a 2002 Red Hat notice for
+positional-argument support, code that is not in the tag's file and not in this
+body.
