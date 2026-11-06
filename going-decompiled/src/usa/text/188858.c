@@ -5620,7 +5620,85 @@ s32 func_0028DC28(HudElement *hud) {
  * kept as layout asm. */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028E640);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028E680);
+/* Declarations func_0028E680 needs. The s136os arm compiles that body alone,
+ * with every other S136OS_SLOT body (and the native-only extern block above)
+ * closed, and DrawHudIconQuadSized / func_0028F0D0 are defined further down,
+ * so it must see them here. */
+void func_0028C1E8(HudElement *rec, s32 *pX, s32 *pY, s32 idx, s32 idxDelta);
+s32  func_0028EDF0(s32 name, s32 level);
+void DrawHudIconQuadSized(s32 iconIndex, s32 x, s32 y, s32 w, s32 h, s32 alpha);
+void func_0028F0D0(s32 iconIndex, s32 x, s32 y, s32 w, s32 h, s32 alpha);
+/* RULING #8620 ADDRESSING-MODEL DEVICE (EE arm only; it moves no data and emits
+ * nothing): the unit compiles at -G8, so a plain 2-byte extern would be read
+ * gp-relative, but the ROM reads this halfword with `lui $3,%hi(D_18B69A)` /
+ * `lh $7,%lo(D_18B69A)($3)` (0x28E75C/0x28E764). The section(".data") attribute
+ * on the DECLARATION makes cc1 treat it as non-small data and split the
+ * address; without it the body is one word shorter (FACT #13121). Native
+ * declares it plainly. */
+#ifndef TARGET_NATIVE
+extern s16 D_18B69A __attribute__((section(".data")));
+#else
+extern s16 D_18B69A;
+#endif
+
+/* func_0028E680 (0x28E680, 71 words): the draw callback of the generic-bank HUD
+ * widget, the Giant Clank health bar. func_0028EB10 registers it with
+ * func_0028C490 as init and func_0028C4C8 as tick, a value source of
+ * g_soundBankHandlesBlk+0x1874 (0x189E20 + 0x1874 = 0x18B694, g_giantClankHealth)
+ * and a cap of 0xC8. It reaches this function only through that pointer, never
+ * a jal.
+ *   o - the HudElement, read at raw offsets: +0x50/+0x54 its screen anchor,
+ *       +0x58/+0x5C its extent, +0x6C its reveal phase, +0x74 the value on
+ *       screen (the tick eases it toward the source), +0x8 that value's cap.
+ * Returns +0x58, the 256-pixel width it has just stored.
+ *
+ * It sets the extent to 256x64, then copies the anchor into (x, y), aligns it
+ * with func_0028C180 and slides it by the reveal phase with func_0028C1E8.
+ * After that it draws three quads of HUD icon 0x7558 at (x, y), all at alpha
+ * 128 unless noted:
+ *  - variant 1, the fill, at value * 221 / cap + 27 pixels by 64. The division
+ *    is a signed integer division; its `break 7` divide-by-zero trap
+ *    (0x28E6F8) is cc1's own;
+ *  - variant 0, the 256x64 frame, through func_0028F0D0;
+ *  - variant 2, a 32x32 cap, at alpha 128 when the halfword D_18B69A
+ *    (g_giantClankHealth+6) is nonzero and 0 otherwise.
+ *
+ * MATCHED on the s136os arm (SN 2.95.3 v1.36 -fopt-stack, the unit's
+ * S136EXTRA "" per RULING #9450, no per-row override; selector row in
+ * tools/ee/s136os_functions.txt). Before task #2473 split it off, its 71 words
+ * were the tail of func_0028E640, reached as func_0028E640+0x40. Task #2473.
+ *
+ * Source: OpenRAC/rac2-decomp (formerly rac2-gc-decomp)
+ * @b2a35115e0cf580a1fdab8dd1071b157799e590e (GPL-3.0, adopted with the
+ * authors' permission per RULING #10405), src/game/0028BDB0.c, func_0028DDD8
+ * (v1.01 address; author commit 6a0dbf0b, bigbeno37; the body is identical at
+ * 96927f87). ADAPTED: (1) callee spellings ours by address: func_0028B740 =
+ * func_0028C180, func_0028B7A8 = func_0028C1E8, func_0028E588 = func_0028EDF0,
+ * func_0028ECD8 = DrawHudIconQuadSized, func_0028E868 = func_0028F0D0;
+ * (2) data: their `extern short D_0018B69A` is our D_18B69A, with the RULING
+ * #8620 section(".data") device above on the EE arm; (3) `char *o` written
+ * `u8 *o` and passed to the two positioning callees as `HudElement *`;
+ * `int` written `s32`; (4) their extern block replaced by this unit's
+ * prototypes, plus forward prototypes for DrawHudIconQuadSized and
+ * func_0028F0D0, which are defined further down. The control flow, every
+ * constant and the statement order are theirs. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0028E680)
+S136OS_SLOT(func_0028E680);
+#else
+s32 func_0028E680(u8 *o) {
+    s32 x = *(s32 *)(o + 0x50), y = *(s32 *)(o + 0x54);
+    s32 w;
+
+    *(s32 *)(o + 0x58) = 256; *(s32 *)(o + 0x5C) = 64;
+    func_0028C180((HudElement *)o, &x, &y);
+    func_0028C1E8((HudElement *)o, &x, &y, *(s32 *)(o + 0x6C), 0);
+    w = *(s32 *)(o + 0x74) * 221 / *(s32 *)(o + 8) + 27;
+    DrawHudIconQuadSized(func_0028EDF0(0x7558, 1), x, y, w, 64, 128);
+    func_0028F0D0(func_0028EDF0(0x7558, 0), x, y, 256, 64, 128);
+    func_0028F0D0(func_0028EDF0(0x7558, 2), x, y, 32, 32, D_18B69A ? 128 : 0);
+    return *(s32 *)(o + 0x58);
+}
+#endif
 
 /* Seed a HUD widget record's geometry (+0x5C/+0x58 = 0x20), start its +0x7C
  * show timer at 0x96 frames, then re-init it via func_0028C390 (empty-asm guard

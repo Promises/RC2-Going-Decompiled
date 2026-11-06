@@ -300,6 +300,7 @@ earliest snapshot in that repository. Tasks #2497 and #2518.
 | `sprintf` | `newlib/libc/stdio/sprintf.c`: `sprintf` |
 | `func_00115CF0` | `newlib/libc/stdio/fiprintf.c`: `fiprintf` |
 | `snd_PrintError` | `newlib/libc/stdio/printf.c`: `printf` |
+| `func_0028E680` in `going-decompiled/src/usa/text/188858.c` (adapted: our callee and data spellings by address, a `section(".data")` addressing device on the `D_18B69A` declaration, `char *` written `u8 *` with `HudElement *` casts, this unit's prototypes for their extern block) | `src/game/0028BDB0.c` | `func_0028DDD8` (v1.01 address) |
 
 #### Newlib `libc/stdio/vfprintf.c` (origin of `func_00119BC8`)
 
