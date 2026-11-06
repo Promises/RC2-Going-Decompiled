@@ -671,6 +671,30 @@
     `GuiWeaponTableEntry`; our signature with a local cast. Per-function
     gcse-ON override (RULING #12178, task #2468, from audit NOTE #13103 /
     FACT #13097).
+  - **`func_00345298`** (`0x00345298`, the weapon-select screen's stat
+    lookup), **`func_00346AF8`** (`0x00346AF8`, the map screen's mode-3
+    two-entry input), **`func_00338F88`** (`0x00338F88`, the framed caption
+    box), **`func_0033D070`** (`0x0033D070`, the progressive-scan option
+    screen) and **`func_003380B8`** (`0x003380B8`, the pause-menu item grid)
+    in `going-decompiled/src/usa/text/235FE8.c`, from
+    `src/us2/game/003448C0.c` (`func_US2_00345298`, author commit
+    `cb63d202`, bigbeno37), `src/us2/game/00346AF8-g8.c`
+    (`func_US2_00346AF8`, `37ee1b19`, Flavius), `src/us2/game/00338F88-cc.c`
+    (`func_US2_00338F88`, `ff791d1e`, bigbeno37),
+    `src/us2/game/0033C958-qcopy.c` (`func_US2_0033D070`, `c4928ea3`,
+    Flavius; no qcopy in this body) and `src/game/00337210.c`
+    (`func_00337210`, `2e9774a0`, Louis-Philippe Le Sieur; the file notes it
+    was adapted from the public RAC1 pause-menu grid renderer, GPL-3.0). All
+    five blobs are identical at `b2a35115`, `5776dcc3` (where the sda
+    re-screen, NOTE #13181, found them) and the head `f3cc4dbf`; none carries
+    a notice of its own. ADAPTED: our symbols per the ROM's relocations, our
+    signatures with local typed views, upstream's `sda`/`nosda` carried as
+    EE-only RULING #8620 `.sdata`/`.data` devices (and RULING #13168 typed
+    views where measured), types spelled `s32`/`u64`/etc. func_00345298
+    is on the unit's plain cc1 2.9 arm (no selector row); func_00338F88 and
+    func_0033D070 on the s136os arm as the unit is; func_00346AF8 and
+    func_003380B8 with the per-function `S136EXTRA=-fno-strict-aliasing`
+    override (RULING #12178). Task #2501.
   - **`func_L24_0034D598`** (level program 24, Ship Shack, at `0x0034D598`:
     builds the level-ordered menu rows and selects the current owner's entry)
     in `going-decompiled/levels/usa/L24/src/func_L24_0034D598.c`, the first
