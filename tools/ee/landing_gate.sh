@@ -1933,8 +1933,11 @@ selftest_gmodel() {
 #   (b)      the first INCLUDE_ASM_FRAGMENT site <= 16 B flipped back to plain
 #            INCLUDE_ASM -> usa: FAIL naming exactly it; eu: no FAIL, and the
 #            INFO count rises by exactly one with it listed;
-#   cap      the uncapped census flags MORE than the capped one on usa (the
-#            cap is load-bearing), printed with the extra members;
+#   cap      on usa, the first debris INCLUDE_ASM_FRAGMENT site > 16 B flipped
+#            back to plain INCLUDE_ASM in a second scratch copy -> the
+#            uncapped census flags it and the 16 B cap does not (the cap is
+#            load-bearing), printed with the extra members. Seeded since task
+#            #2473: the live tree no longer holds a plain debris site > 16 B;
 #   closed   an absent fragment_census.py FAILs, never reads as clean.
 selftest_fraglint() {
   local T="$1" b=0 G real fr cf ln fn n0 n1
@@ -1988,15 +1991,30 @@ selftest_fraglint() {
       else say "SELFTEST-FAIL (29) (b, $REGION) marking $fn: FAILED=$FAILED, INFO members $n0 -> $n1 (want -1 with it gone, no FAIL)"; b=1; fi
     fi
   fi
-  # cap
+  # cap — on a SEEDED scratch tree (task #2473). Until then this leg ran on the
+  # live tree and relied on a real plain debris site > 16 B; the last one,
+  # func_0028E640 (348 B SP_TAIL), was a mis-split head that task #2473 split
+  # into a 64 B FRAGMENT + its real entry, so the live tree read 0 vs 0 and the
+  # leg could not fire. Now one > 16 B debris INCLUDE_ASM_FRAGMENT site is
+  # respelled INCLUDE_ASM in a copy: the uncapped census must flag it and the
+  # 16 B cap must keep it out, whatever the live tree holds.
   if [ "$REGION" = usa ]; then
-    local nc nu
-    (python3 "$HERE/fragment_census.py" --lint --region "$REGION" --max-bytes "$FRAGLINT_MAX_BYTES") > "$T/fraglint_capped.txt" 2>&1
-    nc=$(sed -n 's/^lint: \([0-9]*\) finding.*/\1/p' "$T/fraglint_capped.txt" | tail -1)
-    (python3 "$HERE/fragment_census.py" --lint --region "$REGION" --all-sizes) > "$T/fraglint_uncapped.txt" 2>&1
-    nu=$(sed -n 's/^lint: \([0-9]*\) finding.*/\1/p' "$T/fraglint_uncapped.txt" | tail -1)
-    if [ -n "$nc" ] && [ -n "$nu" ] && [ "$nu" -gt "$nc" ]; then ok "cap (29): uncapped --lint flags $nu site(s) against $nc at 16 B; the extra are bodies > 16 B the cap keeps out: $(/usr/bin/grep -E 'is unmarked debris|is marked INCLUDE_ASM_FRAGMENT' "$T/fraglint_uncapped.txt" | sed -E 's/^FAIL [^ ]+ ([^ ]+) \(([0-9]+) B\).*/\1 \2 B/' | awk '$2+0 > 16' | tr '\n' ';' | sed 's/;$//; s/;/ ; /g')"
-    else say "SELFTEST-FAIL (29) the uncapped census does not flag more than the 16-byte cap ($nu vs $nc) — the cap is not load-bearing on this tree, so this leg proves nothing; re-derive it"; b=1; fi
+    local nc nu fc fs G2
+    fc=$(awk -F'\t' '$3 == "INCLUDE_ASM_FRAGMENT" && $5 > 16 && $6 == "True" && $4 ~ /^(PAD_ZERO|PAD_CDFILL|SP_TAIL|NO_RET|JR_NO_SLOT|EPI_RET)$/ { print $7 "\t" $8 "\t" $2 "\t" $5; exit }' "$T/fraglint_census.tsv")
+    if [ -z "$fc" ]; then say "SELFTEST-BROKEN: (29) no debris INCLUDE_ASM_FRAGMENT site > 16 B in the real census to seed the cap leg from"; b=1; else
+      IFS=$'\t' read -r cf ln fn fs <<< "$fc"
+      G2="$T/fraglint_tree_cap"; rm -rf "$G2"; mkdir -p "$G2/going-decompiled/src"
+      cp -R "going-decompiled/src/$REGION" "$G2/going-decompiled/src/$REGION" && ln -s "$ROOT/going-decompiled/asm" "$G2/going-decompiled/asm" \
+        || { say "SELFTEST-BROKEN: (29) could not build the scratch tree $G2"; return 1; }
+      sed -i.bak "${ln}s/INCLUDE_ASM_FRAGMENT(/INCLUDE_ASM(/" "$G2/$cf"; rm -f "$G2/$cf.bak"
+      if cmp -s "$cf" "$G2/$cf"; then say "SELFTEST-BROKEN: (29) the cap seed did not change $cf:$ln ($fn)"; b=1; fi
+      (cd "$G2" && python3 "$ROOT/$HERE/fragment_census.py" --lint --region "$REGION" --max-bytes "$FRAGLINT_MAX_BYTES") > "$T/fraglint_capped.txt" 2>&1
+      nc=$(sed -n 's/^lint: \([0-9]*\) finding.*/\1/p' "$T/fraglint_capped.txt" | tail -1)
+      (cd "$G2" && python3 "$ROOT/$HERE/fragment_census.py" --lint --region "$REGION" --all-sizes) > "$T/fraglint_uncapped.txt" 2>&1
+      nu=$(sed -n 's/^lint: \([0-9]*\) finding.*/\1/p' "$T/fraglint_uncapped.txt" | tail -1)
+      if [ -n "$nc" ] && [ -n "$nu" ] && [ "$nu" -gt "$nc" ] && /usr/bin/grep -q " $fn ($fs B) is unmarked debris (" "$T/fraglint_uncapped.txt" && ! /usr/bin/grep -q " $fn (" "$T/fraglint_capped.txt"; then ok "cap (29): $fn ($fs B) unmarked at $cf:$ln in a scratch copy -> uncapped --lint flags $nu site(s) against $nc at 16 B; the extra are bodies > 16 B the cap keeps out: $(/usr/bin/grep -E 'is unmarked debris|is marked INCLUDE_ASM_FRAGMENT' "$T/fraglint_uncapped.txt" | sed -E 's/^FAIL [^ ]+ ([^ ]+) \(([0-9]+) B\).*/\1 \2 B/' | awk '$2+0 > 16' | tr '\n' ';' | sed 's/;$//; s/;/ ; /g')"
+      else say "SELFTEST-FAIL (29) with $fn ($fs B) unmarked in a scratch copy the uncapped census does not flag it while the ${FRAGLINT_MAX_BYTES}-byte cap keeps it out ($nu vs $nc) — the cap is not load-bearing, so this leg proves nothing; re-derive it"; b=1; fi
+    fi
   fi
   # closed
   FAILED=0; WARNED=0; check_fraglint "$REGION" . "$T/t2146_absent_census.py" > "$T/fraglint_absent.txt" 2>&1
