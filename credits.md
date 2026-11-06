@@ -635,3 +635,19 @@
       `src/sdk/library/_decodeOrSkipFrame.c` (`_decodeOrSkipFrame`).
     - **`func_0012FEC0`** (`0x0012FEC0`, `cod/022FA8.c`), adapted, from
       `src/sdk/library/_decodeOrSkipField.c` (`_decodeOrSkipField`).
+
+- **OpenRAC — `rac2-decomp`, commit `b2a35115`, us2 body** (GPL-3.0)
+  <https://github.com/OpenRAC/rac2-decomp> at commit `b2a35115e0cf580a1fdab8dd1071b157799e590e`
+
+  One C body, adopted with the authors' permission (held by the operator,
+  RULING #10405) and the operator's 2026-10-31 "adopt all" (RULING #12108),
+  byte-exact on our v2.00 ROM on the s136os arm (task #2460). Contributor:
+  Flavius (author commit `c4928ea3`). The doc comment carries the `Source:`
+  line, which names every respelling. ADAPTED: our symbol names per the ROM's
+  relocations, upstream's `sda` attribute spelled as the EE-only `.sdata`
+  extern device (RULING #8620), typedef names ours.
+
+  Used so far:
+  - **`BuildCheatMenuItemList`** (`0x002CD510`) in
+    `going-decompiled/src/usa/text/1CA080.cpp`, from `src/us2/game/002CD510.c`
+    (`func_US2_002CD510`, author commit `c4928ea3`, Flavius).

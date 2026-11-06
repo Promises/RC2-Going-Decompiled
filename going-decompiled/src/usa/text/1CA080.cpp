@@ -2334,72 +2334,103 @@ s32 func_002CD4F0(s32 *list) {
     return 0;
 }
 
-/* BuildCheatMenuItemList: build the cheat-menu item list. Copies two contiguous
- * parallel tables (D_1AB958 = 8 cheat-entry indices, -1 terminated; D_1AB978 = the
- * parallel display values) into one buffer, then for each entry still unlocked
- * (D_1A7A58[entry] != 0) emits a 0x14-byte menu record into D_0025FC70:
- *   {+0x0 value = D_1AB978[i], +0x4 label = &g_cheatFlags[entry], +0x8 = 0x2C5C,
- *    +0xC = 0x2C5D, +0x10 = 0}, and finally a zero terminator at record[count].
- * Blocked (match), still OPEN: not byte-exact — best 86.13% (unit objdiff report, task
- * #1025's probe body, per FACT #8477's bound) — #else fallback. The original's ldl/ldr/sdl/sdr unaligned 64-bit copy idiom is
- * NOT the wall it was once called: cc1 2.9 emits it from clean C for a struct assignment
- * of an alignment-<8 struct (FACT #8477, DEMONSTRATED), but that lever did not close it.
- * NEEDS-TESTER-ORACLE: the parallel-array wiring + record layout are modeled from the
- * asm; the contiguous buffer copy is required (the ROM lays D_1AB958/D_1AB978 0x20 apart,
- * which separate host externs don't guarantee) — the oracle should confirm faithfulness. */
+/* BuildCheatMenuItemList: build the cheats-screen item list. Copies two contiguous
+ * parallel tables into locals (D_1AB958 = the 8 cheat-entry indices, -1 terminated,
+ * as one 32-byte struct; D_1AB978 = the parallel display values, as one 28-byte
+ * struct), then walks the first 12 slots, stopping at -1: for each entry whose
+ * unlock flag D_1A7A58[entry] is non-zero it emits a 0x14-byte record into
+ * D_0025FC70: {+0x0 value = D_1AB978[i], +0x4 id = &g_cheatFlags[entry],
+ * +0x8 = 0x2C5C, +0xC = 0x2C5D, +0x10 = 0}, and finally a zero value at
+ * record[count]. Takes no arguments and returns int 0 (the ROM sets v0; the old
+ * native arm said void and is corrected here).
+ *
+ * MATCHED byte-exact on the s136os arm (SN 2.95.3 v1.36 cc1plus -O2 -G8
+ * -fopt-stack, this unit's S136EXTRA -fstrict-aliasing, gcse on), as the unit is
+ * today: no unpin, no flag change, no jump table. Row in
+ * tools/ee/s136os_functions.txt, spliced over the S136OS_SLOT line by
+ * tools/ee/s136os_splice.sh; there is no asm fallback — a build that skips the
+ * splice drops the function. On native it is plain C.
+ *
+ * Device — ADDRESSING-MODEL DEVICE (RULING #8620), EE arm only, plain on native:
+ * section(".sdata") on the two EXTERN unsized-array declarations g_cheatFlags[]
+ * and D_1A7A58[] (upstream marks them `sda`). Under -G8 cc1 then treats both as
+ * small data and prints the one-insn load-address macro, which the assembler
+ * expands to the ROM's absolute form; without it this body reads 4/79 because the
+ * ROM's interleaved `lui/addiu, lui/addiu` pair is that assembler-macro shape.
+ * It moves no data and emits nothing; every relocation still names the real
+ * symbol. The unit's other g_cheatFlags uses sit in #else arms that no EE arm
+ * compiles, so no other row can move (the unit report and image cmp are the
+ * check).
+ *
+ * Source: OpenRAC/rac2-decomp @b2a35115e0cf580a1fdab8dd1071b157799e590e
+ * (GPL-3.0, adopted with the authors' permission per RULING #10405 and #12108),
+ * src/us2/game/002CD510.c, func_US2_002CD510 (author commit c4928ea3, Flavius,
+ * 2026-11-01, "feat(us2): 303 functions exact match"; no third-party notice in
+ * the file). Statements identical apart from symbol spelling. ADAPTED: our names
+ * per the ROM's relocations (upstream D_001AB938 = D_1AB958, D_001AB958 =
+ * D_1AB978, D_001A7A40 = g_cheatFlags, D_001A7A50 = D_1A7A58, D_0025FC90 =
+ * D_0025FC70; NOTE #13117 relnames); upstream's `sda` attribute spelled as the
+ * EE-only section(".sdata") extern device above; typedef names ours
+ * (CheatIdTable, CheatStringTable, CheatEntry — upstream names them after its
+ * own v1.01 addresses); and g_cheatFlags typed u8 where upstream says char,
+ * matching this unit's existing declarations (used here only as an
+ * address-of-plus-index cast to int, so codegen-neutral).
+ * Byte-exact on our ROM: in-unit 0/79 words at the unit's flags, every
+ * relocation verified to our symbols with the right addends, spliced at ROM
+ * length with the tip .text sha1-identical to the INCLUDE_ASM build (FACT
+ * #13102: the in-unit seed 0x2C5D->0x2C5E reads 1/79 @+0xB4 and the no-device
+ * control reads 4/79); landed under landing_gate usa and eu --strict. */
 /* Declarations only (no code); unconditional so the engine96 arm sees them. */
+typedef struct { s32 v[8]; } CheatIdTable;      /* D_1AB958: entry indices, -1 terminated */
+typedef struct { s32 v[7]; } CheatStringTable;  /* D_1AB978: parallel display values */
 typedef struct {
-    s32  value;    /* +0x0 */
-    u8  *label;    /* +0x4  &g_cheatFlags[entry] */
-    s32  kind1;    /* +0x8  0x2C5C */
-    s32  kind2;    /* +0xC  0x2C5D */
-    s32  flags;    /* +0x10 */
-} CheatMenuItem;   /* 0x14 */
-extern s32 D_1AB958[];   /* 8 cheat-entry indices, -1 terminated */
-extern s32 D_1AB978[];   /* parallel display values */
-extern u8  D_1A7A58[];   /* per-cheat unlock flag, indexed by entry */
-extern u8  g_cheatFlags[];
-extern CheatMenuItem D_0025FC70[];
-
-/* s136os arm, measured by task #2117 (SN 1.36 -O2 -G8 -fstrict-aliasing -fopt-stack, gcse on):
- * this #else body builds 73 words against the ROM's 79 (SHORTER), so the splice refuses it on
- * LENGTH. Residual class: length/structure, not yet attributed. */
+    s32 value;   /* +0x0 */
+    s32 id;      /* +0x4  &g_cheatFlags[entry] */
+    s32 a;       /* +0x8  0x2C5C */
+    s32 b;       /* +0xC  0x2C5D */
+    s32 c;       /* +0x10 */
+} CheatEntry;    /* 0x14 */
+extern CheatIdTable D_1AB958;
+extern CheatStringTable D_1AB978;
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", BuildCheatMenuItemList);
+/* The two DEVICE declarations (see the Source comment above): EE arm only,
+ * plain u8 externs on native (RULING #8620 term 2). */
+extern u8 g_cheatFlags[] __attribute__((section(".sdata")));
+extern u8 D_1A7A58[] __attribute__((section(".sdata")));
 #else
-/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 6.52% -> STRUCTURAL,
- * first differing row @0: ROM `(none)` vs `lui t2,0x0  [HI16 D_0025FC70]`;
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 33.86% -> STRUCTURAL, first differing row @1: ROM `lui v0,0x0  [HI16 D_1AB958]` vs `lui v0,0x0  [HI16 D_0025FC70]`. */
-void BuildCheatMenuItemList(void) {
-    s32 buf[16];   /* contiguous: [0..7] entries, [8..14] parallel values */
-    CheatMenuItem *rec = D_0025FC70;
-    s32 count = 0;
-    s32 i;
+extern u8 g_cheatFlags[];
+extern u8 D_1A7A58[];
+#endif
+extern CheatEntry D_0025FC70[];
 
-    for (i = 0; i < 8; i++) {
-        buf[i] = D_1AB958[i];
-    }
-    for (i = 0; i < 7; i++) {
-        buf[i + 8] = D_1AB978[i];
-    }
-    if (buf[0] != -1) {
-        i = 0;
-        do {
-            s32 entry = buf[i];
-            if (D_1A7A58[entry] != 0) {
-                rec->value = buf[i + 8];
-                rec->label = &g_cheatFlags[entry];
-                rec->kind1 = 0x2C5C;
-                rec->kind2 = 0x2C5D;
-                rec->flags = 0;
-                rec++;
-                count++;
-            }
-            i++;
-        } while (i < 12 && buf[i] != -1);
+/* GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+ * (SN 2.95.3 v1.36 cc1plus -fopt-stack, tools/ee/s136os_functions.txt) and
+ * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_BuildCheatMenuItemList)
+S136OS_SLOT(BuildCheatMenuItemList);
+#else
+int BuildCheatMenuItemList(void)
+{
+    CheatIdTable ids = D_1AB958;
+    CheatStringTable strings = D_1AB978;
+    int count = 0;
+    int i;
+
+    for (i = 0; i < 12; i++) {
+        if (ids.v[i] == -1)
+            break;
+        if (D_1A7A58[ids.v[i]] != 0) {
+            D_0025FC70[count].value = strings.v[i];
+            D_0025FC70[count].id = (int)(g_cheatFlags + ids.v[i]);
+            D_0025FC70[count].a = 0x2C5C;
+            D_0025FC70[count].b = 0x2C5D;
+            D_0025FC70[count].c = 0;
+            count++;
+        }
     }
     D_0025FC70[count].value = 0;
+    return 0;
 }
 #endif
 

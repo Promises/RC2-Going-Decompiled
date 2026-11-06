@@ -380,3 +380,18 @@ commit):
     LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
     SOFTWARE.
+
+### OpenRAC rac2-decomp at b2a35115, us2 body (GPL-3.0)
+
+One C function body is taken from OpenRAC's `rac2-decomp`,
+<https://github.com/OpenRAC/rac2-decomp> at commit
+`b2a35115e0cf580a1fdab8dd1071b157799e590e` (root `LICENSE`: GNU General Public
+License, version 3), with the authors' permission (RULING #10405) and the
+operator's 2026-10-31 "adopt all" (RULING #12108), task #2460:
+
+| Here | Upstream file | Upstream name |
+|---|---|---|
+| `BuildCheatMenuItemList` in `going-decompiled/src/usa/text/1CA080.cpp` (adapted: our symbol names per the ROM's relocations, upstream's `sda` attribute as the EE-only `section(".sdata")` extern device (RULING #8620), typedef names ours) | `src/us2/game/002CD510.c`, author commit `c4928ea3` (Flavius) | `func_US2_002CD510` |
+
+The GPL-2.0-or-later note in the section "OpenRAC rac2-gc-decomp (GPL-3.0)"
+above applies to this body too.

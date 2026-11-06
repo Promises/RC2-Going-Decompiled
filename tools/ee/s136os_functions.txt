@@ -739,3 +739,4 @@ usa text/1CA080 DrawPlanetWarpMenu
 usa text/248B50 func_0034B220
 usa text/188858 DrawWeaponSelectWheel
 usa text/235FE8 func_00346878 S136EXTRA=-fno-strict-aliasing
+usa text/1CA080 BuildCheatMenuItemList
