@@ -7,7 +7,10 @@
 # CC1EXTRA; no unit gives this arm its own value yet. `.c` units only.
 # RULING #12157 (task #2286): a function goes here only when it closes
 # byte-exact under this compiler and on NO build arm; never to hide a
-# near-miss. Newlib-identity reconstructions stay out pending the operator.
+# near-miss. Newlib-identity bodies ARE adoptable (RULING #13179, operator
+# 2026-11-06) — THIRD-PARTY.md carries the ORIGIN FILE's own notice verbatim,
+# never a generic one; an origin file with no in-file notice parks with
+# watcher-2 before landing.
 #
 # One row per function:  <region> <unit> <function>
 #   unit = the path under going-decompiled/src/<region>/ without extension.
@@ -22,3 +25,6 @@ usa cod/015180 BufferedWrite128
 usa cod/015180 VfprintfDispatch
 usa cod/015180 BufferedWrite128Secondary
 usa cod/015180 VfprintfInteger
+usa cod/015180 abort
+usa cod/015180 AssertFail
+usa cod/015180 func_00115E68

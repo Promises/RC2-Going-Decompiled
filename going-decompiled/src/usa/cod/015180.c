@@ -58,7 +58,44 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", snd_PrintError);
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", sprintf);
 INCLUDE_ASM_ALIAS(func_00115DA8, sprintf);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", abort);
+/* newlib's _exit as SCE built it (0x131CA8, j exit with $4 forced to 0): the
+ * status abort passes is discarded — it exists so abort cannot return. */
+extern void _exitThunk(s32 status) __attribute__((noreturn)); /* DECL-LEVER(#2499): defined void (0314C0.c, task #2211); abort's ROM words load $4=1 in the jal delay slot, and the 2.95.2 cc1 only emits that load when the callee prototype takes the argument */
+void abort(void) __attribute__((noreturn));
+
+/**
+ * abort — newlib's abort (newlib/libc/stdlib/abort.c), SCE-modified.
+ *
+ * Terminates the process. NEVER RETURNS, and has NO epilogue at all: the body
+ * is one call whose delay slot loads the status — control never comes back.
+ *
+ * Upstream newlib loops on raise(SIGABRT) before _exit(1); SCE's build keeps
+ * only the exit — no raise, no loop in the ROM. The 128-bit `sq $31` save is
+ * the wall that confines this to the sn2952 arm (FACT #12263).
+ *
+ * MATCHED on the sn2952 arm (held SN 2.95.2 v2.73a cc1, RULING #12157;
+ * selector row in tools/ee/sn2952_functions.txt; the slot below carries the
+ * splice — the frozen abort.s stays in the tree as the ROM-word reference).
+ * Task #2499, RULING #13179 (Newlib-identity bodies adoptable with notices).
+ *
+ * Source: OpenRAC/rac2-decomp @5833be5b (GPL-3.0, adopted with the authors'
+ * permission per RULING #10405; identical at the audit pin b2a35115),
+ * src/core/00115200.c, func_00115E28 (same address on their v2.00 build;
+ * author commit 2e9774a09c0c8e0877b909b3f62bbe7c7d9c9f18, Louis-Philippe
+ * Le Sieur). Newlib origin: newlib/libc/stdlib/abort.c at newlib-cygwin tag
+ * newlib-2000-02-17 — no in-file copyright notice at that tag or at HEAD;
+ * THIRD-PARTY.md carries the applicable COPYING.NEWLIB section. ADAPTED:
+ * callee func_00131CA8 spelled _exitThunk (our symbol for 0x131CA8); `int`
+ * written `s32`; their noreturn attribute rides the file-scope prototype
+ * above. Statements are theirs.
+ */
+#if !defined(TARGET_NATIVE) && !defined(SN2952_abort)
+SN2952_SLOT(abort);
+#else
+void abort(void) {
+    _exitThunk(1);
+}
+#endif
 INCLUDE_ASM_ALIAS(func_00115E28, abort);
 
 /**
@@ -82,32 +119,81 @@ INCLUDE_ASM_ALIAS(func_00115E28, abort);
  * INPUT, not a gap. func_00115CF0's prologue confirms the varargs shape — it spills
  * $6..$11 to contiguous slots, re-points $6 at that area as a va_list, spills
  * $f12/$f14/$f16/$f18 for float varargs, and tail-calls its vfprintf worker.
+ *
+ * MATCHED on the sn2952 arm (held SN 2.95.2 v2.73a cc1, RULING #12157; selector
+ * row in tools/ee/sn2952_functions.txt; the slot below carries the splice — the
+ * frozen AssertFail.s stays in the tree as the recovered splat-dropped ROM-word
+ * reference). Task #2499, RULING #13179.
+ *
+ * Source: OpenRAC/rac2-decomp @5833be5b (GPL-3.0, adopted with the authors'
+ * permission per RULING #10405; identical at the audit pin b2a35115),
+ * src/core/00115200.c, func_00115E38 (same address on their v2.00 build; author
+ * commit 2e9774a09c0c8e0877b909b3f62bbe7c7d9c9f18, Louis-Philippe Le Sieur).
+ * Newlib origin: newlib/libc/assert.c, __assert (their diagnostic body prints
+ * this format via fiprintf) at newlib-cygwin tag newlib-2000-02-17 — no
+ * in-file copyright notice at that tag or at HEAD; THIRD-PARTY.md carries the
+ * applicable COPYING.NEWLIB section. ADAPTED: callee func_00115E28 spelled
+ * abort (our symbol for 0x115E28, declared noreturn at file scope above);
+ * their `(char *)D_00133E74 + 0xC` pointer arithmetic written as this unit's
+ * s32 model `D_00133E74 + 0xC` (the spelling the native arm already carried;
+ * same codegen); `int` written `s32`. Statements and control flow are theirs.
  */
-#ifndef TARGET_NATIVE
-// recovered splat-dropped code (epilogue-stump mis-split): raw words, byte-exact
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", AssertFail);
+#if !defined(TARGET_NATIVE) && !defined(SN2952_AssertFail)
+SN2952_SLOT(AssertFail);
 #else
 /* 0x13A370 — "assertion \"%s\" failed: file \"%s\", line %d\n" */
 extern const char D_0013A370[];
 /* printf-like: (stream, fmt, ...) — varargs, forwards a va_list to its vfprintf. */
 extern void func_00115CF0(void *stream, const char *fmt, ...);
-/* the abort tail — never returns. */
-extern void func_00115E28(void);
 
 void AssertFail(const char *file, s32 line, const char *expr) {
     /* stream = D_00133E74[+0xC] — the same global the accessor at the top of this
      * unit returns; +0xC is its stderr-equivalent handle. */
     func_00115CF0(*(void **)(D_00133E74 + 0xC), D_0013A370, expr, file, line);
-    func_00115E28();
+    abort();
 }
 #endif
 
-/* func_00115E68: tail-calls func_001175F0(arg0, 0, 0xA) and returns its result
- * sign-extended from 32 to 64 bits. Not matched: the original saves $31 with a
- * 128-bit `sq` (not the `sd` ee-gcc emits here at -O2 -G0) and carries an extra
- * dsll32/dsra32 sign-extend that cc1 elides for an s32-returning callee. Both
- * are codegen/ABI forms this compiler won't reproduce. Left as INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115E68);
+/* strtol's seat in this unit (INCLUDE_ASM below at its own site): long
+ * strtol(const char *s, char **endp, int base), reached here as
+ * (s32, s32, s32) -> s64 per the audit's measured shape. */
+extern s64 func_001175F0(s32 str, s32 endp, s32 base);
+
+/**
+ * func_00115E68 — newlib's atoi (newlib/libc/stdlib/atoi.c).
+ *
+ * @str: the NUL-terminated digit string to convert.
+ *
+ * Returns the parsed value as s32. A pure wrapper: strtol(str, NULL, 10),
+ * tail-called, the 64-bit result sign-extended back to 32 bits by the
+ * dsll32/dsra32 pair before the return. Name kept (never rename a matched
+ * function): the atoi identity lives here in the comment.
+ *
+ * MATCHED on the sn2952 arm (held SN 2.95.2 v2.73a cc1, RULING #12157; the
+ * 128-bit `sq $31` save and the explicit sign-extend are the 2.9-arm walls,
+ * FACT #12263; selector row in tools/ee/sn2952_functions.txt; the slot below
+ * carries the splice — the frozen func_00115E68.s stays in the tree as the
+ * ROM-word reference). Task #2499, RULING #13179.
+ *
+ * Source: OpenRAC/rac2-decomp @5833be5b (GPL-3.0, adopted with the authors'
+ * permission per RULING #10405; identical at the audit pin b2a35115),
+ * src/core/00115E68.c, func_00115E68 (same address on their v2.00 build;
+ * author commit 7b0239935014ed0bd8e37b4c068d795122eade86, Louis-Philippe Le
+ * Sieur). Newlib origin: newlib/libc/stdlib/atoi.c at newlib-cygwin tag
+ * newlib-2000-02-17 (Andy Wilson's 2-Oct-89 wrapper, `return (int) strtol (s,
+ * NULL, 10)`) — no in-file copyright notice at that tag or at HEAD;
+ * THIRD-PARTY.md carries the applicable COPYING.NEWLIB section. ADAPTED:
+ * callee func_001175F0 keeps its name (matched name in this same unit); their
+ * `long` written `s64`, `int` written `s32`, the NULL literal written 0.
+ * Statements and control flow are theirs.
+ */
+#if !defined(TARGET_NATIVE) && !defined(SN2952_func_00115E68)
+SN2952_SLOT(func_00115E68);
+#else
+s32 func_00115E68(s32 str) {
+    return (s32)func_001175F0(str, 0, 10);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", exit_runAtexitHandlers);
 
