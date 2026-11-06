@@ -1474,6 +1474,7 @@ g_lastMenuScreenId
 g_levelDialogToc
 g_levelObjectiveLists
 g_levelSelectEntries
+g_levelSelectListItems
 g_levelSelectRowLineHeight
 g_levelStagingState
 g_levelTocHeader
