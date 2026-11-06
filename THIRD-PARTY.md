@@ -167,11 +167,12 @@ C function bodies are taken from OpenRAC's `rac2-decomp`,
 License, version 3; the repository carries `rac2-gc-decomp`'s history, with
 `96927f87` an ancestor), with the authors' permission (RULINGs #10405 and
 #12108). Each is adapted, with every respelling named in the function's
-`Source:` line. Neither source file below carries a notice of its own.
+`Source:` line. None of the source files below carries a notice of its own.
 
 | Here | Upstream file | Upstream name |
 |---|---|---|
 | `func_00346878` in `going-decompiled/src/usa/text/235FE8.c` (adapted: our symbol names, signature and `PlayGlobalSound` prototype; their owner struct as our `GuiGridCursor` view; their `.sdata` `g_inventoryOwned` and their typed grid array as EE-only asm-label aliases; `sda` dropped), task #2467 | `src/us2/game/00346878-g8.c` | `func_US2_00346878` (v2.00 address) |
+| `func_00346CD8` in `going-decompiled/src/usa/text/235FE8.c` (adapted: our symbol spellings and the unit's declaration types, `s32`/`u8` for their `int`/`unsigned char`; two through EE-only asm-label aliases, a typed view (RULING #13168) replacing their typed array and the `la` alias (RULING #8620) replacing their `section(".sdata")`; their `sda` dropped; struct views renamed and retyped, their material record as our `GuiWeaponTableEntry`; signature ours with a local cast), task #2468 | `src/us2/game/00346CD8-pad-g8.c` (author commit `13388073`, Flavius) | `func_US2_00346CD8` (v2.00 address) |
 | `func_L24_0034D598` in `going-decompiled/levels/usa/L24/src/func_L24_0034D598.c`, level program 24 (adapted: our name at the v2.00 place, the boot's `g_anAvailableLevelOrder`, four level symbols renamed to the v2.00 ROM's relocation targets, `volatile` and `sda` dropped as measured inert, `include_asm.h` dropped; the blob is identical at the repository's head `5833be5b716983046be737d85080b96bc9f1435a`), task #2495 | `src/levels/24_ship_shack/L24_0034C450-init-g8.c` | `func_L24_0034C450` (v1.01 address) |
 
 The GPL-2.0-or-later note in the section "OpenRAC rac2-gc-decomp (GPL-3.0)" above applies to these bodies too.
@@ -350,20 +351,6 @@ Both files carry this notice, reproduced verbatim:
     LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
     SOFTWARE.
-
-### OpenRAC rac2-decomp at b2a35115 (GPL-3.0)
-
-One C function body is taken from OpenRAC's `rac2-decomp`,
-<https://github.com/OpenRAC/rac2-decomp> at commit
-`b2a35115e0cf580a1fdab8dd1071b157799e590e` (root `LICENSE`: GNU General Public
-License, version 3; the file carries no notice of its own), with the authors'
-permission (RULINGs #10405 and #12108), task #2468:
-
-| Here | Upstream file | Upstream name |
-|---|---|---|
-| `func_00346CD8` in `going-decompiled/src/usa/text/235FE8.c` (adapted: our symbol spellings and the unit's declaration types, `s32`/`u8` for their `int`/`unsigned char`; two through EE-only asm-label aliases, a typed view (RULING #13168) replacing their typed array and the `la` alias (RULING #8620) replacing their `section(".sdata")`; their `sda` dropped; struct views renamed and retyped, their material record as our `GuiWeaponTableEntry`; signature ours with a local cast) | `src/us2/game/00346CD8-pad-g8.c` (author commit `13388073`, Flavius) | `func_US2_00346CD8` |
-
-The GPL-2.0-or-later note in the section "OpenRAC rac2-gc-decomp (GPL-3.0)" above applies to this body too.
 
 ### Lombyte (MIT)
 
