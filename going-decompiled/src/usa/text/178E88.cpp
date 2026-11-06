@@ -1101,49 +1101,69 @@ void InitScreenGeometry(void) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", BuildCameraProjection);
 
-/**
- * func_0027B858 — configure the viewport / camera and rebuild the projection.
+/* func_0027B858 — configure the viewport / camera and rebuild the projection.
  *
- * From a target width/height and five projection floats, computes the half
- * extents, publishes the fixed-point GS window offsets (centred on 0x800, <<4)
- * to g_gsPixelOffsetX[0] / g_gsPixelOffsetY[0..2], the screen dims + centres to
- * g_screenWidth/g_screenHeight[0..2], and the viewport scale/half-extents (from
- * IntToFloat(dim)*0.5 and *4, plus the five floats) into the camera scratch at
- * g_sceneActorMobys+0x674 (+0xB0/+0x200..+0x22C), then rebuilds the projection.
- */
-/* TODO(match) t493: sdk29 29.47% / engine96 20.12% (unit objdiff, objdiff_build.sh +
- * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
- * every other remaining arm). Residual on the better arm (sdk29): SIBCALL (first differing insn:
- * ROM `addiu sp,sp,-80` vs built `addiu sp,sp,-160`). Levers: sibcall guard RUN: sdk29 23.95% /
- * engine96 24.70%; cc1-small/absolute globals model RUN: 25.33% (engine96); engine96 with sched1
- * MEASURED (flag not landed): 15.67%. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027B858);
+ * From a target width/height and five projection floats (scale, then the four
+ * values that land at +0x218/+0x21C/+0x228/+0x22C), computes the half extents,
+ * publishes the screen dims + centres and the fixed-point GS window offsets
+ * (centred on 0x800, <<4) to the extent record at g_screenWidth, and the
+ * viewport scale/half-extents (IntToFloat(dim)*0.5, *4, plus the five floats)
+ * into the camera scratch at g_sceneActorMobys+0x674 (+0xB0/+0x200..+0x22C;
+ * the ×4 of +0x208 re-reads +0x200, as the ROM does), then rebuilds the
+ * projection via BuildCameraProjection. The v2.00 copy of v1.01's
+ * func_0027B2F8: same C without that function's +0xA0/+0xA4 constant stores.
+ * The file-scope decl further below spells the params fa..fe; here they keep
+ * upstream's names.
+ *
+ * MATCHED on the s136os arm (SN 2.95.3 v1.36 cc1plus -fopt-stack, the unit's
+ * -fno-gcse pin unchanged; row in tools/ee/s136os_functions.txt), spliced over
+ * S136OS_SLOT by tools/ee/s136os_splice.sh: `built 76 words = ROM 76 words`,
+ * byte-identical .rom (landing_gate usa --strict). There is no asm fallback: a
+ * build that skips the splice drops the function. On native it is plain C.
+ * Devices: the shared g_screenExtent .sdata view above (the x arm) — the same
+ * device commit 1 proved load-bearing (removal -> splice FATAL LENGTH); no new
+ * device. Supersedes the t493 #else (sdk29 29.47% / engine96 20.12%, unit
+ * objdiff).
+ *
+ * Source: OpenRAC/rac2-decomp @5776dcc35045fb2320610edd1d2db4fa7660ef37
+ * (GPL-3.0, adopted with the authors' permission per RULING #10405/#12108),
+ * src/us2/game/0027B858.c, func_US2_0027B858 (author commit `ac7e1a2e`,
+ * bigbeno37, 2026-11-06). ADAPTED: our spellings by address - their D_001B9040
+ * as the cast (ScreenState *)(g_sceneActorMobys + 0x674) (same address
+ * 0x1B8FC0, the shared ScreenState view of commit 1, whose unused color[3]
+ * tail this body does not touch), their D_001A7340 as the g_screenExtent view
+ * over g_screenWidth with sda respelled section(".sdata") (the x arm), their
+ * func_00283CE0 as IntToFloat, their func_0027AB40 as BuildCameraProjection;
+ * int/float spelled s32/f32. Statements as upstream wrote them. (task #2503;
+ * audit NOTE #13181.) */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0027B858)
+S136OS_SLOT(func_0027B858);
 #else
-void func_0027B858(s32 width, s32 height, f32 fa, f32 fb, f32 fc, f32 fd, f32 fe) {
-    u8 *cam = g_sceneActorMobys + 0x674;
+void func_0027B858(s32 width, s32 height, f32 scale, f32 a, f32 b, f32 c, f32 d) {
+    ScreenState *context = (ScreenState *)(g_sceneActorMobys + 0x674);
     s32 halfW = width >> 1;
     s32 halfH = height >> 1;
-    f32 fw = IntToFloat(width) * 0.5f;
-    f32 fh = IntToFloat(height) * 0.5f;
+    f32 halfHeight;
 
-    *(f32 *)(cam + 0xB0) = fa;
-    g_gsPixelOffsetX[0] = (0x800 - halfW) << 4;
-    g_gsPixelOffsetY[0] = (0x800 - halfH) << 4;
-    g_gsPixelOffsetY[1] = (halfW + 0x800) << 4;
-    g_gsPixelOffsetY[2] = (halfH + 0x800) << 4;
-    g_screenWidth[0] = width;
-    g_screenHeight[0] = height;
-    g_screenHeight[1] = halfW;   /* g_screenCenterDefaultX */
-    g_screenHeight[2] = halfH;   /* g_screenCenterDefaultY */
-    *(f32 *)(cam + 0x200) = fw;
-    *(f32 *)(cam + 0x204) = fh;
-    *(f32 *)(cam + 0x208) = fw * 4.0f;
-    *(f32 *)(cam + 0x20C) = fh * 4.0f;
-    *(f32 *)(cam + 0x218) = fb;
-    *(f32 *)(cam + 0x21C) = fc;
-    *(f32 *)(cam + 0x228) = fd;
-    *(f32 *)(cam + 0x22C) = fe;
+    g_screenExtent.width = width;
+    g_screenExtent.height = height;
+    g_screenExtent.half_width = halfW;
+    g_screenExtent.half_height = halfH;
+    g_screenExtent.left = (2048 - halfW) << 4;
+    g_screenExtent.top = (2048 - halfH) << 4;
+    g_screenExtent.right = (halfW + 2048) << 4;
+    g_screenExtent.bottom = (halfH + 2048) << 4;
+
+    context->fB0 = scale;
+    context->f200 = IntToFloat(width) * 0.5f;
+    halfHeight = IntToFloat(height) * 0.5f;
+    context->f204 = halfHeight;
+    context->f208 = context->f200 * 4.0f;
+    context->f20C = halfHeight * 4.0f;
+    context->f218 = a;
+    context->f21C = b;
+    context->f228 = c;
+    context->f22C = d;
     BuildCameraProjection();
 }
 #endif
