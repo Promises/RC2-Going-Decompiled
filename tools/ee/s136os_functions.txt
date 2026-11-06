@@ -782,3 +782,4 @@ usa text/191238 func_002954F0
 usa text/191238 QueueGsTextureUpload
 usa text/191238 LoadShipDisplayModel
 usa text/191238 LoadShipDisplayTexture
+usa text/191238 LoadHeldItemDisplayModel

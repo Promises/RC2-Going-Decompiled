@@ -1806,94 +1806,140 @@ void LoadPlayerDisplayModel(s32 variant) {
 }
 #endif
 
-/* Load the held-item display model+texture for `itemId` (twin of
- * LoadShipDisplayTexture): fence the DMA, kick the disc file load for the item's
- * TOC entry (stride itemId*0x10: start = +0x4FA0 biased by +0x4F04, count +0x4FA4)
- * into g_heldItemModelBufferBase, upload a 16x16 base + the loaded mip (dims from
- * the buffer header at +0x10) as two GS images, cache the packed 64-bit GS
- * texture register in g_heldItemTexDescriptor, then kick a SECOND disc load for
- * the model geometry (+0x4F98 / +0x4F9C). Engine-2.96 (save-slot walled) ->
- * faithful #else; register pack transcribed op-for-op. NEEDS-ORACLE. */
-#ifndef TARGET_NATIVE
-/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
- * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 48.60% PACKED-SAVE /
- * engine96 53.36% GPREL-DECL; best arm engine96, first differing insn there: 'addiu sp, sp,
- * -0xa0' vs 'addiu sp, sp, -0xb0'
- * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
- * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
- * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
- * property and was measured false as the reason this member stays unmatched (FACT #9873).
- * Residual: the saved-register set; the rest UNMEASURED. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", LoadHeldItemDisplayModel);
-#else
-/* Prototypes this body needs whose declarations sit in other guarded arms:
- * the s136os arm compiles this arm alone, so it must see them here. */
-extern s32 Log2Floor(s32 v);
-extern void WaitFrameDmaFence(s32 mode);
-extern void PumpDialogVoiceSystem(s32 blocking);
-extern void StartFileLoadPumpingVoice(void *dest, s32 startSector, s32 sectorCount);
-extern void func_0011AEA0(s32 a);
-extern s32  g_discToc[];
-extern u8   g_vramTextureBase[];
-extern u8  *g_heldItemModelBufferBase;    /* loaded model/texture buffer ptr */
-extern u64  g_heldItemTexDescriptor;      /* cached packed GS texture register */
-extern void func_00126288(void *dst, s32 tbp, s32 a, s32 b, s32 c, s32 d, s32 w, s32 h);
-extern s32 KickGifImageUpload(void *packet, void *src);
-extern void WaitGsPathsIdle(s32 arg);
+/* PackToc: the disc TOC as LoadHeldItemDisplayModel reads it, four words per
+ * held-item pack at +0x4F98, sectors relative to +0x4F04 (OpenRAC's type). */
+typedef struct { int a, b, c, d; } PackEntry;
+typedef struct {
+    char pad0[0x4F04];
+    int base;           /* 0x4F04 */
+    char pad4F08[0x4F98 - 0x4F08];
+    PackEntry packs[1]; /* 0x4F98 */
+} PackToc;
 
-void LoadHeldItemDisplayModel(s32 itemId) {
-    u8   packet[0x60];               /* GIF packet scratch (sp+0) */
-    u8  *disc = (u8 *)g_discToc;
-    s32  off  = itemId << 4;         /* itemId * 0x10 = disc TOC stride */
-    u8  *buffer;
-    u8  *hdr;
-    s32  log2, clampW;
-    s16  w, h;
-    u64  reg;
+/* EE-only ADDRESSING-MODEL views of the held-item loader's data. Each names
+ * the real symbol (or the splat label at that address) and adds no storage.
+ * Native reads the real objects.
+ *  - g_heldItemModelBuffer: g_heldItemModelBufferBase in section(".data")
+ *    (RULING #8620, on the declaration). cc1 splits %hi/%lo as the ROM does
+ *    (0x292CE8). As a small -G8 pointer it goes gp-relative: 117 words, ROM 118.
+ *  - g_heldItemClutVram / g_heldItemImageVram: the VRAM block words at
+ *    g_vramTextureBase+0x8 / +0x18 (labels D_1A72EC / D_1A72FC), as unsized
+ *    `.sdata` arrays (RULING #13168 typed view; their `sda`). The ROM reads
+ *    them absolutely four times. Spelled g_vramTextureBase + 8/0x18, the
+ *    function builds 120 words.
+ *  - g_playerTexDescriptorsSdata: g_playerTexDescriptors as an unsized
+ *    `.sdata` s64 array. The held-item TEX0 store is written as element [5],
+ *    which is g_heldItemTexDescriptor (0x1A72C8). As symbol+offset, cc1 emits
+ *    it as the 2-word assembler macro (0x292E5C `lui $1; sd`) and keeps it out
+ *    of the jal delay slot. Written through g_heldItemTexDescriptor at [0],
+ *    cc1 puts it in the slot: 119 words. LoadPlayerDisplayTextures stores
+ *    elements [i] through the same view. */
+#ifndef TARGET_NATIVE
+extern char *g_heldItemModelBuffer __asm__("g_heldItemModelBufferBase")
+    __attribute__((section(".data")));
+extern s32 g_heldItemClutVram[] __asm__("D_1A72EC") __attribute__((section(".sdata")));
+extern s32 g_heldItemImageVram[] __asm__("D_1A72FC") __attribute__((section(".sdata")));
+extern s64 g_playerTexDescriptorsSdata[] __asm__("g_playerTexDescriptors")
+    __attribute__((section(".sdata")));
+#else
+extern u8  *g_heldItemModelBufferBase;
+extern u64  g_playerTexDescriptors[];
+#define g_heldItemModelBuffer (*(char **)&g_heldItemModelBufferBase)
+#define g_heldItemClutVram ((s32 *)(g_vramTextureBase + 0x8))
+#define g_heldItemImageVram ((s32 *)(g_vramTextureBase + 0x18))
+#define g_playerTexDescriptorsSdata ((s64 *)g_playerTexDescriptors)
+#endif
+
+/*
+ * LoadHeldItemDisplayModel(index) — load held-item display pack `index` and
+ * upload its one texture. No return value.
+ *   index: the pack's slot in the disc TOC's held-item table (stride 0x10 at
+ *          +0x4F98, sectors relative to the TOC's +0x4F04 base).
+ * Reads the pack's second part (+0x8 sector, +0xC count) into
+ * g_heldItemModelBufferBase. The texture record there starts at +0x10: its
+ * 16x16 CLUT goes to VRAM block g_vramTextureBase+0x8 >> 8, and its 8-bit
+ * texels to the block at +0x18, with TBW = max(1, width >> 6). It packs the
+ * texture's GS TEX0 word (as func_002954F0 does, with CLD bit 63 set) into
+ * g_heldItemTexDescriptor (g_playerTexDescriptors[5]). Then it reads the
+ * pack's first part (+0x0, +0x4), the model, into the same buffer.
+ * This is RAC1's LoadPifAsPSMT8H shape (OpenRAC's note).
+ *
+ * MATCHED on the s136os arm (the unit's S136EXTRA "", -G8; task #2540, from
+ * audit NOTE #13181 / FACT #13187, 2/118). Devices, each removed alone:
+ *  - the RULING #8549 allowlist row for the bit-63 constant at 0x292E48
+ *    (without it: 2/118 words);
+ *  - the three data views above (117, 120 and 119 words without each);
+ *  - SetupGsImageUpload / WaitGsPathsIdleU16 (shared block above
+ *    LoadPlayerDisplayTextures' slot). WaitGsPathsIdleU16 carries the ROM's
+ *    second argument; SetupGsImageUpload is equivalent here to (s16) casts.
+ * GUARD: compiled alone by the s136os arm and spliced over the S136OS_SLOT
+ * line (tools/ee/s136os_splice.sh, row in tools/ee/s136os_functions.txt);
+ * plain C on native.
+ * Source: OpenRAC/rac2-decomp @5776dcc35045fb2320610edd1d2db4fa7660ef37
+ * (GPL-3.0, adopted with the authors' permission per RULINGs #10405/#12108;
+ * blob identical at b2a35115 and at head fe6adf9b), src/game/00292408.c,
+ * func_00292408 (v1.01 address), author commit e14fe0f3 (bigbeno37).
+ * ADAPTED: (1) our spellings by address: func_002FC3C0 = WaitFrameDmaFence,
+ * func_002B7CE0 = PumpDialogVoiceSystem (the unit's void prototype; their
+ * `short` return is inert here, measured), func_002B7C80 =
+ * StartFileLoadPumpingVoice, func_00126288 = SetupGsImageUpload (their
+ * prototype), func_001265B0 = KickGifImageUpload, func_001244B8 =
+ * WaitGsPathsIdleU16, func_00282A18 = Log2Floor, D_0014B540 =
+ * `*(PackToc *)g_discToc` (a cast, not a view: measured byte-identical),
+ * D_001BAF34 = g_heldItemModelBuffer, D_001A72EC/D_001A72FC = the two VRAM
+ * views, D_001A72A0 = g_playerTexDescriptorsSdata (their v1.01 data
+ * addresses are 0x80 higher from D_001BAF34 up); (2) every `long` written s64
+ * (RULING #13197), and `packet` passed to SetupGsImageUpload as
+ * `(GsLoadImage *)packet`; (3) `sda` written section(".sdata") on the three
+ * views, and section(".data") added on the buffer pointer; (4) the name is
+ * LoadHeldItemDisplayModel. The rest of the body, its statement order and
+ * its named temporaries are theirs.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_LoadHeldItemDisplayModel)
+S136OS_SLOT(LoadHeldItemDisplayModel);
+#else
+void LoadHeldItemDisplayModel(int index)
+{
+    s64 packet[12] __attribute__((aligned(16)));
+    char *base;
+    char *hdr;
+    PackToc *table;
+    int width, log;
+    char *clut;
 
     WaitFrameDmaFence(1);
-    buffer = g_heldItemModelBufferBase;
+    base = g_heldItemModelBuffer;
     PumpDialogVoiceSystem(1);
-
-    StartFileLoadPumpingVoice(buffer,
-        *(s32 *)(disc + off + 0x4FA0) + *(s32 *)(disc + 0x4F04),
-        *(s32 *)(disc + off + 0x4FA4));
-
-    /* level 0: 16x16 base image */
-    func_00126288(packet, (*(s32 *)(g_vramTextureBase + 0x8) << 8) >> 16,
-                1, 0, 0, 0, 0x10, 0x10);
+    hdr = base + 0x10;
+    clut = base + 0x30;
+    table = (PackToc *)g_discToc;
+    StartFileLoadPumpingVoice(base, table->packs[index].c + table->base, table->packs[index].d);
+    SetupGsImageUpload((GsLoadImage *)packet, g_heldItemClutVram[0] >> 8, 1, 0, 0, 0, 16, 16);
     func_0011AEA0(0);
-    KickGifImageUpload(packet, buffer + 0x30);
-    WaitGsPathsIdle(0);
+    KickGifImageUpload(packet, clut);
+    WaitGsPathsIdleU16(0, 0);
+    log = Log2Floor(*(int *)(hdr + 8));
+    width = *(int *)(hdr + 8) >> 6;
+    if (width < 1)
+        width = 1;
+    SetupGsImageUpload((GsLoadImage *)packet, g_heldItemImageVram[0] >> 8, width, 27, 0, 0, *(short *)(hdr + 8), *(short *)(hdr + 12));
+    func_0011AEA0(0);
+    KickGifImageUpload(packet, base + 0x430);
+    WaitGsPathsIdleU16(0, 0);
+    {
+        s64 image, tex, format, clut_base, word;
 
-    /* level 1: mip sized from the loaded buffer header (+0x10) */
-    hdr    = buffer + 0x10;
-    log2   = Log2Floor(*(s32 *)(hdr + 0x8));
-    clampW = *(s32 *)(hdr + 0x8) >> 6;
-    if (clampW <= 0) {
-        clampW = 1;
+        image = (s64)g_heldItemImageVram[0] >> 8;
+        tex = image | ((s64)width << 14);
+        format = ((s64)log << 26) | 0x1b00000L;
+        tex |= format;
+        tex |= (s64)log << 30;
+        clut_base = (((s64)g_heldItemClutVram[0] >> 8) << 37) | 0x400000000L;
+        word = tex | clut_base;
+        word |= 0x8000000000000000UL;
+        g_playerTexDescriptorsSdata[5] = word;
     }
-    w = *(s16 *)(hdr + 0x8);
-    h = *(s16 *)(hdr + 0xC);
-    func_00126288(packet, (*(s32 *)(g_vramTextureBase + 0x18) << 8) >> 16,
-                (s16)clampW, 0x1B, 0, 0, w, h);
-    func_0011AEA0(0);
-    KickGifImageUpload(packet, buffer + 0x430);
-    WaitGsPathsIdle(0);
-
-    /* pack the 64-bit GS texture register (op-for-op from the dsll/dsra/or chain) */
-    reg = (u64)((s64) * (s32 *)(g_vramTextureBase + 0x18) >> 8)
-        | ((u64)clampW << 14)
-        | (((u64)log2 << 26) | 0x1B00000)
-        | ((u64)log2 << 30)
-        | (((u64)((s64) * (s32 *)(g_vramTextureBase + 0x8) >> 8) << 37) | ((u64)0x8000 << 19))
-        | ((u64)1 << 63);
-    g_heldItemTexDescriptor = reg;
-
-    /* second disc load: the model geometry */
-    StartFileLoadPumpingVoice(buffer,
-        *(s32 *)(disc + off + 0x4F98) + *(s32 *)(disc + 0x4F04),
-        *(s32 *)(disc + off + 0x4F9C));
+    StartFileLoadPumpingVoice(base, table->packs[index].a + table->base, table->packs[index].b);
 }
 #endif
 
