@@ -2464,7 +2464,136 @@ s32 func_00337DA0(u32 idx) {
     return 0;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337DC8);
+/*
+ * func_00337DC8(item, first, second, value): pick the colours of one item's
+ * cell in the pause-menu item grid (callers: func_003380B8,
+ * GuiQuickSelectWheelTick, func_00348628, 24D728 func_0034DBE0).
+ *   item    item id (index into g_itemEquippedSlot)
+ *   first   out: list colour 0, default 0x55F0C070
+ *   second  out: list colour 1, default 0x55F0C070
+ *   value   out: the colour of the item's equipped variant's upgrade level,
+ *           from the 2-entry table D_1ADAE8 for items 12, 14, 17, 18 and 53
+ *           and from the 4-entry table D_1ADAD8 otherwise; item 16 from
+ *           level 2 on reads D_1ADAD8 from its start (level - 2)
+ * No return value. When the variant exists and GetWeaponUpgradeLevel(item) > 0:
+ * with vendor upgrades unlocked and the item at upgrade level >= 2 (or 1 for
+ * the short set) by both GetWeaponUpgradeLevel and the variant's +0x04 level,
+ * the pair becomes 0x60664088 / 0x606600D8; otherwise (upgrades locked or
+ * the count test failing) a level-0 variant whose +0x6C XP threshold is
+ * positive gets 0x6049C1FF / 0x60001EFF. Note the level test reads the
+ * variant's level byte as unsigned, so `level - 2` is only taken for >= 2.
+ *
+ * MATCHED on the s136os arm with a per-function override (task #2550): row
+ * `usa text/235FE8 func_00337DC8 S136EXTRA=-fno-strict-aliasing` in
+ * tools/ee/s136os_functions.txt, i.e. the unit's flags minus -fno-gcse
+ * (RULING #12178). With the unit's -fno-gcse it builds 189 words, not 188;
+ * gcse is what holds %hi(g_itemEquippedSlot) / %hi(g_weaponTable) in
+ * $22/$23 across the calls. The three `switch`es (one per inlined
+ * itemInShortSet after the first) are bound to the ROM's tables
+ * jtbl_0026DD70_text / jtbl_0026DE20_text / jtbl_0026DED0_text by
+ * tools/ee/jtbl_bind.sh. No device of its own: D_1ADAD8 is read through the
+ * unit's existing 8-byte EE declaration above func_00337DA0 (task #948), which
+ * is what keeps it gp-relative at -G8, and D_1ADAE8 (8 bytes) is small at -G8
+ * as declared.
+ * GUARD: on EE this C is the image's body, compiled alone by SN 2.95.3 v1.36
+ * -fopt-stack and spliced over S136OS_SLOT by tools/ee/s136os_splice.sh; there
+ * is no asm fallback. On native it is plain C.
+ * Source: OpenRAC/rac2-decomp @5776dcc35045fb2320610edd1d2db4fa7660ef37
+ * (GPL-3.0, adopted with the authors' permission per RULINGs #10405/#12108;
+ * the file is unchanged at fe6adf9b), src/game/00336A78-g16.c,
+ * func_00336F20 (author commit 77eabfa9, bigbeno37). Respellings by
+ * ROM-encoded address: D_00139568 = g_itemEquippedSlot, D_00239BA0 =
+ * g_weaponTable, D_001ADAF8 = D_1ADAD8, D_001ADB08 = D_1ADAE8,
+ * func_00287F60 = GetWeaponUpgradeLevel, func_00288D58 =
+ * IsVendorUpgradesUnlocked, func_00336F20 = func_00337DC8.
+ * ADAPTED: (1) our prototype (s32, s32 *, s32 *, s32 *),
+ * which func_003380B8 and GuiQuickSelectWheelTick declare, for their
+ * unsigned int pointers;
+ * (2) their ItemRow D_00239BA0[] read through the unit's u8[] g_weaponTable
+ * as `((ItemRow *)g_weaponTable)` (the WEAPON_ROWS macro); (3) their
+ * `sda` attributes dropped and the tables typed s32: D_1ADAD8 is the unit's
+ * existing 8-byte EE declaration (native: the true 4 entries), D_1ADAE8
+ * declared 2 entries; (4) their -G16 unit compiled at our unit's -G8. Control
+ * flow and expressions are theirs.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00337DC8)
+S136OS_SLOT(func_00337DC8);
+#else
+extern s32 D_1ADAE8[2];                 /* 2-entry level colour table (short set) */
+extern s32 GetWeaponUpgradeLevel(s32 item);
+extern s32 IsVendorUpgradesUnlocked(void);
+
+/* One 0xE0-byte g_weaponTable record as func_00337DC8 reads it. */
+typedef struct {
+    int enabled;              /* 0x00: WeaponDef.exists */
+    unsigned char level;      /* 0x04: WeaponDef.upgradeLevel */
+    unsigned char pad05[0x67];
+    int cost;                 /* 0x6C: WeaponDef.xpThreshold */
+    unsigned char pad70[0x70];
+} ItemRow;
+#define WEAPON_ROWS ((ItemRow *)g_weaponTable)
+
+/* Items 12, 14, 17, 18 and 53, which use the two-entry colour table. */
+static __inline__ int itemInShortSet(int item)
+{
+    int found = 0;
+    switch (item) { case 12: case 14: case 17: case 18: case 53: found = 1; }
+    return found;
+}
+
+static __inline__ int itemCountReached(int item)
+{
+    if (WEAPON_ROWS[g_itemEquippedSlot[item]].enabled) {
+        int count = GetWeaponUpgradeLevel(item);
+        if (count >= 2 || (count == 1 && itemInShortSet(item))) return 1;
+    }
+    return 0;
+}
+
+static __inline__ int itemLevelReached(int item)
+{
+    if (WEAPON_ROWS[g_itemEquippedSlot[item]].enabled) {
+        if (WEAPON_ROWS[g_itemEquippedSlot[item]].level == 2
+            || (WEAPON_ROWS[g_itemEquippedSlot[item]].level == 1 && itemInShortSet(item))) return 1;
+    }
+    return 0;
+}
+
+void func_00337DC8(s32 item, s32 *first, s32 *second, s32 *value)
+{
+    unsigned int colour;
+
+    *first = 0x55F0C070;
+    *second = 0x55F0C070;
+    if (itemInShortSet(item)) {
+        int index = g_itemEquippedSlot[item];
+        colour = D_1ADAE8[WEAPON_ROWS[index].level];
+    } else {
+        int index = g_itemEquippedSlot[item];
+        colour = D_1ADAD8[WEAPON_ROWS[index].level];
+    }
+    *value = colour;
+    if (item == 16) {
+        if (WEAPON_ROWS[g_itemEquippedSlot[16]].level >= 2)
+            *value = D_1ADAD8[WEAPON_ROWS[g_itemEquippedSlot[16]].level - 2];
+    }
+    if (WEAPON_ROWS[g_itemEquippedSlot[item]].enabled && GetWeaponUpgradeLevel(item) > 0) {
+        if (IsVendorUpgradesUnlocked() && itemCountReached(item)) {
+            if (itemLevelReached(item)) {
+                *first = 0x60664088;
+                *second = 0x606600D8;
+            }
+        } else {
+            ItemRow *row = &WEAPON_ROWS[g_itemEquippedSlot[item]];
+            if (row->level == 0 && row->cost > 0) {
+                *first = 0x6049C1FF;
+                *second = 0x60001EFF;
+            }
+        }
+    }
+}
+#undef WEAPON_ROWS
+#endif
 
 /*
  * func_003380B8(grid): draw a pause-menu item grid (weapon / gadget icons).

@@ -785,3 +785,4 @@ usa text/191238 LoadShipDisplayTexture
 usa text/191238 LoadHeldItemDisplayModel
 usa text/191238 LoadPlayerDisplayTextures
 usa text/1B4218 CalcMobyTargetThreatDist
+usa text/235FE8 func_00337DC8 S136EXTRA=-fno-strict-aliasing
