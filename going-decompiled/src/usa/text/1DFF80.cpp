@@ -919,9 +919,13 @@ void CloseShrubDrawSegment(void) {
  * unsized array is likewise not gp-relative), D_L04_0021F2E0 =
  * g_shrubClassTable, D_L04_00220860 = g_shrubTexVramTable read through
  * ShrubTexVramPair (upstream's Rac2Native_..._T2, fields a/b -> tbpLo/tbpHi);
- * (2) int spelled s32 (the same type on EE); (3) upstream's unused local `k`
- * dropped (it emits nothing); (4) local names ours (wp, ent, arr, pe, base, e,
- * s -> list, classRec, packets, packet, header, giftag, vram). */
+ * (2) int/short/unsigned char spelled s32/s16/u8 (the same types on EE);
+ * (3) upstream's unused local `k` dropped (it emits nothing); (4) local names
+ * ours (wp, ent, arr, pe, base, e, s -> list, classRec, packets, packet, header,
+ * giftag, vram); (5) an `(s32 *)` cast on g_shrubClassTable[*list], since ours
+ * is u8 *[] where upstream's is int *[] (byte-neutral); (6) upstream's `nosda`
+ * attribute is not carried (see (1): our unsized array is not gp-relative
+ * anyway). Validator #2511's qualification. */
 #if !defined(TARGET_NATIVE) && !defined(S136OS_PatchShrubPacketTex0)
 S136OS_SLOT(PatchShrubPacketTex0);
 #else
@@ -1784,7 +1788,11 @@ s32 ComputeEmitterVolume(SoundEmitterSlot *slot, Vec4 *pos) {
  *              (radians), or a negative value when there is none.
  * @param pos   the emitter's world position.
  * @return      the azimuth of the source in camera space, in whole degrees
- *              (truncated), in [0, 360).
+ *              (truncated): in [0, 360) when taken directly (no previous angle,
+ *              or a far source); on the slew path WrapAnglePiSum (0x284548)
+ *              wraps it into [-pi, pi), so it can be negative, down to -180
+ *              (e.g. lastPanAngle 3.1 with a raw azimuth of 3.5 gives -2.983
+ *              rad -> -170). Validator #2489's Q1.
  *
  * The camera->emitter vector (pos - g_cameraPos) is rotated into camera space
  * by the transpose of the camera matrix at g_cameraPos+0x230, and the azimuth
