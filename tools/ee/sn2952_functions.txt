@@ -33,3 +33,7 @@ usa cod/015180 malloc
 usa cod/015180 func_00115F78
 usa cod/015180 func_00116300
 usa cod/015180 func_00116360
+usa cod/015180 func_00119BC8
+usa cod/015180 sprintf
+usa cod/015180 func_00115CF0
+usa cod/015180 snd_PrintError

@@ -91,13 +91,203 @@ u32 func_00115C90(s32 *reent, u32 incr) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115CF0);
+/* The printf family's stream view (typedef PrintfStream, below with
+ * VfprintfDispatch), forward-declared for the newlib wrappers here. */
+struct PrintfStream;
+
+/* Newlib vfiprintf and the split vfprintf dispatcher, defined further down. */
+extern s32 func_00119BC8(struct PrintfStream *fp, char *fmt, void *ap);
+extern s32 VfprintfDispatch(struct PrintfStream *fp, char *fmt, void *ap);
+
+/**
+ * func_00115CF0 - newlib fiprintf: integer-only formatted print to a stream.
+ *
+ * @stream: the FILE to print to (AssertFail passes _impure_ptr->_stderr).
+ * @fmt:    the format string; its arguments follow.
+ *
+ * Hands (stream, fmt, the variadic arguments) to vfiprintf (func_00119BC8).
+ * The return is not void in newlib, but the only caller (AssertFail) ignores
+ * it, so it is declared void here as everywhere else in the tree; the ROM
+ * leaves vfiprintf's result in $v0 either way. The va_list is the register
+ * save area the prologue spills $a2..$a7 into (sp + 0x50), which is
+ * __builtin_next_arg(fmt) - 0x30 on the EE.
+ *
+ * Newlib origin: newlib libc/stdio/fiprintf.c: fiprintf (newlib-2000-02-17,
+ * the newlib 1.8.2 release); the file's UCB notice (added in 2004, after that
+ * tag) is in THIRD-PARTY.md as it stands at Newlib HEAD.
+ *
+ * MATCHED on the sn2952 arm (held SN 2.95.2 v2.73a cc1, RULING #12157 /
+ * #13179; selector row in tools/ee/sn2952_functions.txt): the ROM saves $31
+ * with a TImode `sq`, which neither cc1 2.9 nor the s136os arm emits for this
+ * body (FACT #9683, FACT #12152). Task #2497.
+ *
+ * Source: OpenRAC/rac2-decomp @8b26d8adeb0b5515a962f83230df4bf909fd0cf5
+ * (unchanged since b2a35115; GPL-3.0, adopted with the authors' permission per
+ * RULING #10405), src/core/00115CF0.c, func_00115CF0 (author commit ab9b31a8,
+ * Louis-Philippe Le Sieur). ADAPTED: parameters `int arg0, int arg1` written
+ * `void *stream, const char *fmt` (the unit's existing prototype, used by
+ * AssertFail); their `int func_00119BC8(int, int, void *)` extern dropped for
+ * the unit's (struct PrintfStream *, char *, void *) prototype, so @fmt is
+ * passed as `(char *)fmt`; their comment dropped for this one. A
+ * TARGET_NATIVE branch (ours) builds the va_list with __builtin_va_start,
+ * since __builtin_next_arg's EE register-save-area arithmetic means nothing on
+ * the host. The EE statement is theirs.
+ */
+#if !defined(TARGET_NATIVE) && !defined(SN2952_func_00115CF0)
+SN2952_SLOT(func_00115CF0);
+#else
+void func_00115CF0(void *stream, const char *fmt, ...) {
+#ifdef TARGET_NATIVE
+    __builtin_va_list ap;
+
+    __builtin_va_start(ap, fmt);
+    func_00119BC8(stream, (char *)fmt, ap);
+    __builtin_va_end(ap);
+#else
+    func_00119BC8(stream, (char *)fmt, (char *)__builtin_next_arg(fmt) - 0x30);
+#endif
+}
+#endif
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115D38);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", snd_PrintError);
+/**
+ * snd_PrintError - newlib printf: formatted print to the reentrancy
+ * structure's stdout. Named for its 989snd callers (19 jal sites in nine
+ * snd_* files); the body is plain newlib printf (FACT #5528).
+ *
+ * @fmt: the format string; its arguments follow.
+ *
+ * Reads _impure_ptr (D_00133E74), stamps it into its stdout FILE's _data
+ * (+0x54; _stdout is at +0x8 of struct _reent), and hands (stdout, fmt, the
+ * variadic arguments) to VfprintfDispatch, newlib's split vfprintf. newlib
+ * returns that count; the ROM leaves it in $v0, but every caller treats the
+ * function as void, as this prototype does. The va_list is the register save
+ * area from $a1 (sp + 0x58), __builtin_next_arg(fmt) - 0x38 on the EE.
+ *
+ * Newlib origin: newlib libc/stdio/printf.c: printf (newlib-2000-02-17, the
+ * newlib 1.8.2 release); the file's UCB notice (added in 2004, after that
+ * tag) is in THIRD-PARTY.md as it stands at Newlib HEAD.
+ *
+ * MATCHED on the sn2952 arm (held SN 2.95.2 v2.73a cc1, RULING #12157 /
+ * #13179; selector row in tools/ee/sn2952_functions.txt), for the TImode `sq`
+ * $31 save (FACT #12152). Task #2497.
+ *
+ * Source: OpenRAC/rac2-decomp @8b26d8adeb0b5515a962f83230df4bf909fd0cf5
+ * (unchanged since b2a35115; GPL-3.0, adopted with the authors' permission per
+ * RULING #10405), src/core/00115D48.c, func_00115D48 (author commit ab9b31a8,
+ * Louis-Philippe Le Sieur). ADAPTED: named snd_PrintError (our symbol),
+ * callee func_00118CC8 spelled VfprintfDispatch with the unit's prototype
+ * (so the stream is passed as `struct PrintfStream *` and @fmt as
+ * `(char *)fmt`); `int arg0` written `const char *fmt`; their
+ * `extern void *D_00133E74` read through the unit's `s32 D_00133E74` as
+ * `(char *)D_00133E74` (same address); locals `void *obj`/`void *ctx`
+ * named `reent`/`out` and typed `char *` (so `(char *)obj + 8` reads
+ * `reent + 8` and the `*(void **)(ctx + 0x54)` store is written
+ * `*(char **)(out + 0x54)`); their comment dropped for this one. A TARGET_NATIVE branch
+ * (ours) builds the va_list with __builtin_va_start. The EE statements are
+ * theirs.
+ */
+#if !defined(TARGET_NATIVE) && !defined(SN2952_snd_PrintError)
+SN2952_SLOT(snd_PrintError);
+#else
+void snd_PrintError(const char *fmt, ...) {
+    char *reent = (char *)D_00133E74;
+    char *out = *(char **)(reent + 8);
+#ifdef TARGET_NATIVE
+    __builtin_va_list ap;
+#endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", sprintf);
+    *(char **)(out + 0x54) = reent;
+#ifdef TARGET_NATIVE
+    __builtin_va_start(ap, fmt);
+    VfprintfDispatch(*(struct PrintfStream **)(reent + 8), (char *)fmt, ap);
+    __builtin_va_end(ap);
+#else
+    VfprintfDispatch(*(struct PrintfStream **)(reent + 8), (char *)fmt,
+                     (char *)__builtin_next_arg(fmt) - 0x38);
+#endif
+}
+#endif
+
+/* The newlib string FILE sprintf builds on its stack: just the fields it sets
+ * (struct __sFILE's _p, _w, _flags, _bf._base, _bf._size and _data). */
+typedef struct SprintfFile {
+    char *p;          /* 0x00 _p: write cursor */
+    s32 r;            /* 0x04 _r */
+    s32 w;            /* 0x08 _w: room left */
+    s16 flags;        /* 0x0C _flags: __SWR | __SSTR */
+    s16 file;         /* 0x0E _file */
+    char *base;       /* 0x10 _bf._base */
+    s32 size;         /* 0x14 _bf._size */
+    char pad0[0x54 - 0x18];
+    void *data;       /* 0x54 _data: struct _reent * */
+} SprintfFile;
+
+/**
+ * sprintf - newlib sprintf: formatted print into a caller's buffer.
+ *
+ * @buf: the destination; no length check (INT_MAX room).
+ * @fmt: the format string; its arguments follow.
+ *
+ * Returns the number of characters written, not counting the NUL. Builds a
+ * string FILE on the stack (cursor and base = @buf, write count and size =
+ * INT_MAX, flags 0x208 = __SWR | __SSTR, _data = _impure_ptr D_00133E74),
+ * runs VfprintfDispatch over it and NUL-terminates at the advanced cursor.
+ * The va_list is the register save area from $a2 (sp + 0xB0),
+ * __builtin_next_arg(fmt) - 0x30 on the EE. 42 calling functions (FACT
+ * #1405), mostly UI text builders.
+ *
+ * Newlib origin: newlib libc/stdio/sprintf.c: sprintf (newlib-2000-02-17, the
+ * newlib 1.8.2 release); its UCB notice is in THIRD-PARTY.md.
+ *
+ * MATCHED on the sn2952 arm (held SN 2.95.2 v2.73a cc1, RULING #12157 /
+ * #13179; selector row in tools/ee/sn2952_functions.txt), for the TImode `sq`
+ * $31 save (FACT #12152). Task #2497.
+ *
+ * Source: OpenRAC/rac2-decomp @8b26d8adeb0b5515a962f83230df4bf909fd0cf5
+ * (unchanged since b2a35115; GPL-3.0, adopted with the authors' permission per
+ * RULING #10405), src/core/00115DA8.c, func_00115DA8 (author commit ab9b31a8,
+ * Louis-Philippe Le Sieur). ADAPTED: named sprintf (our symbol), callee
+ * func_00118CC8 spelled VfprintfDispatch with the unit's prototype (so the
+ * FILE is passed as `(struct PrintfStream *)&f` and @fmt as `(char *)fmt`);
+ * `int func_00115DA8(char *arg0, char *arg1, ...)` written
+ * `s32 sprintf(char *buf, const char *fmt, ...)`; their File_00115DA8 named
+ * SprintfFile with `int`/`short` written `s32`/`s16`; their local
+ * `int result` written `s32 result`; their
+ * `extern void *D_00133E74` read through the unit's `s32 D_00133E74` as
+ * `(void *)D_00133E74` (same address); their comment dropped for this one. A
+ * TARGET_NATIVE branch (ours) builds the va_list with __builtin_va_start. The
+ * EE statements are theirs.
+ */
+#if !defined(TARGET_NATIVE) && !defined(SN2952_sprintf)
+SN2952_SLOT(sprintf);
+#else
+s32 sprintf(char *buf, const char *fmt, ...) {
+    SprintfFile f;
+    s32 result;
+#ifdef TARGET_NATIVE
+    __builtin_va_list ap;
+#endif
+
+    f.p = buf;
+    f.w = 0x7FFFFFFF;
+    f.flags = 0x208;
+    f.base = buf;
+    f.size = 0x7FFFFFFF;
+    f.data = (void *)D_00133E74;
+#ifdef TARGET_NATIVE
+    __builtin_va_start(ap, fmt);
+    result = VfprintfDispatch((struct PrintfStream *)&f, (char *)fmt, ap);
+    __builtin_va_end(ap);
+#else
+    result = VfprintfDispatch((struct PrintfStream *)&f, (char *)fmt,
+                              (char *)__builtin_next_arg(fmt) - 0x30);
+#endif
+    *f.p = '\0';
+    return result;
+}
+#endif
 INCLUDE_ASM_ALIAS(func_00115DA8, sprintf);
 
 /* newlib's _exit as SCE built it (0x131CA8, j exit with $4 forced to 0): the
@@ -912,7 +1102,44 @@ s32 BufferedWrite128Secondary(s32 fd, char *src, u32 len, s32 flush) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00119BC8);
+/**
+ * func_00119BC8 - newlib vfiprintf: the integer-only vfprintf entry.
+ *
+ * @fp:  the stream.
+ * @fmt: the format string.
+ * @ap:  the argument area.
+ *
+ * Returns VfprintfInteger(fp->_data, fp, fmt, ap): the stream's own
+ * reentrancy structure (+0x54) is passed as the engine's first argument.
+ * Only caller: fiprintf (func_00115CF0).
+ *
+ * Newlib origin: newlib libc/stdio/vfprintf.c: vfprintf, compiled with
+ * -DINTEGER_ONLY as vfiprintf (newlib-2000-02-17, the newlib 1.8.2 release,
+ * whose stdio/Makefile.am builds vfiprintf.o that way); its UCB notice is in
+ * THIRD-PARTY.md. VfprintfInteger is the SCE-modified _vfiprintf_r it calls.
+ *
+ * MATCHED on the sn2952 arm (held SN 2.95.2 v2.73a cc1, RULING #12157 /
+ * #13179; selector row in tools/ee/sn2952_functions.txt), for the TImode `sq`
+ * $31 save (FACT #9683 reproduces this body under 2.95.2; FACT #12152).
+ * Task #2497.
+ *
+ * Source: OpenRAC/rac2-decomp @8b26d8adeb0b5515a962f83230df4bf909fd0cf5
+ * (unchanged since b2a35115; GPL-3.0, adopted with the authors' permission per
+ * RULING #10405), src/core/00119BC8.c, func_00119BC8 (author commit 7b023993,
+ * Louis-Philippe Le Sieur). ADAPTED: callee func_00119BF8 spelled
+ * VfprintfInteger with the unit's prototype; `int func_00119BC8(void *arg0,
+ * int arg1, int arg2)` written `s32 func_00119BC8(PrintfStream *fp,
+ * char *fmt, void *ap)`; their `*(int *)((char *)arg0 + 0x54)` written as
+ * the PrintfStream view's `data` (the same EE offset); their comment dropped
+ * for this one. The statement is theirs.
+ */
+#if !defined(TARGET_NATIVE) && !defined(SN2952_func_00119BC8)
+SN2952_SLOT(func_00119BC8);
+#else
+s32 func_00119BC8(PrintfStream *fp, char *fmt, void *ap) {
+    return VfprintfInteger(fp->data, fp, fmt, ap);
+}
+#endif
 
 /* VfprintfInteger's data: the space and zero pad strings (16 of each), the
  * lower/upper hex digit tables, "(null)", and the "bug in vfprintf: bad base"

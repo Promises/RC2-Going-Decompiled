@@ -169,7 +169,9 @@ License, version 3; the repository carries `rac2-gc-decomp`'s history, with
 #12108). Each is adapted, with every respelling named in the function's
 `Source:` line. None of the source files below carries a notice of its own;
 the newlib origin of the `cod/015180` malloc bodies is noticed in the section
-"Newlib, origin files with no in-file notice" below.
+"Newlib, origin files with no in-file notice" below, and the notices of the
+four Newlib stdio bodies in the section "Newlib `libc/stdio`, cod/015180
+bodies" below.
 
 | Here | Upstream file | Upstream name |
 |---|---|---|
@@ -184,6 +186,13 @@ the newlib origin of the `cod/015180` malloc bodies is noticed in the section
 | `func_00115F78` in `going-decompiled/src/usa/cod/015180.c`, newlib `free` with SCE's lock pair (adapted: `_free_r` for their `func_00116E10`, shared lock prototypes for their asm-label ones, the unit's `s32` model; sn2952 arm), task #2498 | `src/core/00115F78.c`, author commit `0f740805`, Louis-Philippe Le Sieur | `func_00115F78` |
 | `func_00116300` in `going-decompiled/src/usa/cod/015180.c`, newlib's `__malloc_lock` hook with SCE's recursive semaphore-lock body (adapted: newlib's unused `reent` parameter added, `int` written `s32`; sn2952 arm; RULING #13221), task #2498 | `src/core/00115200.c`, author commit `4541c4ce`, ReaperOfVeriod | `func_00116300` |
 | `func_00116360` in `going-decompiled/src/usa/cod/015180.c`, newlib's `__malloc_unlock` hook with SCE's body (adapted: `SignalSema` for their `func_0011AC40`, newlib's unused `reent` parameter added, `int` written `s32`; sn2952 arm; RULING #13221), task #2498 | `src/core/00116360.c`, author commit `0f740805`, Louis-Philippe Le Sieur | `func_00116360` |
+| `func_00119BC8` in `going-decompiled/src/usa/cod/015180.c` (Newlib `vfiprintf`, notice in the Newlib section below; adapted: callee func_00119BF8 spelled `VfprintfInteger` with the unit's prototype, `int` parameters typed `PrintfStream *`/`char *`/`void *`, the +0x54 read as the `PrintfStream` view's `data`; sn2952 arm), tasks #2497 and #2518 | `src/core/00119BC8.c`, author commit `7b023993` (Louis-Philippe Le Sieur) | `func_00119BC8` |
+| `sprintf` in `going-decompiled/src/usa/cod/015180.c` (Newlib `sprintf`, notice below; adapted: our symbol name, callee func_00118CC8 spelled `VfprintfDispatch` with the unit's prototype, their `File_00115DA8` named `SprintfFile` with `s32`/`s16`, `_impure_ptr` read through the unit's `s32 D_00133E74`, parameters typed; a `TARGET_NATIVE` branch of ours builds the va_list with `__builtin_va_start`, as clang has no `__builtin_next_arg`; sn2952 arm), tasks #2497 and #2518 | `src/core/00115DA8.c`, author commit `ab9b31a8` (Louis-Philippe Le Sieur) | `func_00115DA8` |
+| `func_00115CF0` in `going-decompiled/src/usa/cod/015180.c` (Newlib `fiprintf`, notice below; adapted: parameters typed `void *stream, const char *fmt`, callee prototype the unit's; a `TARGET_NATIVE` `__builtin_va_start` branch of ours; sn2952 arm), tasks #2497 and #2518 | `src/core/00115CF0.c`, author commit `ab9b31a8` (Louis-Philippe Le Sieur) | `func_00115CF0` |
+| `snd_PrintError` in `going-decompiled/src/usa/cod/015180.c` (Newlib `printf`, notice below; adapted: our symbol name, callee func_00118CC8 spelled `VfprintfDispatch` with the unit's prototype, `_impure_ptr` read through the unit's `s32 D_00133E74`, parameter typed, locals named; a `TARGET_NATIVE` `__builtin_va_start` branch of ours; sn2952 arm), tasks #2497 and #2518 | `src/core/00115D48.c`, author commit `ab9b31a8` (Louis-Philippe Le Sieur) | `func_00115D48` |
+
+The four `cod/015180` files are byte-identical between `b2a35115` and
+`8b26d8adeb0b5515a962f83230df4bf909fd0cf5`, the commit task #2497 read.
 
 `VfprintfInteger`'s upstream file is named by neither upstream's
 `THIRD_PARTY_NOTICES.md` nor its `CREDITS.md`; its header says it was
@@ -245,6 +254,120 @@ permission of Red Hat, Inc.
 `__malloc_unlock` hook (`newlib/libc/stdlib/mlock.c`, which ships only empty
 stubs) with SCE's own recursive semaphore lock; they contain no newlib text,
 so no newlib notice applies to them (RULING #13221).
+
+### Newlib `libc/stdio`, cod/015180 bodies (BSD, University of California)
+
+Four bodies in `going-decompiled/src/usa/cod/015180.c`, taken from OpenRAC
+`rac2-decomp` (rows in "OpenRAC rac2-decomp at b2a35115" above), reconstruct
+functions of Newlib's C library. They are adopted under the operator's RULING
+#13179, with each origin file's notice reproduced verbatim below as it stands
+at Newlib's current HEAD, <https://sourceware.org/git/newlib-cygwin.git> at
+commit `5aa0a116d1a3e4bf3be150e5eaaa8e2ed07637f5` (read 2026-11-06). The ROM's
+build is nearest the tag `newlib-2000-02-17` (commit
+`061afe83dc04a43321d69b5f04860e5de799665c`, the newlib 1.8.2 release), the
+earliest snapshot in that repository. Tasks #2497 and #2518.
+
+| Here | Newlib origin file: function |
+|---|---|
+| `func_00119BC8` | `newlib/libc/stdio/vfprintf.c`: `vfprintf`, built with `-DINTEGER_ONLY` as `vfiprintf` |
+| `sprintf` | `newlib/libc/stdio/sprintf.c`: `sprintf` |
+| `func_00115CF0` | `newlib/libc/stdio/fiprintf.c`: `fiprintf` |
+| `snd_PrintError` | `newlib/libc/stdio/printf.c`: `printf` |
+
+#### Newlib `libc/stdio/vfprintf.c` (origin of `func_00119BC8`)
+
+`func_00119BC8` shares its origin file with `VfprintfInteger`. That file's
+notice at the same HEAD `5aa0a116`, and its history since the tag, are quoted
+once, in the section "Newlib `libc/stdio/vfprintf.c` (BSD, University of
+California)" below.
+
+#### Newlib `libc/stdio/sprintf.c` (origin of `sprintf`)
+
+At HEAD `5aa0a116`, `newlib/libc/stdio/sprintf.c`:
+
+```
+/*
+ * Copyright (c) 1990 The Regents of the University of California.
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms are permitted
+ * provided that the above copyright notice and this paragraph are
+ * duplicated in all such forms and that any documentation,
+ * and/or other materials related to such
+ * distribution and use acknowledge that the software was developed
+ * by the University of California, Berkeley.  The name of the
+ * University may not be used to endorse or promote products derived
+ * from this software without specific prior written permission.
+ * THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+ */
+```
+
+The `newlib-2000-02-17` copy of this notice still carried the advertising
+clause (it read "any documentation, advertising materials, and other materials
+related to such distribution and use acknowledge that the software was
+developed by the University of California, Berkeley"), which the University of
+California rescinded in 1999 for all Regents-copyrighted code; Newlib removed
+it from this file in the same commit, `9042d0ce65533a26fc3264206db5828d5692332c`
+(2020).
+
+#### Newlib `libc/stdio/fiprintf.c` (origin of `func_00115CF0`)
+
+At HEAD `5aa0a116`, `newlib/libc/stdio/fiprintf.c`:
+
+```
+/*
+ * Copyright (c) 1990 The Regents of the University of California.
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms are permitted
+ * provided that the above copyright notice and this paragraph are
+ * duplicated in all such forms and that any documentation,
+ * and/or other materials related to such
+ * distribution and use acknowledge that the software was developed
+ * by the University of California, Berkeley.  The name of the
+ * University may not be used to endorse or promote products derived
+ * from this software without specific prior written permission.
+ * THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+ */
+```
+
+This notice was absent from the file at the `newlib-2000-02-17` tag (commit
+`061afe83`), which carries no copyright notice in it at all; Newlib added it
+in commit `05b315770a3925648b1a3b52781a75232809198d` (2004-04-23), in the form
+with "advertising materials", which commit `9042d0ce6` (2020) removed as for
+`sprintf.c`.
+
+#### Newlib `libc/stdio/printf.c` (origin of `snd_PrintError`)
+
+At HEAD `5aa0a116`, `newlib/libc/stdio/printf.c` (byte-identical to the
+`fiprintf.c` notice above):
+
+```
+/*
+ * Copyright (c) 1990 The Regents of the University of California.
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms are permitted
+ * provided that the above copyright notice and this paragraph are
+ * duplicated in all such forms and that any documentation,
+ * and/or other materials related to such
+ * distribution and use acknowledge that the software was developed
+ * by the University of California, Berkeley.  The name of the
+ * University may not be used to endorse or promote products derived
+ * from this software without specific prior written permission.
+ * THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+ */
+```
+
+This notice was absent from the file at the `newlib-2000-02-17` tag (commit
+`061afe83`); Newlib added it in commit `05b315770` (2004-04-23), and commit
+`9042d0ce6` (2020) removed its advertising wording, as for `fiprintf.c`.
 
 ### Forja contributors (MIT), carried by OpenRAC rac2-gc-decomp
 
@@ -564,4 +687,8 @@ notice that applies is therefore the 3-clause form above, compatible with this
 project's GPL-2.0-or-later. The head file also carries a 2002 Red Hat notice for
 positional-argument support, code that is not in the tag's file and not in this
 body.
+
+The same notice covers `func_00119BC8` (newlib's `vfiprintf` wrapper, built
+from this file; section "Newlib `libc/stdio`, cod/015180 bodies" above, task
+#2518).
 

@@ -405,15 +405,19 @@
     through a `PrintfStream` view. Its switch's jump table is bound to the
     ROM's `jtbl_0013A4B0` by `tools/ee/jtbl_bind.sh`.
 
-- **OpenRAC — `rac2-decomp`, commit `b2a35115`, core body** (GPL-3.0)
+- **OpenRAC — `rac2-decomp`, commit `b2a35115`, cod/015180 core bodies** (GPL-3.0)
   <https://github.com/OpenRAC/rac2-decomp> at commit `b2a35115e0cf580a1fdab8dd1071b157799e590e`
+  (the four Newlib stdio files are byte-identical at `8b26d8adeb0b5515a962f83230df4bf909fd0cf5`, which task #2497 read)
 
-  One core C body, adopted with the authors' permission (held by the
-  operator, RULINGs #10405 and #12108) and re-checked byte-exact against our
-  v2.00 ROM on the per-function SN 2.95.2 arm (RULING #12157), task #2465,
-  from Window X audit NOTE #13099 row A1. Contributor: bigbeno37. The doc
-  comment carries the `Source:` line, which names every change beyond extern
-  spellings.
+  Five core C bodies in `going-decompiled/src/usa/cod/015180.c`, adopted with
+  the authors' permission (held by the operator, RULINGs #10405 and #12108)
+  and re-checked byte-exact against our v2.00 ROM on the per-function SN 2.95.2
+  arm (RULING #12157): `VfprintfInteger` (task #2465, from Window X audit NOTE
+  #13099 row A1; contributor bigbeno37) and four Newlib stdio functions under
+  the operator's Newlib decision (RULING #13179; tasks #2497 and #2518;
+  contributor Louis-Philippe Le Sieur). All five reconstruct Newlib C-library
+  code, so Newlib is credited below as well. Each doc comment carries the
+  `Source:` line, which names every change beyond extern spellings.
 
   Used so far:
   - **`VfprintfInteger`** (`0x00119BF8`, the integer-only engine of the split
@@ -430,18 +434,47 @@
     `tools/ee/jtbl_bind.sh`. Its `strlen` declaration sits inside
     `#ifndef TARGET_NATIVE` (the native arm uses `<string.h>`'s). Newlib is
     credited for the code it reconstructs: see the Newlib entry below.
+  - **`func_00119BC8`** (`0x00119BC8`, Newlib `vfiprintf`), from
+    `src/core/00119BC8.c` (`func_00119BC8`, author commit `7b023993`).
+    ADAPTED: callee func_00119BF8 spelled VfprintfInteger with the unit's
+    prototype, the +0x54 read as the `PrintfStream` view's `data`, `int`
+    parameters typed.
+  - **`sprintf`** (`0x00115DA8`, Newlib `sprintf`), from `src/core/00115DA8.c`
+    (`func_00115DA8`, author commit `ab9b31a8`). ADAPTED: callee
+    func_00118CC8 spelled VfprintfDispatch with the unit's prototype, their
+    FILE struct named `SprintfFile` with `s32`/`s16`, `_impure_ptr` read
+    through the unit's `s32 D_00133E74`, and a `TARGET_NATIVE` branch of ours
+    that builds the va_list with `__builtin_va_start` (clang has no
+    `__builtin_next_arg`).
+  - **`func_00115CF0`** (`0x00115CF0`, Newlib `fiprintf`), from
+    `src/core/00115CF0.c` (`func_00115CF0`, author commit `ab9b31a8`).
+    ADAPTED: parameters typed `void *stream, const char *fmt`, the callee's
+    prototype the unit's, and the same `TARGET_NATIVE` va_list branch.
+  - **`snd_PrintError`** (`0x00115D48`, Newlib `printf`), from
+    `src/core/00115D48.c` (`func_00115D48`, author commit `ab9b31a8`).
+    ADAPTED: our name, callee func_00118CC8 spelled VfprintfDispatch with the
+    unit's prototype, `_impure_ptr` read through the unit's `s32 D_00133E74`,
+    locals named, and the same `TARGET_NATIVE` va_list branch.
 
-- **Newlib — `libc/stdio/vfprintf.c`** (BSD, © 1990 The Regents of the
-  University of California; derived from software contributed to Berkeley by
+- **Newlib — `libc/stdio`** (BSD, © 1990 The Regents of the University of
+  California; `vfprintf.c` derived from software contributed to Berkeley by
   Chris Torek)
-  <https://sourceware.org/git/newlib-cygwin.git>, compared at tag
+  <https://sourceware.org/git/newlib-cygwin.git>, notices quoted at HEAD
+  `5aa0a116d1a3e4bf3be150e5eaaa8e2ed07637f5`; the ROM's build is nearest tag
   `newlib-2000-02-17` (commit `061afe83dc04a43321d69b5f04860e5de799665c`)
 
-  `VfprintfInteger` (`0x00119BF8`, `going-decompiled/src/usa/cod/015180.c`)
-  is the game's copy of newlib's `_vfiprintf_r` (`vfprintf.c` built with
-  `-DINTEGER_ONLY`) with Sony's output layer, reconstructed by OpenRAC (entry
-  above); adopted under RULING #13179, task #2500. The file's notice is
-  reproduced verbatim in THIRD-PARTY.md.
+  The ROM links a Newlib build; the five bodies above reconstruct Newlib's own
+  C functions, adopted under RULING #13179. Each origin file's notice is
+  reproduced verbatim in [THIRD-PARTY.md](THIRD-PARTY.md), with its history
+  since that tag.
+
+  Used so far:
+  - `newlib/libc/stdio/vfprintf.c` (built `-DINTEGER_ONLY`): `VfprintfInteger`
+    (newlib's `_vfiprintf_r`, with Sony's output layer in place of newlib's
+    `__sprint`/uio; task #2500) and `func_00119BC8` (newlib's `vfiprintf`).
+  - `newlib/libc/stdio/sprintf.c` (`sprintf`): `sprintf`.
+  - `newlib/libc/stdio/fiprintf.c` (`fiprintf`): `func_00115CF0`.
+  - `newlib/libc/stdio/printf.c` (`printf`): `snd_PrintError`.
 
 - **OpenRAC — `rac2-gc-decomp`, commit `96927f87`, boundary-split bodies** (GPL-3.0, and MIT for one carried file)
   <https://github.com/OpenRAC/rac2-gc-decomp> at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`
