@@ -361,7 +361,7 @@ permission (RULINGs #10405 and #12108), task #2468:
 
 | Here | Upstream file | Upstream name |
 |---|---|---|
-| `func_00346CD8` in `going-decompiled/src/usa/text/235FE8.c` (adapted: our symbol spellings, two through EE-only asm-label aliases replacing their typed array and `section(".sdata")`; their `sda` dropped; struct views renamed, their material record as our `GuiWeaponTableEntry`; signature ours with a local cast) | `src/us2/game/00346CD8-pad-g8.c` (author commit `13388073`, Flavius) | `func_US2_00346CD8` |
+| `func_00346CD8` in `going-decompiled/src/usa/text/235FE8.c` (adapted: our symbol spellings and the unit's declaration types, `s32`/`u8` for their `int`/`unsigned char`; two through EE-only asm-label aliases, a typed view (RULING #13168) replacing their typed array and the `la` alias (RULING #8620) replacing their `section(".sdata")`; their `sda` dropped; struct views renamed and retyped, their material record as our `GuiWeaponTableEntry`; signature ours with a local cast) | `src/us2/game/00346CD8-pad-g8.c` (author commit `13388073`, Flavius) | `func_US2_00346CD8` |
 
 The GPL-2.0-or-later note in the section "OpenRAC rac2-gc-decomp (GPL-3.0)" above applies to this body too.
 

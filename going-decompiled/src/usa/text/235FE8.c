@@ -11646,32 +11646,49 @@ void func_00346AF8(void *w, s32 flags) {
  *    the lui into that slot: 133 words, SHORTER. Upstream gets the same `la`
  *    from `section(".sdata")` on its declaration; on a redeclaration of our
  *    g_inventoryOwned cc1 ignores that attribute (measured: still split).
- *  - g_mapRowLabels, an asm-label alias typing D_1AA8B8 as MapRowLabel[]
- *    (upstream's typed SelectionEntry array). Indexing the unit's u8
- *    D_1AA8B8 through a cast instead swaps the registers of the two row
- *    lookups: 10 words differ at 0x346DD4 and 0x346E78, same length.
- *  Native reads both through macros over the real symbols.
+ *  - ASM-LABEL TYPED VIEW (RULING #13168): g_mapRowLabels, an EE-only
+ *    asm-label alias typing D_1AA8B8 as MapRowLabel[] (upstream's typed
+ *    SelectionEntry array). Same address, no storage. The type is the one
+ *    the code indexes (10-byte rows, s16 item id at +0x6, as the unit's
+ *    D_1AA7F8 table above), and the only other matched reader,
+ *    func_00347450, takes the table as an opaque pointer. Without it,
+ *    indexing the unit's u8 D_1AA8B8 through a cast swaps the registers of
+ *    the two row lookups: 10 words differ (0x346DD4..E4, 0x346E78..88),
+ *    same length.
+ *  The native arm declares the real objects (u8 g_inventoryOwned[] and
+ *  u8 D_1AA8B8[]) and reads them through macros, so its output does not
+ *  depend on either alias.
  * GUARD: compiled alone by SN 2.95.3 v1.36 -fopt-stack and spliced over the
  * S136OS_SLOT line (tools/ee/s136os_splice.sh); plain C on native.
  * Source: OpenRAC/rac2-decomp @b2a35115e0cf580a1fdab8dd1071b157799e590e,
  * src/us2/game/00346CD8-pad-g8.c, func_US2_00346CD8 (author commit 13388073,
  * Flavius, "wip e1"; GPL-3.0, OpenRAC contributors' own C, adopted with the
  * authors' permission, RULINGs #10405 and #12108). ADAPTED: (1) symbols by our
- * names at the same ROM addresses: func_002E5E58 -> PlayGlobalSound (the
- * unit's s32 prototype; theirs is void), D_001A7AF8 -> g_inventoryOwned (as
- * g_inventoryOwnedLa, above), D_00139568 -> g_itemEquippedSlot, D_00239BA0 ->
- * g_weaponTable, D_001ADB10 -> D_1ADAF0, D_001AA898 -> D_1AA8B8 (as
- * g_mapRowLabels, above), D_001F2840 -> g_menuScreenBlock; (2) types: their
- * SelectionEntry/SelectionOwner/EquipmentState are MapRowLabel/MapRowCursor/
- * MapRowMenuBlock here, with the field `v` named `field`; their MaterialRecord
- * is the unit's GuiWeaponTableEntry (field `material` = nameStringId);
- * g_itemEquippedSlot, g_weaponTable and g_menuScreenBlock keep the unit's u8
- * declarations and are reached through casts; (3) their `section(".sdata")`
- * and `sda` attributes are dropped: the alias above replaces the first, and
- * the unit's file-scope `extern s32 D_1ADAF0` already gives the ROM's
- * %gp_rel store; (4) our signature (void *w, s32 buttons) with a local cast
- * to the owner view, as the unit prototypes it; (5) their MATERIAL macro is
- * MAP_ROW_CAPTION. Control flow and statement order are theirs. */
+ * names at the same ROM addresses: func_002E5E58 -> PlayGlobalSound,
+ * D_001A7AF8 -> g_inventoryOwned (as g_inventoryOwnedLa, above),
+ * D_00139568 -> g_itemEquippedSlot, D_00239BA0 -> g_weaponTable,
+ * D_001ADB10 -> D_1ADAF0, D_001AA898 -> D_1AA8B8 (as g_mapRowLabels, above),
+ * D_001F2840 -> g_menuScreenBlock; (2) declaration types, each the unit's:
+ * PlayGlobalSound `void (int, int, int)` -> `s32 (s32, s32, s32)`;
+ * D_001A7AF8 `unsigned char[]` with `section(".sdata")` -> the `u8[8]`
+ * alias g_inventoryOwnedLa (attribute dropped); D_00139568 `unsigned char[]`
+ * -> `u8[]`; D_00239BA0 `MaterialRecord[]` -> `u8[]`, read through a cast to
+ * the unit's GuiWeaponTableEntry (their `short material` at +0x6 is its
+ * `s16 nameStringId`; their `char pad[6]`/`char tail[216]` are its padding);
+ * D_001ADB10 `int` with `sda` -> `s32` (attribute dropped: the unit's
+ * file-scope `extern s32 D_1ADAF0` already gives the ROM's %gp_rel store);
+ * D_001AA898 `SelectionEntry[]` -> the MapRowLabel[] view g_mapRowLabels;
+ * D_001F2840 `EquipmentState` -> `u8[]`, read through a cast to
+ * MapRowMenuBlock; (3) struct views renamed and retyped: SelectionEntry
+ * `{ short v[5]; }` -> MapRowLabel `{ s16 field[5]; }`; SelectionOwner
+ * `{ char pad[0x4fc]; int column, row, selected, state; }` -> MapRowCursor
+ * `{ u8 _pad[0x4FC]; s32 ... }`; EquipmentState `{ char pad[0x44]; int
+ * selected; }` -> MapRowMenuBlock `{ u8 _pad[0x44]; s32 selected; }`;
+ * (4) our signature `void (void *w, s32 buttons)` for their
+ * `void (SelectionOwner *o, int buttons)`, with a local `o` cast from `w`,
+ * as the unit prototypes it; (5) their MATERIAL macro is MAP_ROW_CAPTION.
+ * Locals keep their `int` and their names; control flow and statement order
+ * are theirs. */
 typedef struct { s16 field[5]; } MapRowLabel;  /* 10-byte D_1AA8B8 row; item id at +0x6 */
 typedef struct { u8 _pad[0x4FC]; s32 column, row, selected, state; } MapRowCursor;
 typedef struct { u8 _pad[0x44]; s32 selected; } MapRowMenuBlock;  /* g_menuScreenBlock view */
