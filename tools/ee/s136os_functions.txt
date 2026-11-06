@@ -749,3 +749,4 @@ usa text/1DFF80 DrawSkyPiecesFormatA S136EXTRA=
 usa text/1DFF80 DrawSkyPiecesFormatB S136EXTRA=
 usa text/24D728 FmvStreamFeedLoop S136EXTRA=
 usa text/235FE8 func_00346CD8 S136EXTRA=-fno-strict-aliasing
+usa text/178E88 func_00281020 S136EXTRA=

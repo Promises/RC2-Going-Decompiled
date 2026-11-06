@@ -3979,54 +3979,61 @@ void func_00280FE0(void) {
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00281010);
 
 /** func_00281020 — occlusion visibility ratio for a scene actor. The actor's
- *  record (g_sceneActorMobys+0x44, stride 0x30, indexed by `actorIdx`) holds the
- *  query rect w/h at +0x24/+0x26, a depth threshold at +0x14, and a result-float
- *  pointer at +0x10. Count how many of the w*h read-back pixels have their 24-bit
- *  depth above the threshold, then store the *un*-exceeded fraction
- *  (total - count)/total to the result float. */
-/* TODO(match) t493: sdk29 62.50% / engine96 65.95% (unit objdiff, objdiff_build.sh +
- * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
- * every other remaining arm). Residual on the better arm (engine96): UNKNOWN-addiu (first
- * differing insn: ROM `addiu v1,zero,48` vs built `sll v0,a1,0x1`). Levers: engine96 with sched1
- * MEASURED (flag not landed): 67.08%.
- * TODO(match) t2054, s136os arm (solo compile under this unit's -fno-gcse, same harness as
- * func_0027A138's screen): re-indexing the record after the loop (`rec = g_sceneActorMobys +
- * 0x44 + actorIdx * 0x30;` before the result store, the loop as a down-counted do-while)
- * reproduces the ROM's second `mult`/`addu` and is 39 words against the ROM's 40. The
- * missing word is the ROM's `daddu $10,$2,$0`: it keeps the %hi of g_sceneActorMobys+0x44
- * live across the loop and re-forms only the %lo after it. That is the gcse cross-block
- * %hi copy (FACT #9472). With -fno-gcse removed (a diagnostic only: no per-function flag
- * without a RULING) the copy appears and the body is 38 words. The rest is allocation
- * (total in $4 rather than $9, no `daddu $4,$6,$0` pixel copy, no nop before the loop).
- * Class: FLAG (this unit's -fno-gcse) + ALLOCATION.
- * TODO(match) t2292 (narrows the above, FACT #12197): a different body reads 0/40 on the s136os
- * arm with gcse ON (solo screen NOTE #12195, reloc-masked, not the gate) and 37/40 under this
- * unit's -fno-gcse. It drops the `if (total > 0)` guard, reads the threshold inside the loop, and
- * re-indexes the record into a fresh local whose result pointer is loaded before the store
- * (NOTE #12194). With gcse on, then, the wall is the flag alone. It cannot land by unpinning the
- * unit: S136EXTRA="" makes ResolveZBufferOcclusionQueries splice 120 words against the ROM's 121
- * and moves func_0027E1E8 (FACT #12196). It needs a per-function gcse-on arm, which needs a
- * ruling. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00281020);
+ *  record (g_sceneActorMobys+0x44, stride 0x30, indexed by `index`) holds a
+ *  result-float pointer at +0x10, a depth threshold at +0x14, and the query
+ *  rect w/h at +0x24/+0x26. Counts how many of the w*h read-back pixels at
+ *  `pixels` have their low 24 bits above the threshold, then stores the
+ *  *un*-exceeded fraction (total - count)/total through the result pointer.
+ *  Returns void.
+ *
+ *  MATCHED byte-exact on the s136os arm (SN 2.95.3 v1.36 cc1plus -O2 -G8
+ *  -fopt-stack, gcse ON for this function only via the per-function `S136EXTRA=`
+ *  empty override, RULING #12178), as the unit is today: no unpin, no unit flag
+ *  change, no jump table. The unit itself stays -fno-gcse because an unpin is
+ *  not usable — with gcse off this body loses the ROM's cross-block %hi copy
+ *  (39/40), and unpinning also breaks ResolveZBufferOcclusionQueries
+ *  (120 spliced words vs the ROM's 121) and moves func_0027E1E8 (FACT #12196).
+ *  Row `usa text/178E88 func_00281020 S136EXTRA=` in tools/ee/s136os_functions.txt,
+ *  spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh; there is no
+ *  asm fallback — a build that skips the splice drops the function. On native
+ *  it is plain C. No codegen device: the cast view of the record table is plain
+ *  C, measured 0/40 with gcse ON in the audit's in-unit compile (NOTE #13122
+ *  ROW G2 / FACT #13116), superseding our previous #else body (FACT #12197).
+ *
+ *  Source: OpenRAC rac2-decomp @ b2a35115e0cf580a1fdab8dd1071b157799e590e,
+ *  src/game/0027F128.c func_00280670 (author commit bf067513e, bigbeno37,
+ *  2026-11-01, GPL-3.0).
+ *  ADAPTED: upstream's `extern CopyRegion D_001B8A10[]` + `D_001B8A10[index]`
+ *  spelled as the cast view `((CopyRegion_280670 *)(g_sceneActorMobys + 0x44))[index]`
+ *  — resolved by address (g_sceneActorMobys = 0x1B894C in symbol_addrs;
+ *  +0x44 = 0x1B8990 = the ROM's reloc target; upstream's name spells 0x1B8A10,
+ *  which is not where the ROM relocates); `CopyRegion` -> `CopyRegion_280670`;
+ *  `int`/`float` -> `s32`/`f32`. Statements otherwise as upstream wrote them. */
+/* GUARD: on EE this unit compiles func_00281020 once per arm. Under the
+ * default arm (sdk29 2.9) the guard below is false and S136OS_SLOT emits only
+ * a comment marker into the unit .s — no bytes. tools/ee/s136os_splice.sh
+ * compiles this same TU once per s136os row with -DS136OS_<fn> (SN 2.95.3
+ * v1.36 cc1plus, the unit's flags plus this row's S136EXTRA), extracts the
+ * function's block, and splices it over the marker in the linked unit .s; the
+ * helper refuses a row without a slot and a slot without a row, so keep them
+ * in sync. A build that skips the splice silently DROPS the function. On
+ * TARGET_NATIVE the guard is false and the body compiles as plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00281020)
+S136OS_SLOT(func_00281020);
 #else
-void func_00281020(u32 *pixels, s32 actorIdx) {
-    u8 *rec = g_sceneActorMobys + 0x44 + actorIdx * 0x30;
-    s32 w = *(s16 *)(rec + 0x24);
-    s32 h = *(s16 *)(rec + 0x26);
-    s32 total = w * h;
-    s32 count = 0;
+/* Scene-actor record, stride 0x30 (upstream CopyRegion): result float ptr
+ * +0x10, depth threshold +0x14, flags +0x1C, query rect x/y/w/h +0x20..+0x27. */
+typedef struct { u8 pad[0x10]; f32 *result; u32 threshold; u8 gap[4]; s32 flags; s16 x, y, w, h; u8 tail[8]; } CopyRegion_280670;
 
-    if (total > 0) {
-        u32 threshold = *(u32 *)(rec + 0x14);
-        s32 i;
-        for (i = 0; i < total; i++) {
-            if ((pixels[i] & 0xFFFFFF) > threshold) {
-                count++;
-            }
-        }
+void func_00281020(u32 *pixels, s32 index) {
+    CopyRegion_280670 *region = &((CopyRegion_280670 *)(g_sceneActorMobys + 0x44))[index];
+    s32 total = region->w * region->h;
+    s32 count = 0;
+    s32 i;
+    for (i = 0; i < total; i++) {
+        if ((pixels[i] & 0xFFFFFF) > region->threshold) count++;
     }
-    **(f32 **)(rec + 0x10) = (f32)(total - count) / (f32)total;
+    *(&((CopyRegion_280670 *)(g_sceneActorMobys + 0x44))[index])->result = (f32)(total - count) / (f32)total;
 }
 #endif
 
