@@ -819,7 +819,7 @@ PlayGlobalSound = 0x002E6C90; // CONFIRMED - plays from the global/common sound-
 UpdateSoundEmitters = 0x002E5900; // CONFIRMED - per-frame driver - listener pos history + velocity, master volume ducking, per-slot owner-follow, distance volume, occlusion ring sampling, then issues 989snd commands (deferred key-on FUN_00132a10 with g_soundBankHandles, snd_SetVoiceVolumeRamp with ComputeEmitterPan, key-off) plus UpdateDialogVoiceManager - the proof this pool is audio not particles
 ComputeEmitterVolume = 0x002E54D8; // CONFIRMED - distance from listener (camera pos 0x1B52C0) to emitter then ComputeVolumeFalloff vs the slot sound def - result below 0x20 means inaudible cull
 ComputeVolumeFalloff = 0x002E53E0; // CONFIRMED - interpolates def far volume (+0x8) to near volume (+0xC) across minDist..maxDist - def +0x19 bit0 selects squared vs linear falloff
-ComputeEmitterPan = 0x002E5520; // CONFIRMED - emitter direction in camera space (matrix 0x1B54F0) - atan2 azimuth with hysteresis vs slot +0x40 last angle for near sources - returns degrees, used as pan arg of snd_SetVoiceVolumeRamp
+ComputeEmitterPan = 0x002E5520; // CONFIRMED - emitter direction in camera space (matrix 0x1B54F0) - atan2 azimuth, slew-limited to 0.2 rad per call against slot +0x40 last angle for near sources (planar dist < 2.0, else +0x40 = -1.0) - returns degrees, used as pan arg of snd_SetVoiceVolumeRamp
 CastEmitterOcclusionRay = 0x002E5340; // CONFIRMED - raycast (mask 0x82, ignore owner moby) toward a point 75 percent from listener to emitter clamped to 64.0 - result feeds the 36-entry per-slot occlusion history ring at +0x44, occluded fraction halves volume
 ComputeListenerOcclusionProbe = 0x002E5290; // CONFIRMED - random jittered probe point (0.5..6.0) around the listener (g_flCameraPos 0x1B52C0), raycast via CollLine mask 0x82, on hit the probe is pulled to 75% toward g_collHitPoint (0x1BAF20, the ray's hit surface) - fills g_listenerOcclusionProbes - 6 regenerated on camera-id change, used to occlusion-test pending (state 7) sounds before key-on
 InitSoundEmitterSystem = 0x002E5720; // CONFIRMED - boot init from FUN_002914d8 - clears listener ring + all slot states, snd_Init(2), mono/stereo from 0x1A7BA0, channel limits, applies g_sndChannelVolumes, default reverb setup
@@ -1422,7 +1422,7 @@ DrawSkyShellsFixedSpin = 0x002E4360; // CONFIRMED - per-shell UpdateSkyShellRota
 UpdateSkyShellRotation = 0x002E4290; // CONFIRMED - advances g_skyShellAngles by g_pSkyShellSpinRates - builds the shell matrix
 DrawSkyShell = 0x002E4758; // CONFIRMED mechanism - dispatches on piece-list hdr +4 - FormatA vs FormatB
 DrawSkyPiecesFormatA = 0x002E47B0; // CONFIRMED mechanism - culls pieces - double-buffered staging - transform + emit tris
-DrawSkyPiecesFormatB = 0x002E49F0; // PARTIAL - second sky piece format - difference untraced
+DrawSkyPiecesFormatB = 0x002E49F0; // CONFIRMED - second sky piece format - FormatA's walk with GS state D_139300 and emitter func_002E4DB8, then SCANMSK + Z-masked ZBUF_1 regs
 TransformSkyPieceVerts = 0x002E4C6C; // PARTIAL - transforms piece verts to scratchpad 0x70002000 - returns nonzero when fully clipped
 CullSkyPieceVisibility = 0x002E51A0; // PARTIAL - per-piece visibility flags for the shell piece list
 EmitSkyTrianglePackets = 0x002E4EE0; // CONFIRMED - GIF tri packets with shared-clip-flag rejection + on-demand sky texture VRAM alloc/upload
