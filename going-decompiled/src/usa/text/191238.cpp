@@ -1625,6 +1625,55 @@ void BindSkyData(SkyData *sky) {
 }
 #endif
 
+/* Declarations shared by the four display-model loaders adopted from OpenRAC
+ * (task #2540): LoadPlayerDisplayTextures, LoadHeldItemDisplayModel,
+ * LoadShipDisplayTexture and (callees only) LoadShipDisplayModel.
+ * GsLoadImage is the 0x60-byte GIF image packet func_00126288 builds and
+ * KickGifImageUpload sends.
+ * CALL VIEWS by asm label (the unit's own device, as func_002938B0's
+ * BuildGsImageUploadS32 / WaitGsPathsIdle2), EE only. They name the same
+ * functions with OpenRAC's prototypes:
+ *  - SetupGsImageUpload = func_00126288 with `short` parameters. The caller
+ *    sign-extends each argument (`sll 16; sra 16`, e.g. 0x292A34/0x292A58).
+ *    Load-bearing for LoadPlayerDisplayTextures: with our s32 prototype and
+ *    explicit (s16) casts it differs in 8/172 words. For the other two
+ *    loaders the casts give the same bytes.
+ *  - WaitGsPathsIdleU16 = WaitGsPathsIdle with the second argument the ROM
+ *    passes as 0 in $5 (FACT #9314). Called with one argument,
+ *    LoadShipDisplayTexture builds 113 words against the ROM's 115.
+ *  - PumpDialogVoiceSystemS16 / StartFileLoadPumpingVoiceS32: OpenRAC's
+ *    `short` / `int` returns. Each result is ignored, but the return type
+ *    still changes cc1's allocation. With the unit's void prototypes:
+ *    LoadShipDisplayTexture differs in 6/116 words (the short return only);
+ *    LoadPlayerDisplayTextures differs in 3/172 (short) and 4/172 (int).
+ *    LoadHeldItemDisplayModel is byte-identical with both void prototypes,
+ *    so it calls the unit's own.
+ * Native calls the unit's prototypes, with the casts spelled out. */
+typedef struct { s64 w[12]; } GsLoadImage __attribute__((aligned(16)));
+extern void WaitFrameDmaFence(s32 mode);
+extern void PumpDialogVoiceSystem(s32 blocking);
+extern void StartFileLoadPumpingVoice(void *dest, s32 startSector, s32 sectorCount);
+extern void func_0011AEA0(s32 a);
+extern s32  Log2Floor(s32 v);
+extern s32  KickGifImageUpload(void *packet, void *src);
+extern s32  g_discToc[];
+extern u8   g_levelDialogToc[];
+extern u8   g_vramTextureBase[];
+#ifndef TARGET_NATIVE
+extern s32 SetupGsImageUpload(GsLoadImage *, s16, s16, s16, s16, s16, s16, s16)
+    __asm__("func_00126288");
+extern s32 WaitGsPathsIdleU16(s32, u16) __asm__("WaitGsPathsIdle");
+extern s16 PumpDialogVoiceSystemS16(s32) __asm__("PumpDialogVoiceSystem");
+extern s32 StartFileLoadPumpingVoiceS32(void *, s32, s32) __asm__("StartFileLoadPumpingVoice");
+#else
+extern void func_00126288(void *dst, s32 tbp, s32 a, s32 b, s32 c, s32 d, s32 w, s32 h);
+extern void WaitGsPathsIdle(s32 arg);
+#define SetupGsImageUpload(p, tbp, a, b, c, d, w, h) \
+    func_00126288((p), (s16)(tbp), (s16)(a), (s16)(b), (s16)(c), (s16)(d), (s16)(w), (s16)(h))
+#define WaitGsPathsIdleU16(a, b) WaitGsPathsIdle(a)
+#define PumpDialogVoiceSystemS16 PumpDialogVoiceSystem
+#define StartFileLoadPumpingVoiceS32 StartFileLoadPumpingVoice
+#endif
 /* LoadPlayerDisplayTextures (0x292928) — stream + GS-upload the player display
  * model's texture set. Portable #else body lives in the display-loader slice
  * below (after the g_vramTextureBase/g_pPlayerModelBuffer decls + its twin
@@ -1940,57 +1989,111 @@ void LoadPlayerDisplayTextures(s32 slot) {
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/191238", func_00292E90);
 
-/**
- * LoadShipDisplayModel — load the ship display model for level `index`.
- *
- * Records the index at g_levelDialogToc+0x13C8, waits for the frame DMA fence,
- * then kicks the model's disc read (StartFileLoadPumpingVoice) into
- * g_shipModelBufferBase from the level's TOC entry (g_discToc + index*8: start
- * LBN at +0x48D8 plus the base +0x3E24, sector count at +0x48DC). Sets up the
- * GS texture register block at g_pointLights+0x2280 (descriptor from
- * g_levelDialogToc+0x13E8 followed by the two fixed GS registers) and rebases
- * the loaded moby class header (FixupMobyClassHeader).
- */
+/* SelectState: the ship-display state at D_152C00 (g_levelDialogToc+0x13B0):
+ * the model index at +0x18, the ship texture's TEX0 word at +0x38.
+ * SelectTable: the disc TOC's ship-model table, eight bytes per entry at
+ * +0x48D8, sectors relative to +0x3E24. Both are OpenRAC's types. */
+typedef struct {
+    u8 p0[0x18];
+    s32 f18;
+    u8 p1c[0x1C];
+    u64 f38;
+} SelectState;
+
+typedef struct {
+    u8 p0[0x3E24];
+    s32 base;
+    u8 p3e28[0x48D8 - 0x3E28];
+    struct {
+        s32 a;
+        s32 b;
+    } e[1];
+} SelectTable;
+
+/* EE-only ADDRESSING-MODEL views (RULING #13168), named onto the real
+ * symbols; native reads the real objects:
+ *  - g_shipModelBufferWords: g_shipModelBufferBase as an unsized s32 array
+ *    (their `s32 D_001BAF30[]`). It is read absolutely (0x292ED8 lui/lw). Read
+ *    as the unit's small void * instead, it goes gp-relative: 48 words, ROM 49.
+ *  - g_shipRemapWord: the remap table D_1A91E0 sized as one s32 word (their
+ *    `s32 D_001A91E0` sda). Its address is then the ROM's gp-relative
+ *    `addiu $6,$28,%gp_rel(D_1A91E0)` (0x292F40). As the unit's unsized u8[],
+ *    cc1 builds a lui/addiu pair: 17/50 words. */
 #ifndef TARGET_NATIVE
-/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
- * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 39.88% PACKED-SAVE /
- * engine96 53.94% SIBCALL; best arm engine96, first differing insn there: 'sd s1, 0x8(sp)' vs
- * 'sd s2, 0x10(sp)'
- * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): this member's prologue - the
- * ROM's save set at its 8-byte stride, and its frame - is reproduced exactly (NOTE #9871), so
- * the save-slot wall named above is a cc1 2.9 property and was measured false as the reason
- * this member stays unmatched (FACT #9873). Residual: UNMEASURED. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", LoadShipDisplayModel);
+extern s32 g_shipModelBufferWords[] __asm__("g_shipModelBufferBase");
+extern s32 g_shipRemapWord __asm__("D_1A91E0");
 #else
-/* Declarations this body needs whose only other declarations sit in other
- * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
-extern u8 g_pointLights[];
-/* (end of this body's declarations) */
-extern s32 g_discToc[];
-extern u8 g_levelDialogToc[];
 extern void *g_shipModelBufferBase;
 extern u8 D_1A91E0[];
-extern void WaitFrameDmaFence(s32 mode);
-extern void StartFileLoadPumpingVoice(void *dest, s32 startSector, s32 sectorCount);
+#define g_shipModelBufferWords ((s32 *)&g_shipModelBufferBase)
+#define g_shipRemapWord (*(s32 *)D_1A91E0)
+#endif
+/* Both arms: OpenRAC's two struct-typed globals as casts of our symbols. */
+#define g_shipSelectState (*(SelectState *)(g_levelDialogToc + 0x13B0))
+#define g_shipSelectTable (*(SelectTable *)g_discToc)
+extern s64 g_modelTexRegs[];
 extern void FixupMobyClassHeader(void *hdr, s32 arg2, s32 reloc, s32 classId);
 
-void LoadShipDisplayModel(s32 index) {
-    s32 *entry = (s32 *)((u8 *)g_discToc + index * 8);
-
-    *(s32 *)(g_levelDialogToc + 0x13B0 + 0x18) = index;
+/*
+ * LoadShipDisplayModel(n) — load ship display model `n` and point the model's
+ * texture registers at the ship texture. No return value.
+ *   n: the entry in the disc TOC's ship-model table (+0x48D8, eight bytes
+ *      each), recorded at D_152C00+0x18.
+ * Waits for the frame DMA and reads the model into g_shipModelBufferBase. It
+ * writes the three GS register words at g_modelTexRegs: the TEX0 word
+ * LoadShipDisplayTexture left at D_152C00+0x38, then the fixed
+ * 0xFFA0000000E0 and 0x40000400004000 (the same pair
+ * BindPlayerDisplayModel writes). Then FixupMobyClassHeader rebases the
+ * loaded header (arg 0, remap table D_1A91E0, class id -1).
+ *
+ * MATCHED on the s136os arm (the unit's S136EXTRA "", -G8; task #2540, from
+ * audit NOTE #13181 / FACT #13187, 10/49). Devices, each removed alone:
+ *  - the RULING #8549 allowlist row for 0x40000400004000 at 0x292F1C. SN
+ *    Ps2EeAs expands it to 5 words (`ori 0x8000; dsll 20; ori 0x8000;
+ *    dsll 19; ori 0x4000`), GNU as to 4, so without it the function builds
+ *    48 words (NOTE #9664 named this wall);
+ *  - the two views above (48 words; 17/50).
+ * GUARD: compiled alone by the s136os arm and spliced over the S136OS_SLOT
+ * line (tools/ee/s136os_splice.sh, row in tools/ee/s136os_functions.txt);
+ * plain C on native.
+ * Source: OpenRAC/rac2-decomp @5776dcc35045fb2320610edd1d2db4fa7660ef37
+ * (GPL-3.0, adopted with the authors' permission per RULINGs #10405/#12108;
+ * blob identical at b2a35115 and at head fe6adf9b), src/game/002925F0-g8.c,
+ * func_002925F0 (v1.01 address), author commit 34e66dc9 (Flavius; their
+ * header says it is carried from rac3-decomp src/boot_elf/text/398A48.c,
+ * func_00398F98). ADAPTED: (1) our spellings by address: D_00152C00 =
+ * g_shipSelectState, `*(SelectState *)(g_levelDialogToc + 0x13B0)`, and
+ * D_0014B540 = g_shipSelectTable, `*(SelectTable *)g_discToc` (casts,
+ * measured byte-identical to asm-label views),
+ * D_001BAF30 = g_shipModelBufferWords, D_001C4DC0 = g_modelTexRegs (declared
+ * s64[] as at the unit's other use), D_001A91E0 = g_shipRemapWord (their
+ * v1.01 addresses are 0x80 higher for the last three), func_002FC3C0 =
+ * WaitFrameDmaFence, func_002B7C80 = StartFileLoadPumpingVoice and
+ * func_002934F8 = FixupMobyClassHeader; (2) their (s32, s32, s32) and
+ * (s32, s32, void *, s32) prototypes are the unit's, so `h` is passed as
+ * `(void *)h` and the remap address as `(s32)&g_shipRemapWord`; (3)
+ * `unsigned long` written u64; (4) `sda` not carried; (5) the name is
+ * LoadShipDisplayModel. The rest of the body is theirs.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_LoadShipDisplayModel)
+S136OS_SLOT(LoadShipDisplayModel);
+#else
+void LoadShipDisplayModel(s32 n) {
+    SelectTable *b;
+    s32 h;
+    g_shipSelectState.f18 = n;
     WaitFrameDmaFence(1);
-    StartFileLoadPumpingVoice(g_shipModelBufferBase,
-                              entry[0x48D8 / 4] + g_discToc[0x3E24 / 4],
-                              entry[0x48DC / 4]);
-    {
-        u64 *reg = (u64 *)(g_pointLights + 0x2280);
-        reg[0] = *(u64 *)(g_levelDialogToc + 0x13B0 + 0x38);
-        reg[1] = 0x0000FFA0000000E0ULL;     /* fixed GS register A */
-        reg[2] = 0x0040000400004000ULL;     /* fixed GS register B */
-    }
-    FixupMobyClassHeader(g_shipModelBufferBase, 0, (s32)D_1A91E0, -1);
+    b = &g_shipSelectTable;
+    h = g_shipModelBufferWords[0];
+    StartFileLoadPumpingVoice((void *)h, b->e[n].a + b->base, b->e[n].b);
+    g_modelTexRegs[0] = g_shipSelectState.f38;
+    g_modelTexRegs[1] = 0xFFA0000000E0;
+    g_modelTexRegs[2] = 0x40000400004000;
+    FixupMobyClassHeader((void *)h, 0, (s32)&g_shipRemapWord, -1);
 }
 #endif
+#undef g_shipSelectState
+#undef g_shipSelectTable
 
 /* Load the ship-select display texture for `shipId`: fence the frame DMA, resolve
  * the double-buffered frame-arena slot, kick the disc file load (the shipId TOC
