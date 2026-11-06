@@ -493,12 +493,15 @@ notice is reproduced here verbatim, as published at newlib-cygwin
 ```
 
 That tag is the earliest newlib snapshot in the repository (no 1999 release is
-tagged there), so it is the nearest to the "newlib 1999 implementation" the
-upstream file's header names. At the repository's head (`5aa0a116d1a3`, read 2026-11-06) the same notice is the 3-clause form: clause 3 (the
-advertising acknowledgement, "All advertising materials mentioning features or
-use of this software must display the following acknowledgement: This product
-includes software developed by the University of California, Berkeley and its
-contributors.") is removed and clause 4 is renumbered 3, following the
-University's 1999 rescission of that clause. The head file also carries a 2002
-Red Hat notice for positional-argument support, code that is not in the tag's
-file and not in this body.
+tagged there; its `newlib/README` is the one for the newlib-1.8.2 release), so
+it is the nearest to the "newlib 1999 implementation" the upstream file's
+header names. At the repository's head (`5aa0a116d1a3`, read 2026-11-06) the
+same notice is the 3-clause form: clause 3 (the advertising acknowledgement,
+"All advertising materials mentioning features or use of this software must
+display the following acknowledgement: This product includes software developed
+by the University of California, Berkeley and its contributors.") is removed
+and clause 4 is renumbered 3, by newlib commit
+`9042d0ce65533a26fc3264206db5828d5692332c` (Keith Packard, 2020-01-29, "Use
+remove-advertising-clause script to edit BSD licenses"). The head file also
+carries a 2002 Red Hat notice for positional-argument support, code that is not
+in the tag's file and not in this body.
