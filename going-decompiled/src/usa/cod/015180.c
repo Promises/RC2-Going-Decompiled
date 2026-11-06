@@ -653,7 +653,17 @@ extern unsigned int strlen(const char *s); /* linked newlib strlen, 0x1157AC */
 
 /**
  * VfprintfInteger - the integer-only printf engine of SCE's split vfprintf:
- * newlib's 1999 _vfprintf_r with every floating-point conversion removed.
+ * newlib's _vfiprintf_r, i.e. libc/stdio/vfprintf.c built with -DINTEGER_ONLY
+ * (newlib's own stdio Makefile.am rule for vfiprintf.o), with SCE's output
+ * layer in place of newlib's.
+ *
+ * Which part is newlib's (RULING #13179 item 3): the format scan, flag/width/
+ * precision/size parsing, argument fetch, conversion switch, digit generation,
+ * sign/prefix/padding logic and the "bad base" text are vfprintf.c's
+ * _VFPRINTF_R. SCE's: the PRINT macro's output layer (a direct memcpy into a
+ * string stream, else BufferedWrite128Secondary to an fd) replacing newlib's
+ * __sprint/uio iovec, and the entry through VfprintfDispatch. Newlib origin
+ * file and its notice: THIRD-PARTY.md, "Newlib libc/stdio/vfprintf.c".
  *
  * @reent: the caller's struct _reent * (fp->data). Never read: the multibyte
  *         scan passes the global _impure_ptr (D_00133E74) instead (NOTE #5546).
@@ -693,9 +703,19 @@ extern unsigned int strlen(const char *s); /* linked newlib strlen, 0x1157AC */
  * memchr/strlen/memcpy asm labels -> func_00115250 / strlen / memcpy (the
  * builtin's call); D_00133E74 is the unit's `s32` extern, so it is passed as
  * `(void *)D_00133E74`; their `const` dropped from the pad-string externs
- * (BufferedWrite128Secondary takes `char *`); macro and data comments added,
- * their header comment replaced by this one. Statements, locals, macros and
- * control flow are theirs.
+ * (BufferedWrite128Secondary takes `char *`); their `strlen` asm-label
+ * declaration is written as a plain `extern unsigned int strlen(const char *s)`
+ * (the linked newlib strlen at 0x1157AC) inside `#ifndef TARGET_NATIVE ...
+ * #endif`, so the native arm takes <string.h>'s declaration via common.h
+ * instead (a token addition, EE bytes unchanged); macro and data comments
+ * added, their header comment replaced by this one. Statements, locals, macros
+ * and control flow are theirs. Their header's placement note, kept: `realsz`
+ * is declared in the block that uses it because gcse numbers its PRE registers
+ * by hash bucket and a bucket sums the regnos, so realsz's regno decides the
+ * spill slots of `flags & 4` (sp+0x6C) and `width > realsz` (sp+0x70).
+ * Newlib origin: libc/stdio/vfprintf.c, _VFPRINTF_R as _vfiprintf_r
+ * (INTEGER_ONLY); compared at newlib-cygwin tag newlib-2000-02-17. Its
+ * Berkeley notice is reproduced verbatim in THIRD-PARTY.md (RULING #13179).
  */
 #if !defined(TARGET_NATIVE) && !defined(SN2952_VfprintfInteger)
 SN2952_SLOT(VfprintfInteger);

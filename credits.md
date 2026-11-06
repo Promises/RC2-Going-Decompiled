@@ -427,7 +427,21 @@
     `memchr` label), `strlen` and `memcpy`; `(void *)D_00133E74` for the
     unit's `s32` extern; `const` dropped from two pad-string externs. Its
     switch's jump table is bound to the ROM's `jtbl_0013A7B0` by
-    `tools/ee/jtbl_bind.sh`.
+    `tools/ee/jtbl_bind.sh`. Its `strlen` declaration sits inside
+    `#ifndef TARGET_NATIVE` (the native arm uses `<string.h>`'s). Newlib is
+    credited for the code it reconstructs: see the Newlib entry below.
+
+- **Newlib — `libc/stdio/vfprintf.c`** (BSD, © 1990 The Regents of the
+  University of California; derived from software contributed to Berkeley by
+  Chris Torek)
+  <https://sourceware.org/git/newlib-cygwin.git>, compared at tag
+  `newlib-2000-02-17` (commit `061afe83dc04a43321d69b5f04860e5de799665c`)
+
+  `VfprintfInteger` (`0x00119BF8`, `going-decompiled/src/usa/cod/015180.c`)
+  is the game's copy of newlib's `_vfiprintf_r` (`vfprintf.c` built with
+  `-DINTEGER_ONLY`) with Sony's output layer, reconstructed by OpenRAC (entry
+  above); adopted under RULING #13179, task #2500. The file's notice is
+  reproduced verbatim in THIRD-PARTY.md.
 
 - **OpenRAC — `rac2-gc-decomp`, commit `96927f87`, boundary-split bodies** (GPL-3.0, and MIT for one carried file)
   <https://github.com/OpenRAC/rac2-gc-decomp> at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`

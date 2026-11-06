@@ -440,3 +440,65 @@ operator's 2026-10-31 "adopt all" (RULING #12108), task #2460:
 
 The GPL-2.0-or-later note in the section "OpenRAC rac2-gc-decomp (GPL-3.0)"
 above applies to this body too.
+
+### Newlib `libc/stdio/vfprintf.c` (BSD, University of California)
+
+`VfprintfInteger` in `going-decompiled/src/usa/cod/015180.c` (taken from
+OpenRAC `rac2-decomp`, see "OpenRAC rac2-decomp at b2a35115" above) is the
+game's copy of newlib's `_vfiprintf_r`: newlib's `libc/stdio/vfprintf.c`
+compiled with `-DINTEGER_ONLY` (newlib's own `libc/stdio/Makefile.am` rule for
+`vfiprintf.o`), with Sony's output layer in place of newlib's `__sprint`/uio.
+The format scanning, conversion and padding logic derive from that file, so its
+notice is reproduced here verbatim, as published at newlib-cygwin
+(<https://sourceware.org/git/newlib-cygwin.git>) tag `newlib-2000-02-17`
+(commit `061afe83dc04a43321d69b5f04860e5de799665c`), path
+`newlib/libc/stdio/vfprintf.c`, RULING #13179, task #2500:
+
+```
+/*-
+ * Copyright (c) 1990 The Regents of the University of California.
+ * All rights reserved.
+ *
+ * This code is derived from software contributed to Berkeley by
+ * Chris Torek.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ * 3. All advertising materials mentioning features or use of this software
+ *    must display the following acknowledgement:
+ *	This product includes software developed by the University of
+ *	California, Berkeley and its contributors.
+ * 4. Neither the name of the University nor the names of its contributors
+ *    may be used to endorse or promote products derived from this software
+ *    without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ * SUCH DAMAGE.
+ */
+```
+
+That tag is the earliest newlib snapshot in the repository (no 1999 release is
+tagged there), so it is the nearest to the "newlib 1999 implementation" the
+upstream file's header names. At the repository's head (`5aa0a116d1a3`, read 2026-11-06) the same notice is the 3-clause form: clause 3 (the
+advertising acknowledgement, "All advertising materials mentioning features or
+use of this software must display the following acknowledgement: This product
+includes software developed by the University of California, Berkeley and its
+contributors.") is removed and clause 4 is renumbered 3, following the
+University's 1999 rescission of that clause. The head file also carries a 2002
+Red Hat notice for positional-argument support, code that is not in the tag's
+file and not in this body.
