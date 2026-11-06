@@ -2486,15 +2486,18 @@ s32 func_00337DA0(u32 idx) {
  * MATCHED on the s136os arm with a per-function override (task #2550): row
  * `usa text/235FE8 func_00337DC8 S136EXTRA=-fno-strict-aliasing` in
  * tools/ee/s136os_functions.txt, i.e. the unit's flags minus -fno-gcse
- * (RULING #12178). With the unit's -fno-gcse it builds 189 words, not 188;
- * gcse is what holds %hi(g_itemEquippedSlot) / %hi(g_weaponTable) in
- * $22/$23 across the calls. The three `switch`es (one per inlined
- * itemInShortSet after the first) are bound to the ROM's tables
- * jtbl_0026DD70_text / jtbl_0026DE20_text / jtbl_0026DED0_text by
- * tools/ee/jtbl_bind.sh. No device of its own: D_1ADAD8 is read through the
- * unit's existing 8-byte EE declaration above func_00337DA0 (task #948), which
- * is what keeps it gp-relative at -G8, and D_1ADAE8 (8 bytes) is small at -G8
- * as declared.
+ * (RULING #12178). Removal probe (task #2550): the row without the override
+ * makes s136os_splice.sh FATAL, built 189 words vs ROM 188 (LONGER); the ROM
+ * keeps %hi(g_itemEquippedSlot) / %hi(g_weaponTable) live in $22/$23 across
+ * the calls, as the gcse build does. The three inlined itemInShortSet
+ * `switch`es are bound to the ROM's tables jtbl_0026DD70_text /
+ * jtbl_0026DE20_text / jtbl_0026DED0_text by tools/ee/jtbl_bind.sh, which
+ * needs its per-table entry count (task #2550; before it, a function's second
+ * table read 84 entries and the bind was refused). No device of its own:
+ * D_1ADAD8 is read through the unit's existing 8-byte EE declaration above
+ * func_00337DA0 (task #948), which keeps it gp-relative at -G8 as the ROM has
+ * it, and D_1ADAE8 (8 bytes) is small at -G8 as declared. Upstream compiles
+ * it in a -G16 unit with `sda` on both tables; neither is needed here.
  * GUARD: on EE this C is the image's body, compiled alone by SN 2.95.3 v1.36
  * -fopt-stack and spliced over S136OS_SLOT by tools/ee/s136os_splice.sh; there
  * is no asm fallback. On native it is plain C.
@@ -2505,7 +2508,8 @@ s32 func_00337DA0(u32 idx) {
  * ROM-encoded address: D_00139568 = g_itemEquippedSlot, D_00239BA0 =
  * g_weaponTable, D_001ADAF8 = D_1ADAD8, D_001ADB08 = D_1ADAE8,
  * func_00287F60 = GetWeaponUpgradeLevel, func_00288D58 =
- * IsVendorUpgradesUnlocked, func_00336F20 = func_00337DC8.
+ * IsVendorUpgradesUnlocked, func_00336F20 (their v1.01 address; their own
+ * catalogue places it at 0x00337DC8, 752 bytes) = func_00337DC8.
  * ADAPTED: (1) our prototype (s32, s32 *, s32 *, s32 *),
  * which func_003380B8 and GuiQuickSelectWheelTick declare, for their
  * unsigned int pointers;
