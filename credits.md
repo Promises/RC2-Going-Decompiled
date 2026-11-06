@@ -821,10 +821,10 @@
 - **OpenRAC — `rac2-decomp`, commit `5776dcc3`, text/178E88 Window X screen-geometry bodies** (GPL-3.0)
   <https://github.com/OpenRAC/rac2-decomp> at commit `5776dcc35045fb2320610edd1d2db4fa7660ef37`
 
-  One engine C body in text/178E88, adopted with the authors' permission
+  Engine C bodies in text/178E88, adopted with the authors' permission
   (held by the operator, RULING #10405/#12108) and re-checked byte-exact
   against our v2.00 ROM on the s136os arm (task #2503, from the Window X
-  audit NOTE #13181). The doc comment carries the `Source:` line, which
+  audit NOTE #13181). Each doc comment carries the `Source:` line, which
   names every change beyond symbol spellings.
 
   Used so far:
@@ -839,6 +839,18 @@
     as the cast `(ScreenState *)(g_sceneActorMobys + 0x674)` (same address
     0x1B8FC0), their `func_00283CE0` as `IntToFloat`, and
     `int`/`short`/`float` spelled `s32`/`s16`/`f32`.
+  - **`func_0027B858`** (`0x0027B858`, 76 words, configure the viewport /
+    camera extents and rebuild the projection; the v2.00 copy of v1.01's
+    `func_0027B2F8`) in `going-decompiled/src/usa/text/178E88.cpp`, on the
+    s136os arm at the unit's pinned S136EXTRA, from
+    `src/us2/game/0027B858.c` (`func_US2_0027B858`, author commit
+    `ac7e1a2e`, bigbeno37, 2026-11-06, body unchanged to the pin). ADAPTED:
+    their `D_001B9040` as the cast `(ScreenState *)(g_sceneActorMobys +
+    0x674)` (same address 0x1B8FC0), their `D_001A7340` as the
+    `g_screenExtent` view over `g_screenWidth` with sda respelled
+    `section(".sdata")` (the x arm), their `func_00283CE0` as `IntToFloat`,
+    their `func_0027AB40` as `BuildCameraProjection`, and `int`/`float`
+    spelled `s32`/`f32`.
 
 - **Forja contributors** (MIT, © 2026 Forja contributors), via OpenRAC
   `rac2-gc-decomp` at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`

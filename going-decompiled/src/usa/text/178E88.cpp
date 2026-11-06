@@ -1120,9 +1120,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", BuildCameraProj
  * S136OS_SLOT by tools/ee/s136os_splice.sh: `built 76 words = ROM 76 words`,
  * byte-identical .rom (landing_gate usa --strict). There is no asm fallback: a
  * build that skips the splice drops the function. On native it is plain C.
- * Devices: the shared g_screenExtent .sdata view above (the x arm) — the same
- * device commit 1 proved load-bearing (removal -> splice FATAL LENGTH); no new
- * device. Supersedes the t493 #else (sdk29 29.47% / engine96 20.12%, unit
+ * Devices: the shared g_screenExtent .sdata view above (the x arm) — removal
+ * probe this body (attribute dropped alone): `built 70 words, ROM 76 words —
+ * SHORTER` -> BUILD FAIL, so it is load-bearing here too; no new device.
+ * Supersedes the t493 #else (sdk29 29.47% / engine96 20.12%, unit
  * objdiff).
  *
  * Source: OpenRAC/rac2-decomp @5776dcc35045fb2320610edd1d2db4fa7660ef37
