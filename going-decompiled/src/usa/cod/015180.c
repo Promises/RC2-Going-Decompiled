@@ -331,9 +331,103 @@ void func_00115F78(s32 ptr) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", _mbtowc_r);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00116300);
+/* The malloc lock: owning thread id (-1 = free), recursion depth, and the
+ * kernel semaphore that serialises owners. */
+extern s32 D_001341E0;
+extern s32 D_001341E4;
+extern s32 D_00134DB8;
+/* EE kernel syscalls GetThreadId (0x2F), WaitSema (0x44), SignalSema (0x42),
+ * defined further down this unit. */
+extern s32 func_0011AB10(void);
+extern s32 func_0011AC60(s32 sema);
+extern s32 SignalSema(s32 sema);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00116360);
+/**
+ * func_00116300 — __malloc_lock, the hook newlib's malloc family calls
+ * (hook: newlib libc/stdlib/mlock.c: __malloc_lock; body SCE's).
+ *
+ * @reent: newlib's reentrancy-block argument; unused, as in newlib.
+ *
+ * A recursive per-thread lock. If the calling thread (GetThreadId) does not
+ * own the lock it waits on the semaphore D_00134DB8 and takes ownership
+ * (D_001341E0); either way it bumps the depth D_001341E4 and returns it.
+ * The INTERFACE (name, signature) is newlib's hook: newlib's mlock.c ships
+ * only an empty stub ("you need to define your own versions"). The BODY is
+ * SCE's recursive per-thread semaphore lock, reconstructed by the upstream
+ * author; it carries no newlib text (RULING #13221 point 3, so no newlib
+ * notice). Name kept (never rename a matched function).
+ *
+ * MATCHED on the sn2952 arm (held SN 2.95.2 v2.73a cc1, RULING #12157;
+ * selector row in tools/ee/sn2952_functions.txt): the ROM saves $16/$17/$31
+ * with TImode `sq` (FACT #12152). Task #2498, RULING #13221 (an SCE body
+ * reconstructed from the ROM is adoptable). No device.
+ *
+ * Source: OpenRAC/rac2-decomp @8b26d8adeb0b5515a962f83230df4bf909fd0cf5
+ * (GPL-3.0, adopted with the authors' permission per RULING #10405; blob
+ * identical at the audit pin b2a35115), src/core/00115200.c, func_00116300
+ * (same address on their v2.00 build; author commit 4541c4ce,
+ * ReaperOfVeriod). Hook cited (interface only, no text taken):
+ * newlib/libc/stdlib/mlock.c, __malloc_lock, newlib-cygwin tag
+ * newlib-2000-02-17. ADAPTED: the unused `s32 reent`
+ * parameter added (newlib's signature, so malloc/free can pass the argument
+ * the ROM passes in one TU; their callers bound a separate prototype by asm
+ * label instead); `int` written `s32`. Statements, externs and control flow
+ * are theirs.
+ */
+#if !defined(TARGET_NATIVE) && !defined(SN2952_func_00116300)
+SN2952_SLOT(func_00116300);
+#else
+s32 func_00116300(s32 reent) {
+    s32 id = func_0011AB10();
+
+    if (D_001341E0 != id) {
+        func_0011AC60(D_00134DB8);
+        D_001341E0 = id;
+        return ++D_001341E4;
+    }
+    return ++D_001341E4;
+}
+#endif
+
+/**
+ * func_00116360 — __malloc_unlock, the release half of func_00116300
+ * (hook: newlib libc/stdlib/mlock.c: __malloc_unlock; body SCE's).
+ *
+ * @reent: newlib's reentrancy-block argument; unused, as in newlib.
+ *
+ * Drops one level of D_001341E4; at depth 0 it clears the owner (-1) and
+ * signals the semaphore D_00134DB8. The INTERFACE (name, signature) is
+ * newlib's hook (mlock.c ships an empty stub); the BODY is SCE's recursive
+ * per-thread semaphore lock, reconstructed by the upstream author, with no
+ * newlib text (RULING #13221 point 3, so no newlib notice). Name kept (never
+ * rename a matched function).
+ *
+ * MATCHED on the sn2952 arm (held SN 2.95.2 v2.73a cc1, RULING #12157;
+ * selector row in tools/ee/sn2952_functions.txt): the ROM saves $31 with a
+ * TImode `sq` (FACT #12152). Task #2498, RULING #13221. No device.
+ *
+ * Source: OpenRAC/rac2-decomp @8b26d8adeb0b5515a962f83230df4bf909fd0cf5
+ * (GPL-3.0, adopted with the authors' permission per RULING #10405; blob
+ * identical at the audit pin b2a35115), src/core/00116360.c, func_00116360
+ * (same address on their v2.00 build; author commit 0f740805, Louis-Philippe
+ * Le Sieur). Hook cited (interface only, no text taken):
+ * newlib/libc/stdlib/mlock.c, __malloc_unlock, newlib-cygwin tag
+ * newlib-2000-02-17. ADAPTED: callee func_0011AC40 spelled
+ * SignalSema (our symbol for 0x11AC40, with the unit's `s32` return for
+ * their `void`); the unused `s32 reent` parameter added (as for
+ * func_00116300); `int` written `s32`. Statements and control flow are
+ * theirs.
+ */
+#if !defined(TARGET_NATIVE) && !defined(SN2952_func_00116360)
+SN2952_SLOT(func_00116360);
+#else
+void func_00116360(s32 reent) {
+    if (--D_001341E4 == 0) {
+        D_001341E0 = -1;
+        SignalSema(D_00134DB8);
+    }
+}
+#endif
 
 /**
  * Seed the random-number generator: store arg0 as the RNG state word at

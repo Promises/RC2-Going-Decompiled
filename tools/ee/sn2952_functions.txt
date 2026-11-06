@@ -31,3 +31,5 @@ usa cod/015180 func_00115E68
 usa cod/015180 func_00115C90
 usa cod/015180 malloc
 usa cod/015180 func_00115F78
+usa cod/015180 func_00116300
+usa cod/015180 func_00116360
