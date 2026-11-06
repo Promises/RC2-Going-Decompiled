@@ -167,7 +167,9 @@ C function bodies are taken from OpenRAC's `rac2-decomp`,
 License, version 3; the repository carries `rac2-gc-decomp`'s history, with
 `96927f87` an ancestor), with the authors' permission (RULINGs #10405 and
 #12108). Each is adapted, with every respelling named in the function's
-`Source:` line. None of the source files below carries a notice of its own.
+`Source:` line. None of the source files below carries a notice of its own;
+the newlib origin of the `cod/015180` malloc bodies is noticed in the section
+"Newlib, origin files with no in-file notice" below.
 
 | Here | Upstream file | Upstream name |
 |---|---|---|
@@ -177,6 +179,11 @@ License, version 3; the repository carries `rac2-gc-decomp`'s history, with
 | `VfprintfInteger` in `going-decompiled/src/usa/cod/015180.c` (adapted: our name, `s32` return, `reent` for their `data`; their `PrintFile` view merged into the unit's `PrintfStream`; callees respelled by address to `_mbtowc_r`, `BufferedWrite128Secondary`, `func_00115250` (their `memchr` label), `strlen` and `memcpy`; `(void *)D_00133E74` for the unit's `s32` extern; `const` dropped from the pad-string externs; its switch table bound to the ROM's by `tools/ee/jtbl_bind.sh`; sn2952 arm), task #2465 | `src/core/00119BF8.c` (author commit `bf067513`, bigbeno37) | `func_00119BF8` |
 | `PatchShrubPacketTex0` in `going-decompiled/src/usa/text/1DFF80.cpp` (adapted: our symbol names; their {short, short} table entry as our `ShrubTexVramPair` view; `int`/`short`/`unsigned char` spelled `s32`/`s16`/`u8`; an `(s32 *)` cast on `g_shrubClassTable[*list]`; their `nosda` not carried; an unused local dropped; local names ours; s136os arm, gcse ON via the per-function `S136EXTRA=` override, RULING #12178), task #2470 | `src/game/002E10B8.c` (author commit `7fccf735`, Flavius) | `func_002E10B8` (v1.01 address) |
 | `func_002DC6C8` in `going-decompiled/src/usa/text/1D54C0.cpp` (adapted: our symbol names, signature and record types; their struct-typed `D_001C4FA0` as a cast view of our `g_mapVertexData`; `volatile` and `sda` on the list pointer dropped), task #2479 | `src/game/002DB988-init-g8.c` | `func_002DB988` (v1.01 address) |
+| `func_00115C90` in `going-decompiled/src/usa/cod/015180.c`, newlib `_sbrk_r` (adapted: `int` written `s32`, parameters named; sn2952 arm), task #2498 | `src/core/00115C90.c`, author commit `399c57d5`, Louis-Philippe Le Sieur | `func_00115C90` |
+| `malloc` in `going-decompiled/src/usa/cod/015180.c`, newlib `malloc` with SCE's lock pair (adapted: our name, newlib's `void *`/unsigned types for their `int`s, the unit's `s32` model for `D_00133E74`; sn2952 arm), task #2498 | `src/core/00115F28.c`, author commit `399c57d5`, Louis-Philippe Le Sieur | `func_00115F28` |
+| `func_00115F78` in `going-decompiled/src/usa/cod/015180.c`, newlib `free` with SCE's lock pair (adapted: `_free_r` for their `func_00116E10`, shared lock prototypes for their asm-label ones, the unit's `s32` model; sn2952 arm), task #2498 | `src/core/00115F78.c`, author commit `0f740805`, Louis-Philippe Le Sieur | `func_00115F78` |
+| `func_00116300` in `going-decompiled/src/usa/cod/015180.c`, newlib's `__malloc_lock` hook with SCE's recursive semaphore-lock body (adapted: newlib's unused `reent` parameter added, `int` written `s32`; sn2952 arm; RULING #13221), task #2498 | `src/core/00115200.c`, author commit `4541c4ce`, ReaperOfVeriod | `func_00116300` |
+| `func_00116360` in `going-decompiled/src/usa/cod/015180.c`, newlib's `__malloc_unlock` hook with SCE's body (adapted: `SignalSema` for their `func_0011AC40`, newlib's unused `reent` parameter added, `int` written `s32`; sn2952 arm; RULING #13221), task #2498 | `src/core/00116360.c`, author commit `0f740805`, Louis-Philippe Le Sieur | `func_00116360` |
 
 `VfprintfInteger`'s upstream file is named by neither upstream's
 `THIRD_PARTY_NOTICES.md` nor its `CREDITS.md`; its header says it was
@@ -184,6 +191,60 @@ reconstructed from retail control flow and the newlib 1999 implementation in
 rac1-decomp `src/core/00116FA0.c`.
 
 The GPL-2.0-or-later note in the section "OpenRAC rac2-gc-decomp (GPL-3.0)" above applies to these bodies too.
+
+### Newlib, origin files with no in-file notice
+
+C bodies in `going-decompiled/src/usa/cod/015180.c`, taken from OpenRAC
+(section "OpenRAC rac2-decomp at b2a35115" above), reconstruct newlib C-library
+code as SCE built it (RULING #13179, task #2498): `func_00115C90` is newlib's
+`_sbrk_r` (`newlib/libc/reent/sbrkr.c`), `malloc` and `func_00115F78` are
+newlib's `malloc` and `free` cover functions (`newlib/libc/stdlib/malloc.c`),
+to which SCE added a `__malloc_lock`/`__malloc_unlock` pair. The origin files
+were read in a fresh clone of <https://sourceware.org/git/newlib-cygwin.git> at
+the release tag nearest the ROM's "newlib 1999", `newlib-2000-02-17` (commit
+`061afe83dc04a43321d69b5f04860e5de799665c`, the earliest newlib tag; no 1999
+tag exists), and again at HEAD `5aa0a116d1a3e4bf3be150e5eaaa8e2ed07637f5`.
+**`sbrkr.c` and `malloc.c` carry no in-file copyright notice at either ref**
+(`newlib/libc/stdlib/strtol.c` at the same tag carries one, so the absence is
+real; the same holds for `newlib/libc/stdlib/abort.c`, `newlib/libc/assert.c`
+and `newlib/libc/stdlib/atoi.c`, the origins of `abort`, `AssertFail` (newlib
+`__assert`) and `func_00115E68` (newlib `atoi`), also in `cod/015180.c`, adopted
+via OpenRAC `rac2-decomp` at `5833be5b`, task #2499; `abort` is SCE-modified,
+the raise-loop replaced by one call to the exit thunk). `COPYING.NEWLIB` is absent from the tag's tree (it was first added in
+2001), so the text below is quoted from HEAD. Its preamble says that, unless
+otherwise noted in the body of a source file, the notices that follow apply;
+for a notice-less file that is section (1), recorded here as newlib's default
+for notice-less files (watcher-2, 2026-11-06). A newlib origin file that
+carries its own in-file notice uses that notice instead. Verbatim, preamble
+and section (1):
+
+```
+The newlib subdirectory is a collection of software from several sources.
+
+Each file may have its own copyright/license that is embedded in the source 
+file.  Unless otherwise noted in the body of the source file(s), the following copyright
+notices will apply to the contents of the newlib subdirectory:
+
+(1) Red Hat Incorporated
+
+Copyright (c) 1994-2009  Red Hat, Inc. All rights reserved.
+
+This copyrighted material is made available to anyone wishing to use,
+modify, copy, or redistribute it subject to the terms and conditions
+of the BSD License.   This program is distributed in the hope that 
+it will be useful, but WITHOUT ANY WARRANTY expressed or implied, 
+including the implied warranties of MERCHANTABILITY or FITNESS FOR 
+A PARTICULAR PURPOSE.  A copy of this license is available at 
+http://www.opensource.org/licenses. Any Red Hat trademarks that are
+incorporated in the source code or documentation are not subject to
+the BSD License and may only be used or replicated with the express
+permission of Red Hat, Inc.
+```
+
+`func_00116300` and `func_00116360` implement newlib's `__malloc_lock` /
+`__malloc_unlock` hook (`newlib/libc/stdlib/mlock.c`, which ships only empty
+stubs) with SCE's own recursive semaphore lock; they contain no newlib text,
+so no newlib notice applies to them (RULING #13221).
 
 ### Forja contributors (MIT), carried by OpenRAC rac2-gc-decomp
 
@@ -503,47 +564,3 @@ project's GPL-2.0-or-later. The head file also carries a 2002 Red Hat notice for
 positional-argument support, code that is not in the tag's file and not in this
 body.
 
-### Newlib C bodies adopted via OpenRAC rac2-decomp at 5833be5b — notice-less Newlib origin files (task #2499, RULING #13179; watcher-2 answer 2026-11-06)
-
-Three C bodies in `going-decompiled/src/usa/cod/015180.c` reconstruct
-Newlib C-library code as SCE built it: `abort` (Newlib
-`libc/stdlib/abort.c`; SCE replaced the raise-loop with a single call to
-the exit thunk), `AssertFail` (Newlib `__assert`, `libc/assert.c`) and
-`func_00115E68` (Newlib `atoi`, `libc/stdlib/atoi.c`). Adopted per
-RULING #13179. Their Newlib origin files were read in a fresh clone of
-<https://sourceware.org/git/newlib-cygwin.git> at the release tag nearest
-"newlib 1999" — `newlib-2000-02-17`, the earliest release tag; no 1999
-tag exists — and again at HEAD: **`abort.c`, `assert.c` and `atoi.c`
-carry no in-file copyright notice of their own at either ref**
-(`libc/stdlib/strtol.c` in the same tag tree does carry one, so the
-absence is real, not a clone artefact). `COPYING.NEWLIB` is absent from
-that tag's tree, so the text below is quoted from HEAD `5aa0a116`, whose
-preamble reads: "Each file may have its own copyright/license that is
-embedded in the source file. Unless otherwise noted in the body of the
-source file(s), the following copyright notices will apply to the
-contents of the newlib subdirectory." For a notice-less file that
-default therefore applies; this section records it as Newlib's default
-for notice-less files. A Newlib origin file that carries its OWN in-file
-notice (e.g. `libc/stdlib/strtol.c` at this tag) uses that notice
-instead. The applicable notice is section (1), quoted verbatim:
-
-    (1) Red Hat Incorporated
-
-    Copyright (c) 1994-2009  Red Hat, Inc. All rights reserved.
-
-    This copyrighted material is made available to anyone wishing to use,
-    modify, copy, or redistribute it subject to the terms and conditions
-    of the BSD License.   This program is distributed in the hope that 
-    it will be useful, but WITHOUT ANY WARRANTY expressed or implied, 
-    including the implied warranties of MERCHANTABILITY or FITNESS FOR 
-    A PARTICULAR PURPOSE.  A copy of this license is available at 
-    http://www.opensource.org/licenses. Any Red Hat trademarks that are
-    incorporated in the source code or documentation are not subject to
-    the BSD License and may only be used or replicated with the express
-    permission of Red Hat, Inc.
-
-The reconstructor credit is in credits.md (OpenRAC rac2-decomp,
-GPL-3.0, RULING #10405 — the GPL-2.0-or-later note in the section
-"OpenRAC rac2-gc-decomp (GPL-3.0)" above applies to the adopted C text
-as for the other OpenRAC bodies); this section records Newlib's notice,
-which covers the reconstructed behaviour those bodies re-implement.

@@ -602,15 +602,17 @@
     byte-exact on our ROM; its one inline `sync` is the hardware barrier
     RULING #12168 allows (task #2297).
 
-- **OpenRAC — `rac2-decomp`, commit `b2a35115`, Window X bodies (text/235FE8, text/1DFF80, text/1D54C0 and level program 24)** (GPL-3.0)
+- **OpenRAC — `rac2-decomp`, commit `b2a35115`, Window X bodies (text/235FE8, text/1DFF80, text/1D54C0, cod/015180 and level program 24)** (GPL-3.0)
   <https://github.com/OpenRAC/rac2-decomp> at commit `b2a35115e0cf580a1fdab8dd1071b157799e590e`
   (the same history as `rac2-gc-decomp` above: `96927f87` is an ancestor)
 
-  C bodies from upstream's `src/us2/` (their USA v2.00 port) and
-  `src/levels/` (their level programs), adopted with the authors' permission
-  (held by the operator, RULINGs #10405 and #12108) and re-checked byte-exact
-  against our v2.00 ROM (the boot ELF, or the level program off the disc) on
-  the s136os arm.
+  C bodies from upstream's `src/us2/` (their USA v2.00 port), `src/levels/`
+  (their level programs) and `src/core/` (their boot core), adopted with the
+  authors' permission (held by the operator, RULINGs #10405 and #12108) and
+  re-checked byte-exact against our v2.00 ROM (the boot ELF, or the level
+  program off the disc) on the s136os arm, or for the five cod/015180 malloc
+  bodies on the sn2952 arm (RULING #12157). Contributors so far: Flavius,
+  Louis-Philippe Le Sieur and ReaperOfVeriod.
   Each doc comment carries the `Source:` line, which names every respelling.
 
   Used so far:
@@ -664,6 +666,44 @@
     map cache as a cast view of our `g_mapVertexData`, `volatile` and `sda`
     on the list pointer dropped. Unit s136os arm (S136EXTRA "", task #2479),
     after splitting the 4-word debris head `func_002DC6B8` off it.
+  - **The newlib malloc layer of `going-decompiled/src/usa/cod/015180.c`**
+    (task #2498, sn2952 arm, no device; read at upstream's head `8b26d8ad`,
+    where every blob is identical to `b2a35115`'s), five bodies:
+    - **`func_00115C90`** (`0x00115C90`, newlib `_sbrk_r`), from
+      `src/core/00115C90.c` (author commit `399c57d5`, Louis-Philippe Le
+      Sieur). ADAPTED: `int` written `s32`, parameters named.
+    - **`malloc`** (`0x00115F28`, newlib `malloc` plus SCE's lock pair), from
+      `src/core/00115F28.c` (`func_00115F28`, author commit `399c57d5`,
+      Louis-Philippe Le Sieur). ADAPTED: our name, newlib's `void *` /
+      unsigned types for their `int`s, the unit's `s32` model for
+      `D_00133E74`.
+    - **`func_00115F78`** (`0x00115F78`, newlib `free` plus SCE's lock pair),
+      from `src/core/00115F78.c` (author commit `0f740805`, Louis-Philippe Le
+      Sieur). ADAPTED: `_free_r` for their `func_00116E10`, the shared lock
+      prototypes for their asm-label ones, the unit's `s32` model.
+    - **`func_00116300`** (`0x00116300`, SCE's recursive semaphore lock behind
+      newlib's `__malloc_lock` hook), from `src/core/00115200.c` (author
+      commit `4541c4ce`, ReaperOfVeriod). ADAPTED: newlib's unused `reent`
+      parameter added, `int` written `s32`. RULING #13221.
+    - **`func_00116360`** (`0x00116360`, the matching `__malloc_unlock`), from
+      `src/core/00116360.c` (author commit `0f740805`, Louis-Philippe Le
+      Sieur). ADAPTED: `SignalSema` for their `func_0011AC40`, newlib's
+      unused `reent` parameter added, `int` written `s32`. RULING #13221.
+
+- **Newlib** (<https://sourceware.org/git/newlib-cygwin.git>, tag
+  `newlib-2000-02-17`, commit `061afe83dc04a43321d69b5f04860e5de799665c`;
+  Red Hat / Cygnus Solutions and contributors)
+
+  The C library the game links. Bodies reconstructed from it are adopted under
+  RULING #13179 (operator, 2026-11-06); THIRD-PARTY.md carries each origin
+  file's notice, or for a file with none, the `COPYING.NEWLIB` default.
+
+  Used so far:
+  - `func_00115C90` (`_sbrk_r`, `newlib/libc/reent/sbrkr.c`), `malloc` and
+    `func_00115F78` (`malloc`, `free`, `newlib/libc/stdlib/malloc.c`) in
+    `going-decompiled/src/usa/cod/015180.c` (task #2498). `func_00116300` /
+    `func_00116360` implement newlib's `__malloc_lock` / `__malloc_unlock`
+    hook (`newlib/libc/stdlib/mlock.c`) but carry SCE's body, not newlib's.
 
 - **OpenRAC — `rac2-decomp`, commit `b2a35115`, text/178E88 Window X bodies** (GPL-3.0)
   <https://github.com/OpenRAC/rac2-decomp> at commit `b2a35115e0cf580a1fdab8dd1071b157799e590e`
@@ -794,7 +834,7 @@
   consulted is not recorded, so it is credited here as possible prior art
   (validator #2512).
 
-- **OpenRAC — `rac2-decomp` at `5833be5b`, Newlib-identity bodies in cod/015180** (GPL-3.0; the bodies reconstruct Newlib code, whose notice is carried in THIRD-PARTY.md's section "Newlib C bodies adopted via OpenRAC rac2-decomp at 5833be5b — notice-less Newlib origin files")
+- **OpenRAC — `rac2-decomp` at `5833be5b`, Newlib-identity bodies in cod/015180** (GPL-3.0; the bodies reconstruct Newlib code, whose notice is carried in THIRD-PARTY.md's section "Newlib, origin files with no in-file notice")
   <https://github.com/OpenRAC/rac2-decomp> at commit `5833be5b` (read at
   HEAD; `src/core/00115200.c` and `src/core/00115E68.c` are identical at the
   audit pin `b2a35115e0cf580a1fdab8dd1071b157799e590e`)
