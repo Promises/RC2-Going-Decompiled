@@ -166,54 +166,118 @@ s32 LoadIrxModuleFromBuffer(void *image, s32 size, void *iopAddr) {
 extern u8   g_memoryArenaTable[]; /* 0x1BAE40, 0x9C bytes */
 extern s32  g_sceneArenaCursor;   /* 0x1B2230 */
 
-/* SetupMemoryArenaTable: zero the 0x9C-byte g_memoryArenaTable then fill the EE
- * memory-region base addresses the loaders + ResetFrameArenas read: the scene
- * arena halves at 0x354000 (+cursor / +2*cursor), splash/loading-WAD buffers,
- * the per-asset display-model buffers (ship/held-item/player), GUI + debug-malloc
- * pools, and the boot-WAD / upper-RAM region tops. Called from BootSystemInit
- * (0x29153C), func_00290FD0 (0x290FE8) and InitLoadingSceneSystem (0x2EBA08). */
-#ifndef TARGET_NATIVE
-/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
- * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 61.20% PACKED-SAVE /
- * engine96 29.27% CONST-LI; best arm sdk29, first differing insn there: 'addiu sp, sp, -0x30'
- * vs 'addiu sp, sp, -0x40'
- * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
- * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
- * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
- * property and was measured false as the reason this member stays unmatched (FACT #9873).
- * Residual: the saved-register set; the rest UNMEASURED. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", SetupMemoryArenaTable);
+/* SetupMemoryArenaTable(): zero the 0x9C-byte g_memoryArenaTable and fill in
+ * the EE memory map the loaders and ResetFrameArenas read (byte offsets):
+ *   +0x00 0, +0x04 0x100000 (the scene arena's size step);
+ *   +0x08 / +0x0C the first page past the program: the end of .text rounded
+ *         up to 16 KB (0x354000 on this build; RelocateMobyClassChunk's
+ *         offset limit and the scene decompress base);
+ *   +0x10 / +0x14 that base + 1x / 2x g_sceneArenaCursor (the scene arena
+ *         halves), +0x18 and +0x68 the +0x14 value + 0x100000;
+ *   +0x84 down to +0x70 the fixed buffers carved downward from 32 KB below
+ *         the top of EE RAM (0x2000000): 0x1FF8000, then -0x40000 (GUI
+ *         pool), -0x64000 (debug malloc pool), -0x2C000 (player model
+ *         buffer), -0x8000 (held-item model buffer), -0x14000 (ship model
+ *         buffer, copied to +0x6C, the staged-segment ceiling);
+ *   +0x88 16 KB below the top of EE RAM (0x1FFC000);
+ *   +0x8C..+0x98 the fixed 0x7000000 / 0x7100000 / 0x7180000 / 0x7200000.
+ * No params, no return. Called from BootSystemInit (0x29153C), func_00290FD0
+ * (0x290FE8) and InitLoadingSceneSystem (0x2EBA08).
+ *
+ * LINK-TIME ADDRESSES: the .text end and the two top-of-RAM values are not
+ * constants in the ROM but lui/addiu address pairs (FACT #5753 for the .text
+ * one), which cc1 emits for a symbol. The EE arm reads them through the
+ * absolute names build.sh already defines for this function's asm (its
+ * D_<hex> blanket; StartFrontendSegmentLoad below reads D_1FF7FF0 the same
+ * way): D_356D07 = the end of .text 0x352D08 + 0x3FFF, where upstream writes
+ * `+ 0x3FFF` over an end-of-text symbol; D_1FF8000 and D_1FFC000, where
+ * upstream writes `- 0x8000` and `- 0x4000` over a symbol at 0x2000000,
+ * which no name of ours provides. The native arm has no EE link map, so it
+ * keeps the numbers this build resolves them to, as the body it replaces did.
+ * Measured by removal (objdiff_build.sh, splice length line, then vmu):
+ * all three as numbers build 64 words, not 70 (cc1 folds the chain into
+ * constants); D_1FFC000 alone as a number builds 70 words, 2 of them wrong
+ * (lui 0x1FF / ori 0xC000 for the ROM's lui 0x200 / addiu -0x4000).
+ *
+ * DEVICE (RULING #8620 with #13168, EE arm only): the cursor is read through
+ * g_sceneArenaCursorSmall, an asm-label view of g_sceneArenaCursor (same
+ * symbol and address, no storage; the relocation names g_sceneArenaCursor)
+ * in section ".sdata", our respelling of upstream's `sda` attribute.
+ * Measured by removal: without the section attribute the body is 70 words
+ * with 23 wrong (cc1 splits the cursor's %hi/%lo itself and schedules the
+ * pair elsewhere); the ROM has the lui/lw pair GNU as expands from cc1's
+ * one-insn `lw` macro. The view is the unsized `s32[]` upstream declares: a
+ * scalar view (`s32`, size 4) builds 69 words, since cc1 then carries
+ * `.extern g_sceneArenaCursor,4` and GNU as makes the load gp-relative.
+ * The unit objdiff report reads this row 99.86%, not 100%: the TARGET object
+ * carries a relocation splat invented, pairing the lone `lui $9,0xFFFC`
+ * (-0x40000) at 0x291400 with the unrelated `addiu $18,$6,-0x8000` at
+ * 0x291444 as `D_FFFB8000`. The bytes are identical (verify_match_unit 70/70).
+ *
+ * MATCHED on the s136os arm, 191238's S136EXTRA "" (SN 2.95.3 v1.36 cc1plus
+ * -O2 -G8 -fopt-stack, gcse on), task #2507.
+ * GUARD: on EE this C is the image's body, compiled alone by SN 2.95.3 v1.36
+ * -fopt-stack and spliced over S136OS_SLOT by tools/ee/s136os_splice.sh; there
+ * is no asm fallback. On native it is plain C.
+ * Source: OpenRAC/rac2-decomp @b2a35115e0cf580a1fdab8dd1071b157799e590e
+ * (GPL-3.0, adopted with the authors' permission per RULINGs #10405/#12108;
+ * the file's blob is identical at 5776dcc3 and at the head d36c267a),
+ * src/game/00290A40.c, func_00290B48 (v1.01 address; author commit 7dc80be1,
+ * bigbeno37). Respellings by ROM-encoded address: func_00115484 = memset,
+ * D_001BAEC0 = g_memoryArenaTable, D_001B22B0 = g_sceneArenaCursor.
+ * ADAPTED: `ref_L00_00290B48_00 + 0x3FFF` as D_356D07,
+ * `ref_L00_00290B48_01 - 0x8000` as D_1FF8000 and `D_02000000 - 0x4000` as
+ * D_1FFC000 (EE arm; numbers on native), `sda` as the ".sdata" view above,
+ * `int`/`unsigned int` spelled `s32`/`u32`. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_SetupMemoryArenaTable)
+S136OS_SLOT(SetupMemoryArenaTable);
 #else
-/* Declarations this body needs whose only other declarations sit in other
- * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 #ifndef TARGET_NATIVE
 extern void *memset(void *s, int c, unsigned int n); /* native: <string.h> via common.h */
+extern u8 D_356D07[];   /* link-time: end of .text (0x352D08) + 0x3FFF */
+extern u8 D_1FF8000[];  /* link-time: top of EE RAM (0x2000000) - 0x8000 */
+extern u8 D_1FFC000[];  /* link-time: top of EE RAM - 0x4000 */
+extern s32 g_sceneArenaCursorSmall[] __asm__("g_sceneArenaCursor") __attribute__((section(".sdata")));
+#define ARENA_TEXT_END_PLUS_3FFF ((u32)D_356D07)
+#define ARENA_RAM_TOP_LESS_32K   ((u32)D_1FF8000)
+#define ARENA_RAM_TOP_LESS_16K   ((u32)D_1FFC000)
+#else
+#define ARENA_TEXT_END_PLUS_3FFF 0x356D07u
+#define ARENA_RAM_TOP_LESS_32K   0x1FF8000u
+#define ARENA_RAM_TOP_LESS_16K   0x1FFC000u
+#define g_sceneArenaCursorSmall  (&g_sceneArenaCursor)
 #endif
-/* (end of this body's declarations) */
 void SetupMemoryArenaTable(void) {
-    u8 *t = g_memoryArenaTable;
-    s32 cursor = g_sceneArenaCursor;
-    memset(t, 0, 0x9C);
-    *(s32 *)(t + 0x04) = 0x100000;
-    *(s32 *)(t + 0x08) = 0x354000;          /* g_relocOffsetLimit */
-    *(s32 *)(t + 0x0C) = 0x354000;          /* g_sceneDecompressBase (half0) */
-    *(s32 *)(t + 0x10) = cursor + 0x354000; /* g_sceneArenaBase (half1) */
-    *(s32 *)(t + 0x14) = cursor * 2 + 0x354000; /* g_splashImageBuffer */
-    *(s32 *)(t + 0x18) = cursor * 2 + 0x454000; /* g_pLoadingSceneWad */
-    *(s32 *)(t + 0x68) = cursor * 2 + 0x454000;
-    *(s32 *)(t + 0x6C) = 0x1F0C000;         /* g_stagedSegmentCeiling */
-    *(s32 *)(t + 0x70) = 0x1F0C000;         /* g_shipModelBufferBase */
-    *(s32 *)(t + 0x74) = 0x1F20000;         /* g_heldItemModelBufferBase */
-    *(s32 *)(t + 0x78) = 0x1F28000;         /* g_playerModelBufferBase */
-    *(s32 *)(t + 0x7C) = 0x1F54000;         /* g_debugMallocPoolBase */
-    *(s32 *)(t + 0x80) = 0x1FB8000;         /* g_guiMemoryBase */
-    *(s32 *)(t + 0x84) = 0x1FF8000;         /* boot-WAD staging top */
-    *(s32 *)(t + 0x88) = 0x1FFC000;
-    *(s32 *)(t + 0x8C) = 0x7000000;
-    *(s32 *)(t + 0x90) = 0x7100000;
-    *(s32 *)(t + 0x94) = 0x7180000;
-    *(s32 *)(t + 0x98) = 0x7200000;
+    s32 *state = (s32 *)g_memoryArenaTable;
+    u32 start, size;
+
+    memset(state, 0, 0x9C);
+    state[0] = 0;
+    state[1] = 0x100000;
+    start = ARENA_TEXT_END_PLUS_3FFF & ~0x3FFF;
+    state[2] = start;
+    state[3] = start;
+    size = g_sceneArenaCursorSmall[0];
+    state[4] = state[3] + size;
+    state[5] = state[4] + size;
+    state[6] = state[5] + state[1];
+    state[0x84 / 4] = ARENA_RAM_TOP_LESS_32K;
+    state[0x80 / 4] = state[0x84 / 4] - 0x40000;
+    state[0x7C / 4] = state[0x80 / 4] - 0x64000;
+    state[0x78 / 4] = state[0x7C / 4] - 0x2C000;
+    state[0x74 / 4] = state[0x78 / 4] - 0x8000;
+    state[0x68 / 4] = state[6];
+    state[0x88 / 4] = ARENA_RAM_TOP_LESS_16K;
+    state[0x70 / 4] = state[0x74 / 4] - 0x14000;
+    state[0x6C / 4] = state[0x70 / 4];
+    state[0x8C / 4] = 0x07000000;
+    state[0x90 / 4] = 0x07100000;
+    state[0x94 / 4] = 0x07180000;
+    state[0x98 / 4] = 0x07200000;
 }
+#undef ARENA_TEXT_END_PLUS_3FFF
+#undef ARENA_RAM_TOP_LESS_32K
+#undef ARENA_RAM_TOP_LESS_16K
 #endif
 
 /*

@@ -646,7 +646,7 @@
     byte-exact on our ROM; its one inline `sync` is the hardware barrier
     RULING #12168 allows (task #2297).
 
-- **OpenRAC — `rac2-decomp`, commit `b2a35115`, Window X bodies (text/235FE8, text/1DFF80, text/1D54C0, text/250080, text/188858, cod/015180 and level program 24)** (GPL-3.0)
+- **OpenRAC — `rac2-decomp`, commit `b2a35115`, Window X bodies (text/235FE8, text/1DFF80, text/1D54C0, text/250080, text/188858, text/191238, cod/015180 and level program 24)** (GPL-3.0)
   <https://github.com/OpenRAC/rac2-decomp> at commit `b2a35115e0cf580a1fdab8dd1071b157799e590e`
   (the same history as `rac2-gc-decomp` above: `96927f87` is an ancestor)
 
@@ -806,6 +806,16 @@
     `D_001AE0C8` as our `D_1AE0A0[idx]`, declared `s32[2]` on EE (RULING
     #12316 Q3) and `s32[3]` on native. Per-function
     `S136EXTRA=-fno-strict-aliasing` override (RULING #12178), task #2469.
+  - **`SetupMemoryArenaTable`** (`0x002913C0`, fills the 0x9C-byte EE
+    memory-region table) in `going-decompiled/src/usa/text/191238.cpp`, from
+    `src/game/00290A40.c` (`func_00290B48`, author commit `7dc80be1`,
+    bigbeno37; the blob is identical at `5776dcc3` and at the head
+    `d36c267a`). ADAPTED: our symbol names per the ROM's relocations, their
+    end-of-text and top-of-RAM symbol arithmetic read as the build's
+    absolute names `D_356D07` / `D_1FF8000` / `D_1FFC000` (numbers on
+    native), their `sda` cursor as an EE-only `.sdata` asm-label view
+    (RULINGs #8620/#13168), `s32`/`u32` spellings. Unit s136os arm
+    (S136EXTRA "", task #2507).
 
   - **`UpdateSubtitleStateMachine`** (`0x00289BB8`) in
     `going-decompiled/src/usa/text/188858.c`, from `src/game/00289178.c`
