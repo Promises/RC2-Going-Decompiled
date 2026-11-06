@@ -5215,11 +5215,18 @@ void func_002DECE0(void) {
     }
 }
 
+/* Dead debris ahead of func_002DEEF8: `addiu $sp,$sp,0xA0; nop; addiu $sp,$sp,
+ * 0x20; nop` after func_002DECE0's jr and its delay slot. No prologue and no jr
+ * of its own, and no jal, j, data word or hi/lo in the ROM names any of the
+ * four words, so it is not a function body and cannot be C. Split off by a
+ * symbol_addrs size pin (task #2480). */
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DEEE8);
+
 /* Save-image WAD streaming/decompress state machine (obj->0x34 state 0..3),
- * driving DecompressWad on the save preview. Wall: the splat splice prepends an
- * `addiu $sp` mis-split prologue fragment, plus a large state machine + multi
- * callee-save. Bare INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DEEE8);
+ * driving DecompressWad on the save preview. Until task #2480 this body sat
+ * under func_002DEEE8 behind 4 words of debris (split above); its real
+ * prologue is the addiu $sp,-0x30 at 0x2DEEF8. Bare INCLUDE_ASM. */
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DEEF8);
 
 /* (Re)assign the 5 map cache slots' backing addresses and flags for a text
  * table swap. `param` selects whether the secondary banks are included: the
