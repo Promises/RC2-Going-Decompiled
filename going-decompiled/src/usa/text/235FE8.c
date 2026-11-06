@@ -2525,7 +2525,9 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337DC8);
  * D_00139568 = g_itemEquippedSlot, D_001395B8 = D_1395B8, D_00239BA0 =
  * g_weaponTable, D_001F2840 = g_menuScreenBlock, D_00139868 = g_weaponXp,
  * D_001ADB18 = D_1ADAF8, D_001ADB28 = D_1ADB08.
- * ADAPTED: (1) their Grid/GridCell/GridWeapon/GridEquipped/GridLabels/
+ * ADAPTED: (0) g_weaponTable and g_menuScreenBlock read through the casts
+ * `(GuiGridWeapon *)g_weaponTable` (the WEAPON macro) and
+ * `(GuiGridEquipped *)g_menuScreenBlock`; (1) their Grid/GridCell/GridWeapon/GridEquipped/GridLabels/
  * GridOffset/GridVTable types renamed GuiItemGrid/GuiItemGridCell/
  * GuiGridWeapon/GuiGridEquipped/GuiGridLabels/GuiGridOffset/GuiDrawVtable,
  * layouts unchanged; (2) `(int)grid->label` passed to func_00336A38 as
@@ -3039,7 +3041,8 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
  * g_screenHeight (0x1A7344); func_00280200 = func_00280BB8, func_00280190 =
  * func_00280B48, func_00280270 = func_00280C28, func_0027EB88 =
  * func_0027F208, func_US2_00339398 = func_00339398.
- * ADAPTED: (1) their `sda` int array D_001A7340 read at [1] through the
+ * ADAPTED: (0) sprintf's format argument written `(char *)D_1ADB38` (a cast
+ * to the unit's prototype); (1) their `sda` int array D_001A7340 read at [1] through the
  * EE-only view above (native: g_screenHeight); (2) their
  * short/int/unsigned char as s16/s32/char (RULING #13197), and their
  * `unsigned long` style parameters as the definitions' s32, except
@@ -5374,7 +5377,7 @@ extern CaptionIdPair D_1ADDA8;
  * gp-relative for func_0033D3C0/func_0033E680); the unit's `.extern
  * g_bProgressiveScan, 16` removed -> 83 words; upstream's identical-arm
  * `if (w != 0)` replaced by the one assignment -> 84 words, DIFF 112 bytes
- * (kept verbatim; it changes no behaviour).
+ * (kept verbatim under RULING #13273; it changes no behaviour).
  * GUARD: on EE this C is the image's body, compiled alone by SN 2.95.3 v1.36
  * -fopt-stack and spliced over S136OS_SLOT by tools/ee/s136os_splice.sh; there
  * is no asm fallback. On native it is plain C.
