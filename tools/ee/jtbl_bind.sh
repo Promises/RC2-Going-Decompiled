@@ -89,7 +89,7 @@ find_tables() {
     st == 2 && $1 == ".word" && NF == 2 && $2 ~ /^\$L[A-Za-z0-9_]+$/ { ent[lab, n++] = $2; next }
     st == 2 && n > 0 && ($0 ~ /^[ \t]*\.text[ \t]*$/ || $0 ~ /^[ \t]*\.section[ \t]+\.text[ \t]*$/) {
       nt++; tf[nt] = fn; tl[nt] = lab; tn[nt] = n; ts[nt] = s; te[nt] = NR; for (i = s; i <= NR; i++) intab[i] = 1
-      st = 0; next }
+      st = 0; n = 0; next }
     st { st = 0 }
     END {
       for (t = 1; t <= nt; t++) {
@@ -249,6 +249,15 @@ if [ "${1:-}" = "--selftest" ]; then
     v="$(table_compare UpgradeWeaponToMax '$L63' jtbl_0026C6D0_text "$fs" "$fs" "$T/b5" "$T/r")"
     case "$v" in 'UpgradeWeaponToMax: $L63 entry 5 targets UpgradeWeaponToMax+0x70, jtbl_0026C6D0_text word 5 targets UpgradeWeaponToMax+0x6c') pass "10: the real table with entry 5 seeded -> refused: $v" ;; *) flunk "10: '$v'" ;; esac
   else flunk "9-10: cannot read the real table ($D, $E, $R, mips-linux-gnu-objdump): run in the ee-build container on a provisioned tree"; fi
+  # 11: TWO tables in ONE function (3 then 2 entries) are counted and indexed
+  # each from 0. Before task #2550 the entry counter was reset only at .ent, so
+  # the second table read 5 entries (the running total) with its entries at
+  # indices 3-4, and every multi-table function was refused on the count
+  # (func_00337DC8: 42/84/126; SaveLoadStateMachine's "34 vs 6", NOTE #13181).
+  printf '\t.ent\tf\nf:\n\tlui\t$2,%%hi($L9)\n\taddiu\t$2,$2,%%lo($L9)\n\t.rdata\n\t.align\t4\n$L9:\n\t.word\t$L3\n\t.word\t$L4\n\t.word\t$L3\n\t.text\n\tlui\t$2,%%hi($L8)\n\taddiu\t$2,$2,%%lo($L8)\n\t.rdata\n\t.align\t4\n$L8:\n\t.word\t$L4\n\t.word\t$L3\n\t.text\n$L3:\n\tli\t$2,1\n$L4:\n\tj\t$31\n\t.end\tf\n' > "$T/u11.s"
+  find_tables "$T/u11.s" > "$T/ft11"
+  if [ "$(/usr/bin/grep '^T ' "$T/ft11" | awk '{print $3, $4}' | tr '\n' ';')" = '$L9 3;$L8 2;' ] && [ "$(/usr/bin/grep '^E \$L8 ' "$T/ft11" | tr '\n' ';')" = 'E $L8 0 $L4;E $L8 1 $L3;' ]; then pass "11: two tables in one function -> \$L9 3 entries, \$L8 2 entries indexed 0-1"
+  else flunk "11: find_tables gave:"; sed 's/^/        /' "$T/ft11"; fi
   echo "jtbl_bind --selftest: $n arms"
   [ "$rc" = 0 ] && echo "#### jtbl_bind --selftest: PASS" || echo "#### jtbl_bind --selftest: FAIL"
   exit "$rc"
