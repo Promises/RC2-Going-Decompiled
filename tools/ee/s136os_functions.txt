@@ -755,3 +755,4 @@ usa text/178E88 func_00281020 S136EXTRA=
 usa text/1DFF80 PatchShrubPacketTex0 S136EXTRA=
 usa text/16E980 DrawLensFlare
 usa text/235FE8 func_00346AF8 S136EXTRA=-fno-strict-aliasing
+usa text/235FE8 func_00338F88

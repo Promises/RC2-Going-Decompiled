@@ -2734,102 +2734,143 @@ void func_00338F18(void *p, const void *src, s32 id) {
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00338F80);
 
-/* func_00338F88(a1, layout, color, val, font, reposFlag, drawFlag, sub, n9, n10,
- * n11): format + draw a bordered text box. Builds the caption into a 768-byte
- * scratch buffer by selecting one of seven format strings (D_1ADBA8/98/90/70/58/
- * 48/38) from the n9/n10/n11/sub argument combination (page/count indicators),
- * then draws the text with the font selected by `font` (1=DrawFont1TextBox
- * func_00280B48, 0=DrawFont2 func_00280BB8, 2=DrawFont3 func_00280C28). If
- * reposFlag is set, vertically re-centers the box (fields at +0x0/+0x2/+0xA from
- * height +0xE and g_screenHeight). Computes the border rect from the box
- * half-extents (+0xC width, +0xE height, centered on +0x8/+0xA) padded 10x5, draws
- * it (DrawTextBoxBorder func_0027F208 + the frame func_00339398), redraws the text,
- * and restores the layout flag word (+0x12). The +0x12 flag word is toggled with
- * bits 3/4 (|=3, |=4, &=~4) across the passes. Faithful TARGET_NATIVE #else (engine
- * 2.96 = no byte-match); all-integer args (no float-arg reordering); the one
- * mixed-arg call (func_00339398) is asm-verified. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00338F88);
+/*
+ * func_00338F88(object, box, style, text, mode, center, length, single, first,
+ * second, third): format a caption and draw it in a framed text box. Formats
+ * `text` (with up to three extra strings `first`/`second` and the flag
+ * `third`; `single` picks the one-1 or the two-1 form) into a 768-byte stack
+ * buffer by one of seven format strings D_1ADB38..D_1ADBA8, lays it out in
+ * `box` with the font routine chosen by `mode` (0 = func_00280BB8,
+ * 1 = func_00280B48, 2 = func_00280C28; style = colour, length = char limit),
+ * optionally (`center`) re-centres the box vertically on g_screenHeight, lays
+ * it out again, draws a backing rectangle padded 10x5 (func_0027F208, alpha
+ * 0x60, colour 0x60442D00) and the rounded frame (func_00339398, colour
+ * 0x55F0C070) behind it, and lays the text out a third time on top. The
+ * box's flag halfword box[9] is OR'd with 3, then 4 for the layout passes,
+ * cleared of 4 before the frame and restored at the end.
+ * box halfwords: [0] top, [1] bottom, [4] centre x, [5] centre y, [6] width,
+ * [7] height, [9] flags. object = the GUI resource block handed to
+ * func_00339398. No return value. Caller: 198FA0's text-box wrapper.
+ *
+ * MATCHED on the s136os arm as the unit is (S136EXTRA -fno-gcse
+ * -fno-strict-aliasing), row `usa text/235FE8 func_00338F88` (task #2501).
+ * DEVICE, ADDRESSING MODEL (RULINGs #8620/#13168/#13197): the screen height
+ * is read as SCREEN_HEIGHT_SDATA = g_screenExtentSdata[1], an EE-only unsized
+ * s32[] asm-label view of g_screenWidth carrying upstream's `sda` as
+ * `section(".sdata")` (upstream reads the same word as D_001A7340[1]). cc1
+ * emits the one-insn `lw` macro, which the assembler expands to the ROM's
+ * absolute `lui; lw %lo(g_screenHeight)`, and keeps it out of the `center`
+ * branch's delay slot. Ablations (task #2501): plain g_screenHeight (gp-rel
+ * under -G8) builds 257 words, not 259; a sized `.sdata` scalar alias of
+ * g_screenHeight also 257 (cc1 then emits `.extern g_screenHeight, 4`); an
+ * unsized view of g_screenHeight read at [0] builds 259 words but cc1 moves
+ * the load into the delay slot (DIFF 17 bytes). It moves no data and emits
+ * nothing; native reads g_screenHeight, the true object.
+ * GUARD: on EE this C is the image's body, compiled alone by SN 2.95.3 v1.36
+ * -fopt-stack and spliced over S136OS_SLOT by tools/ee/s136os_splice.sh; there
+ * is no asm fallback. On native it is plain C.
+ * Source: OpenRAC/rac2-decomp @5776dcc35045fb2320610edd1d2db4fa7660ef37
+ * (GPL-3.0, adopted with the authors' permission per RULINGs #10405/#12108),
+ * src/us2/game/00338F88-cc.c, func_US2_00338F88 (author commit ff791d1e,
+ * bigbeno37); file unchanged at upstream head f3cc4dbf. Respellings by
+ * ROM-encoded address: func_00115DA8 (sprintf) as the unit spells it;
+ * D_001ADB58/68/78/90/B0/B8/C8 = D_1ADB38/48/58/70/90/98/A8; D_001A7340[1] =
+ * g_screenHeight (0x1A7344); func_00280200 = func_00280BB8, func_00280190 =
+ * func_00280B48, func_00280270 = func_00280C28, func_0027EB88 =
+ * func_0027F208, func_US2_00339398 = func_00339398.
+ * ADAPTED: (1) their `sda` int array D_001A7340 read at [1] through the
+ * EE-only view above (native: g_screenHeight); (2) their
+ * short/int/unsigned long/unsigned char as s16/s32/u64/char (RULING #13197);
+ * (3) their func_US2_00339398(object, 96, 0x55F0C070, top, bottom, left,
+ * right) called through the unit's own prototype (x0, y0, x1, y1, base,
+ * packByte, color): the four floats travel in $f12-$f15 and the three words
+ * in $a0-$a2 in both spellings; (4) their prototypes' `unsigned short *`/
+ * `unsigned char *` layout/text parameters as `void *` and `const char *`.
+ * Control flow and expressions are theirs.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00338F88)
+S136OS_SLOT(func_00338F88);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00338F88, unit objdiff): 50.33%,
-   217/303 insns differ. Residual: UNKNOWN-daddu + gp/abs-mixed symbol (first differing insn: '' vs 'daddu s0, a5, zero').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
-extern void func_00280B48(void *layout, u32 color, const char *text, s32 flag);
-extern void func_00280BB8(void *layout, u32 color, const char *text, s32 flag);
-extern void func_00280C28(void *layout, u32 color, const char *text, s32 flag);
-extern void func_0027F208(s32 top, s32 bottom, s32 left, s32 right, s32 thickness,
-                          u32 color);
-extern void func_00339398(f32 x0, f32 y0, f32 x1, f32 y1, s32 a1, s32 thickness,
+extern u8 D_1ADB38[], D_1ADB48[], D_1ADB58[], D_1ADB70[], D_1ADB90[], D_1ADB98[],
+          D_1ADBA8[];                /* the seven caption format strings */
+extern void func_00280B48(void *layout, u64 style, const char *text, s32 length);
+extern void func_00280BB8(void *layout, u64 style, const char *text, s32 length);
+extern void func_00280C28(void *layout, u64 style, const char *text, s32 length);
+extern void func_0027F208(s32 top, s32 bottom, s32 left, s32 right, s32 alpha,
+                          s32 color);
+extern void func_00339398(f32 x0, f32 y0, f32 x1, f32 y1, s32 base, s32 packByte,
                           u32 color);
 extern s32 g_screenHeight;
-extern u8 D_1ADB38[], D_1ADB48[], D_1ADB58[], D_1ADB70[], D_1ADB90[], D_1ADB98[],
-          D_1ADBA8[];
-void func_00338F88(void *a1, void *layout, u32 color, s32 val, s32 font,
-                   s32 reposFlag, s32 drawFlag, s32 sub, s32 n9, s32 n10, s32 n11) {
-    s16 *ps = (s16 *)layout;
-    char buf[768];
-    s16 savedFlags = ps[9];
-    s32 dx, dy, top, bottom, left, right;
+#ifndef TARGET_NATIVE
+extern s32 g_screenExtentSdata[] __asm__("g_screenWidth") __attribute__((section(".sdata")));
+#define SCREEN_HEIGHT_SDATA g_screenExtentSdata[1]  /* = g_screenHeight, 0x1A7344 */
+#else
+#define SCREEN_HEIGHT_SDATA g_screenHeight
+#endif
+void func_00338F88(void *object, s16 *box, s32 style, char *text, s32 mode,
+                   s32 center, s32 length, s32 single, char *first, char *second,
+                   s32 third)
+{
+    char buffer[768];
+    s32 flags = box[9];
+    s32 top, bottom, left, right;
+    s32 halfWidth, halfHeight;
+    s32 x, y;
 
-    ps[9] |= 3;
-
-    if (n9 != 0) {
-        if (n10 != 0) {
-            if (n11 != 0) {
-                if (sub != 0) func_00115DA8(buf, (char *)D_1ADB38, val, 1, n9, 1, n10);
-                else          func_00115DA8(buf, (char *)D_1ADB48, val, 1, 1, n9, 1, n10);
+    box[9] |= 3;
+    if (first) {
+        if (second) {
+            if (third) {
+                if (single) func_00115DA8(buffer, (char *)D_1ADB38, text, 1, first, 1, second);
+                else func_00115DA8(buffer, (char *)D_1ADB48, text, 1, 1, first, 1, second);
             } else {
-                if (sub != 0) func_00115DA8(buf, (char *)D_1ADB58, val, 1, n9, n10);
-                else          func_00115DA8(buf, (char *)D_1ADB70, val, 1, 1, n9, n10);
+                if (single) func_00115DA8(buffer, (char *)D_1ADB58, text, 1, first, second);
+                else func_00115DA8(buffer, (char *)D_1ADB70, text, 1, 1, first, second);
             }
         } else {
-            if (sub != 0) func_00115DA8(buf, (char *)D_1ADB90, val, 1, n9);
-            else          func_00115DA8(buf, (char *)D_1ADB98, val, 1, 1, n9);
+            if (single) func_00115DA8(buffer, (char *)D_1ADB90, text, 1, first);
+            else func_00115DA8(buffer, (char *)D_1ADB98, text, 1, 1, first);
         }
     } else {
-        func_00115DA8(buf, (char *)D_1ADBA8, val);
+        func_00115DA8(buffer, (char *)D_1ADBA8, text);
     }
-    ps[9] |= 4;
-
-    switch (font) {
-    case 0: func_00280BB8(layout, color, buf, drawFlag); break;
-    case 1: func_00280B48(layout, color, buf, drawFlag); break;
-    case 2: func_00280C28(layout, color, buf, drawFlag); break;
+    box[9] |= 4;
+    switch (mode) {
+    case 0: func_00280BB8(box, style, buffer, length); break;
+    case 1: func_00280B48(box, style, buffer, length); break;
+    case 2: func_00280C28(box, style, buffer, length); break;
     }
+    if (center) {
+        s32 height = (u16)box[7];
+        s32 newTop = (SCREEN_HEIGHT_SDATA - (s16)height) >> 1;
+        s32 middle = newTop + ((s16)height >> 1);
 
-    if (reposFlag != 0) {
-        s16 h = ps[7];
-        s16 y = (s16)((g_screenHeight - h) >> 1);
-        ps[1] = y + h;
-        ps[5] = y + (h >> 1);
-        ps[0] = y;
+        box[1] = newTop + height;
+        box[5] = middle;
+        box[0] = newTop;
     }
-
-    switch (font) {
-    case 0: func_00280BB8(layout, color, buf, drawFlag); break;
-    case 1: func_00280B48(layout, color, buf, drawFlag); break;
-    case 2: func_00280C28(layout, color, buf, drawFlag); break;
+    switch (mode) {
+    case 0: func_00280BB8(box, style, buffer, length); break;
+    case 1: func_00280B48(box, style, buffer, length); break;
+    case 2: func_00280C28(box, style, buffer, length); break;
     }
-
-    dx = (ps[6] >> 1) + 10;
-    dy = (ps[7] >> 1) + 5;
-    right  = ps[4] + dx;
-    bottom = ps[5] + dy;
-    top    = ps[5] - dy;
-    left   = ps[4] - dx;
-    ps[9] &= (s16)0xFFFB;
-    func_0027F208(top, bottom, left, right, 0x60, 0x60442D00);
-    func_00339398((f32)top, (f32)bottom, (f32)left, (f32)right, (s32)a1, 0x60,
-                  0x55F0C070);
-
-    switch (font) {
-    case 0: func_00280BB8(layout, color, buf, drawFlag); break;
-    case 1: func_00280B48(layout, color, buf, drawFlag); break;
-    case 2: func_00280C28(layout, color, buf, drawFlag); break;
+    halfWidth = (box[6] >> 1) + 10;
+    halfHeight = (box[7] >> 1) + 5;
+    box[9] &= ~4;
+    x = box[4];
+    y = box[5];
+    top = y - halfHeight;
+    left = x - halfWidth;
+    right = x + halfWidth;
+    bottom = y + halfHeight;
+    func_0027F208(top, bottom, left, right, 96, 0x60442D00);
+    func_00339398((f32)top, (f32)bottom, (f32)left, (f32)right, (s32)object, 96, 0x55F0C070);
+    switch (mode) {
+    case 0: func_00280BB8(box, style, buffer, length); break;
+    case 1: func_00280B48(box, style, buffer, length); break;
+    case 2: func_00280C28(box, style, buffer, length); break;
     }
-
-    ps[9] = savedFlags;
+    box[9] = flags;
 }
 #endif
 
