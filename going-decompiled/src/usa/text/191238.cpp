@@ -2095,91 +2095,126 @@ void LoadShipDisplayModel(s32 n) {
 #undef g_shipSelectState
 #undef g_shipSelectTable
 
-/* Load the ship-select display texture for `shipId`: fence the frame DMA, resolve
- * the double-buffered frame-arena slot, kick the disc file load (the shipId TOC
- * entry: start sector = g_discToc + shipId*8 + 0x48F0 biased by +0x3E24, count
- * +0x48F4), then upload two GS image levels (a 16x16 base + the loaded mip whose
- * dims come from the arena header) into VRAM and cache the packed 64-bit GS
- * texture register at g_levelDialogToc[0x13B0+0x38] for the draw path to load.
- * Engine-2.96 TU (prologue packs 6 saved regs at 8-byte slots, frame 0x90)
- * -> save-slot walled on canonical-2.9, which can't byte-match it; faithful #else, with the
- * trailing dsll/dsra/or register pack transcribed op-for-op. NEEDS-ORACLE.
- * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
- * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
- * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
- * property and was measured false as the reason this member stays unmatched (FACT #9873).
- * Residual: the saved-register set; the rest UNMEASURED. */
+/* UploadTable: the disc TOC's ship-texture table, eight bytes per entry at
+ * +0x48F0, sectors relative to +0x3E24. UploadState: the same ship-display
+ * state at D_152C00 that LoadShipDisplayModel reads, seen from the texture
+ * side (index at +0x30, TEX0 word at +0x38). Both are OpenRAC's types. */
+typedef struct { int off, size; } UploadPair;
+typedef struct { char p0[0x3e24]; int base; char p1[0x48f0-0x3e28]; UploadPair entries[1]; } UploadTable;
+typedef struct { char p0[0x30]; int index; char p1[4]; s64 word; } UploadState;
+
+/* EE-only ADDRESSING-MODEL views (RULING #13168), named onto the real
+ * symbols; native reads the real objects:
+ *  - g_frameArenaBaseWords: g_frameArenaBase as an unsized s32 array, the
+ *    two frame arenas (their `int D_001B22A0[]`). Its address is the ROM's
+ *    lui/addiu (0x292FA8). Read as the unit's small s32 it goes gp-relative:
+ *    114 words, ROM 115.
+ *  - g_frameArenaFlipWords: g_frameArenaFlip as an unsized `.sdata` array
+ *    (their `sda`), read absolutely (0x292FA0). Without the section: 3/116
+ *    words; as the unit's small s32: 114 words.
+ *  - g_shipClutVram / g_shipImageVram: the VRAM block words at
+ *    g_vramTextureBase+0xC / +0x1C (labels D_1A72F0 / D_1A7300), unsized
+ *    `.sdata` arrays. Spelled g_vramTextureBase + 0xC/0x1C: 117 words. */
 #ifndef TARGET_NATIVE
-/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
- * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 53.92% PACKED-SAVE /
- * engine96 56.37% GPREL-DECL; best arm engine96, first differing insn there: 'addiu sp, sp,
- * -0x90' vs 'addiu sp, sp, -0xa0' */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", LoadShipDisplayTexture);
+extern s32 g_frameArenaBaseWords[] __asm__("g_frameArenaBase");
+extern s32 g_frameArenaFlipWords[] __asm__("g_frameArenaFlip") __attribute__((section(".sdata")));
+extern s32 g_shipClutVram[] __asm__("D_1A72F0") __attribute__((section(".sdata")));
+extern s32 g_shipImageVram[] __asm__("D_1A7300") __attribute__((section(".sdata")));
 #else
-/* Declarations this body needs whose only other declarations sit in other
- * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
-extern s32 Log2Floor(s32 v);
-extern void StartFileLoadPumpingVoice(void *dest, s32 startSector, s32 sectorCount);
-extern void WaitFrameDmaFence(s32 mode);
-extern s32 g_discToc[];
-extern u8 g_levelDialogToc[];
-/* (end of this body's declarations) */
-extern s32  g_frameArenaFlip;             /* double-buffer index (0/1) */
-extern s32  g_frameArenaBase;             /* per-frame arena base (declared later in-unit) */
-extern u8   g_vramTextureBase[];          /* VRAM texture-slot descriptor (+0xC/+0x1C = level TBPs) */
-extern void PumpDialogVoiceSystem(s32 blocking);   /* declared later in-unit */
-extern void func_0011AEA0(s32 a);                  /* declared later in-unit */
-extern void func_00126288(void *dst, s32 tbp, s32 a, s32 b, s32 c, s32 d, s32 w, s32 h);
-extern s32 KickGifImageUpload(void *packet, void *src);
-extern void WaitGsPathsIdle(s32 arg);
+extern s32 g_frameArenaFlip;
+extern s32 g_frameArenaBase;
+#define g_frameArenaBaseWords (&g_frameArenaBase)
+#define g_frameArenaFlipWords (&g_frameArenaFlip)
+#define g_shipClutVram ((s32 *)(g_vramTextureBase + 0xC))
+#define g_shipImageVram ((s32 *)(g_vramTextureBase + 0x1C))
+#endif
 
-void LoadShipDisplayTexture(s32 shipId) {
-    u8    packet[0x60];               /* GIF packet scratch (sp+0) */
-    u8   *base  = &g_levelDialogToc[0x13B0];
-    u8   *disc  = (u8 *)g_discToc;
-    void *arena;
-    s32   log2, clampW;
-    s16   w, h;
-    u64   reg;
+/*
+ * LoadShipDisplayTexture(index) — load ship texture `index` and upload it.
+ * No return value.
+ *   index: the entry in the disc TOC's ship-texture table (+0x48F0, eight
+ *          bytes each), recorded at D_152C00+0x30.
+ * Reads the file into the frame arena not in use
+ * (g_frameArenaBase[1 - g_frameArenaFlip]). Its 16x16 CLUT goes to VRAM block
+ * g_vramTextureBase+0xC >> 8 and its 8-bit texels to the block at +0x1C, with
+ * TBW = max(1, width >> 6). The texture's GS TEX0 word, with CLD bit 63 set,
+ * is stored at D_152C00+0x38, where LoadShipDisplayModel picks it up.
+ *
+ * MATCHED on the s136os arm (the unit's S136EXTRA "", -G8; task #2540, from
+ * audit NOTE #13181 / FACT #13187, 2/115). Devices, each removed alone:
+ *  - the RULING #8549 allowlist row for the bit-63 constant at 0x293100
+ *    (without it: 2/116 words);
+ *  - the views above;
+ *  - the call views (shared block above LoadPlayerDisplayTextures' slot):
+ *    PumpDialogVoiceSystemS16, their `short` return (6/116 words without it),
+ *    and WaitGsPathsIdleU16 (113 words). Their `int` return on
+ *    StartFileLoadPumpingVoice is inert here (measured), so the unit's void
+ *    prototype is called.
+ * GUARD: compiled alone by the s136os arm and spliced over the S136OS_SLOT
+ * line (tools/ee/s136os_splice.sh, row in tools/ee/s136os_functions.txt);
+ * plain C on native.
+ * Source: OpenRAC/rac2-decomp @5776dcc35045fb2320610edd1d2db4fa7660ef37
+ * (GPL-3.0, adopted with the authors' permission per RULINGs #10405/#12108;
+ * blob identical at b2a35115 and at head fe6adf9b), src/game/00291758.c,
+ * func_002926B8 (v1.01 address), author commit e14fe0f3 (bigbeno37).
+ * ADAPTED: (1) our spellings by address: their asm-label `upload_table`
+ * (D_0014B540) = `*(UploadTable *)g_discToc` and D_00152C00 =
+ * `*(UploadState *)(g_levelDialogToc + 0x13B0)` (casts, measured
+ * byte-identical to views), D_001B22A0 = g_frameArenaBaseWords, D_001B22B4 =
+ * g_frameArenaFlipWords (their v1.01 addresses are 0x80 higher),
+ * D_001A72F0/D_001A7300 = the two VRAM views, func_002FC3C0 =
+ * WaitFrameDmaFence, func_002B7CE0 = PumpDialogVoiceSystemS16, func_002B7C80
+ * = StartFileLoadPumpingVoice, func_00126288 = SetupGsImageUpload,
+ * func_001265B0 = KickGifImageUpload, func_001244B8 = WaitGsPathsIdleU16 and
+ * func_00282A18 = Log2Floor; (2) every `long` written s64 (RULING #13197); (3) `sda` written
+ * section(".sdata"); (4) the name is LoadShipDisplayTexture. The rest of the
+ * body is theirs.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_LoadShipDisplayTexture)
+S136OS_SLOT(LoadShipDisplayTexture);
+#else
+void LoadShipDisplayTexture(s32 index)
+{
+    GsLoadImage packet;
+    char *base;
+    char *clut;
+    UploadState *state;
+    UploadTable *table;
+    int width, log;
 
-    *(s32 *)(base + 0x30) = shipId;
+    state = (UploadState *)(g_levelDialogToc + 0x13B0);
+    state->index = index;
     WaitFrameDmaFence(1);
-    arena = (void *)(&g_frameArenaBase)[1 - g_frameArenaFlip];
-    PumpDialogVoiceSystem(1);
-
-    StartFileLoadPumpingVoice(arena,
-        *(s32 *)(disc + shipId * 8 + 0x48F0) + *(s32 *)(disc + 0x3E24),
-        *(s32 *)(disc + shipId * 8 + 0x48F4));
-
-    /* level 0: 16x16 base image */
-    func_00126288(packet, (*(s32 *)(g_vramTextureBase + 0xC) << 8) >> 16,
-                1, 0, 0, 0, 0x10, 0x10);
+    base = (char *)g_frameArenaBaseWords[1 - g_frameArenaFlipWords[0]];
+    PumpDialogVoiceSystemS16(1);
+    clut = base + 0x20;
+    table = (UploadTable *)g_discToc;
+    StartFileLoadPumpingVoice(base, table->entries[index].off + table->base, table->entries[index].size);
+    SetupGsImageUpload(&packet, g_shipClutVram[0] >> 8, 1, 0, 0, 0, 16, 16);
     func_0011AEA0(0);
-    KickGifImageUpload(packet, (u8 *)arena + 0x20);
-    WaitGsPathsIdle(0);
+    KickGifImageUpload(&packet, clut);
+    WaitGsPathsIdleU16(0, 0);
+    log = Log2Floor(*(int *)(base + 8));
+    width = *(int *)(base + 8) >> 6;
+    if (width < 1)
+        width = 1;
+    SetupGsImageUpload(&packet, g_shipImageVram[0] >> 8, width, 27, 0, 0, *(short *)(base + 8), *(short *)(base + 12));
+    func_0011AEA0(0);
+    KickGifImageUpload(&packet, base + 0x420);
+    WaitGsPathsIdleU16(0, 0);
+    {
+        s64 image, tex, format, clut_base, word;
 
-    /* level 1: mip level sized from the loaded arena header (+0x8 w, +0xC h) */
-    log2   = Log2Floor(*(s32 *)((u8 *)arena + 0x8));
-    clampW = *(s32 *)((u8 *)arena + 0x8) >> 6;
-    if (clampW <= 0) {
-        clampW = 1;
+        image = (s64)g_shipImageVram[0] >> 8;
+        tex = image | ((s64)width << 14);
+        format = ((s64)log << 26) | 0x1b00000L;
+        tex |= format;
+        tex |= (s64)log << 30;
+        clut_base = (((s64)g_shipClutVram[0] >> 8) << 37) | 0x400000000L;
+        word = tex | clut_base;
+        word |= 0x8000000000000000UL;
+        state->word = word;
     }
-    w = *(s16 *)((u8 *)arena + 0x8);
-    h = *(s16 *)((u8 *)arena + 0xC);
-    func_00126288(packet, (*(s32 *)(g_vramTextureBase + 0x1C) << 8) >> 16,
-                (s16)clampW, 0x1B, 0, 0, w, h);
-    func_0011AEA0(0);
-    KickGifImageUpload(packet, (u8 *)arena + 0x420);
-    WaitGsPathsIdle(0);
-
-    /* pack the 64-bit GS texture register (op-for-op from the dsll/dsra/or chain) */
-    reg = (u64)((s64) * (s32 *)(g_vramTextureBase + 0x1C) >> 8)
-        | ((u64)clampW << 14)
-        | (((u64)log2 << 26) | 0x1B00000)
-        | ((u64)log2 << 30)
-        | (((u64)((s64) * (s32 *)(g_vramTextureBase + 0xC) >> 8) << 37) | ((u64)0x8000 << 19))
-        | ((u64)1 << 63);
-    *(u64 *)(base + 0x38) = reg;
 }
 #endif
 
