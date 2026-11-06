@@ -310,6 +310,7 @@ already this file's (landed with task #2206's `func_001296A0`).
 | Here | Upstream file | Upstream name |
 |---|---|---|
 | `func_00129DA8` in `going-decompiled/src/usa/cod/022FA8.c` (verbatim, plain sdk29 `-O2 -G0` arm, no devices) | `src/core/00129450.c` | `func_00129DA8` (author commit `bf067513e`, bigbeno37, 2026-11-01) |
+| `func_00130428` in `going-decompiled/src/usa/cod/022FA8.c` (adapted: `s32 *` parameter for our prototype, casts to our callee prototypes, a `func_001306D0` prototype ahead of it; upstream's never-taken branch kept verbatim as the RULING #13126 device), task #2476 | `src/core/00130288.c` (from rac1-decomp `src/core/0012AC80.c`), whose earlier draft says it is transcribed from Lombyte (MIT) `src/assembly/sdk/library/sequenceheader.c` | `func_00130428` (rac1-decomp `mpeg_init_seq`, `func_0012C608`; Lombyte `func_0012C4C8`) |
 
 The GPL-2.0-or-later note in the section "OpenRAC rac2-gc-decomp (GPL-3.0)"
 above applies to this body too. The body is Lombyte-origin: the upstream file's

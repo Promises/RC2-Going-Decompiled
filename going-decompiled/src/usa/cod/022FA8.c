@@ -7885,7 +7885,167 @@ void func_00130300(s32 *ipu) {
     func_00130428(dec->callbacks);
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00130428);
+extern void func_001306D0(unsigned int *o0, unsigned int *o1, unsigned int *o2, unsigned int *o3,
+                          unsigned int *o4, unsigned int *o5, unsigned int *o6, unsigned int *o7,
+                          unsigned int *o8, int a, int b, int c, int w, int h);
+
+/**
+ * libmpeg mpeg_init_seq (the reference-image resize half of _sequenceHeader):
+ * once func_00130300 has parsed the sequence header, recompute the decoder's
+ * macroblock counts and, only when the frame size actually changed, reserve
+ * the three frame buffers and re-initialise the nine reference-image
+ * descriptors.
+ *
+ * arg0: the decoder's owner (IpuDecoder.callbacks, the sceMpeg object). Its
+ *       words 0 and 1 hold the frame width and height last set up, and +0x40
+ *       points at the decoder state `s` (the IpuDecoder).
+ * Returns nothing.
+ *
+ * Steps:
+ *  - on the first sequence header (s+0x848 == 0), seed the decoder defaults
+ *    (picture structure 3, the flags at +0x13C/+0x140/+0x188/+0x17C, +0x144 = 5);
+ *  - s+0x12C = mb_width = (horizontal_size + 15) >> 4; s+0x130 = mb_height,
+ *    rounded to a field pair for a non-progressive stream after the first;
+ *  - if the pixel size (mb_width * 16, mb_height * 16) equals arg0[0..1],
+ *    return; else store it there;
+ *  - reset the allocator region at s+0x108 (func_0012FB70) and carve three
+ *    frame buffers of mbw * mbh * 384 / 256 bytes, 64-byte aligned
+ *    (func_0012FB80), into s+0xFC/+0x100/+0x104;
+ *  - point the nine descriptors at s+0x1E8..+0x528 (stride 0x68) at those
+ *    buffers (func_001306D0) and give each its size (func_001302E0): three
+ *    full frames, then six at half height.
+ *
+ * DEVICE — upstream's dead branch (RULING #13126, its first instance).
+ *
+ *     if ((mbw & 0xF) && (mbw & 0xE))
+ *         p = q8;
+ *     q8 = p;
+ *
+ * The branch is NEVER TAKEN. mbw is `*(int *)(s + 0x12C) << 4`, so its low
+ * four bits are always 0, `mbw & 0xF` is 0, and `&&` short-circuits before
+ * `mbw & 0xE` is even evaluated. Its body `p = q8` therefore never executes,
+ * so its read of the still-uninitialised local q8 never happens at run time;
+ * the only effect that ever executes is `q8 = p`, i.e. q8 = s + 0x528. The
+ * same holds on the native arm, which compiles this same C.
+ *
+ * It emits no instruction of its own, but it steers cc1 2.9's scheduling of
+ * the frame-size check: WITHOUT it (the two branch lines deleted, `q8 = p;`
+ * kept) this body reads 22/170 words differing on this arm (the NEAR our own
+ * grind rows #2378/#2384 stalled at); WITH it, 0/170. Re-measured for task
+ * #2476 on this unit's plain sdk29 `-O2 -G0` arm (FACT filed with the task).
+ * It is upstream's text, adopted verbatim, not a device we invented.
+ *
+ * Source: OpenRAC/rac2-decomp @b2a35115e0cf580a1fdab8dd1071b157799e590e
+ * (GPL-3.0, adopted with the authors' permission per RULINGs #10405 and
+ * #12108), src/core/00130288.c, func_00130428 (author commit 00ebb44e,
+ * bigbeno37, "match 19 boot functions"); upstream comment "rac1-decomp
+ * src/core/0012AC80.c: mpeg_init_seq (func_0012C608)". Its earlier draft
+ * (nonmatching/core/func_00130428.c @96927f87) says it is transcribed from
+ * the reconstruction Lombyte carries as
+ * src/assembly/sdk/library/sequenceheader.c (MIT), func_0012C4C8; that file
+ * exists in Lombyte <https://github.com/mateuszklysz/Lombyte> at
+ * 2c4452dd03f5f7ebb2868dbe073ccdb1afb27f61, under the MIT notice below
+ * (task #2476).
+ * ADAPTED: the parameter is `s32 *arg0` to match our prototype (upstream
+ * `void *`); the call arguments are cast to our callee prototypes:
+ * func_0012FB70((s32 *)…), func_0012FB80((s32)s, (struct AllocRegion *)…)
+ * x3, func_001302E0((s32 *)qN, …) x9; and func_001306D0's prototype is
+ * declared above, because this file defines it after this function. No
+ * statement is changed. Relocations as the ROM decodes them: J26 to
+ * func_0012FB70, func_0012FB80 x3, func_001306D0, func_001302E0 x9
+ * (identity with upstream's names).
+ *
+ * The Lombyte notice (Lombyte's root LICENSE at 2c4452dd), verbatim:
+ *
+ *   MIT License
+ *
+ *   Copyright (c) 2026 Mateusz Kłysz
+ *
+ *   Permission is hereby granted, free of charge, to any person obtaining a copy
+ *   of this software and associated documentation files (the "Software"), to deal
+ *   in the Software without restriction, including without limitation the rights
+ *   to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ *   copies of the Software, and to permit persons to whom the Software is
+ *   furnished to do so, subject to the following conditions:
+ *
+ *   The above copyright notice and this permission notice shall be included in all
+ *   copies or substantial portions of the Software.
+ *
+ *   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ *   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ *   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ *   AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ *   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ *   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ *   SOFTWARE.
+ */
+void func_00130428(s32 *arg0) {
+    int *a = (int *)arg0;
+    char *s = *(char **)((char *)arg0 + 0x40);
+    int f = *(int *)(s + 0x848);
+    int h, mbw, mbh;
+    unsigned int n, t;
+    unsigned int *q0, *q1, *q2, *q3, *q4, *q5, *q6, *q7, *q8;
+
+    if (f == 0) {
+        *(int *)(s + 0x174) = 3;
+        *(int *)(s + 0x13C) = 1;
+        *(int *)(s + 0x140) = 1;
+        *(int *)(s + 0x188) = 1;
+        *(int *)(s + 0x17C) = 1;
+        *(int *)(s + 0x144) = 5;
+    }
+    *(int *)(s + 0x12C) = (*(int *)(s + 0x124) + 0xF) >> 4;
+    if (f != 0 && *(int *)(s + 0x13C) == 0)
+        h = ((*(int *)(s + 0x128) + 0x1F) >> 5) << 1;
+    else
+        h = (*(int *)(s + 0x128) + 0xF) >> 4;
+    *(int *)(s + 0x130) = h;
+    mbh = h << 4;
+    mbw = *(int *)(s + 0x12C) << 4;
+    {
+    unsigned int *p;
+    if (mbw != a[0]) {
+        p = (unsigned int *)(s + 0x528);
+    } else {
+        if (mbh == a[1])
+            return;
+        p = (unsigned int *)(s + 0x528);
+    }
+    a[0] = mbw;
+    a[1] = mbh;
+    if ((mbw & 0xF) && (mbw & 0xE))
+        p = q8;
+    q8 = p;
+    t = mbh * 0x180;
+    q0 = (unsigned int *)(s + 0x1E8);
+    q1 = (unsigned int *)(s + 0x250);
+    q2 = (unsigned int *)(s + 0x2B8);
+    q3 = (unsigned int *)(s + 0x320);
+    q4 = (unsigned int *)(s + 0x388);
+    q5 = (unsigned int *)(s + 0x3F0);
+    q6 = (unsigned int *)(s + 0x458);
+    q7 = (unsigned int *)(s + 0x4C0);
+    n = (mbw * t) >> 8;
+    func_0012FB70((s32 *)(s + 0x108));
+    *(unsigned int *)(s + 0xFC) = func_0012FB80((s32)s, (struct AllocRegion *)(s + 0x108), n, 0x40);
+    *(unsigned int *)(s + 0x100) = func_0012FB80((s32)s, (struct AllocRegion *)(s + 0x108), n, 0x40);
+    *(unsigned int *)(s + 0x104) = func_0012FB80((s32)s, (struct AllocRegion *)(s + 0x108), n, 0x40);
+    func_001306D0(q0, q1, q2,
+                  q3, q4, q5,
+                  q6, q7, q8,
+                  *(int *)(s + 0xFC), *(int *)(s + 0x100), *(int *)(s + 0x104), mbw, mbh);
+    func_001302E0((s32 *)q0, mbw, mbh);
+    func_001302E0((s32 *)q1, mbw, mbh);
+    func_001302E0((s32 *)q2, mbw, mbh);
+    func_001302E0((s32 *)q3, mbw, mbh >> 1);
+    func_001302E0((s32 *)q4, mbw, mbh >> 1);
+    func_001302E0((s32 *)q5, mbw, mbh >> 1);
+    func_001302E0((s32 *)q6, mbw, mbh >> 1);
+    func_001302E0((s32 *)q7, mbw, mbh >> 1);
+    func_001302E0((s32 *)q8, mbw, mbh >> 1);
+    }
+}
 
 /**
  * Fill nine out-pointers with buffer addresses: write the uncached (0x20000000)

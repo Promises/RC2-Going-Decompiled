@@ -698,6 +698,18 @@
     at commit `5ccfa1fb314e9cb43f6ff9a43249523e1c4a5310`. Adopted byte-exact on
     our ROM with the operator's "adopt all" (RULING #12108, task #2475); the
     doc comment carries the notice verbatim and the `Source:` line.
+  - **`func_00130428`** (`0x00130428`, libmpeg `mpeg_init_seq`: the
+    reference-image resize after a sequence header) in
+    `going-decompiled/src/usa/cod/022FA8.c`, from `src/core/00130288.c`
+    (`func_00130428`, author commit `00ebb44e`, bigbeno37; from rac1-decomp
+    `src/core/0012AC80.c`). Lombyte-origin: its earlier upstream draft says it
+    is transcribed from Lombyte (MIT) `src/assembly/sdk/library/sequenceheader.c`
+    (`func_0012C4C8`, present at Lombyte `2c4452dd`); the MIT notice is
+    reproduced in [THIRD-PARTY.md](THIRD-PARTY.md) and in the doc comment.
+    ADAPTED: `s32 *` parameter for our prototype, casts to our callee
+    prototypes, a `func_001306D0` prototype ahead of it. Plain sdk29
+    `-O2 -G0`, no selector row; upstream's never-taken branch is kept
+    verbatim as the RULING #13126 codegen device (task #2476).
 
 - **OpenRAC — `rac2-decomp`, commit `b2a35115`, us2 body** (GPL-3.0)
   <https://github.com/OpenRAC/rac2-decomp> at commit `b2a35115e0cf580a1fdab8dd1071b157799e590e`
