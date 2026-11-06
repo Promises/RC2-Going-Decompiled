@@ -2374,7 +2374,8 @@ s32 func_002CD4F0(s32 *list) {
  * (CheatIdTable, CheatStringTable, CheatEntry — upstream names them after its
  * own v1.01 addresses); and g_cheatFlags typed u8 where upstream says char,
  * matching this unit's existing declarations (used here only as an
- * address-of-plus-index cast to int, so codegen-neutral).
+ * address-of-plus-index cast to int, so codegen-neutral); upstream's int and
+ * unsigned char spelled s32 and u8 (codegen-neutral).
  * Byte-exact on our ROM: in-unit 0/79 words at the unit's flags, every
  * relocation verified to our symbols with the right addends, spliced at ROM
  * length with the tip .text sha1-identical to the INCLUDE_ASM build (FACT
