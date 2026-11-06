@@ -864,6 +864,23 @@
     `(ScreenState *)(g_sceneActorMobys + 0x674)` (same address 0x1B8FC0),
     their `func_00283CE0` as `IntToFloat`, their `func_00279FF0` as
     `func_0027A550`, and `short`/`int`/`float` spelled `s16`/`s32`/`f32`.
+  - **`func_0027DB38`** (`0x0027DB38`, 66 words, draw the pulsing "notice"
+    text line — localized string `0x2DB6` at a fixed x, y shifted when the
+    suppression flag is set, color-cycled on a cosine pulse driven by the
+    frame counter) in `going-decompiled/src/usa/text/178E88.cpp`, on the
+    s136os arm at the unit's pinned S136EXTRA, from
+    `src/us2/game/0027DB38.c` (`func_US2_0027DB38`, author commit
+    `cde7e4dd`, Flavius, 2026-10-21, body unchanged to the pin). ADAPTED:
+    their `D_001A7BB1` is stale (the ROM reads `0x1A7BB9`) — respelled as
+    the `g_noticeFadeSuppress` view over `D_1A7BB9`, carried with the
+    file-scope `.extern D_1A7BB9, 16` sizing device (probe-measured
+    load-bearing); their `D_L00_001BCAF4` is stale (the ROM reads
+    `0x1B87F4`) — respelled as the `g_noticePulseFrame` `.data` view over
+    `g_sceneFrame`; their `func_00283180` as `func_00283B30` (cosine),
+    `func_00283D38` as `ColorLerpPacked`, `func_00288FB8` as
+    `GetLocalizedString` (`u8 *`), `func_0027F5B8` as `DrawDebugString`
+    prototyped to its definition's five-`s32` shape with a `(s32)text`
+    cast, and `long`/`unsigned char *` spelled `s32`/`u8 *`.
 
 - **Forja contributors** (MIT, © 2026 Forja contributors), via OpenRAC
   `rac2-gc-decomp` at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`

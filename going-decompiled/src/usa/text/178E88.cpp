@@ -2207,52 +2207,97 @@ void FadeOutToBlackBlocking(s32 frames)
 }
 #endif
 
-/**
- * func_0027DB38 — draw a pulsing debug string.
+/* func_0027DB38 — draw the pulsing "notice" text line: localized string 0x2DB6
+ * at x=0x3C, y=0x148 (y=0x17C when the flag at D_1A7BB9 is set), color cycling
+ * between 0x7FE0E0E0 and 0x5FF0C070 on a cosine pulse ((frame % 100) / 100 * 2
+ * - 1, clamped, cos, +1, halved) driven by the frame counter g_sceneFrame.
+ * No params, no return.
  *
- * Drives a 100-frame triangle wave from g_sceneFrame (frame%100 mapped to
- * [-1,1]), shapes it with cos(t·pi) into a 0..1 pulse, and blends two packed
- * colors (0x7FE0E0E0 / 0x5FF0C070, ColorLerpPacked) by that pulse. Draws the
- * localized string 0x2DB6 (DrawDebugString) at x=0x3C with a y that depends on
- * the fade-suppress flag D_1A7BB9 (0x17C when set, else 0x148).
- */
-/* TODO(match) t493: sdk29 63.17% / engine96 44.76% (unit objdiff, objdiff_build.sh +
- * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
- * every other remaining arm). Residual on the better arm (sdk29): SIBCALL (first differing insn:
- * ROM `lui v0,0x0  [HI16 0x001B87F4]` vs built `lw v1,0(gp)  [GPREL16 0x001B87F4]`). Levers:
- * sibcall guard RUN: sdk29 74.68% / engine96 49.36%; cc1-small/absolute globals model RUN: 68.08%
- * (sdk29); engine96 with sched1 MEASURED (flag not landed): 57.05%.
- * TODO(match) t2054, s136os arm: NOTE #10008's pin-free body re-measured at 9/66. Every
- * re-phrasing gives the same 9 words: frame read into a local, phase computed first,
- * param as an if over 0x148, 0x17C held in its own local in either declaration order.
- * Viewing g_sceneFrame through a section(".data") alias (RULING #8620) instead of the
- * incomplete array is also 9/66. The residual is allocation alone: ROM %hi $2 / 100 $3 /
- * 0x17C $5 / mfhi $6, ours $3 / $2 / $3 / $5. Class: ALLOCATION. */
+ * MATCHED on the s136os arm (SN 2.95.3 v1.36 cc1plus -fopt-stack, the unit's
+ * -fno-gcse pin unchanged; row in tools/ee/s136os_functions.txt), spliced over
+ * S136OS_SLOT by tools/ee/s136os_splice.sh: `built 66 words (assembled st_size
+ * 0x108) = ROM 66 words`, byte-identical .rom (build.sh usa). No asm fallback:
+ * a build that skips the splice drops the function. On native it is plain C.
+ * Devices, minimised from the audit's maximal z2 set of three by removal
+ * probes (each device removed alone, everything else held): the file-scope
+ * `.extern D_1A7BB9, 16` below — dropped: `built 65 words, ROM 66 words —
+ * SHORTER` -> splice FATAL -> BUILD FAIL (the 16-byte sizing keeps the flag
+ * non-small, so GNU as expands cc1's one-insn bare-symbol `lbu` absolutely;
+ * without the line the splice carries the body's own 1-byte `.extern` and the
+ * load collapses to a 1-word gp form) — KEPT; the `.data` view over
+ * g_sceneFrame — attribute dropped alone: `built 65 words — SHORTER` ->
+ * BUILD FAIL (the frame read must stay the ROM's absolute lui/%lo pair, not a
+ * 1-word gp `lw`) — KEPT; the `.sdata` attribute on the flag view — dropped:
+ * `built 66 words = ROM 66 words`, still byte-identical .rom, cc1 emits the
+ * bare-symbol `lbu` either way — NOT load-bearing, removed from this landing.
+ * Supersedes the t493 #else (sdk29 63.17% / engine96 44.76%, unit objdiff).
+ *
+ * Source: OpenRAC/rac2-decomp @5776dcc35045fb2320610edd1d2db4fa7660ef37
+ * (GPL-3.0, adopted with the authors' permission per RULING #10405/#12108),
+ * src/us2/game/0027DB38.c, func_US2_0027DB38 (author commit `cde7e4dd`,
+ * Flavius, 2026-10-21). ADAPTED: our spellings by address — their D_001A7BB1
+ * is stale, the ROM reads 0x1A7BB9 = our D_1A7BB9, respelled g_noticeFadeSuppress
+ * (.extern-sized view above); their D_L00_001BCAF4 is stale, the ROM reads
+ * 0x1B87F4 = our g_sceneFrame, respelled g_noticePulseFrame (.data view above);
+ * func_00283180 -> func_00283B30 (cosine); func_00283D38 -> ColorLerpPacked;
+ * func_00288FB8 -> GetLocalizedString (u8 *); func_0027F5B8 -> DrawDebugString,
+ * prototyped here to its definition's shape (five s32) with a `(s32)text` cast
+ * on the pointer argument (a codegen no-op); `long` -> s32 and
+ * `unsigned char *` -> u8 * for our typedefs (EE 32-bit long); their undeclared
+ * callees get prototypes in this file. Body otherwise theirs. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027DB38);
+/* ADDRESSING-MODEL DEVICES (RULINGs #8620/#12316) for func_0027DB38, from the
+ * Window X audit's z2 set (NOTE #13181), minimised by the removal probes in
+ * the doc comment above: only the file-scope `.extern D_1A7BB9, 16` (sizes
+ * the flag non-small so the assembler expands cc1's bare-symbol `lbu`
+ * absolutely) and the `.data` attribute on the frame view (keeps the frame
+ * read an absolute lui/%lo pair) are load-bearing; the audit's `.sdata`
+ * attribute on the flag view proved redundant and is not carried. Relocations
+ * name the REAL symbols (D_1A7BB9, g_sceneFrame); the native arm reads the
+ * plain externs below. */
+__asm__(".extern D_1A7BB9, 16");
+extern u8 g_noticeFadeSuppress __asm__("D_1A7BB9");
+extern s32 g_noticePulseFrame __asm__("g_sceneFrame") __attribute__((section(".data")));
+#define noticeFadeSuppress g_noticeFadeSuppress
+#define noticePulseFrame g_noticePulseFrame
 #else
-extern s32 g_sceneFrame;
+#define noticeFadeSuppress D_1A7BB9
+#define noticePulseFrame g_sceneFrame
+#endif
 extern u8 D_1A7BB9;
-extern f32 func_00283B30(f32 angle);                        /* cosine */
-extern s32 ColorLerpPacked(f32 t, s32 colorA, s32 colorB);    /* blend packed colors by t */
-extern char *GetLocalizedString(s32 id);
+extern s32 g_sceneFrame;
+extern f32 func_00283B30(f32 angle);                     /* cosine */
+extern s32 ColorLerpPacked(f32 t, s32 colorA, s32 colorB); /* blend packed colors by t */
+extern u8 *GetLocalizedString(s32 id);
 extern void DrawDebugString(s32 a, s32 b, s32 c, s32 d, s32 e);
 
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0027DB38)
+S136OS_SLOT(func_0027DB38);
+#else
 void func_0027DB38(void) {
-    s32 param = (D_1A7BB9 != 0) ? 0x17C : 0x148;
-    f32 t = (f32)(g_sceneFrame % 100) * 0.02f - 1.0f;
-    f32 pulse;
-    s32 color;
+    s32 y;
+    s32 style;
+    u8 *text;
+    f32 f;
+    s32 v;
 
-    if (t < -1.0f) {
-        t = -1.0f;
+    y = 0x148;
+    if (noticeFadeSuppress) {
+        y = 0x17C;
     }
-    if (1.0f < t) {
-        t = 1.0f;
+    v = noticePulseFrame;
+    f = (f32)(v % 100) * 0.02f - 1.0f;
+    if (f < -1.0f) {
+        f = -1.0f;
     }
-    pulse = (func_00283B30(t * 3.1415927f) + 1.0f) * 0.5f;
-    color = ColorLerpPacked(pulse, 0x7FE0E0E0, 0x5FF0C070);
-    DrawDebugString(0x3C, param, color, (s32)GetLocalizedString(0x2DB6), -1);
+    if (1.0f < f) {
+        f = 1.0f;
+    }
+    f = func_00283B30(f * 3.14159274f);
+    f = f + 1.0f;
+    style = ColorLerpPacked(f * 0.5f, 0x7FE0E0E0, 0x5FF0C070);
+    text = GetLocalizedString(0x2DB6);
+    DrawDebugString(0x3C, y, style, (s32)text, -1);
 }
 #endif
 
