@@ -5,7 +5,7 @@
 // and the gated boot build's symbol table and sectioned objects. No disc or ROM bytes are read.
 // Source per name: core (boot value, below 0x1A7C80) | placed (its own place) | catalogue (a call the
 // committed boot<->place table predicts) | split-operand (the committed split's operand at that offset).
-// 2524 names, 1069 placed functions.
+// 2529 names, 1071 placed functions.
 AccumMobyMotionProfile = 0x0032A498; // catalogue+placed
 AddFxDrawHookLate = 0x002E39E0; // placed
 AddItemToInventoryOrder = 0x002F0A60; // catalogue+placed
@@ -47,6 +47,7 @@ BuildShrubDrawSegment = 0x00358FD0; // placed
 BuildTfragDrawSegment = 0x003676E8; // placed
 BuildTieDrawSegment = 0x00369230; // placed
 BuildUiTextureDescriptors = 0x002FA928; // placed
+CalcMobyTargetThreatDist = 0x003272D8; // placed
 CalcSaveSectionsSize = 0x00309368; // catalogue+placed
 CaptureScreenToVram = 0x003418D0; // placed
 CastEmitterOcclusionRay = 0x0035C338; // placed
@@ -414,6 +415,7 @@ D_1ADA78 = 0x001ADD78; // split-operand
 D_1ADA98 = 0x001ADD98; // split-operand
 D_1ADAC0 = 0x001ADDC0; // split-operand
 D_1ADAD8 = 0x001ADDD8; // split-operand
+D_1ADAE8 = 0x001ADDE8; // split-operand
 D_1ADAF0 = 0x001ADDF0; // split-operand
 D_1ADAF8 = 0x001ADDF8; // split-operand
 D_1ADB08 = 0x001ADE08; // split-operand
@@ -1862,7 +1864,7 @@ func_00337C58 = 0x0043C950; // split-operand
 func_00337D78 = 0x0043CA70; // catalogue+placed
 func_00337D98 = 0x0043CA90; // split-operand
 func_00337DA0 = 0x0043CA98; // placed
-func_00337DC8 = 0x0043CAC0; // catalogue
+func_00337DC8 = 0x0043CAC0; // catalogue+placed
 func_003380B8 = 0x0043CDB0; // catalogue+placed
 func_00338A80 = 0x0043D778; // catalogue+placed
 func_00338AB8 = 0x0043D7B0; // catalogue+placed
@@ -2514,6 +2516,9 @@ jtbl_0026CD40_text = 0x002A4A90; // split-operand
 jtbl_0026CDA0_text = 0x002A4AF0; // split-operand
 jtbl_0026CE90_text = 0x002A4BE0; // split-operand
 jtbl_0026CEB0_text = 0x002A4C00; // split-operand
+jtbl_0026DD70_text = 0x002A5AC0; // split-operand
+jtbl_0026DE20_text = 0x002A5B70; // split-operand
+jtbl_0026DED0_text = 0x002A5C20; // split-operand
 memcmp = 0x00115340; // core
 memcpy = 0x001153D4; // core
 memset = 0x00115484; // core
@@ -3006,6 +3011,7 @@ func_L09_00324548 = CountSkillPointsCompleted; // alias
 func_L09_00327048 = SetMobyFlagBit0; // alias
 func_L09_00327070 = SetMobyFlagBit1; // alias
 func_L09_003270B8 = func_002B47D0; // alias
+func_L09_003272D8 = CalcMobyTargetThreatDist; // alias
 func_L09_00327530 = CheckTargetInRangeBand; // alias
 func_L09_00327C08 = CheckMobyIsLevelObjectSlot; // alias
 func_L09_00328990 = IsGameStatePending; // alias
@@ -3307,6 +3313,7 @@ func_L09_0043C958 = GuiPoolInit; // alias
 func_L09_0043C9E0 = GuiPoolAlloc; // alias
 func_L09_0043CA70 = func_00337D78; // alias
 func_L09_0043CA98 = func_00337DA0; // alias
+func_L09_0043CAC0 = func_00337DC8; // alias
 func_L09_0043CDB0 = func_003380B8; // alias
 func_L09_0043D778 = func_00338A80; // alias
 func_L09_0043D7B0 = func_00338AB8; // alias
