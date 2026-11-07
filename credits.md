@@ -1250,3 +1250,75 @@
     `going-decompiled/levels/usa/L11/src/func_L11_00461AD8.c`, from
     `src/levels/11_joba/L11_00453358.c` (`func_L11_00460038`, author commit `7fccf735`, Flavius),
     task #2553. ADAPTED: our name at the v2.00 place; one callee as L11's copy; the body otherwise verbatim, and the audit's `long long` respelling not needed (no `long long` in this function); `common.h` dropped.
+  - **`func_L02_003DCEB8`** (`0x003DCEB8`, level program 02) in
+    `going-decompiled/levels/usa/L02/src/func_L02_003DCEB8.c`, from
+    `src/levels/02_maktar_nebula/L02_003DB310.c` (`func_L02_003DB950`, author commit `773eafc2`, llesieur99),
+    task #2559. VERBATIM but for names: our name at the v2.00 place; no other symbol.
+  - **`func_L02_003E8B18`** (`0x003E8B18`, level program 02) in
+    `going-decompiled/levels/usa/L02/src/func_L02_003E8B18.c`, from
+    `src/levels/02_maktar_nebula/L02_003DB310.c` (`func_L02_003E75A8`, author commit `b7374531`, bigmak94),
+    task #2559. VERBATIM but for names: our name at the v2.00 place; four callees as L02's copies; the track table D_L02_002A53B0 as the v2.00 label D_L02_002A5470; `u16` written out.
+  - **`func_L02_003EB9F8`** (`0x003EB9F8`, level program 02) in
+    `going-decompiled/levels/usa/L02/src/func_L02_003EB9F8.c`, from
+    `src/levels/02_maktar_nebula/L02_003DB310.c` (`func_L02_003EA488`, author commit `ee3fee45`, llesieur99),
+    task #2559. VERBATIM but for names: our name at the v2.00 place; callee func_31E6A0 as L02's copy func_L02_0031F998.
+  - **`func_L02_003F01C8`** (`0x003F01C8`, level program 02) in
+    `going-decompiled/levels/usa/L02/src/func_L02_003F01C8.c`, from
+    `src/levels/02_maktar_nebula/L02_003DB310.c` (`func_L02_003EEC58`, author commit `eef580e5`, Flavius),
+    task #2559. VERBATIM but for names: our name at the v2.00 place; the boot's `g_heroPos`; one callee as L02's copy; `D_L02_001FF1C0` kept, address-named (RULING #13291 §2).
+  - **`func_L02_003F0528`** (`0x003F0528`, level program 02) in
+    `going-decompiled/levels/usa/L02/src/func_L02_003F0528.c`, from
+    `src/levels/02_maktar_nebula/L02_003DB310.c` (`func_L02_003EEFB8`, author commit `246b78db`, bigmak94),
+    task #2559. VERBATIM but for names: our name at the v2.00 place; the boot's `g_heroPos`; two callees at their v2.00 places; `D_L02_001FF1C0` kept, address-named (RULING #13291 §2).
+  - **`func_L02_003F2AE8`** (`0x003F2AE8`, level program 02) in
+    `going-decompiled/levels/usa/L02/src/func_L02_003F2AE8.c`, from
+    `src/levels/02_maktar_nebula/L02_003DB310.c` (`func_L02_003F1578`, author commit `adcbd51e`, llesieur99),
+    task #2559. VERBATIM but for names: our name at the v2.00 place; two callees as L02's copies.
+  - **`func_L02_003F2C60`** (`0x003F2C60`, level program 02) in
+    `going-decompiled/levels/usa/L02/src/func_L02_003F2C60.c`, from
+    `src/levels/02_maktar_nebula/L02_003DB310.c` (`func_L02_003F16F0`, author commit `e80a585a`, Flavius),
+    task #2559. VERBATIM but for names: our name at the v2.00 place; two callees at their v2.00 places.
+  - **`func_L02_003F2D20`** (`0x003F2D20`, level program 02) in
+    `going-decompiled/levels/usa/L02/src/func_L02_003F2D20.c`, from
+    `src/levels/02_maktar_nebula/L02_003DB310.c` (`func_L02_003F17B0`, author commit `e80a585a`, Flavius),
+    task #2559. VERBATIM but for names: our name at the v2.00 place; three callees as L02's copies; `u8`/`u16` written out.
+  - **`func_L02_003F2E58`** (`0x003F2E58`, level program 02) in
+    `going-decompiled/levels/usa/L02/src/func_L02_003F2E58.c`, from
+    `src/levels/02_maktar_nebula/L02_003DB310.c` (`func_L02_003F18E8`, author commit `ee3fee45`, llesieur99),
+    task #2559. VERBATIM but for names: our name at the v2.00 place; nine callees at their v2.00 places.
+  - **`func_L02_003F30E0`** (`0x003F30E0`, level program 02) in
+    `going-decompiled/levels/usa/L02/src/func_L02_003F30E0.c`, from
+    `src/levels/02_maktar_nebula/L02_003DB310.c` (`func_L02_003F1B70`, author commit `773eafc2`, llesieur99),
+    task #2559. VERBATIM but for names: our name at the v2.00 place; one callee as L02's copy.
+  - **`func_L02_003FC4C8`** (`0x003FC4C8`, level program 02) in
+    `going-decompiled/levels/usa/L02/src/func_L02_003FC4C8.c`, from
+    `src/levels/02_maktar_nebula/L02_003F5430.c` (`func_L02_003FAF28`, author commit `ee3fee45`, llesieur99),
+    task #2559. VERBATIM but for names: our name at the v2.00 place; three callees as L02's copies; the callback D_L02_004004D8 as its v2.00 glabel func_L02_00401C20 (upstream's `char []` type kept).
+  - **`func_L02_003FCC60`** (`0x003FCC60`, level program 02) in
+    `going-decompiled/levels/usa/L02/src/func_L02_003FCC60.c`, from
+    `src/levels/02_maktar_nebula/L02_003F5430.c` (`func_L02_003FB6C0`, author commit `455cde53`, Flavius),
+    task #2559. VERBATIM but for names: our name at the v2.00 place; two callees at their v2.00 places.
+  - **`func_L02_003FCFF8`** (`0x003FCFF8`, level program 02) in
+    `going-decompiled/levels/usa/L02/src/func_L02_003FCFF8.c`, from
+    `src/levels/02_maktar_nebula/L02_003F5430.c` (`func_L02_003FBA58`, author commit `adcbd51e`, llesieur99),
+    task #2559. VERBATIM but for names: our name at the v2.00 place; two callees at their v2.00 places.
+  - **`func_L02_003FD5C0`** (`0x003FD5C0`, level program 02) in
+    `going-decompiled/levels/usa/L02/src/func_L02_003FD5C0.c`, from
+    `src/levels/02_maktar_nebula/L02_003F5430.c` (`func_L02_003FC020`, author commit `773eafc2`, llesieur99),
+    task #2559. VERBATIM but for names: our name at the v2.00 place; one callee at its v2.00 place; `D_L02_001BA3C0` kept, address-named (RULING #13291 §2).
+  - **`func_L02_003FD658`** (`0x003FD658`, level program 02) in
+    `going-decompiled/levels/usa/L02/src/func_L02_003FD658.c`, from
+    `src/levels/02_maktar_nebula/L02_003F5430.c` (`func_L02_003FC0B8`, author commit `adcbd51e`, llesieur99),
+    task #2559. VERBATIM but for names: our name at the v2.00 place; no other symbol.
+  - **`func_L02_003FD670`** (`0x003FD670`, level program 02) in
+    `going-decompiled/levels/usa/L02/src/func_L02_003FD670.c`, from
+    `src/levels/02_maktar_nebula/L02_003F5430.c` (`func_L02_003FC0D0`, author commit `455cde53`, Flavius),
+    task #2559. VERBATIM but for names: our name at the v2.00 place; no other symbol.
+  - **`func_L02_00401D98`** (`0x00401D98`, level program 02) in
+    `going-decompiled/levels/usa/L02/src/func_L02_00401D98.c`, from
+    `src/levels/02_maktar_nebula/L02_003F5430.c` (`func_L02_00400650`, author commit `ee3fee45`, llesieur99),
+    task #2559. VERBATIM but for names: our name at the v2.00 place; the boot's `g_fileLoadVoiceState`.
+  - **`func_L02_00402410`** (`0x00402410`, level program 02) in
+    `going-decompiled/levels/usa/L02/src/func_L02_00402410.c`, from
+    `src/levels/02_maktar_nebula/L02_003F5430.c` (`func_L02_00400CC8`, author commit `597e1ea6`, ReaperOfVeriod),
+    task #2559. VERBATIM but for names: our name at the v2.00 place; `D_0017A80` as the v2.00 relocation target `D_L02_001CAA80`, address-named (RULING #13291 §2).
