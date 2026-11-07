@@ -1634,7 +1634,8 @@ typedef struct {
  *
  * Every dimension/position argument is a signed short; the ROM sign-extends
  * each by sll/sra 0x10. The GIFtag is built by zeroing it with one 128-bit
- * store (the mode(TI) store; the ROM's `sq $0`) and masking the fields on —
+ * store (the mode(TI) store; the ROM's `por $2,$0,$0` then `sq $2`,
+ * validator #2643) and masking the fields on —
  * which is why its words are not plain immediates.
  *
  * Source: OpenRAC/rac2-decomp @b2a35115e0cf580a1fdab8dd1071b157799e590e
