@@ -32,15 +32,19 @@ extern unsigned char g_soundBankHandlesBlk[];
 /* RULING #8620 addressing devices, EE arm only (level code has no native arm):
  * a section attribute on an extern DECLARATION moves no data and emits nothing.
  * ".sdata" makes cc1 print the one-instruction `lw $r,SYM` (gp-relative at
- * -G8); ".data" keeps D_00138324 absolute (%hi/%lo). Ablation (task #2552):
+ * -G8); ".data" keeps D_138324 absolute (%hi/%lo). Ablation (task #2552):
  * with all three attributes removed, .text is 0x208 bytes, not 0x20C, and
  * level_elf.py cobj refuses the object. */
 extern int D_L24_001AEB70 __attribute__((section(".sdata")));
 extern int D_L24_001AEB74 __attribute__((section(".sdata")));
 extern int D_L24_001A8F00;
-/* g_mcMutexSema+0x4B8 in the boot; the address-named extern is valued from its
- * name by tools/levels/level_elf.py undef (RULING #13291 section 2). */
-extern unsigned int D_00138324 __attribute__((section(".data")));
+/* 0x138324, spelled as the boot already spells it: the %hi/%lo operand of
+ * UpdateSubtitleStateMachine (asm/usa/nonmatchings/text/188858/
+ * UpdateSubtitleStateMachine.s:219), declared by boot C
+ * (src/usa/text/188858.c:2045) and listed in L24_boot_names.txt:119 as a core
+ * name. Address-named; tools/levels/level_elf.py values it from its name
+ * (RULING #13291 section 2). */
+extern unsigned int D_138324 __attribute__((section(".data")));
 extern void func_L24_00319B50(unsigned char *, unsigned char, int);
 extern void func_L24_003231F0(char *, float *, int, int, float);
 extern float func_L24_002ED790(void *, void *);
@@ -66,7 +70,7 @@ extern int func_L24_00325408(int, int, int, int, unsigned char *);
  * to the object is at most pi/2 (Atan2fPoly's and AngleAbsDiffPi's copies);
  * and his mode is neither 0x1C nor 0x31. If permitted, `selected` is
  * func_L24_00323528(1, 0x12EB, 1) != 0 (the level's copy of func_002B1A90).
- * When bit 0x10 of D_00138324 is set and `selected`, it calls
+ * When bit 0x10 of D_138324 is set and `selected`, it calls
  * func_L24_00325408(5, 1, object, 0, 0) (RequestGameStateChange's copy) and
  * moves to state 2.
  * State 2: back to state 1 once D_L24_001A8F00 (g_nGameState) is 0.
@@ -89,6 +93,8 @@ extern int func_L24_00325408(int, int, int, int, unsigned char *);
  *     `__attribute__((nosda))` -> `__attribute__((section(".data")))`
  *     (RULING #8620; upstream's patched compiler reads sda/nosda, ours does not);
  *   - D_00189E20 -> g_soundBankHandlesBlk (the boot's name, same address);
+ *   - D_00138324 -> D_138324: the same address, respelled to the boot's
+ *     existing name for it (task #2621, census NOTE #13409);
  *   - D_L24_001AEBB8 -> D_L24_001AEB70, D_L24_001AEBBC -> D_L24_001AEB74:
  *     upstream's names state v1.01 addresses, ours are the targets of the
  *     v2.00 disc's own gp-relative loads;
@@ -128,7 +134,7 @@ void func_L24_0037AE10(unsigned char *object)
             permitted = 0;
         if (PLAYER->mode == 0x1c || PLAYER->mode == 0x31) permitted = 0;
         if (permitted) selected = func_L24_00323528(1, 0x12EB, 1) != 0;
-        if ((D_00138324 & 0x10) && selected) {
+        if ((D_138324 & 0x10) && selected) {
             func_L24_00325408(5, 1, (int)object, 0, 0);
             object[0x20] = 2;
         }
