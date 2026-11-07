@@ -3250,3 +3250,73 @@
     `src/levels/10_hrugis_cloud/L10_00424028.c`
     (`func_L10_00449AD0`, author commit `ee3fee45`, llesieur99), task #2657.
     Adapted: built at -G8 against upstream's -G0; our name at the v2.00 place; `D_L10_001ADE90` as our split label `D_L10_001ADE70` (`sda` text kept, ignored by cc1); `include_asm.h`/`common.h` dropped.
+  - **`func_L03_00312640`** (`0x00312640`, level program 03) in
+    `going-decompiled/levels/usa/L03/src/func_L03_00312640.c`, from
+    `src/levels/03_endako/L03_002CCB70.c`
+    (`func_L03_003112F8`, author commit `86097b24`, Louis-Philippe Le Sieur), task #2655.
+    VERBATIM but for names: our name at the v2.00 place; `D_L03_001B2918` kept (address-named at the v2.00 relocation target, RULING #13291 §2); `common.h` dropped, its typedefs written out; sdk29 -G0, plain as.
+  - **`func_L03_0032E408`** (`0x0032E408`, level program 03) in
+    `going-decompiled/levels/usa/L03/src/func_L03_0032E408.c`, from
+    `src/levels/03_endako/L03_002CCB70.c`
+    (`func_L03_0032CFD8`, author commit `a6fb1b20`, Flavius), task #2655.
+    VERBATIM but for names: our name at the v2.00 place; six callees as L03's copies; s136 -G0, plain as.
+  - **`func_L03_0038BF08`** (`0x0038BF08`, level program 03) in
+    `going-decompiled/levels/usa/L03/src/func_L03_0038BF08.c`, from
+    `src/levels/03_endako/L03_0038AA20-rc2.c`
+    (`func_L03_0038AA20`, author commit `fe9859d7`, Sergio Rodmauser), task #2655.
+    VERBATIM but for names: our name at the v2.00 place; upstream's ref_ cross-reference names as `func_L03_0038C000` and the address-named `D_L03_00238040` (RULING #13291 §2); `common.h` dropped, its typedefs written out; the file's own MIT notice kept verbatim in the TU (RULING #12108); s136 -G0, plain as; MIT, the file's own notice ("Forja contributors") kept verbatim in the TU (RULING #12108).
+  - **`func_L03_003C9048`** (`0x003C9048`, level program 03) in
+    `going-decompiled/levels/usa/L03/src/func_L03_003C9048.c`, from
+    `src/levels/03_endako/L03_00399230.c`
+    (`func_L03_003C7A40`, author commit `91e04732`, llesieur99), task #2655.
+    VERBATIM but for names: our name at the v2.00 place; one callee as L03's copy; s136 -G0, plain as.
+  - **`func_L03_003C9090`** (`0x003C9090`, level program 03) in
+    `going-decompiled/levels/usa/L03/src/func_L03_003C9090.c`, from
+    `src/levels/03_endako/L03_00399230.c`
+    (`func_L03_003C7A88`, author commit `91e04732`, llesieur99), task #2655.
+    VERBATIM but for names: our name at the v2.00 place; no other symbol (0 relocations); s136 -G0, plain as.
+  - **`func_L03_003C9C00`** (`0x003C9C00`, level program 03) in
+    `going-decompiled/levels/usa/L03/src/func_L03_003C9C00.c`, from
+    `src/levels/03_endako/L03_00399230.c`
+    (`func_L03_003C85F8`, author commit `4541c4ce`, ReaperOfVeriod), task #2655.
+    VERBATIM but for names: our name at the v2.00 place; three callees as L03's copies; s136 -G0, plain as.
+  - **`func_L03_003CD378`** (`0x003CD378`, level program 03) in
+    `going-decompiled/levels/usa/L03/src/func_L03_003CD378.c`, from
+    `src/levels/03_endako/L03_00399230.c`
+    (`func_L03_003CBD70`, author commit `431ac503`, llesieur99), task #2655.
+    VERBATIM but for names: our name at the v2.00 place; the boot's `g_listenerPosHistory` for `D_L03_00188660`; four callees as L03's copies; s136 -G0, plain as.
+  - **`func_L03_003D0DC0`** (`0x003D0DC0`, level program 03) in
+    `going-decompiled/levels/usa/L03/src/func_L03_003D0DC0.c`, from
+    `src/levels/03_endako/L03_00399230.c`
+    (`func_L03_003CF7B8`, author commit `91e04732`, llesieur99), task #2655.
+    VERBATIM but for names: our name at the v2.00 place; no other symbol (0 relocations); sdk29 -G0, plain as.
+  - **`func_L03_003D1138`** (`0x003D1138`, level program 03) in
+    `going-decompiled/levels/usa/L03/src/func_L03_003D1138.c`, from
+    `src/levels/03_endako/L03_00399230.c`
+    (`func_L03_003CFB30`, author commit `91e04732`, llesieur99), task #2655.
+    VERBATIM but for names: our name at the v2.00 place; three callees as L03's copies; s136 -G0, plain as.
+  - **`func_L03_003D2708`** (`0x003D2708`, level program 03) in
+    `going-decompiled/levels/usa/L03/src/func_L03_003D2708.c`, from
+    `src/levels/03_endako/L03_00399230.c`
+    (`func_L03_003D1100`, author commit `91e04732`, llesieur99), task #2655.
+    VERBATIM but for names: our name at the v2.00 place; six callees as L03's copies; s136 -G0, plain as.
+  - **`func_L03_003D35B8`** (`0x003D35B8`, level program 03) in
+    `going-decompiled/levels/usa/L03/src/func_L03_003D35B8.c`, from
+    `src/levels/03_endako/L03_00399230.c`
+    (`func_L03_003D1FB0`, author commit `91e04732`, llesieur99), task #2655.
+    VERBATIM but for names: our name at the v2.00 place; two callees as L03's copies (upstream's duplicate prototype carried once); s136 -G0, plain as.
+  - **`func_L03_003D3700`** (`0x003D3700`, level program 03) in
+    `going-decompiled/levels/usa/L03/src/func_L03_003D3700.c`, from
+    `src/us2/levels/03_endako/L03_003D3700.c`
+    (`func_US2_L03_003D3700`, author commit `1d1f5ade`, Flavius; its other lines are images of `func_L03_003D20F8` in `src/levels/03_endako/L03_00399230.c` by Gianni (`b32a5088`, from his draft `nonmatching/levels/func_L03_003D20F8.c`), Jacob (`4e18867a`) and llesieur99 (`431ac503`), RULINGs #13427 and #13541), task #2655.
+    ADAPTED: our name; `sda` as `section(".sdata")` (RULING #8620, ablation 2 of 63 words → 0); the asm label of upstream's typed view as `g_mobyTableBase`, L03's boot-name map name; the boot's `g_soundBankHandlesBlk` for `D_00189E20_11`; `D_001395C0` kept, address-named (RULING #13291 §2); seven callees as L03's copies; s136 -G0, plain as.
+  - **`func_L03_003F7D18`** (`0x003F7D18`, level program 03) in
+    `going-decompiled/levels/usa/L03/src/func_L03_003F7D18.c`, from
+    `src/levels/03_endako/L03_003F09C0.c`
+    (`func_L03_003F66D8`, author commit `431ac503`, llesieur99), task #2655.
+    ADAPTED: our name at the v2.00 place; `sda` as `section(".sdata")` (RULING #8620, ablation 28 of 30 words → 0); `D_L03_001B2A1C`/`D_L03_001FB5A0` as `g_mobyTableBase`/`g_mobyGroupLists`, L03's boot-name map names; one callee as L03's copy; s136 -G0, plain as.
+  - **`func_L03_0041E7E8`** (`0x0041E7E8`, level program 03) in
+    `going-decompiled/levels/usa/L03/src/func_L03_0041E7E8.c`, from
+    `src/levels/03_endako/L03_003F09C0.c`
+    (`func_L03_0041D128`, author commit `431ac503`, llesieur99), task #2655.
+    ADAPTED: our name at the v2.00 place; `sda` as `section(".sdata")` (RULING #8620, ablation 42 of 46 words → 0); `D_L03_001B2A1C`/`D_L03_001FB5A0` as `g_mobyTableBase`/`g_mobyGroupLists`, L03's boot-name map names; one callee as L03's copy; s136 -G0, plain as.
