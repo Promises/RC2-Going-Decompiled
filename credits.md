@@ -2994,3 +2994,88 @@
     `going-decompiled/levels/usa/L01/src/func_L01_003BF330.c`, from
     `src/levels/01_oozla/L01_003BB9D0.c` (`func_L01_003BDF28`, author commit `ee3fee45`, llesieur99),
     task #2626. VERBATIM but for names: our name at the v2.00 place; D_00189EA0 as the boot's g_heroPos; func_00283180, func_00283198, func_002A7878, func_00282CC0, func_00282CF0, func_00282F20 and func_L01_003BDBE8 as L01's copies func_L01_002E4750, func_L01_002E4768, func_L01_003117A0, func_L01_002E4178, func_L01_002E41A8, func_L01_002E4440 and func_L01_003BEFF0; common.h and the file's other declarations dropped.
+  - **`func_L09_003CA110`** (`0x003CA110`, level program 09) in
+    `going-decompiled/levels/usa/L09/src/func_L09_003CA110.c`, from
+    `src/levels/09_dobbo/L09_002F8BA0.c`
+    (`func_L09_003C8CD8`, author commit `431ac503`, llesieur99), task #2561.
+    Adapted: our name at the v2.00 place, three boot-copy callees by their L09 places, `*(long long *)` written `*(s64 *)` with `typedef long s64` (RULING #13197), `common.h` dropped.
+  - **`func_L09_003DEF10`** (`0x003DEF10`, level program 09) in
+    `going-decompiled/levels/usa/L09/src/func_L09_003DEF10.c`, from
+    `src/levels/09_dobbo/L09_002F8BA0.c`
+    (`func_L09_003DDAA0`, author commit `264cb2be`, llesieur99), task #2561.
+    Verbatim but for names: our name at the v2.00 place, two boot-copy callees by their L09 places, `common.h` dropped.
+  - **`func_L09_003DEFB0`** (`0x003DEFB0`, level program 09) in
+    `going-decompiled/levels/usa/L09/src/func_L09_003DEFB0.c`, from
+    `src/levels/09_dobbo/L09_002F8BA0.c`
+    (`func_L09_003DDB40`, author commit `264cb2be`, llesieur99), task #2561.
+    Verbatim but for names: our name at the v2.00 place, two boot-copy callees by their L09 places, `common.h` dropped.
+  - **`func_L09_003E4630`** (`0x003E4630`, level program 09) in
+    `going-decompiled/levels/usa/L09/src/func_L09_003E4630.c`, from
+    `src/levels/09_dobbo/L09_002F8BA0.c`
+    (`func_L09_003E31C0`, author commit `264cb2be`, llesieur99), task #2561.
+    Verbatim but for names: our name at the v2.00 place, three boot-copy callees by their L09 places, `common.h` dropped.
+  - **`func_L09_003F1740`** (`0x003F1740`, level program 09) in
+    `going-decompiled/levels/usa/L09/src/func_L09_003F1740.c`, from
+    `src/levels/09_dobbo/L09_002F8BA0.c`
+    (`func_L09_003F02D0`, author commit `d5fd91e5`, Louis-Philippe Le Sieur), task #2561.
+    Verbatim but for names: our name at the v2.00 place, one boot-copy callee by its L09 place, `common.h` dropped.
+  - **`func_L09_003F17A0`** (`0x003F17A0`, level program 09) in
+    `going-decompiled/levels/usa/L09/src/func_L09_003F17A0.c`, from
+    `src/levels/09_dobbo/L09_002F8BA0.c`
+    (`func_L09_003F0330`, author commit `264cb2be`, llesieur99), task #2561.
+    Verbatim but for names: our name at the v2.00 place, two boot-copy callees by their L09 places, `common.h` dropped.
+  - **`func_L09_003F7F48`** (`0x003F7F48`, level program 09) in
+    `going-decompiled/levels/usa/L09/src/func_L09_003F7F48.c`, from
+    `src/levels/09_dobbo/L09_002F8BA0-g8.c`
+    (`func_L09_003F6AB8`, author commit `431ac503`, llesieur99), task #2561.
+    Verbatim but for names: our name at the v2.00 place, `D_L09_001B0EE8` as our label `D_L09_001B0E98` (upstream's `sda` text kept, ignored by cc1), three boot-copy callees by their L09 places, `common.h` dropped, its f32 typedef written in the TU.
+  - **`func_L09_003FF0E8`** (`0x003FF0E8`, level program 09) in
+    `going-decompiled/levels/usa/L09/src/func_L09_003FF0E8.c`, from
+    `src/levels/09_dobbo/L09_002F8BA0.c`
+    (`func_L09_003FDC58`, author commit `ee3fee45`, llesieur99), task #2561.
+    Adapted: our name at the v2.00 place, `D_L09_001FE6C0` as the address-named `D_L09_001FE640`, two boot-copy callees by their L09 places, `common.h` dropped.
+  - **`func_L09_003FF368`** (`0x003FF368`, level program 09) in
+    `going-decompiled/levels/usa/L09/src/func_L09_003FF368.c`, from
+    `src/levels/09_dobbo/L09_002F8BA0.c`
+    (`func_L09_003FDED8`, author commit `ee3fee45`, llesieur99), task #2561.
+    Verbatim but for names: our name at the v2.00 place, six boot-copy callees by their L09 places, `common.h` dropped.
+  - **`func_L09_003FFDA8`** (`0x003FFDA8`, level program 09) in
+    `going-decompiled/levels/usa/L09/src/func_L09_003FFDA8.c`, from
+    `src/levels/09_dobbo/L09_002F8BA0.c`
+    (`func_L09_003FE918`, author commit `264cb2be`, llesieur99), task #2561.
+    Verbatim but for names: our name at the v2.00 place, two boot-copy callees by their L09 places, `common.h` dropped.
+  - **`func_L09_003FFE08`** (`0x003FFE08`, level program 09) in
+    `going-decompiled/levels/usa/L09/src/func_L09_003FFE08.c`, from
+    `src/levels/09_dobbo/L09_002F8BA0-g8.c`
+    (`func_L09_003FE978`, author commit `132e23b5`, bigmak94), task #2561.
+    Adapted: our name at the v2.00 place, `D_L09_001B285C_1`/`D_L09_001B2878`/`D_L09_001FB560` as the address-named `D_L09_001B27DC`/`D_L09_001B27F8`/`D_L09_001FB4E0`, `sda` respelled `section(".sdata")` on both data externs (RULING #8620), `common.h` dropped.
+  - **`func_L09_00404510`** (`0x00404510`, level program 09) in
+    `going-decompiled/levels/usa/L09/src/func_L09_00404510.c`, from
+    `src/levels/09_dobbo/L09_003FEA48.c`
+    (`func_L09_00403080`, author commit `264cb2be`, llesieur99), task #2561.
+    Adapted: our name at the v2.00 place, `D_L09_001B285C`/`D_L09_001FFFB560` as the address-named `D_L09_001B27DC`/`D_L09_001FB4E0` (upstream's `sda` text kept, ignored by cc1), built at -G8 against upstream's -G0, `common.h` dropped, typedefs written in the TU.
+  - **`func_L09_00404590`** (`0x00404590`, level program 09) in
+    `going-decompiled/levels/usa/L09/src/func_L09_00404590.c`, from
+    `src/levels/09_dobbo/L09_003FEA48.c`
+    (`func_L09_00403100`, author commit `bcc9f7db`, bigbeno37), task #2561.
+    Adapted: our name at the v2.00 place, `D_L09_001B285C`/`D_L09_001FFFB560` as the address-named `D_L09_001B27DC`/`D_L09_001FB4E0`, `sda` respelled `section(".sdata")` (RULING #8620), callees `func_002A8508` and `func_L09_00403080` as `func_L09_00318B08` and our C `func_L09_00404510` (declared extern), `common.h` dropped, typedefs written in the TU.
+  - **`func_L09_004064F0`** (`0x004064F0`, level program 09) in
+    `going-decompiled/levels/usa/L09/src/func_L09_004064F0.c`, from
+    `src/levels/09_dobbo/L09_003FEA48.c`
+    (`func_L09_00405060`, author commit `264cb2be`, llesieur99), task #2561.
+    Adapted: our name at the v2.00 place, `D_L09_001B285C`/`D_L09_001FFFB560` as the address-named `D_L09_001B27DC`/`D_L09_001FB4E0` (upstream's `sda` text kept, ignored by cc1), built at -G8 against upstream's -G0, `common.h` dropped, typedefs written in the TU.
+  - **`func_L09_00408030`** (`0x00408030`, level program 09) in
+    `going-decompiled/levels/usa/L09/src/func_L09_00408030.c`, from
+    `src/levels/09_dobbo/L09_003FEA48.c`
+    (`func_L09_00406BA0`, author commit `264cb2be`, llesieur99), task #2561.
+    Adapted: our name at the v2.00 place, `D_L09_001B285C` as the address-named `D_L09_001B27DC`, `sda` respelled `section(".sdata")` (RULING #8620), `common.h` dropped, typedefs written in the TU.
+  - **`func_L09_00408120`** (`0x00408120`, level program 09) in
+    `going-decompiled/levels/usa/L09/src/func_L09_00408120.c`, from
+    `src/levels/09_dobbo/L09_003FEA48.c`
+    (`func_L09_00406C90`, author commit `264cb2be`, llesieur99), task #2561.
+    Adapted: our name at the v2.00 place, `D_L09_001B285C` as the address-named `D_L09_001B27DC` (upstream's `sda` text kept, ignored by cc1), built at -G8 against upstream's -G0, `common.h` dropped, typedefs written in the TU.
+  - **`func_L09_00409680`** (`0x00409680`, level program 09) in
+    `going-decompiled/levels/usa/L09/src/func_L09_00409680.c`, from
+    `src/levels/09_dobbo/L09_003FEA48.c`
+    (`func_L09_004081F0`, author commit `96fa46bb`, Louis-Philippe Le Sieur (validator #2585: at `264cb2be` it was still INCLUDE_ASM)), task #2561.
+    Adapted: our name at the v2.00 place, `D_L09_001B285C` as the address-named `D_L09_001B27DC`, `sda` respelled `section(".sdata")` (RULING #8620), `func_L09_00408138` as `func_L09_004095C8`, `common.h` dropped, typedefs written in the TU.
