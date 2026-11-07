@@ -775,3 +775,5 @@ usa text/188858 UpdateSubtitleStateMachine
 usa text/191238 SetupMemoryArenaTable
 usa text/188858 func_0028E680
 usa text/235FE8 func_00339740 S136EXTRA=-fno-strict-aliasing
+usa text/1D54C0 MenuScreenDoAction
+usa text/1D54C0 SoundOptionsMenuInput

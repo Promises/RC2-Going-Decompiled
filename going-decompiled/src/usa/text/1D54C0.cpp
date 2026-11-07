@@ -99,7 +99,7 @@ extern void func_00280090(s32 a, s32 b, s32 c, s32 d, s32 e);
 extern s32 func_002801B8(s32 x, s32 y, u32 color, s32 str, s32 wrap);
 extern void func_00283460(void *dst, const void *src, s32 nbytes);
 extern void func_00286138(s32 a, s32 b);
-extern void func_002861D8(s32 a, s32 b);
+extern void func_002861D8(s32 a, s32 b, s32 c, s32 d); /* ROM zeroes a0-a3 at the only call site (MenuScreenDoAction op 12) */
 extern s32  func_00288898(void);
 extern void func_002888A8(void);
 extern void func_002888D0(void);
@@ -319,8 +319,14 @@ extern void func_0029D1D8(s32 buttons);
 /* Caller view of the (x0,x1,y0,y1) rect hook. The ROM body is empty (`jr $ra;
  * nop`, text/188858.c's definition), so nothing is submitted. */
 extern void func_002897B0(s32 x0, s32 x1, s32 y0, s32 y1);
-/* UI/system sound trigger from the global sound-def pool. */
-extern void PlayGlobalSound(s32 id, s32 a, s32 b);
+/* UI/system sound trigger from the global sound-def pool. The ROM-matched
+ * definition (text/1DFF80.cpp, s32 PlayGlobalSound) and text/1CA080's caller
+ * decls return s32; upstream's callee decl agrees. The `void` spelling this
+ * file carried until task #2502 is a prototype error, not a style choice: at
+ * -O2 it changes the callee's dead-$2 liveness, and MenuScreenDoAction op 5's
+ * (flags|4)&~2 web pair then allocates with the mask in the wrong register
+ * (6/183 words). */
+extern s32 PlayGlobalSound(s32 id, s32 a, s32 b);
 /* Map-slot toggle/lookup helpers (defined later in this unit). */
 extern s32 FreeMenuWorkBuffer(s32 id);
 extern s32 AllocMenuWorkBuffer(s32 forceSet);
@@ -1449,140 +1455,281 @@ s32 func_002D67A0(s32 op, s32 arg) {
     return MenuScreenDoAction(op, arg, &outFlag);
 }
 
-/* Central front-end/pause screen-action dispatcher. `op` (0-13, via
- * jtbl_0026CD40_text) selects an action on the menu-screen manager block
- * (g_menuScreenBlock): push/swap a screen (ops 6-8,10,11 stage +0xF4/0x100/0x104
- * from the current screen fields and set the +0x1C transition kind, then ring the
- * menu chrome sound func_002DFFA0 and clear *outFlag), request the front-end game
- * state (ops 4,5,12,13 via RequestGameStateChange with the save/popup status bits
- * at g_nSaveLoadStatusCode+0x4 toggled), set the next screen (op 3) or the active
- * language (op 9). Returns 1 when a screen push/swap was staged, else 0.
- * jtbl targets recovered from data/138B80. Matching arm stays INCLUDE_ASM. */
+/* Central front-end/pause screen-action dispatcher. `op` (0-13) is dispatched
+ * through the retail jump table jtbl_0026CD40_text (14 code addresses in
+ * .data; ops 0/1 share the common return, op >= 14 returns 0). Ops on the
+ * menu-screen manager block g_menuScreenBlock:
+ *   2  ring the menu chrome sound func_002DFFA0(2, 0x11);
+ *   3  set the requested next screen g_pNextMenuScreen[0] = arg;
+ *   4  PlayGlobalSound(4,0,0), func_002888D0(), flags |= 2 & ~4, popup = 0,
+ *      then RequestGameStateChange(4,1,1,arg,0);
+ *   5  same but flags |= 4 & ~2, and popup = 1 written AFTER the request;
+ *   6  stage a push: captionId (+0xFC) = the caption table at
+ *      g_collTriBuffer+0x1020[arg>>16] when arg>>16 is nonzero; requestedId
+ *      (+0xF4) = arg&0xFFFF; the current screen's +0x14/+0x8 saved into
+ *      +0x100/+0x104; transitionKind (+0x1C) = 5;
+ *   7  stage transitionKind 3 (+0xF4 = arg) and FALL INTO 8's kind-4 staging;
+ *   8/10 stage transitionKinds 4/6 (+0xF4 = arg); 11 stages kind 7 with no
+ *      +0xF4 write;
+ *   9  set the active language g_currentLanguage = arg;
+ *   12 tear the screen down (PlayGlobalSound(4,0,0), func_002861D8(0,0,0,0),
+ *      func_00286138(0,0)) and request the game state with 9; 13 with 11;
+ *      both pass g_pCurrentMenuScreen[0] as the screen id.
+ * Ops 6-8,10,11 and 9 set ret = 1 and clear *outFlag (ops 6-8,10,11 ring
+ * func_002DFFA0(0,0x11) first); ops 2 and 3 leave ret = 0. Returns ret.
+ *
+ * MATCHED on the s136os arm (SN 2.95.3 v1.36 cc1plus -fopt-stack, this
+ * unit's -G8 with S136EXTRA "" so gcse on; row in tools/ee/
+ * s136os_functions.txt), spliced over S136OS_SLOT by tools/ee/
+ * s136os_splice.sh. There is no asm fallback: a build that skips the splice
+ * drops the function from the image. Native: plain C, dispatching through a
+ * label-address table (the ROM table has no native definition).
+ *
+ * Source: OpenRAC/rac2-decomp
+ * @5776dcc35045fb2320610edd1d2db4fa7660ef37 (GPL-3.0, adopted with the
+ * authors' permission per RULING #10405), src/game/002D5540.c, func_002D5B58
+ * (v1.01 address; author commit 08722f0c, bigmak94, 2026-10-21, which
+ * replaced the INCLUDE_ASM 7fccf735 carried; `git log -L` on the definition
+ * shows no later change through 71af8fdc). ADAPTED: (1) our symbols
+ * by ROM-decoded address (upstream v1.01 names in parentheses):
+ * func_002E5E58 = PlayGlobalSound, func_00287EA8 = func_002888D0,
+ * func_002B49E0 = RequestGameStateChange, func_002DF190 = func_002DFFA0,
+ * func_00285828 = func_002861D8 (called with four arguments, as the ROM
+ * zeroes a0-a3 here), func_00285788 = func_00286138, D_001F2840 =
+ * g_menuScreenBlock, D_001A7424 = g_gameStateFlags, D_001A7BB4 =
+ * g_currentLanguage, D_001C1220 = the caption table at
+ * g_collTriBuffer+0x1020 and D_001F29A0 = the popup word at
+ * g_pTextTableLoadBuf+0x48 (both offset views), D_0026CD60 =
+ * jtbl_0026CD40_text; the block fields upstream reads as root->f18 and
+ * root->f14 (ops 3/12/13) are the ROM's own symbols g_pNextMenuScreen and
+ * g_pCurrentMenuScreen — the splat .s names those symbols, not
+ * block+offsets. (2) The root struct spelled MenuScreenActionState with
+ * names from the call sites (field offsets are upstream's Func002D5B58Root);
+ * the third parameter is this unit's existing void *outFlag prototype (the
+ * store is the same sw). (3) PlayGlobalSound's prototype spelled s32
+ * (returning), as upstream's callee decl has it and as the ROM-matched
+ * definition (text/1DFF80.cpp `s32 PlayGlobalSound`) and text/1CA080's
+ * caller decls already say; the file-scope `void` spelling this unit carried
+ * is a prototype error measured here: it changes the callee's dead-$2
+ * liveness and op 5's (flags|4)&~2 web pair then allocates with the mask in
+ * the wrong register (6/183 words, both front ends). (4) Upstream's `static
+ * void *cases[12]` label-keeper KEPT, with one edit: upstream declares it
+ * BEFORE `int ret = 0;` and ours sits AFTER `s32 ret = 0;`. This file is
+ * C++, and a &&label reference is goto-like, so it may not cross ret's
+ * initialisation. The initialiser text is upstream's. With the dispatch
+ * reading the ROM table, the
+ * array's &&label references are the only thing keeping the case bodies
+ * reachable — measured in task #2502, dropping it makes cc1plus -O2 delete
+ * every case body (the dispatch emits, then nothing). The array itself is
+ * dead data and does not survive into the object (no extra group in the
+ * s136os object). Statements and control flow are theirs.
+ *
+ * EXTENT VIEWS (RULING #13282 item 2: each reads a neighbouring global by
+ * adjacency to its base. Tolerated until the native phase, when the native
+ * arm must name the real objects):
+ *   - NATIVE g_gameStateFlags (0x1A7424) is read and written as
+ *     g_nSaveLoadStatusCode (0x1A7420) + 4 (the `#define` in the native
+ *     block below). The EE arm names g_gameStateFlags itself.
+ *   - MSA_CAPTIONS, both arms: g_collTriBuffer (0x1C0180) + 0x1020 =
+ *     0x1C11A0. That is past the tri buffer's own 63 x 0x40 = 0xFC0 bytes:
+ *     it is the caption table, a neighbouring object with no symbol here.
+ *     On EE it goes through the msaCaptionData asm-label alias.
+ *   - MSA_POPUP32, both arms: the popup word at (u8 *)&g_pTextTableLoadBuf
+ *     (0x1F28D8, a 4-byte pointer variable) + 0x48 = 0x1F2920. On EE it goes
+ *     through the msaPopupData alias.
+ *   - msaBlock, both arms: g_menuScreenBlock (0x1F27C0) read as
+ *     MenuScreenActionState. Its +0x14 field (field14, read by the staging
+ *     ops) is the word the ROM also names g_pCurrentMenuScreen (0x1F27D4);
+ *     the ROM reads it here through the block base (`lw $6,0x14($2)`), as
+ *     this body does. +0x18 is g_pNextMenuScreen,
+ *     but op 3 writes that word under its own symbol.
+ *
+ * ADDRESSING-MODEL DEVICES (audit NOTE #13181 row 7 set; each priced by
+ * removing it alone — solo s136os compile as .c (cc1), positional masked word
+ * compare vs the ROM .s; probe figures recorded at the task FACT):
+ *   - `.extern g_gameStateFlags, 16` at file scope just below (RULING
+ *     #12316 Q1, directive-only): without it cc1 declares the symbol
+ *     size 4 and the -G8 assemble expands the bare-symbolic refs
+ *     gp-relatively; sizing it 16 makes gas emit the ROM's absolute
+ *     HI16/LO16 pair. Measured: explicit %gp_rel text is never rewritten by
+ *     gas, only bare operands (gas experiment, task #2502). Probe: without
+ *     it 180/184 words (length mismatch), 156 differ — carried.
+ *   - `.extern g_currentLanguage, 16` — already at file scope above (the
+ *     ROM's sb here is absolute too). Probe: without it 182/184 words
+ *     (length mismatch), 48 differ — carried.
+ *   - section(".data") (RULING #8620) on the block, the two offset-view
+ *     aliases and the jump-table alias was in the audit's set and is probed
+ *     INERT here, so it is NOT carried (the set is maximal, not mandatory):
+ *     the solo-TU text is identical without the four attributes (they are
+ *     declaration-only; no msaXxx symbol reaches the object, relocs name the
+ *     real symbol), and the full USA image with them stripped is
+ *     byte-identical to the with-attribute image (24204528/24204528 bytes,
+ *     same .rom md5 both arms, task #2502 gatelogs) — all four refs are
+ *     absolute in the ROM and in cc1's emit either way. The aliases carry no
+ *     section attribute below.
+ */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", MenuScreenDoAction);
+__asm__(".extern g_gameStateFlags, 16");
+#endif
+#if !defined(TARGET_NATIVE) && !defined(S136OS_MenuScreenDoAction)
+S136OS_SLOT(MenuScreenDoAction);
 #else
-/* Declarations this body needs whose only other declarations sit in other
- * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
-extern void func_002888D0(void);
+extern u8 g_currentLanguage;
+/* Declarations this body needs whose only other declarations sit in the
+ * TARGET_NATIVE block near the top of the file: the s136os arm compiles this
+ * arm alone, so it must see them here. */
 extern s32 RequestGameStateChange(s32 stateId, s32 push, s32 argA, s32 argB, s32 outDoneFlag);
-extern void func_002861D8(s32 a, s32 b);
+extern void func_002861D8(s32 a, s32 b, s32 c, s32 d);
 extern void func_00286138(s32 a, s32 b);
-/* (end of this body's declarations) */
-/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
- * objdiff): sdk29 45.51% / engine96 37.61%; better arm sdk29; 133 differing
- * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
- * insn: ROM `addiu sp,sp,-32` vs `addiu sp,sp,-112`. Not iterated in t495.
- * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): saves land at the ROM's
- * 8-byte stride, but the saved register set/count differs from the ROM's (NOTE #9871) - an
- * allocation/frame difference, not the stride. So the save-slot wall named above is a cc1 2.9
- * property and was measured false as the reason this member stays unmatched (FACT #9873).
- * Residual: the saved-register set; the rest UNMEASURED. */
+extern void func_002888D0(void);
+#ifndef TARGET_NATIVE
+extern s32 g_gameStateFlags;
+/* Declaration-only asm-label aliases; the ROM addresses all four absolutely
+ * in this function, never gp-relatively, so no section attribute is needed
+ * (probed inert — see the device list above). */
+extern u8 msaBlockData[] __asm__("g_menuScreenBlock");
+extern u8 msaCaptionData[] __asm__("g_collTriBuffer");
+extern u8 msaPopupData[] __asm__("g_pTextTableLoadBuf");
+extern void *msaCases[] __asm__("jtbl_0026CD40_text");
+#define msaBlock ((MenuScreenActionState *)msaBlockData)
+#define MSA_CAPTIONS ((const s32 *)(msaCaptionData + 0x1020))
+#define MSA_POPUP32 ((s32 *)(msaPopupData + 0x48))
+#else
+extern s32 g_nSaveLoadStatusCode;
+extern u8 g_collTriBuffer[];
+#define g_gameStateFlags (*(s32 *)((u8 *)&g_nSaveLoadStatusCode + 4))
+#define msaBlock ((MenuScreenActionState *)g_menuScreenBlock)
+#define MSA_CAPTIONS ((const s32 *)(g_collTriBuffer + 0x1020))
+#define MSA_POPUP32 ((s32 *)((u8 *)&g_pTextTableLoadBuf + 0x48))
+/* Native dispatch table lives INSIDE MenuScreenDoAction: &&label is a
+ * function-scoped extension and cannot seed a file-scope initializer. */
+#endif
+typedef struct MenuScreenActionState {
+    s32 pad00[2];        /* 0x00 */
+    s32 field08;         /* 0x08 current-screen field, saved into saved104 */
+    s32 pad0C[2];
+    s32 field14;         /* 0x14 current-screen field, saved into saved100 */
+    s32 pad18;           /* 0x18: the next-screen slot (the ROM's g_pNextMenuScreen); not written by this body */
+    s32 transitionKind;  /* 0x1C: 5 push, 3+4 swap pair, 6/7 other menus */
+    u8 pad20[0xF4 - 0x20];
+    s32 requestedId;     /* 0xF4: menu id pushed/swapped to */
+    s32 padF8;
+    s32 captionId;       /* 0xFC: caption id staged from the +0x1020 table (op 6) */
+    s32 saved100;        /* 0x100: saved copy of field14 */
+    s32 saved104;        /* 0x104: saved copy of field08 */
+} MenuScreenActionState;
+
 s32 MenuScreenDoAction(s32 op, s32 arg, void *outFlag) {
-    extern u8 g_currentLanguage;
-    extern u8 g_collTriBuffer[];
-    u8 *mb = (u8 *)g_menuScreenBlock;
-    s32 *statusFlags = (s32 *)((u8 *)&g_nSaveLoadStatusCode + 4);
-    s32 *popupState = (s32 *)((u8 *)&g_pTextTableLoadBuf + 0x48);
     s32 ret = 0;
+    /* Label lifeline only (see ADAPTED 4): keeps the case bodies address-
+     * taken now that the dispatch reads the ROM table. Not read; does not
+     * survive into the object. Declared after ret (ADAPTED 4; upstream has it
+     * before): &&label references are
+     * goto-like and must not cross ret's C++ initialization. */
+#ifndef TARGET_NATIVE
+    static void *cases[12] = {&&L3, &&L4, &&L5, &&L6, &&L7, &&L8, &&L10, &&L11, &&L9, &&L2, &&L12, &&L13};
+#else
+    /* Native: the ROM dispatch table has no native definition; label
+     * addresses give the same case map (ops 0/1 share the common return;
+     * op >= 2 indexes the table after the (unsigned)op >= 14 guard). */
+    static void *msaCases[14] = {&&done, &&done, &&L3, &&L4, &&L5, &&L6, &&L7, &&L8,
+                                 &&L10, &&L11, &&L9, &&L2, &&L12, &&L13};
+#endif
 
-    switch (op) {
-    case 0:
-    case 1:
-        break;
-
-    case 2:
-        func_002DFFA0(2, 0x11);
-        break;
-
-    case 3:
-        g_pNextMenuScreen[0] = (void *)arg;
-        break;
-
-    case 4:
-        PlayGlobalSound(4, 0, 0);
-        func_002888D0();
-        *statusFlags = (*statusFlags | 2) & ~4;
-        *popupState = 0;
-        RequestGameStateChange(4, 1, 1, arg, 0);
-        break;
-
-    case 5:
-        PlayGlobalSound(4, 0, 0);
-        *statusFlags = (*statusFlags | 4) & ~2;
-        RequestGameStateChange(4, 1, 1, arg, 0);
-        *popupState = 1;
-        break;
-
-    case 6:
-        if ((arg >> 16) != 0) {
-            *(s32 *)(mb + 0xFC) = *(s32 *)(g_collTriBuffer + 0x1020 + (arg >> 16) * 4);
-        }
-        *(s32 *)(mb + 0xF4) = arg & 0xFFFF;
-        *(s32 *)(mb + 0x100) = *(s32 *)(mb + 0x14);
-        *(s32 *)(mb + 0x104) = *(s32 *)(mb + 0x8);
-        *(s32 *)(mb + 0x1C) = 5;
-        ret = 1;
-        func_002DFFA0(0, 0x11);
-        *(s32 *)outFlag = 0;
-        break;
-
-    case 7:
-        *(s32 *)(mb + 0x100) = *(s32 *)(mb + 0x14);
-        *(s32 *)(mb + 0x104) = *(s32 *)(mb + 0x8);
-        *(s32 *)(mb + 0x1C) = 3;
-        *(s32 *)(mb + 0xF4) = arg;
-        func_002DFFA0(0, 0x11);
-        *(s32 *)outFlag = 0;
-        /* fall through: op 7 continues into the op 8 staging */
-    case 8:
-        *(s32 *)(mb + 0xF4) = arg;
-        *(s32 *)(mb + 0x100) = *(s32 *)(mb + 0x14);
-        *(s32 *)(mb + 0x104) = *(s32 *)(mb + 0x8);
-        *(s32 *)(mb + 0x1C) = 4;
-        ret = 1;
-        func_002DFFA0(0, 0x11);
-        *(s32 *)outFlag = 0;
-        break;
-
-    case 9:
-        g_currentLanguage = (u8)arg;
-        *(s32 *)outFlag = 0;
-        ret = 1;
-        break;
-
-    case 10:
-        *(s32 *)(mb + 0xF4) = arg;
-        *(s32 *)(mb + 0x100) = *(s32 *)(mb + 0x14);
-        *(s32 *)(mb + 0x104) = *(s32 *)(mb + 0x8);
-        *(s32 *)(mb + 0x1C) = 6;
-        ret = 1;
-        func_002DFFA0(0, 0x11);
-        *(s32 *)outFlag = 0;
-        break;
-
-    case 11:
-        *(s32 *)(mb + 0x1C) = 7;
-        *(s32 *)(mb + 0x100) = *(s32 *)(mb + 0x14);
-        *(s32 *)(mb + 0x104) = *(s32 *)(mb + 0x8);
-        ret = 1;
-        func_002DFFA0(0, 0x11);
-        *(s32 *)outFlag = 0;
-        break;
-
-    case 12:
-        PlayGlobalSound(4, 0, 0);
-        func_002861D8(0, 0);
-        func_00286138(0, 0);
-        RequestGameStateChange(4, 1, 9, (s32)g_pCurrentMenuScreen[0], 0);
-        break;
-
-    case 13:
-        RequestGameStateChange(4, 1, 0xB, (s32)g_pCurrentMenuScreen[0], 0);
-        break;
-
-    default:  /* op >= 14: no-op */
-        break;
+    if ((unsigned)op >= 14)
+        goto done;
+    goto *msaCases[op];
+L3:
+    g_pNextMenuScreen[0] = (void *)arg;
+    goto done;
+L4:
+    PlayGlobalSound(4, 0, 0);
+    func_002888D0();
+    g_gameStateFlags = (g_gameStateFlags | 2) & ~4;
+    *MSA_POPUP32 = 0;
+    RequestGameStateChange(4, 1, 1, arg, 0);
+    goto done;
+L5:
+    PlayGlobalSound(4, 0, 0);
+    g_gameStateFlags = (g_gameStateFlags | 4) & ~2;
+    RequestGameStateChange(4, 1, 1, arg, 0);
+    *MSA_POPUP32 = 1;
+    goto done;
+L6: {
+    MenuScreenActionState *root;
+    s32 index = arg >> 16;
+    if (index != 0) {
+        MenuScreenActionState *first = msaBlock;
+        first->captionId = MSA_CAPTIONS[index];
     }
+    root = msaBlock;
+    root->saved100 = root->field14;
+    root->saved104 = root->field08;
+    root->transitionKind = 5;
+    root->requestedId = arg & 0xFFFF;
+    ret = 1;
+    func_002DFFA0(0, 0x11);
+    *(s32 *)outFlag = 0;
+    goto done;
+}
+L7: {
+    MenuScreenActionState *root = msaBlock;
+    root->requestedId = arg;
+    root->saved100 = root->field14;
+    root->transitionKind = 3;
+    root->saved104 = root->field08;
+    func_002DFFA0(0, 0x11);
+    *(s32 *)outFlag = 0;
+}
+L8: {
+    MenuScreenActionState *root = msaBlock;
+    root->saved100 = root->field14;
+    root->saved104 = root->field08;
+    root->transitionKind = 4;
+    root->requestedId = arg;
+    ret = 1;
+    func_002DFFA0(0, 0x11);
+    *(s32 *)outFlag = 0;
+    goto done;
+}
+L10: {
+    MenuScreenActionState *root = msaBlock;
+    root->saved100 = root->field14;
+    root->saved104 = root->field08;
+    root->transitionKind = 6;
+    root->requestedId = arg;
+    ret = 1;
+    func_002DFFA0(0, 0x11);
+    *(s32 *)outFlag = 0;
+    goto done;
+}
+L11: {
+    MenuScreenActionState *root = msaBlock;
+    root->saved100 = root->field14;
+    root->saved104 = root->field08;
+    root->transitionKind = 7;
+    ret = 1;
+    func_002DFFA0(0, 0x11);
+    *(s32 *)outFlag = 0;
+    goto done;
+}
+L9:
+    g_currentLanguage = (u8)arg;
+    ret = 1;
+    *(s32 *)outFlag = 0;
+    goto done;
+L2:
+    func_002DFFA0(2, 0x11);
+    goto done;
+L12:
+    PlayGlobalSound(4, 0, 0);
+    func_002861D8(0, 0, 0, 0);
+    func_00286138(0, 0);
+    RequestGameStateChange(4, 1, 9, (s32)g_pCurrentMenuScreen[0], 0);
+    goto done;
+L13:
+    RequestGameStateChange(4, 1, 11, (s32)g_pCurrentMenuScreen[0], 0);
+done:
     return ret;
 }
 #endif
@@ -2051,22 +2198,134 @@ s32 func_002D87B0(void) {
     return 0;
 }
 
-/* Title-screen audio-options input (UpdateAudioOptionsMenu). 3-row menu in
- * obj->0x40 (mod 3): Up/Down move the selection (sound on change); row 0/1 are
- * the music/sfx volume sliders adjusted by held Left/Right in steps of 3 and
- * clamped 0..0x400 (re-mixing on change); row 2 toggles mono/stereo on X.
- * Cancel(0x10) requests the parent. Returns 0/1/-1.
- * Wall: long branch ladder + clamp arithmetic. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", SoundOptionsMenuInput);
-#else
-/* Declarations this body needs whose only other declarations sit in other
- * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
-extern void MapSetCurrentLevel(s32 level);
-extern void ComputeAudioChannelMix(void);
-extern void func_00132938(s32 flag);
-/* (end of this body's declarations) */
-/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+/* Title-screen audio-options input (UpdateAudioOptionsMenu). `obj` is the
+ * screen widget: the selection (0..2, mod 3) at +0x40 and the map-push enable
+ * at +0x30 bit 0x20. L1/R1 (pressed 0x900) returns 1 while the menu's
+ * transition-override word is clear; Cancel (0x10) opens the owner page's
+ * back screen (block+0x14 -> +0xE0, stored to block+0x18) or, with none,
+ * returns -1 unless the block's +0x134 override is set; Up/Down (0x1000/
+ * 0x4000) move the selection mod 3 and, on change or when the current screen
+ * carries a pending focus (g_pCurrentMenuScreen[0]+0x128), ring
+ * func_002DFFA0(1, 0x11) and — when bit 0x20 is set — push
+ * MapSetCurrentLevel(g_pLevelOrder[selection]); held Left/Right (0x2000/
+ * 0x8000) step the selected row's slider (row 0 music, row 1 sfx) by 3,
+ * clamped to 0..0x400, ringing func_002E5698 (the channel-mix recompute,
+ * formerly named ComputeAudioChannelMix) on any change; X (0x40)
+ * on row 2 toggles mono/stereo, pushes it via func_00132938(!mode) and rings
+ * func_002DFFA0(0, 0x11). Returns 0/1/-1.
+ *
+ * MATCHED on the s136os arm (SN 2.95.3 v1.36 cc1plus -fopt-stack, the unit's
+ * -G8 with gcse on, S136EXTRA="" — RULING #9491 shape), task #2502. gcse
+ * keeps the ROM's %hi(D_138180) in s1 across the body. The pads are
+ * D_138180+0x1C0/0x1C4 (held/pressed). The t495 save-stride finding below
+ * held: the frame is the ROM's own (s0/s1/ra at -0x20).
+ *
+ * Source: OpenRAC/rac2-decomp
+ * @5776dcc35045fb2320610edd1d2db4fa7660ef37 (GPL-3.0, adopted with the
+ * authors' permission per RULINGs #10405 and #12108), src/game/002D5E98.c,
+ * func_002D7B18 (v1.01 address; author commit 5ae008de, bigbeno37,
+ * 2026-10-29, which replaced the INCLUDE_ASM 3cd2f593 carried; `git log -L`
+ * on the definition shows no later change through 71af8fdc). ADAPTED:
+ * (1) our symbols per the ROM's relocations, upstream v1.01 names in
+ * parentheses: func_002DF190 =
+ * func_002DFFA0, func_00295C50 = MapSetCurrentLevel, func_002E4860 =
+ * our func_002E5698 (upstream's ComputeAudioChannelMix; 0x2E5698 — spelled
+ * under its current in-tree name; the former alias ComputeAudioChannelMix no
+ * longer resolves), func_00132938 as named, D_00138180 =
+ * D_138180 (Pad2D7B18 -> SoundOptPad, +0x1C0 held / +0x1C4 pressed),
+ * D_001AA4F0 = g_pLevelOrder; the audio-options settings block D_001A7B90
+ * (Settings2D7B18 -> SoundOptSettings, 40 bytes: .mode +8, .slider1 +0xC,
+ * .slider0 +0x10) is adopted whole, its fields respelled onto the ROM's own
+ * symbols BY ADDRESS as offset views over the middle word: base
+ * g_audioStereoMode (0x1A7BA0 = .mode), +4 = g_sfxVolume (0x1A7BA4 =
+ * .slider1), +8 = g_musicVolume (0x1A7BA8 = .slider0) — the block's first
+ * word (the PAL flag, g_bPalMode at 0x1A7B98) is never referenced here.
+ * Upstream's `__attribute__((sda))` is dropped: on SN cc1plus it is inert
+ * (warning: `sda' attribute directive ignored), classification is by
+ * declared size, and the ROM's own form is absolute per-access HI16/LO16
+ * pairs — gas gets the base sized by the file-scope
+ * `.extern g_audioStereoMode, 16` device block just above this arm's guard
+ * (carried at file scope, before the block in BOTH translation units;
+ * removing every sizing collapses each settings access to a gp-relative
+ * load: 154 words vs the ROM's 168, 76 word diffs, first at the settings
+ * gate). (2) upstream's single menu-context view
+ * (CtxB6 over D_001F2840) does not exist in v2.00: our ROM reads owner/next
+ * and the back-else override as block offsets over g_menuScreenBlock
+ * (+0x14/+0x18/+0x134; SoundOptRoot, offsets numeric so the relocs stay the
+ * bare symbol), the 0x900-gate word as the ROM's own g_pTextTableLoadBuf+0x1C
+ * offset view spelled through an asm-label ARRAY alias (RULING #13168, the
+ * msaPopupData device — the address the file-scope D_001F28F4 alias names,
+ * same word, different fold), and the pending focus through
+ * g_pCurrentMenuScreen[0]+0x128 (the ROM relocates the pointer symbol, not a
+ * block offset). (3) upstream's signed selection kept: the ROM's (sel±k) % 3
+ * is the bare div/mfhi pair with only the divide-by-zero guard — SN cc1plus's
+ * own form for signed %; spelled unsigned the arm compiles divu instead
+ * (measured). (4) the three settings words are accessed as u8-cast offset
+ * views over the one base extern (see the declarations below): per-access
+ * macro operands are what reproduce the ROM's slider region byte for byte —
+ * each access stays an absolute HI16/LO16 pair (loads expand with the target
+ * register as the hi temp, stores with $at), same-offset reads merge (the
+ * music-up block reuses the pre-store load) and different-offset accesses
+ * conflict (the sfx-up block reloads after the music store, as the ROM
+ * does). (5) Two `volatile` qualifiers are OURS, not upstream's (upstream's
+ * body has none): the sel==1 up-block re-read of the sfx word and the mode
+ * word in the X toggle. They are CODEGEN DEVICES, described with their
+ * ablation figures and writer census in the paragraph below. Upstream's own
+ * note ("symbol+offset macro loads never fill a delay slot, as in retail")
+ * corroborates the shape. Control flow and statements are theirs.
+ *
+ * EXTENT VIEWS (RULING #13282 item 2: each reads a neighbouring global by
+ * adjacency to its base. Tolerated until the native phase, when the native
+ * arm must name the real objects):
+ *   - sndSlider1 / sndSlider1Up / sndSlider0, both arms (the same macros):
+ *     g_audioStereoMode (0x1A7BA0) + 4 = g_sfxVolume (0x1A7BA4) and + 8 =
+ *     g_musicVolume (0x1A7BA8). These are load-bearing on EE (ADAPTED 4;
+ *     plain externs give 166 words).
+ *   - sndActive, NATIVE: (u8 *)&g_pTextTableLoadBuf (0x1F28D8, a pointer
+ *     variable) + 0x1C = D_001F28F4. On EE it goes through the sndTextData
+ *     asm-label alias.
+ *   - sndRoot, both arms: g_menuScreenBlock (0x1F27C0) + 0x14 (owner) =
+ *     g_pCurrentMenuScreen (0x1F27D4); + 0x18 (next, stored) =
+ *     g_pNextMenuScreen (0x1F27D8); + 0x134 (fallback) = D_001F28F4. That is
+ *     the word sndActive reads, reached from a different base, as in the ROM.
+ *   - sndPad, both arms: D_138180 + 0x1C0 (held) = g_padButtonsHeld
+ *     (0x138340) and + 0x1C4 (pressed) = g_padButtonsPressed (0x138344).
+ *
+ * CODEGEN DEVICES (RULING #8404 for a volatile read, RULING #12316 Q2 for a
+ * volatile store). They are NOT a claim that these words change
+ * asynchronously. Each volatile access is one the ROM itself executes, in
+ * the same order: the sfx loads at +0x134/+0x188/+0x1F8/+0x214 and the mode
+ * load/store/load at +0x25C/+0x268/+0x270. The qualifier only stops cc1
+ * merging or speculating a load the ROM compiler did not merge or
+ * speculate. Each is priced by removing it alone, in-unit (objdiff_build.sh,
+ * s136os_splice LENGTH, task #2586):
+ *   - sndSlider1Up (the sfx word, g_sfxVolume, re-read after the music
+ *     store): non-volatile, cc1 merges it with the pre-store read, giving
+ *     166 words vs the ROM's 168.
+ *   - sndMode (g_audioStereoMode, read, stored and re-read by the X toggle):
+ *     non-volatile, cc1 speculates a dead pre-store duplicate into the
+ *     branch-likely slot, so the ROM's bne+nop becomes bnel+lui/lw: 169
+ *     words.
+ *   - both non-volatile: 167 words.
+ * Writer census (task #2586; FACT filed with the task). A ROM scan of every
+ * sb/sh/sw/sd/sq/swc1/sdc1 store finds exactly six stores to 0x1A7BA0..
+ * 0x1A7BA7, resolving the base by lui/addiu/ori and $gp (0x1AEFF0) in
+ * SCUS_972.68 and all 27 level ELFs: three in this function and three in
+ * func_0033E070 (the in-game audio menu). Each level ELF holds relocated
+ * copies of the same six. Two indirect writers cover the words too.
+ * DeserializeSaveSections loads save section tag 0x26 (0x1A7B98, 0x28
+ * bytes, g_saveSectionTableGlobal[20]). func_00299BF8 copies the same 0x28
+ * bytes out and back around a save load through func_00283460. Their static
+ * callers reach only main-thread game code: LoadLevelAndInitHealth (called
+ * by main through jalr), the menu state machines, and menu handler tables.
+ * The forward static closure (238 functions) from every interrupt, DMAC,
+ * thread, alarm and SIF/cdvd handler root contains none of the writers or
+ * their callers, so no concurrent writer exists. The volatile changes no
+ * value this function reads; it only changes which loads cc1 keeps.
+ * Revoked per RULING #8404 by a non-volatile spelling that closes, or by a
+ * trace of one of these words being written off the main thread.
+ *
+ * t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 63.85% / engine96 55.96%; better arm sdk29; 144 differing
  * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
  * insn: ROM `addiu sp,sp,-32` vs `addiu sp,sp,-48`. Not iterated in t495.
@@ -2074,66 +2333,180 @@ extern void func_00132938(s32 flag);
  * ROM's save set at its 8-byte stride, and its frame - is reproduced exactly (NOTE #9871), so
  * the save-slot wall named above is a cc1 2.9 property and was measured false as the reason
  * this member stays unmatched (FACT #9873). Residual: UNMEASURED. */
-    /* TODO(match): functional equivalent - not byte-exact. */
+/* ADDRESSING-MODEL DEVICE (RULING #8620 class; directive-only, emits nothing):
+ * the ROM reads all three volumes absolutely (%hi/%lo), never gp-relative. At
+ * FILE SCOPE, outside every guard and BEFORE this arm's block in BOTH
+ * translation units: the s136os TU compiles THIS arm's body but never the
+ * func_002D8A68 body these three lines used to sit below, and
+ * s136os_splice refuses ADDRESSING when a block's two TUs disagree (gate,
+ * task #2502: gp-relative at final size 4 in the s136os TU vs absolute at
+ * final size 16 in the spliced unit). RULING #12316 Q1 sizing: gas expands
+ * every base+offset macro access here into the ROM's absolute HI16/LO16
+ * pairs, loads with the target register as the hi temp, stores with $at.
+ * Without ANY sizing each access collapses to a gp-relative load (probe,
+ * task #2502: 154 words vs the ROM's 168, 76 word diffs, first at the
+ * settings gate). The three lines were func_002D8A68's existing device,
+ * moved here. Each one's removal figure, alone, in-unit (objdiff_build.sh,
+ * s136os_splice LENGTH, task #2586):
+ *   - `g_audioStereoMode, 16`: this body 154 vs 168, and func_002D8A68 217
+ *     vs 218. It is the only line this body needs: every settings access
+ *     here is an offset view over g_audioStereoMode.
+ *   - `g_sfxVolume, 16`: this body unchanged at 168; func_002D8A68 217 vs 218.
+ *   - `g_musicVolume, 16`: this body unchanged at 168; func_002D8A68 217 vs 218.
+ * No directive is needed for g_pLevelOrder (the ROM loads
+ * it gp-relative, one insn, in a branch-likely delay slot): a fourth line
+ * `.extern g_pLevelOrder, 4` was carried here and is NOT load-bearing at
+ * this body. Without it, tools/ee/s136os_splice.sh carries the s136os TU's
+ * own `.extern g_pLevelOrder, 4` in front of the block, because the unit
+ * does not declare the name (its log reads `SoundOptionsMenuInput spliced
+ * (1 .extern carried; ...)`). The splice still reads 168 = 168 words, the
+ * unit object is cmp-identical to the one built with the line, and the full
+ * image cmp is 0 (validator #2573; re-measured in task #2586). The line was
+ * removed. */
+#ifndef TARGET_NATIVE
+__asm__(".extern g_musicVolume, 16");
+__asm__(".extern g_sfxVolume, 16");
+__asm__(".extern g_audioStereoMode, 16");
+#endif
+#if !defined(TARGET_NATIVE) && !defined(S136OS_SoundOptionsMenuInput)
+S136OS_SLOT(SoundOptionsMenuInput);
+#else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void MapSetCurrentLevel(s32 level);
+extern void func_002E5698(void);
+extern void func_00132938(s32 flag);
+extern u8 D_138180[];
+extern s32 *g_pLevelOrder;
+/* Upstream's one settings object (Settings2D7B18, 40 bytes at 0x1A7B98: mode
+ * +8, slider1 +0xC, slider0 +0x10 — upstream numbers the sliders by the menu
+ * row that edits them), respelled BY ADDRESS onto the ROM's own middle word:
+ * the plain extern below IS .mode, and the two u8-cast offset views land on
+ * g_sfxVolume (+4) and g_musicVolume (+8). Typed struct fields keep the base
+ * symbol and the field offsets SEPARATE (hi/lo of the base, offset as the
+ * load displacement), CSE the address into a register and save an extra
+ * s-reg — none of which the ROM does; the u8-cast keeps every access a
+ * per-access HI16/LO16 macro operand with the offset folded into the
+ * relocations. The ROM's merge/reload asymmetry falls out of the same
+ * shape: cc1's conflict analysis cannot see through the wrapped offset, so
+ * a store through one offset kills the cached loads at the OTHER offsets
+ * (the ROM's sfx-up block reloads after the music store) while the
+ * same-offset expression stays rtx-equal and merges (the music-up block
+ * reuses the pre-store load in $5). Plain externs of the three symbols
+ * carry DECL-disjointness instead — no kills, pre-store values kept, no
+ * match (measured in task #2586: g_sfxVolume/g_musicVolume as plain externs
+ * for the two sliders, the sfx re-read still volatile, assembles 166 words
+ * vs the ROM's 168). */
+extern s32 g_audioStereoMode;
+#define sndMode    (*(volatile s32 *)&g_audioStereoMode)
+#define sndSlider1 (*(s32 *)((u8 *)&g_audioStereoMode + 4))
+#define sndSlider0 (*(s32 *)((u8 *)&g_audioStereoMode + 8))
+/* CODEGEN DEVICES (RULINGs #8404 / #12316 Q2; figures and writer census in
+ * the doc comment above), not async-object claims. Two accesses carry
+ * volatile, each for a measured reason. The sel==1
+ * up-block reads the sfx word again after the music store; the ROM reloads
+ * it there (a store through another offset must invalidate it), and only a
+ * volatile access forces that reload — every non-volatile spelling merges
+ * it with the pre-store read instead (166 words; CODEGEN DEVICES in the doc
+ * comment above).
+ * The mode word is volatile for the X toggle's tail: a volatile read cannot
+ * be duplicated or speculated into a branch-likely delay, so the sel!=2
+ * test stays a plain `bne` with an unfilled delay slot (the ROM's nop) and
+ * the arg read stays a single post-store load; non-volatile, cc1 speculates
+ * a dead pre-store duplicate into the likely slot and the ROM's bne+nop
+ * becomes bnel+lui/lw (+1 word). The slider reads outside these two are
+ * killed by their own words' stores and stay non-volatile. */
+#define sndSlider1Up (*(volatile s32 *)((u8 *)&g_audioStereoMode + 4))
+/* (end of this body's declarations) */
+typedef struct { char p00[0x1C0]; s32 held; s32 pressed; } SoundOptPad;
+typedef struct { char p00[0x30]; u32 flags; char p34[0xC]; s32 selection; } SoundOptMenu;
+typedef struct { char p00[0x14]; void *owner; s32 next; char p1c[0x134 - 0x1C]; s32 fallback; } SoundOptRoot;
+typedef struct { char p00[0xE0]; s32 back; } SoundOptPage;
+#define sndPad  (*(SoundOptPad *)D_138180)
+#define sndRoot (*(SoundOptRoot *)g_menuScreenBlock)
+#ifndef TARGET_NATIVE
+/* Asm-label ARRAY alias (RULING #13168, the MenuScreenDoAction msaPopupData
+ * device): as an array of unknown size cc1 emits the direct HI16/LO16 pair
+ * with the +0x1C folded into the relocations, which is the ROM's own form;
+ * through the plain `extern u8 *` declaration cc1 believes the pointer small
+ * and the bare-symbolic ref assembles gp-relatively. */
+extern u8 sndTextData[] __asm__("g_pTextTableLoadBuf");
+#define sndActive (*(s32 *)(sndTextData + 0x1C))
+#else
+#define sndActive (*(s32 *)((u8 *)&g_pTextTableLoadBuf + 0x1C))
+#endif
 s32 SoundOptionsMenuInput(MenuWidget *obj) {
-    u8 *o = (u8 *)obj;
-    s32 pressed = g_padButtonsPressed[0];
-    s32 sel;
-    if ((pressed & 0x900) && D_001F28F4 == 0) {
+    SoundOptMenu *menu = (SoundOptMenu *)obj;
+    s32 previous;
+    s32 oldSfx;
+    s32 oldMusic;
+
+    if ((sndPad.pressed & 0x900) != 0 && sndActive == 0)
         return 1;
+    if ((sndPad.pressed & 0x10) != 0) {
+        s32 back = ((SoundOptPage *)sndRoot.owner)->back;
+        s32 result;
+
+        /* One shared exit: it keeps the 0/-1 choice a branch, not a conditional move. */
+        if (back != 0) {
+            sndRoot.next = back;
+        } else if (sndRoot.fallback == 0) {
+            result = -1;
+            goto back_done;
+        }
+        result = 0;
+back_done:
+        return result;
     }
-    if (pressed & 0x10) {
-        void *nxt = *(void **)((u8 *)g_pCurrentMenuScreen[0] + 0xE0);
-        if (nxt == 0 && D_001F28F4 == 0) return -1;
-        if (nxt == 0) nxt = g_pNextMenuScreen[0];
-        g_pNextMenuScreen[0] = nxt;
-        return 0;
-    }
-    sel = *(s32 *)(o + 0x40);
-    if (pressed & 0x1000) *(s32 *)(o + 0x40) = (sel + 2) % 3;
-    if (pressed & 0x4000) *(s32 *)(o + 0x40) = (*(s32 *)(o + 0x40) + 1) % 3;
-    if (*(s32 *)(o + 0x40) != sel ||
-        *(s32 *)((u8 *)g_pCurrentMenuScreen[0] + 0x128) != 0) {
+
+    previous = menu->selection;
+    if ((sndPad.pressed & 0x1000) != 0)
+        menu->selection = (previous + 2) % 3;
+    if ((sndPad.pressed & 0x4000) != 0)
+        menu->selection = (menu->selection + 1) % 3;
+    if (menu->selection != previous ||
+        *(s32 *)((u8 *)*(void **)g_pCurrentMenuScreen + 0x128) != 0) {
         func_002DFFA0(1, 0x11);
-        if (*(u32 *)(o + 0x30) & 0x20) {
-            extern s32 g_anAvailableLevelOrder[];
-            MapSetCurrentLevel(g_anAvailableLevelOrder[*(s32 *)(o + 0x40)]);
+        if (menu->flags & 0x20)
+            MapSetCurrentLevel(g_pLevelOrder[menu->selection]);
+    }
+
+    oldSfx = sndSlider1;
+    oldMusic = sndSlider0;
+    if ((sndPad.held & 0x2000) != 0) {
+        if (menu->selection == 0) {
+            s32 next = sndSlider0 + 3;
+            sndSlider0 = next < 1025 ? next : 1024;
+        }
+        if (menu->selection == 1) {
+            s32 next = sndSlider1Up + 3;
+            sndSlider1 = next < 1025 ? next : 1024;
         }
     }
-    {
-        s32 prevMusic = g_nMusicVolume;
-        s32 prevSfx = g_nSfxVolume;
-        if (g_padButtonsHeld & 0x2000) {
-            if (*(s32 *)(o + 0x40) == 0) {
-                s32 v = g_nMusicVolume + 3;
-                g_nMusicVolume = (v < 0x401) ? v : 0x400;
-            } else if (*(s32 *)(o + 0x40) == 1) {
-                s32 v = g_nSfxVolume + 3;
-                g_nSfxVolume = (v < 0x401) ? v : 0x400;
-            }
+    if ((sndPad.held & 0x8000) != 0) {
+        if (menu->selection == 0) {
+            s32 next = sndSlider0 - 3;
+            sndSlider0 = next >= 0 ? next : 0;
         }
-        if (g_padButtonsHeld & 0x8000) {
-            if (*(s32 *)(o + 0x40) == 0) {
-                g_nMusicVolume -= 3;
-                if (g_nMusicVolume < 0) g_nMusicVolume = 0;
-            } else if (*(s32 *)(o + 0x40) == 1) {
-                g_nSfxVolume -= 3;
-                if (g_nSfxVolume < 0) g_nSfxVolume = 0;
-            }
-        }
-        if (prevSfx != g_nSfxVolume || prevMusic != g_nMusicVolume) {
-            ComputeAudioChannelMix();
+        if (menu->selection == 1) {
+            s32 next = sndSlider1 - 3;
+            sndSlider1 = next >= 0 ? next : 0;
         }
     }
-    if (pressed & 0x40) {
-        if (*(s32 *)(o + 0x40) == 2) {
-            g_nAudioStereoMode = (g_nAudioStereoMode == 0);
-        }
-        func_00132938(g_nAudioStereoMode == 0);
+    if (oldSfx != sndSlider1 || oldMusic != sndSlider0)
+        func_002E5698();
+
+    if ((sndPad.pressed & 0x40) != 0) {
+        if (menu->selection == 2)
+            sndMode = !sndMode;
+        func_00132938(!sndMode);
         func_002DFFA0(0, 0x11);
     }
     return 0;
 }
+#undef sndPad
+#undef sndRoot
+#undef sndActive
 #endif
 
 /* Draw the title-screen audio-options screen: three rows (music volume, SFX
@@ -2155,15 +2528,6 @@ s32 SoundOptionsMenuInput(MenuWidget *obj) {
  * with the icon call's `sll` argument instead (12 words). A row-3 local set
  * before the row-2 icon call costs 55..148 words. Also worse, measured before
  * the walking local: `ry + 2 * ry` (79 words) and `lx + (fill + 8)` (187). */
-/* ADDRESSING-MODEL DEVICE (RULING #8620 class; directive-only, emits nothing):
- * the ROM reads all three volumes absolutely (%hi/%lo), never gp-relative. At
- * FILE SCOPE, outside the guard, so the unit's 2.9 TU declares them before the
- * spliced block too (s136os_splice refuses ADDRESSING otherwise). */
-#ifndef TARGET_NATIVE
-__asm__(".extern g_musicVolume, 16");
-__asm__(".extern g_sfxVolume, 16");
-__asm__(".extern g_audioStereoMode, 16");
-#endif
 /* GUARD: on EE this C is the image's body, compiled alone by the s136os arm
  * (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; tools/ee/s136os_functions.txt) and
  * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
@@ -5540,7 +5904,16 @@ s32 AllocMenuWorkBuffer(s32 wantLarge) {
 /* Release the map cache slot whose id == `id`: if it is in-use (flag bit 1),
  * cancel any pending stream tied to it (bit 4 + the global file-load gate) and
  * clear its in-use bit. Returns 0. Slots are the interleaved id/flags pairs at
- * D_001B1E90+0x40/+0x44 (stride 8). */
+ * D_001B1E90+0x40/+0x44 (stride 8).
+ *
+ * NOT byte-exact (task #2502 member verdict): the OpenRAC adoption in this
+ * file between commits fb4c03c34 and a41abc444 assembled 52 words against the
+ * ROM's 53 (s136os_splice LENGTH refusal, gate run 3 at a41abc444) — the
+ * ROM's loop shape is two folded member cursors against the hoisted
+ * D_001B1E90+0x68 end bound plus a separate byte-offset counter that re-forms
+ * the flags base for the entry store, and six cc1 spellings measured produced
+ * one folded cursor with displacement reads instead. Reverted to the
+ * INCLUDE_ASM arm; the attempt is recorded here and in the task report. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", FreeMenuWorkBuffer);
 #else

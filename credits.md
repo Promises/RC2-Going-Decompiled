@@ -847,6 +847,59 @@
     device on the `D_18B69A` declaration (EE arm only), `char *` written
     `u8 *` with `HudElement *` casts, and this unit's prototypes for their
     extern block.
+  - **`MenuScreenDoAction`** (`0x002D67C0`, the front-end/pause screen-action
+    dispatcher) in `going-decompiled/src/usa/text/1D54C0.cpp`, from
+    `src/game/002D5540.c` (`func_002D5B58`, author commit `08722f0c`,
+    bigmak94, 2026-10-21, which replaced the `INCLUDE_ASM` that `7fccf735`
+    carried; the body is unchanged after it through `71af8fdc`). ADAPTED:
+    our symbol names per the ROM's relocations (incl.
+    the block fields upstream reads as `root->f18`/`root->f14`, which the
+    ROM's own `.s` names `g_pNextMenuScreen`/`g_pCurrentMenuScreen`); their
+    `Func002D5B58Root` as our `MenuScreenActionState`; the third parameter as
+    this unit's existing `void *outFlag` prototype; `PlayGlobalSound`'s
+    file-scope prototype corrected to `s32` (the ROM-matched definition and
+    this unit's other decls already return `s32`; the `void` spelling flips
+    op 5's register allocation, 6/183 words); RULING #12316 `.extern ,16`
+    sizing for `g_gameStateFlags` (`g_currentLanguage`'s directive
+    pre-existing); declaration-only
+    asm-label aliases with offset views for the caption table
+    (`g_collTriBuffer+0x1020`) and popup word (`g_pTextTableLoadBuf+0x48`);
+    their jump-table name bound to `jtbl_0026CD40_text`; the s136os selector
+    row. Two of the audit's three devices carried (probe figures at the task
+    FACT); the section(".data") device probed inert and dropped.
+
+  - **`SoundOptionsMenuInput`** (`0x002D87C8`, the sound-options screen input
+    handler) in `going-decompiled/src/usa/text/1D54C0.cpp`, from
+    `src/game/002D5E98.c` (`func_002D7B18`, author commit `5ae008de`,
+    bigbeno37, 2026-10-29, which replaced the `INCLUDE_ASM` that `3cd2f593`
+    carried; the body is unchanged after it through `71af8fdc`). ADAPTED:
+    our symbols per the ROM's relocations (upstream v1.01 names in the doc
+    comment); upstream's
+    `Settings2D7B18` settings block respelled BY ADDRESS onto the ROM's own
+    symbols as u8-cast offset views over the middle word (base
+    `g_audioStereoMode`, +4 `g_sfxVolume`, +8 `g_musicVolume`; the PAL-flag
+    first word is never referenced here); two `volatile` accesses, which are
+    ours and not upstream's, are CODEGEN DEVICES (RULINGs #8404 / #12316
+    Q2): they carry the ROM's merge asymmetry (the sfx word re-read after the
+    music store; 166 words without it) and the X-toggle shape (a volatile
+    read cannot fill the branch-likely delay, so the ROM's plain `bne`+nop
+    stays; 169 words without it). The writer census in the doc comment finds
+    no concurrent writer of either word. The RULING #8620-class file-scope
+    `.extern g_audioStereoMode, 16` (without it this body assembles 154
+    words vs 168): it is one line of func_002D8A68's existing three-line
+    `.extern ,16` block, which moved above this arm's guard. The other two
+    lines, `g_musicVolume, 16` and `g_sfxVolume, 16`, are not load-bearing
+    for this body (still 168 without either). They serve only
+    func_002D8A68 (217 vs 218 words without either) and are not credited
+    here. Also adapted: a declaration-only asm-label array alias for the
+    `g_pTextTableLoadBuf+0x1C` offset view (RULING #13168); the s136os selector row; the mix callee
+    spelled under its current in-tree name `func_002E5698` (the former alias
+    `ComputeAudioChannelMix` no longer resolves — caught by the link at gate
+    run 4). Byte-exact 168=168 words, 0 diffs; splice gate-green after one
+    real-stream device fix (device ordering — splice ADDRESSING), which no
+    solo harness can see. A `.extern g_pLevelOrder, 4` line once carried for a
+    LENGTH refusal is not load-bearing at the landed body and was removed
+    (task #2586: 168 = 168 without it, unit object cmp-identical).
 - **Newlib** (<https://sourceware.org/git/newlib-cygwin.git>, tag
   `newlib-2000-02-17`, commit `061afe83dc04a43321d69b5f04860e5de799665c`;
   Red Hat / Cygnus Solutions and contributors)
