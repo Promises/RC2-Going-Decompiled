@@ -1,0 +1,55 @@
+# Functions of level program L23 built from C (task #2567 row L23-A, task #2568 row L23-B; RULING #13291;
+# the format is L24's, task #2495, NOTE #13098 row L6).
+# One row per function, compiled ALONE as its own TU by tools/levels/level_build.sh
+# and linked at its one place in place of its split asm (gen_ld.py cuts the
+# function's block out of the .text asm). Single placement only (row L7 is the
+# multi-placement design).
+#   function: the glabel in the split .text asm (its address is in its name)
+#   source:   path under going-decompiled/levels/usa/L23/
+#   arm:      tools/ee/ee_cc1.sh arm (sdk29 | s136 | sn2952); s136 adds -fopt-stack
+#   gflag:    -G0 | -G8, used by cc1 AND the assembler
+#   as:       optional (task #2552): as (plain GNU as) | asm_unit (tools/ee/asm_unit.sh,
+#             the boot's model of SN's assembler); a 4-column row is `as -`
+#   cc1flags: optional, with as: extra cc1 flags, comma-separated, or - for none
+# function	source	arm	gflag	[as	cc1flags]
+func_L23_003C1278	src/func_L23_003C1278.c	s136	-G0	as	-
+func_L23_003C1400	src/func_L23_003C1400.c	s136	-G0	as	-
+func_L23_003C1468	src/func_L23_003C1468.c	s136	-G0	as	-
+func_L23_003C2238	src/func_L23_003C2238.c	s136	-G0	as	-
+func_L23_003C22D8	src/func_L23_003C22D8.c	s136	-G0	as	-
+func_L23_003C2388	src/func_L23_003C2388.c	sdk29	-G0	as	-
+func_L23_003C23C8	src/func_L23_003C23C8.c	s136	-G0	as	-
+func_L23_003C2DA0	src/func_L23_003C2DA0.c	s136	-G0	as	-
+func_L23_003C2DC8	src/func_L23_003C2DC8.c	s136	-G0	as	-
+func_L23_003C2EF0	src/func_L23_003C2EF0.c	s136	-G0	as	-
+func_L23_004174C8	src/func_L23_004174C8.c	s136	-G8	as	-
+func_L23_00417590	src/func_L23_00417590.c	sdk29	-G0	as	-
+func_L23_004195F0	src/func_L23_004195F0.c	s136	-G0	as	-
+func_L23_0041A430	src/func_L23_0041A430.c	s136	-G0	as	-
+func_L23_0041A4D0	src/func_L23_0041A4D0.c	s136	-G0	as	-
+func_L23_0041A588	src/func_L23_0041A588.c	sdk29	-G0	as	-
+func_L23_0041B1E0	src/func_L23_0041B1E0.c	sdk29	-G0	as	-
+func_L23_0041C978	src/func_L23_0041C978.c	sdk29	-G0	as	-
+func_L23_0041CAB0	src/func_L23_0041CAB0.c	sdk29	-G0	as	-
+func_L23_0041CDF8	src/func_L23_0041CDF8.c	s136	-G8	as	-
+func_L23_0041CE48	src/func_L23_0041CE48.c	sdk29	-G8	as	-
+func_L23_0041CE60	src/func_L23_0041CE60.c	sdk29	-G8	as	-
+func_L23_0041D540	src/func_L23_0041D540.c	s136	-G8	as	-
+func_L23_0041D5B0	src/func_L23_0041D5B0.c	sdk29	-G8	as	-
+func_L23_0041D5C0	src/func_L23_0041D5C0.c	s136	-G8	as	-
+func_L23_0041DCD8	src/func_L23_0041DCD8.c	s136	-G8	as	-
+func_L23_0041EE30	src/func_L23_0041EE30.c	s136	-G8	as	-
+func_L23_0041EEB0	src/func_L23_0041EEB0.c	s136	-G8	as	-
+func_L23_0041F720	src/func_L23_0041F720.c	sdk29	-G0	as	-
+func_L23_0041F760	src/func_L23_0041F760.c	sdk29	-G8	as	-
+func_L23_0041F918	src/func_L23_0041F918.c	s136	-G8	as	-
+func_L23_0041FA48	src/func_L23_0041FA48.c	s136	-G8	as	-
+func_L23_00426EE0	src/func_L23_00426EE0.c	s136	-G8	as	-
+func_L23_004275F0	src/func_L23_004275F0.c	s136	-G0	as	-
+func_L23_00428CB8	src/func_L23_00428CB8.c	s136	-G0	as	-
+func_L23_00428CE8	src/func_L23_00428CE8.c	s136	-G8	as	-
+func_L23_00428DB0	src/func_L23_00428DB0.c	sdk29	-G0	as	-
+func_L23_0042B4F8	src/func_L23_0042B4F8.c	sdk29	-G0	as	-
+func_L23_0042C170	src/func_L23_0042C170.c	s136	-G8	as	-
+func_L23_0042C290	src/func_L23_0042C290.c	sdk29	-G0	as	-
+func_L23_00440DF0	src/func_L23_00440DF0.c	s136	-G0	as	-

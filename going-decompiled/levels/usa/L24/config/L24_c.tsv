@@ -1,0 +1,15 @@
+# Functions of level program L24 built from C (task #2495, NOTE #13098 row L6).
+# One row per function, compiled ALONE as its own TU by tools/levels/level_build.sh
+# and linked at its one place in place of its split asm (gen_ld.py cuts the
+# function's block out of the .text asm). Single placement only (row L7 is the
+# multi-placement design).
+#   function: the glabel in the split .text asm (its address is in its name)
+#   source:   path under going-decompiled/levels/usa/L24/
+#   arm:      tools/ee/ee_cc1.sh arm (sdk29 | s136 | sn2952); s136 adds -fopt-stack
+#   gflag:    -G0 | -G8, used by cc1 AND the assembler
+#   as:       optional (task #2552): as (plain GNU as) | asm_unit (tools/ee/asm_unit.sh,
+#             the boot's model of SN's assembler); a 4-column row is `as -`
+#   cc1flags: optional, with as: extra cc1 flags, comma-separated, or - for none
+# function	source	arm	gflag	[as	cc1flags]
+func_L24_0034D598	src/func_L24_0034D598.c	s136	-G8
+func_L24_0037AE10	src/func_L24_0037AE10.c	s136	-G8	asm_unit	-

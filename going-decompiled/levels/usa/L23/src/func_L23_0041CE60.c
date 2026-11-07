@@ -1,0 +1,36 @@
+/* Level 23 (Damosel Orbit), USA v2.00: a level-only function built from C (task
+ * #2567, RULING #13291 row L23-A, as-is route). Compiled ALONE as its own TU
+ * and linked at its one place, 0x0041CE60, in place of its split asm; the row
+ * is going-decompiled/levels/usa/L23/config/L23_c.tsv: the arm ee-gcc
+ * 2.9-ee-991111 cc1 (tools/ee/ee_cc1.sh sdk29) at -O2 -G8, assembled by plain
+ * GNU as (the row's `as` column).
+ */
+
+extern float D_L23_001B1494;
+
+/**
+ * func_L23_0041CE60 - stores a float in the level global D_L23_001B1494.
+ * (Upstream's comment: "Stores the incoming float in the level global reached
+ * through $gp.")
+ *
+ * @arg0: the value.
+ * Return: nothing.
+ *
+ * Source: OpenRAC rac2-decomp <https://github.com/OpenRAC/rac2-decomp> at
+ * fe6adf9baddcd31323c35adf102d078aa250852d, GPL-3.0 (root LICENSE; the file
+ * carries no notice of its own; `grep -ic lombyte` on the file is 0, so not
+ * Lombyte-origin), file src/levels/23_damosel_orbit/L23_00416388-g8.c,
+ * function func_L23_0041B960 (v1.01 address), author commit adcbd51e
+ * (llesieur99). Adopted with the authors' permission (RULINGs #10405, #12108,
+ * #13082, #13291). ADAPTED (the audit's verdict was BYTE-IDENTICAL): names
+ * respelled and upstream's inert `sda` attribute dropped, as listed below;
+ * the body's statements unchanged (RULING #13291 section 7). Edits:
+ *   - func_L23_0041B960 -> func_L23_0041CE60 (our split name at the v2.00
+ *     place)
+ *   - D_L23_001B14E4 -> D_L23_001B1494
+ *   - upstream's `__attribute__((sda))` dropped: inert at -G8 for a 4-byte
+ *     object
+ *   - `#include "include_asm.h"` dropped: the TU declares what it uses, and
+ *     upstream's comments are folded into this one
+ */
+void func_L23_0041CE60(float arg0) { D_L23_001B1494 = arg0; }

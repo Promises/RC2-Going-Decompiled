@@ -1,0 +1,22 @@
+# Functions of level program L09 built from C (task #2580 row L09-ASM, created here; L24 header).
+# One row per function, compiled ALONE as its own TU by tools/levels/level_build.sh
+# and linked at its one place in place of its split asm (gen_ld.py cuts the
+# function's block out of the .text asm). Single placement only (row L7 is the
+# multi-placement design).
+#   function: the glabel in the split .text asm (its address is in its name)
+#   source:   path under going-decompiled/levels/usa/L09/
+#   arm:      tools/ee/ee_cc1.sh arm (sdk29 | s136 | sn2952); s136 adds -fopt-stack
+#   gflag:    -G0 | -G8, used by cc1 AND the assembler
+#   as:       optional (task #2552): as (plain GNU as) | asm_unit (tools/ee/asm_unit.sh,
+#             the boot's model of SN's assembler); a 4-column row is `as -`
+#   cc1flags: optional, with as: extra cc1 flags, comma-separated, or - for none
+# function	source	arm	gflag	[as	cc1flags]
+func_L09_002B5E70	src/func_L09_002B5E70.c	s136	-G8	asm_unit	-
+func_L09_003FCC18	src/func_L09_003FCC18.c	s136	-G8	asm_unit	-
+func_L09_003FCCF0	src/func_L09_003FCCF0.c	s136	-G8	asm_unit	-
+func_L09_003FF768	src/func_L09_003FF768.c	s136	-G8	asm_unit	-
+func_L09_003FFF78	src/func_L09_003FFF78.c	s136	-G8	asm_unit	-
+func_L09_00406020	src/func_L09_00406020.c	s136	-G8	asm_unit	-
+func_L09_00406080	src/func_L09_00406080.c	s136	-G8	asm_unit	-
+func_L09_0040C5B8	src/func_L09_0040C5B8.c	s136	-G8	asm_unit	-
+func_L09_0041EB58	src/func_L09_0041EB58.c	s136	-G8	asm_unit	-
