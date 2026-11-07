@@ -2705,3 +2705,83 @@
     `going-decompiled/levels/usa/L11/src/func_L11_0048A080.c`, from
     `src/levels/11_joba/L11_004618C0.c` (`func_L11_004885B8`, author commit `ee3fee45`, llesieur99),
     task #2556. VERBATIM but for names: our name at the v2.00 place; three callees as L11’s v2.00 names.
+  - **`func_L02_003D39E0`** (`0x003D39E0`, level program 02) in
+    `going-decompiled/levels/usa/L02/src/func_L02_003D39E0.c`, from
+    `src/us2/levels/02_maktar_nebula/L02_003D39E0.c`
+    (`func_US2_L02_003D39E0`, author commit `ac7e1a2e`, bigbeno37), task #2560.
+    Verbatim but for names.
+  - **`func_L02_003FC5A0`** (`0x003FC5A0`, level program 02) in
+    `going-decompiled/levels/usa/L02/src/func_L02_003FC5A0.c`, from
+    `src/levels/02_maktar_nebula/L02_003FB000-g8.c`
+    (`func_L02_003FB000`, author commit `b887d976`, Louis-Philippe Le Sieur), task #2560.
+    Verbatim but for names.
+  - **`func_L02_0040CB68`** (`0x0040CB68`, level program 02) in
+    `going-decompiled/levels/usa/L02/src/func_L02_0040CB68.c`, from
+    `src/levels/02_maktar_nebula/L02_0040A4A8.c`
+    (`func_L02_0040B420`, author commit `91e04732`, llesieur99), task #2560.
+    Verbatim but for names.
+  - **`func_L02_0040CBF8`** (`0x0040CBF8`, level program 02) in
+    `going-decompiled/levels/usa/L02/src/func_L02_0040CBF8.c`, from
+    `src/levels/02_maktar_nebula/L02_0040A4A8.c`
+    (`func_L02_0040B4B0`, author commit `91e04732`, llesieur99), task #2560.
+    Verbatim but for names.
+  - **`func_L02_0040CFB0`** (`0x0040CFB0`, level program 02) in
+    `going-decompiled/levels/usa/L02/src/func_L02_0040CFB0.c`, from
+    `src/levels/02_maktar_nebula/L02_0040A4A8.c`
+    (`func_L02_0040B868`, author commit `91e04732`, llesieur99), task #2560.
+    Verbatim but for names.
+  - **`func_L02_0040D0C8`** (`0x0040D0C8`, level program 02) in
+    `going-decompiled/levels/usa/L02/src/func_L02_0040D0C8.c`, from
+    `src/levels/02_maktar_nebula/L02_0040A4A8.c`
+    (`func_L02_0040B980`, author commit `e80a585a`, Flavius), task #2560.
+    Verbatim but for names.
+  - **`func_L02_0040D2E8`** (`0x0040D2E8`, level program 02) in
+    `going-decompiled/levels/usa/L02/src/func_L02_0040D2E8.c`, from
+    `src/levels/02_maktar_nebula/L02_0040A4A8.c`
+    (`func_L02_0040BBA0`, author commit `ee3fee45`, llesieur99), task #2560.
+    Verbatim but for names.
+  - **`func_L02_0040E630`** (`0x0040E630`, level program 02) in
+    `going-decompiled/levels/usa/L02/src/func_L02_0040E630.c`, from
+    `src/levels/02_maktar_nebula/L02_0040A4A8.c`
+    (`func_L02_0040CEE8`, author commit `91e04732`, llesieur99), task #2560.
+    Verbatim but for names.
+  - **`func_L02_0040E6B0`** (`0x0040E6B0`, level program 02) in
+    `going-decompiled/levels/usa/L02/src/func_L02_0040E6B0.c`, from
+    `src/levels/02_maktar_nebula/L02_0040A4A8.c`
+    (`func_L02_0040CF68`, author commit `7a7816b9`, bigmak94), task #2560.
+    Verbatim but for names.
+  - **`func_L02_0040E7C8`** (`0x0040E7C8`, level program 02) in
+    `going-decompiled/levels/usa/L02/src/func_L02_0040E7C8.c`, from
+    `src/levels/02_maktar_nebula/L02_0040A4A8.c`
+    (`func_L02_0040D080`, author commit `91e04732`, llesieur99), task #2560.
+    Verbatim but for names.
+  - **`func_L02_0040E8C8`** (`0x0040E8C8`, level program 02) in
+    `going-decompiled/levels/usa/L02/src/func_L02_0040E8C8.c`, from
+    `src/levels/02_maktar_nebula/L02_0040A4A8.c`
+    (`func_L02_0040D180`, author commit `24d977dd`, bigmak94), task #2560.
+    Verbatim but for names.
+  - **`func_L02_00413F50`** (`0x00413F50`, level program 02) in
+    `going-decompiled/levels/usa/L02/src/func_L02_00413F50.c`, from
+    `src/levels/02_maktar_nebula/L02_0040A4A8.c`
+    (`func_L02_00412808`, author commit `ce9897f7`, bigmak94), task #2560.
+    Verbatim but for names.
+  - **`func_L02_0043A360`** (`0x0043A360`, level program 02) in
+    `going-decompiled/levels/usa/L02/src/func_L02_0043A360.c`, from
+    `src/levels/02_maktar_nebula/L02_0040A4A8.c`
+    (`func_L02_00438B28`, author commit `91e04732`, llesieur99), task #2560.
+    Verbatim but for names; `D_L02_001BE200` kept address-named, RULING #13291 §2.
+  - **`func_L02_0043F998`** (`0x0043F998`, level program 02) in
+    `going-decompiled/levels/usa/L02/src/func_L02_0043F998.c`, from
+    `src/levels/02_maktar_nebula/L02_0043E150.c`
+    (`func_L02_0043E150`, author commit `b8fd9b4c`, Flavius, which moved bigmak94's nonmatching draft from `20ad739c` (validator #2622, RULING #13427)), task #2560.
+    Verbatim but for names.
+  - **`func_L02_00457A90`** (`0x00457A90`, level program 02) in
+    `going-decompiled/levels/usa/L02/src/func_L02_00457A90.c`, from
+    `src/levels/02_maktar_nebula/L02_0040A4A8.c`
+    (`func_L02_00456258`, author commit `76651091`, Flavius), task #2560.
+    Verbatim but for names; upstream credits rac1-decomp `src/core/00118A40.c` `func_00119100`.
+  - **`func_L02_004582F8`** (`0x004582F8`, level program 02) in
+    `going-decompiled/levels/usa/L02/src/func_L02_004582F8.c`, from
+    `src/levels/02_maktar_nebula/L02_0040A4A8.c`
+    (`func_L02_00456AC0`, author commit `91e04732`, llesieur99), task #2560.
+    Verbatim but for names.

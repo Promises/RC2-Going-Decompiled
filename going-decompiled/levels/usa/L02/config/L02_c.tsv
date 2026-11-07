@@ -1,4 +1,4 @@
-# Functions of level program L02 built from C (RULING #13291, b3 level-C rows; task #2559 row L02-C, task #2557 row L02-A, task #2558 row L02-B, task #2579 row L02-ASM).
+# Functions of level program L02 built from C (RULING #13291, b3 level-C rows; task #2559 row L02-C, task #2557 row L02-A, task #2558 row L02-B, task #2579 row L02-ASM, task #2560 row L02-D).
 # One row per function, compiled ALONE as its own TU by tools/levels/level_build.sh
 # and linked at its one place in place of its split asm (gen_ld.py cuts the
 # function's block out of the .text asm). Single placement only (row L7 is the
@@ -24,6 +24,7 @@ func_L02_003D3190	src/func_L02_003D3190.c	s136	-G8	asm_unit	-
 func_L02_003D3428	src/func_L02_003D3428.c	s136	-G8	asm_unit	-
 func_L02_003D37A0	src/func_L02_003D37A0.c	s136	-G0
 func_L02_003D38E8	src/func_L02_003D38E8.c	s136	-G0
+func_L02_003D39E0	src/func_L02_003D39E0.c	s136	-G0
 func_L02_003D5870	src/func_L02_003D5870.c	s136	-G8	asm_unit	-
 func_L02_003D5C20	src/func_L02_003D5C20.c	s136	-G0
 func_L02_003D5E68	src/func_L02_003D5E68.c	s136	-G0
@@ -61,6 +62,7 @@ func_L02_003F2E58	src/func_L02_003F2E58.c	s136	-G0
 func_L02_003F30E0	src/func_L02_003F30E0.c	s136	-G0
 func_L02_003F69A0	src/func_L02_003F69A0.c	s136	-G0
 func_L02_003FC4C8	src/func_L02_003FC4C8.c	s136	-G0
+func_L02_003FC5A0	src/func_L02_003FC5A0.c	s136	-G8
 func_L02_003FCA78	src/func_L02_003FCA78.c	s136	-G8
 func_L02_003FCB40	src/func_L02_003FCB40.c	s136	-G0
 func_L02_003FCC60	src/func_L02_003FCC60.c	s136	-G0
@@ -77,6 +79,20 @@ func_L02_00401D98	src/func_L02_00401D98.c	s136	-G0
 func_L02_00402258	src/func_L02_00402258.c	s136	-G0
 func_L02_00402410	src/func_L02_00402410.c	sdk29	-G0
 func_L02_0040C840	src/func_L02_0040C840.c	s136	-G8	asm_unit	-
+func_L02_0040CB68	src/func_L02_0040CB68.c	s136	-G0
+func_L02_0040CBF8	src/func_L02_0040CBF8.c	s136	-G0
+func_L02_0040CFB0	src/func_L02_0040CFB0.c	s136	-G0
+func_L02_0040D0C8	src/func_L02_0040D0C8.c	s136	-G0
+func_L02_0040D2E8	src/func_L02_0040D2E8.c	s136	-G0
+func_L02_0040E630	src/func_L02_0040E630.c	s136	-G0
+func_L02_0040E6B0	src/func_L02_0040E6B0.c	s136	-G0
+func_L02_0040E7C8	src/func_L02_0040E7C8.c	s136	-G0
+func_L02_0040E8C8	src/func_L02_0040E8C8.c	s136	-G0
 func_L02_004112C8	src/func_L02_004112C8.c	s136	-G0
+func_L02_00413F50	src/func_L02_00413F50.c	s136	-G0
 func_L02_00425010	src/func_L02_00425010.c	s136	-G0
+func_L02_0043A360	src/func_L02_0043A360.c	s136	-G0
+func_L02_0043F998	src/func_L02_0043F998.c	s136	-G0
 func_L02_00446A48	src/func_L02_00446A48.c	s136	-G8	asm_unit	-
+func_L02_00457A90	src/func_L02_00457A90.c	sdk29	-G0
+func_L02_004582F8	src/func_L02_004582F8.c	s136	-G0
