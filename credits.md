@@ -2184,7 +2184,7 @@
     `going-decompiled/levels/usa/L23/src/func_L23_0041EEB0.c`, from
     `src/us2/levels/23_damosel_orbit/L23_0041EEB0-g8.c`
     (`func_US2_L23_0041EEB0`, author commit `cde7e4dd`, Flavius), task
-    #2568. VERBATIM but for names: our name, 2 data names and 3 callees renamed to the v2.00 disc's own targets, upstream's boot address `D_001395B8` kept address-named (RULING #13291 §2).
+    #2568. VERBATIM but for names: our name, 2 data names and 3 callees renamed to the v2.00 disc's own targets, upstream's boot address `D_001395B8` respelled `D_1395B8`, the boot's existing spelling, address-named (RULING #13291 §2; task #2606).
   - **`func_L23_0041F720`** (`0x0041F720`, level program 23) in
     `going-decompiled/levels/usa/L23/src/func_L23_0041F720.c`, from
     `src/levels/23_damosel_orbit/L23_00416388.c`
