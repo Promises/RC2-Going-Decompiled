@@ -2,7 +2,7 @@
 # storage symbol: g_dataArena  ==  __gamedata_start (linker)
 # seed: memcpy snapshot[rom_addr] -> g_dataArena[rom_addr - base]
 #       for rom_addr in [base, base+span).
-# base 0x133B80  span 0x14AD80  placed 1777  (const 11)
+# base 0x133B80  span 0x14AD80  placed 1791  (const 11)
 # columns: <symbol> <rom_addr> <arena_offset> [const]
 #   'const' tag = static rodata/string literal (see data_const.txt);
 #   NOT mutable state - the tester's effect-diff must EXCLUDE these.
@@ -296,6 +296,7 @@ D_00143600 0x143600 0xFA80
 D_00143640 0x143640 0xFAC0
 D_00147CC0 0x147CC0 0x14140
 g_discToc 0x14B540 0x179C0
+D_14B884 0x14B884 0x17D04
 g_globalWadBaseLbn 0x14B8AC 0x17D2C
 D_14D11C 0x14D11C 0x1959C
 g_sceneWadBaseLbn 0x14F364 0x1B7E4
@@ -343,6 +344,7 @@ g_health 0x18C2EC 0x5876C
 D_18D0E8 0x18D0E8 0x59568
 g_platinumBoltFlags 0x19B278 0x676F8
 g_saveImageGlobal 0x1A2BA8 0x6F028
+D_1A2BB0 0x1A2BB0 0x6F030
 g_saveImageArea 0x1A53A8 0x71828
 g_fileLoadVoiceState 0x1A63A8 0x72828
 g_fileLoadState 0x1A63AC 0x7282C
@@ -459,8 +461,11 @@ D_1A792C 0x1A792C 0x73DAC
 g_saveDirTemplate 0x1A7938 0x73DB8
 D_1A7950 0x1A7950 0x73DD0
 g_saveIconSysPath 0x1A7968 0x73DE8
+D_1A797D 0x1A797D 0x73DFD
 g_saveStaticIcoPath 0x1A7988 0x73E08
+D_1A799D 0x1A799D 0x73E1D
 D_1A79A8 0x1A79A8 0x73E28
+D_1A79BD 0x1A79BD 0x73E3D
 g_saveFileFmt 0x1A79D8 0x73E58
 g_playerProgress 0x1A79F8 0x73E78
 g_boltCount 0x1A7A00 0x73E80
@@ -473,6 +478,7 @@ g_nanotech 0x1A7A14 0x73E94
 g_nPendingNanotechXp 0x1A7A18 0x73E98
 g_pendingBoltCredit 0x1A7A1C 0x73E9C
 g_equippedArmor 0x1A7A20 0x73EA0
+D_1A7A28 0x1A7A28 0x73EA8
 D_1A7A3A 0x1A7A3A 0x73EBA
 D_1A7A3B 0x1A7A3B 0x73EBB
 g_cheatFlags 0x1A7A48 0x73EC8
@@ -683,6 +689,14 @@ D_1A9760 0x1A9760 0x75BE0
 D_1A99A0 0x1A99A0 0x75E20
 g_changedSaveSectionCount 0x1A99A0 0x75E20
 D_1A99A8 0x1A99A8 0x75E28
+D_1A99C0 0x1A99C0 0x75E40
+D_1A99C8 0x1A99C8 0x75E48
+D_1A99D0 0x1A99D0 0x75E50
+D_1A99D8 0x1A99D8 0x75E58
+D_1A99E8 0x1A99E8 0x75E68
+D_1A9A00 0x1A9A00 0x75E80
+D_1A9A20 0x1A9A20 0x75EA0
+D_1A9A40 0x1A9A40 0x75EC0
 D_1A9A60 0x1A9A60 0x75EE0
 D_1A9A88 0x1A9A88 0x75F08
 D_1A9A8C 0x1A9A8C 0x75F0C
