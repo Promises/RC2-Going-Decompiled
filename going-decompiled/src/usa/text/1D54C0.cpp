@@ -5918,17 +5918,26 @@ typedef struct MenuWorkSlot {
  * (`lui $5,%hi(D_001B1E90 + 0x40)` / `lui $6,%hi(D_001B1E90 + 0x44)` at
  * 0x2DF440 / 0x2DF434), the in-loop flags base (`lui $17,%hi(D_001B1E90 +
  * 0x44)` at 0x2DF478) and the end bound (`lui $7,%hi(D_001B1E90 + 0x68)` at
- * 0x2DF45C), each the one-insn `la` macro. `.extern ,16` makes gas expand
- * each to that absolute lui/addiu pair; the relocations name D_001B1E90 with
- * the offset in the immediate. Spelled instead as the plain offset view
- * `(MenuWorkSlot *)(D_001B1E90 + 0x40)` (the native arm below), cc1 folds
- * every access into one cursor off the shared base: 42 words against the
- * ROM's 53 (s136os_splice LENGTH refusal, task #2658). At file scope, outside
- * the s136os guard, so both translation units see it (RULING #9073's splice
- * condition). Natively the pool is read through D_001B1E90 by adjacency
- * (RULING #13282 item 2 extent view, as GetMenuWorkBufferSize does). */
+ * 0x2DF45C), each the one-insn `la` macro. Gas expands each to that
+ * absolute lui/addiu pair because the equate takes the size of its target,
+ * which the unit's `.extern D_001B1E90, 16` above makes 16; the relocations
+ * name D_001B1E90 with the offset in the immediate. Each part priced by
+ * removing it alone, in-unit (objdiff_build.sh, s136os_splice LENGTH, task
+ * #2658):
+ *   - the distinct symbol (spelled instead as the plain offset view
+ *     `(MenuWorkSlot *)(D_001B1E90 + 0x40)`, the native arm below): cc1
+ *     folds every access into one cursor off the shared base, 42 words
+ *     against the ROM's 53;
+ *   - section(".sdata") on the declaration: the unsized array is not small
+ *     data to cc1, which splits and CSEs the %hi/%lo itself, 44 words;
+ *   - an explicit `.extern g_menuWorkSlotsAbs, 16` is NOT needed: with it
+ *     the unit object is cmp-identical, so it was left out.
+ * At file scope, outside the s136os guard, so both translation units see it
+ * (RULING #9073's splice condition). Natively the pool is read through
+ * D_001B1E90 by adjacency (RULING #13282 item 2 extent view, as
+ * GetMenuWorkBufferSize does). */
 #ifndef TARGET_NATIVE
-__asm__(".extern g_menuWorkSlotsAbs, 16\n\tg_menuWorkSlotsAbs = D_001B1E90 + 0x40");
+__asm__("g_menuWorkSlotsAbs = D_001B1E90 + 0x40");
 extern MenuWorkSlot g_menuWorkSlotsAbs[] __attribute__((section(".sdata")));
 #else
 #define g_menuWorkSlotsAbs ((MenuWorkSlot *)(D_001B1E90 + 0x40))

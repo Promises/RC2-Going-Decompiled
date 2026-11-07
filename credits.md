@@ -1030,8 +1030,8 @@
     and #13541); the slot type and its `D_001B1F50_slots` declaration are
     bigbeno37's, from `b073e803`. ADAPTED: their `sda` slot table as an
     EE-only nonzero-offset assembler equate `g_menuWorkSlotsAbs =
-    D_001B1E90 + 0x40` sized 16 and declared `section(".sdata")` (FACT #8036
-    form, RULING #9574 under #8620; the plain offset view gives 42 words vs
+    D_001B1E90 + 0x40` declared `section(".sdata")` (FACT #8036
+    form, RULING #9574 under #8620, sized by the unit's `.extern D_001B1E90, 16`; the plain offset view gives 42 words vs
     53); `func_002B7AD0` = `StopFileLoad`, `D_001F2840` =
     `g_menuScreenBlock`; their `ChunkSlot` as `MenuWorkSlot`, `int`/`unsigned
     char` as `s32`/`u8`. s136os arm as the unit is (task #2658, from audit
