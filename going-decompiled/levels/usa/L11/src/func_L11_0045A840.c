@@ -22,7 +22,9 @@ extern void func_L11_00301280(char *dst, char *src, float scale);
  * fe6adf9baddcd31323c35adf102d078aa250852d, GPL-3.0 (root LICENSE; the file
  * carries no notice of its own; `grep -ic lombyte` on it = 0, so not
  * Lombyte-origin), file src/levels/11_joba/L11_00453358.c, function
- * func_L11_00458D88 (v1.01 address), author commit 7fccf735 (Flavius).
+ * func_L11_00458D88 (v1.01 address), author commit 7fccf735 (Flavius; upstream's root
+ * commit, which squashed the earlier RAC2 history, so the text's first
+ * author is not recoverable from upstream's log).
  * Adopted with the authors' permission (RULINGs #10405, #12108, #13082,
  * #13291). ADAPTED, the body's statements unchanged (verbatim but for
  * names; no device); edits:

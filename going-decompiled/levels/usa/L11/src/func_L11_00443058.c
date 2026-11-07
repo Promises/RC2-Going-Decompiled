@@ -35,7 +35,9 @@ extern s32 func_L11_0032F328(f32 *point, f32 *vertices, s32 count);
  * fe6adf9baddcd31323c35adf102d078aa250852d, GPL-3.0 (root LICENSE; the file
  * carries no notice of its own and no Lombyte mention), file
  * src/levels/11_joba/L11_0043E1A0.c, function func_L11_00441808 (v1.01
- * address), author commit 7fccf735 (Flavius). Adopted with the authors'
+ * address), author commit 7fccf735 (Flavius; upstream's root
+ * commit, which squashed the earlier RAC2 history, so the text's first
+ * author is not recoverable from upstream's log). Adopted with the authors'
  * permission (RULINGs #10405, #12108, #13082, #13291). VERBATIM but for names
  * (no device); the respellings, each to the target of the v2.00 disc's own
  * relocation at this place (task #2555 relverify):

@@ -29,7 +29,9 @@ typedef struct {
  * fe6adf9baddcd31323c35adf102d078aa250852d, GPL-3.0 (root LICENSE; the file
  * carries no notice of its own and no Lombyte mention), file
  * src/levels/11_joba/L11_0043E1A0.c, function func_L11_00441868 (v1.01
- * address), author commit 7fccf735 (Flavius). Adopted with the authors'
+ * address), author commit 7fccf735 (Flavius; upstream's root
+ * commit, which squashed the earlier RAC2 history, so the text's first
+ * author is not recoverable from upstream's log). Adopted with the authors'
  * permission (RULINGs #10405, #12108, #13082, #13291). VERBATIM but for names
  * (no device):
  *   - func_L11_00441868 -> func_L11_004430B8 (our split name at the v2.00 place);

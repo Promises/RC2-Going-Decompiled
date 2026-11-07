@@ -38,7 +38,9 @@ extern void func_L14_002F6AA8(void *out, void *in, float scale);
  * fe6adf9baddcd31323c35adf102d078aa250852d, GPL-3.0 (root LICENSE; the file
  * carries no notice of its own; `grep -ic lombyte` on it = 0, so not
  * Lombyte-origin), file src/levels/14_aranos_prison/L14_003F4F98.c,
- * function func_L14_00413CD8 (v1.01 address), author commit 7fccf735 (Flavius).
+ * function func_L14_00413CD8 (v1.01 address), author commit 7fccf735 (Flavius; upstream's root
+ * commit, which squashed the earlier RAC2 history, so the text's first
+ * author is not recoverable from upstream's log).
  * Adopted with the authors' permission (RULINGs #10405, #12108, #13082,
  * #13291). ADAPTED in the audit (code 1lo); as carried, VERBATIM but for names; edits:
  *   - name func_L14_00413CD8 -> func_L14_00415288 (our split name at

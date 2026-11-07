@@ -914,7 +914,8 @@ void CloseShrubDrawSegment(void) {
  * Source: OpenRAC/rac2-decomp @b2a35115e0cf580a1fdab8dd1071b157799e590e
  * (GPL-3.0, adopted with the authors' permission per RULINGs #10405/#12108),
  * src/game/002E10B8.c, func_002E10B8 (v1.01 address; author commit 7fccf735,
- * Flavius; the body is unchanged since). ADAPTED: (1) our names, by address:
+ * Flavius, upstream's root commit, which squashed the earlier RAC2 history;
+ * the body is unchanged since). ADAPTED: (1) our names, by address:
  * D_L04_00220D60 = g_shrubVisibleClassList (upstream's `nosda` int; our
  * unsized array is likewise not gp-relative), D_L04_0021F2E0 =
  * g_shrubClassTable, D_L04_00220860 = g_shrubTexVramTable read through
