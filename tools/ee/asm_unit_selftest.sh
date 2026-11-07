@@ -89,6 +89,26 @@
 #        block pin nothing (`0 pins`) and keep GNU as's words. Against a copy
 #        from before task #2004 the four pinning arms must FAIL (GNU as moves
 #        the sqc2 into the slot) and the line is absent from every arm.
+#   FPLAB (task #2604, FACT #13355) the fpcmp-label pass: a reorder-mode
+#        `c.<cond>` whose bc1* is reached through a label gets an explicit nop
+#        AFTER the label, so a branch to the label lands on the nop (the ROM's
+#        layout, NOTE #8972). fpl_cmow is CheckMobyOverWater's real spliced
+#        cc1plus block (task #2604's objdiff_build): its 47 words equal the ROM
+#        at 0x2B72E0 but for the three relocation fields (two jal, one GPREL16,
+#        zero until link), with the `b` at +0x74 = 10000007. Also: the small
+#        noreorder-bracketed bc1tl shape at -G8 and -G0 and in CRLF, a
+#        reorder-mode bc1t, and two labels (both branches land on the nop),
+#        each `fpcmp-label: 1 nops in <unit>: <fn>`. Negative arms keep GNU's
+#        words and print `0 nops`: an instruction between the compare and the
+#        label, no label, the compare already under noreorder, and a label
+#        followed by a non-bc1 instruction. A label after `.set noreorder` in
+#        the window is refused by the pass's own message (rc 2, no object).
+#        Against a copy from before task #2604 (3e09af647's) all 11 FPLAB arms
+#        FAIL and the other 209 pass (measured): the six positive arms on their
+#        words too (fpl_cmow's `b` reads 10000008, the label lands on the bc1*;
+#        fpl_a's 10000004), the four negative arms on the absent line only
+#        (their words are GNU's on both copies), the refusal arm because it
+#        assembles (rc 0).
 #
 # The seeds are written in cc1 layout (TAB, mnemonic, TAB, operands) into the
 # container's own /tmp, so no VM mount sits between writing and assembling
@@ -587,6 +607,151 @@ for k in "ph_pre:10400001 8f830000 03e00008 00000000" \
   ok=$(accepted); [ "$ok" = 1 ] && [ "$WORDS" = "$w" ] || ok=0
   verdict "POSHOIST $sd -G8" "$ok" ".text [$w] (got [$WORDS])"
 done
+
+# --- FPLAB: the c.cond->bc1 hazard nop after a merge label (task #2604) ---
+# GNU as alone puts the nop BEFORE a label between the compare and its bc1*;
+# the pass writes it after the label. fpl_cmow is CheckMobyOverWater's spliced
+# block verbatim (cc1plus output after s136os_splice.sh, task #2604), with the
+# unit's two .extern lines for g_altGravityEnabled and its #8036 alias.
+cat > "$T/fpl_cmow.s" <<'FPLEOF'
+	.extern	g_altGravityEnabled, 16
+	.extern	g_altGravityEnabledGp, 4
+	g_altGravityEnabledGp = g_altGravityEnabled
+	.text
+	.align	2
+	.ent	CheckMobyOverWater
+CheckMobyOverWater:
+	.frame	$sp,32,$31		# vars= 0, regs= 8/0, args= 0, extra= 0
+	.mask	0x80070000,-8
+	.fmask	0x00000000,0
+	subu	$sp,$sp,32
+	sd	$17,8($sp)
+	sd	$16,0($sp)
+	move	$17,$4
+	sd	$18,16($sp)
+	sd	$31,24($sp)
+	l.s	$f1,144($5)
+	l.s	$f0,24($17)
+	#nop
+	c.le.s	$f0,$f1
+	#nop
+	.set	noreorder
+	.set	nomacro
+	bc1t	$L42_s136_CheckMobyOverWater
+	move	$2,$0
+	.set	macro
+	.set	reorder
+
+	.set	noreorder
+	.set	nomacro
+	jal	func_002AC088
+	move	$4,$17
+	.set	macro
+	.set	reorder
+
+	move	$16,$2
+	.set	noreorder
+	.set	nomacro
+	bne	$16,$0,$L37_s136_CheckMobyOverWater
+	lw	$2,g_altGravityEnabledGp
+	.set	macro
+	.set	reorder
+
+	.set	noreorder
+	.set	nomacro
+	b	$L42_s136_CheckMobyOverWater
+	move	$2,$0
+	.set	macro
+	.set	reorder
+
+	.p2align 2
+$L37_s136_CheckMobyOverWater:
+	.set	noreorder
+	.set	nomacro
+	beq	$2,$0,$L38_s136_CheckMobyOverWater
+	move	$18,$0
+	.set	macro
+	.set	reorder
+
+	.set	noreorder
+	.set	nomacro
+	jal	func_002B11C8
+	addu	$4,$17,16
+	.set	macro
+	.set	reorder
+
+	l.s	$f1,64($16)
+	li.s	$f2,5.00000000000000000000e-1
+	#nop
+	sub.s	$f1,$f1,$f2
+	c.lt.s	$f0,$f1
+	b	$L44_s136_CheckMobyOverWater
+	.p2align 2
+$L38_s136_CheckMobyOverWater:
+	l.s	$f0,64($16)
+	li.s	$f1,5.00000000000000000000e-1
+	l.s	$f2,24($17)
+	sub.s	$f0,$f0,$f1
+	c.lt.s	$f2,$f0
+$L44_s136_CheckMobyOverWater:
+	.set	noreorder
+	.set	nomacro
+	bc1tl	$L40_s136_CheckMobyOverWater
+	li	$18,1			# 0x1
+	.set	macro
+	.set	reorder
+
+$L40_s136_CheckMobyOverWater:
+	move	$2,$18
+$L42_s136_CheckMobyOverWater:
+	ld	$16,0($sp)
+	ld	$17,8($sp)
+	ld	$18,16($sp)
+	ld	$31,24($sp)
+	#nop
+	.set	noreorder
+	.set	nomacro
+	j	$31
+	addu	$sp,$sp,32
+	.set	macro
+	.set	reorder
+
+	.end	CheckMobyOverWater
+FPLEOF
+FH='\t.text\n\t.ent\tf\nf:\n'
+FE='\t.end\tf\n'
+FB='\t.set\tnoreorder\n\t.set\tnomacro\n\tbc1tl\t$L40\n\tli\t$18,1\n\t.set\tmacro\n\t.set\treorder\n$L40:\n\tj\t$31\n'
+seed fpl_a      "$FH\tc.lt.s\t\$f0,\$f1\n\tb\t\$L44\n\$L38:\n\tsub.s\t\$f0,\$f0,\$f1\n\tc.lt.s\t\$f2,\$f0\n\$L44:\n$FB$FE"
+seed fpl_r      "$FH\tc.lt.s\t\$f0,\$f1\n\tb\t\$L44\n\$L38:\n\tc.lt.s\t\$f2,\$f0\n\$L44:\n\tbc1t\t\$L38\n\tj\t\$31\n$FE"
+seed fpl_2lab   "$FH\tc.lt.s\t\$f0,\$f1\n\tb\t\$L44\n\tc.lt.s\t\$f2,\$f0\n\$L43:\n\$L44:\n$FB\tb\t\$L43\n$FE"
+printf "$FH\tc.lt.s\t\$f0,\$f1\n\tb\t\$L44\n\$L38:\n\tsub.s\t\$f0,\$f0,\$f1\n\tc.lt.s\t\$f2,\$f0\n\$L44:\n$FB$FE" | sed 's/$/\r/' > "$T/fpl_crlf.s"
+seed fpl_fill   "$FH\tc.lt.s\t\$f0,\$f1\n\tb\t\$L44\n\tc.lt.s\t\$f2,\$f0\n\tsub.s\t\$f1,\$f1,\$f0\n\$L44:\n$FB$FE"
+seed fpl_nolab  "$FH\tc.lt.s\t\$f2,\$f0\n\t#nop\n$FB$FE"
+seed fpl_nore   "$FH\t.set\tnoreorder\n\tc.lt.s\t\$f2,\$f0\n\$L44:\n\tbc1tl\t\$L40\n\tli\t\$18,1\n\t.set\treorder\n\$L40:\n\tj\t\$31\n\tb\t\$L44\n$FE"
+seed fpl_labins "$FH\tc.lt.s\t\$f2,\$f0\n\$L44:\n\tsub.s\t\$f1,\$f1,\$f0\n$FB\tb\t\$L44\n$FE"
+seed fpl_bad    "$FH\tc.lt.s\t\$f2,\$f0\n\t.set\tnoreorder\n\$L44:\n\tbc1tl\t\$L44\n\tnop\n\t.set\treorder\n\tj\t\$31\n$FE"
+FPLCMOW="27bdffe0 ffb10008 ffb00000 0080882d ffb20010 ffbf0018 c4a10090 c6200018 46010036 00000000 4501001e 0000102d 0c000000 0220202d 0040802d 16000003 8f820000 10000017 0000102d 1040000b 0000902d 0c000000 26240010 c6010040 3c013f00 44811000 00000000 46020841 46010034 10000007 00000000 c6000040 3c013f00 44810800 c6220018 46010001 46001034 00000000 45030001 24120001 0240102d dfb00000 dfb10008 dfb20010 dfbf0018 03e00008 27bd0020"
+FPLA="46010034 10000003 00000000 46010001 46001034 00000000 45030001 24120001 03e00008 00000000"
+# <seed>:<-G>:<fn named on the line, empty for none>:<nops>:<the whole .text>
+for k in "fpl_cmow:-G8:CheckMobyOverWater:1:$FPLCMOW" \
+         "fpl_a:-G8:f:1:$FPLA" \
+         "fpl_a:-G0:f:1:$FPLA" \
+         "fpl_crlf:-G0:f:1:$FPLA" \
+         "fpl_r:-G8:f:1:46010034 10000002 00000000 46001034 00000000 4501fffd 00000000 03e00008 00000000" \
+         "fpl_2lab:-G8:f:1:46010034 10000002 00000000 46001034 00000000 45030001 24120001 03e00008 00000000 1000fffa 00000000" \
+         "fpl_fill:-G8::0:46010034 10000003 00000000 46001034 46000841 45030001 24120001 03e00008 00000000" \
+         "fpl_nolab:-G8::0:46001034 00000000 45030001 24120001 03e00008 00000000" \
+         "fpl_nore:-G8::0:46001034 45030001 24120001 03e00008 00000000 1000fffb 00000000" \
+         "fpl_labins:-G8::0:46001034 46000841 45030001 24120001 03e00008 00000000 1000fffa 00000000"; do
+  sd=${k%%:*}; r=${k#*:}; G=${r%%:*}; r=${r#*:}; fn=${r%%:*}; r=${r#*:}; np=${r%%:*}; w=${r#*:}
+  run "$sd" "$G"
+  ok=$(accepted); [ "$ok" = 1 ] && [ "$WORDS" = "$w" ] || ok=0
+  R2LINE=$(grep '^asm_unit\.sh: fpcmp-label:' "$T/err" | tr -d '\r' || true)
+  [ "$R2LINE" = "asm_unit.sh: fpcmp-label: $np nops in $T/$sd${fn:+: $fn}" ] || ok=0
+  verdict "FPLAB $sd $G" "$ok" "'asm_unit.sh: fpcmp-label: $np nops in $T/$sd${fn:+: $fn}', .text [$w] (got [$WORDS], '$R2LINE')"
+done
+run fpl_bad -G8
+verdict "FPLAB fpl_bad -G8" "$(passrefused 'fpcmp-label pass (task #2604): in f, a label between')" "refused by the pass's own message (rc 2, no object)"
 
 echo "asm_unit_selftest: $N arms, $F failed ($AU)"
 [ "$F" = 0 ]

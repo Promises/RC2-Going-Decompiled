@@ -406,6 +406,9 @@ cd "$FIXROOT"
 # function name per pin, so a function pinned twice is named twice. N is 0 at
 # a unit with no inline-asm return, at every -G. landing_gate.sh's ASMUNIT row
 # knows this spelling too.
+# And a fourth, R2's (task #2604; described where it runs, after R1):
+#   asm_unit.sh: fpcmp-label: N nops in <unit>[: <fn> <fn> ...]
+# <unit> spelled as on the noapp-slot line, one function name per nop written.
 # The selftest is tools/ee/asm_unit_selftest.sh.
 DLIAWK="$ROOT/tools/ee/ps2eeas_dli.awk"
 DLISRC="$ROOT/tools/ee/ps2eeas_dli_sites.txt"
@@ -845,8 +848,81 @@ NR1=$(($(wc -l < "$R1OUT")))
 R1UNIT=$(printf '%s\n' "$UNIT_S" | sed -E "s#^.*/src/$REGION/##; s#(\._u)?\.s\$##")
 R1PINS=$(awk '/^\t# asm_unit\.sh noapp-slot pin / { n++ } END { print n + 0 }' "$R1OUT")
 R1FNS=$(awk '/^\t# asm_unit\.sh noapp-slot pin / { printf " %s", $NF }' "$R1OUT")
-mips-linux-gnu-as -march=r5900 -mabi=eabi -no-pad-sections -EL "$GFLAG" -I. -o "$OUT_O" - < "$R1OUT"
+# R2, the FP-compare hazard nop AFTER a merge label (task #2604, FACT #13355,
+# NOTE #8972). In reorder mode GNU as 2.40 pads the c.<cond>->bc1* hazard with a
+# nop, and when a label sits between the two it puts that nop BEFORE the label,
+# so the label lands on the bc1* and a branch to it skips the nop. The ROM's
+# assembler puts it AFTER the label: a branch to the label lands on the nop.
+# Same length, but every branch to the label is one word off (CheckMobyOverWater
+# 0x2B7354: built 10000008, ROM 10000007; FACT #9545, ledger-37785).
+# The pass writes an explicit `nop` directly after the last such label. GNU as
+# then sees the hazard filled and adds nothing (ledger-37786's fB: the `b`
+# targets the nop, the length is unchanged).
+# The shape, in cc1's text, every line in reorder mode: `c.<cond>.<fmt>`, then
+# only blank/comment lines, then one or more labels, then only directives and
+# blank/comment lines, then `bc1t|bc1f|bc1tl|bc1fl` as the FIRST instruction.
+# Any instruction before the bc1* fills the hazard (no gas nop, no change). A
+# c.cond already under `.set noreorder` gets no gas nop and is not touched.
+# GENERAL, NOT ALLOWLISTED, BY CENSUS (task #2604): the ROM never has the nop
+# before such a label. Over the boot ELF and all 26 level programs' split asm,
+# 302 compares are `c.* ; L:nop ; bc1*` (boot: CheckMobyOverWater 0x2B7370,
+# func_00320A20 0x320CE8; 300 in level code) and 0 are `c.* ; nop ; L:bc1*`
+# (the census can return that class: a seeded label at 0x2B7308 gives 1).
+# Our own cc1/cc1plus output at the base this landed on had 0 sites, so no
+# matched byte moved; a site in it is listed on the per-unit line below.
+# REFUSED (`asm_unit.sh: FAIL:`, exit 2, no object): a label in that window
+# AFTER a `.set noreorder`. gas flushes the hazard at the mode switch, before
+# the label, and a nop written after it would be a second nop; the case is not
+# measured, so it is refused rather than guessed. CRLF is ignored when
+# matching and kept when printing. Each nop is preceded by a
+# `# asm_unit.sh fpcmp-label nop <fn>` comment, counted into the per-unit line
+#   asm_unit.sh: fpcmp-label: N nops in <unit>[: <fn> <fn> ...]
+# with the unit spelled as on the noapp-slot line. landing_gate.sh's ASMUNIT
+# row knows this spelling; the selftest arms are FPLAB in asm_unit_selftest.sh.
+R2OUT="$(mktemp)"
+R2RC=0
+awk '
+  function flush(site,   i) {
+    for (i = 1; i <= nb; i++) {
+      print buf[i]
+      if (site && i == lastlab) { print "\t# asm_unit.sh fpcmp-label nop " fn; print "\tnop" }
+    }
+    nb = 0; lastlab = 0; badlab = 0; pend = 0
+  }
+  { s = $0; sub(/\r$/, "", s); t = s; sub(/^[ \t]+/, "", t); sub(/[ \t]+$/, "", t) }
+  t ~ /^\.ent[ \t]/ { fn = t; sub(/^\.ent[ \t]+/, "", fn); sub(/[ \t,].*/, "", fn) }
+  t ~ /^\.set[ \t]+noreorder([ \t#]|$)/ { nore = 1 }
+  t ~ /^\.set[ \t]+reorder([ \t#]|$)/ { nore = 0 }
+  pend {
+    if (t == "" || t ~ /^#/ || t ~ /^\./) { buf[++nb] = $0; next }
+    if (t ~ /^[$A-Za-z0-9_.]+:$/) { buf[++nb] = $0; lastlab = nb; if (nore) badlab = 1; next }
+    m = t; sub(/[ \t].*/, "", m)
+    if (lastlab && m ~ /^bc1(t|f)l?$/) {
+      if (badlab) {
+        printf "asm_unit.sh: FAIL: fpcmp-label pass (task #2604): in %s, a label between `%s` and `%s` follows `.set noreorder`; GNU as flushes the hazard nop at the mode switch, so a nop after the label would be a second one (not measured, refused)\n", fn, cmp, t | "cat 1>&2"
+        bad = 1; exit 3
+      }
+      flush(1)
+    } else flush(0)
+  }
+  { print }
+  !nore && t ~ /^c\.[a-z]+\.[sd][ \t]/ { pend = 1; nb = 0; lastlab = 0; badlab = 0; cmp = t }
+  END { if (!bad && pend) flush(0) }
+' "$R1OUT" > "$R2OUT" || R2RC=$?
+case "$R2RC" in
+  0) ;;
+  3) echo "  input: $UNIT_S (-G: $GFLAG)" >&2
+     echo "  No object written." >&2
+     rm -f "$DLIIN" "$DLIOUT" "$R1OUT" "$R2OUT" "$OUT_O"; rm -rf "$DLITMP"; exit 2 ;;
+  *) rm -f "$R1OUT" "$R2OUT"; dli_fail "(b): the task #2604 fpcmp-label pass exited $R2RC" ;;
+esac
+NR2=$(($(wc -l < "$R2OUT")))
+[ "$NR2" -ge "$NR1" ] || { rm -f "$R1OUT" "$R2OUT"; dli_fail "(c): the task #2604 fpcmp-label pass printed $NR2 line(s) for $NR1 in"; }
+R2NOPS=$(awk '/^\t# asm_unit\.sh fpcmp-label nop / { n++ } END { print n + 0 }' "$R2OUT")
+R2FNS=$(awk '/^\t# asm_unit\.sh fpcmp-label nop / { printf " %s", $NF }' "$R2OUT")
+mips-linux-gnu-as -march=r5900 -mabi=eabi -no-pad-sections -EL "$GFLAG" -I. -o "$OUT_O" - < "$R2OUT"
 echo "asm_unit.sh: dli: $DLIN transforms ($DLIM allowlist rows for $REGION)" >&2
 echo "asm_unit.sh: la-slot: $LAPINS pins" >&2
 echo "asm_unit.sh: noapp-slot: $R1PINS pins in $R1UNIT${R1FNS:+:$R1FNS}" >&2
-rm -f "$DLIIN" "$DLIOUT" "$R1OUT"; rm -rf "$DLITMP"
+echo "asm_unit.sh: fpcmp-label: $R2NOPS nops in $R1UNIT${R2FNS:+:$R2FNS}" >&2
+rm -f "$DLIIN" "$DLIOUT" "$R1OUT" "$R2OUT"; rm -rf "$DLITMP"

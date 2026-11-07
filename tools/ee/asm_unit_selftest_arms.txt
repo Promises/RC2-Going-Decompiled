@@ -48,6 +48,17 @@ EMPTY real allowlist -G0 (control)
 EMPTY real allowlist -G8 (control)
 EMPTY relative input path -G0
 EMPTY relative input path -G8
+FPLAB fpl_2lab -G8
+FPLAB fpl_a -G0
+FPLAB fpl_a -G8
+FPLAB fpl_bad -G8
+FPLAB fpl_cmow -G8
+FPLAB fpl_crlf -G0
+FPLAB fpl_fill -G8
+FPLAB fpl_labins -G8
+FPLAB fpl_nolab -G8
+FPLAB fpl_nore -G8
+FPLAB fpl_r -G8
 LASLOT la_abs -G8
 LASLOT la_b -G0
 LASLOT la_b -G8

@@ -679,6 +679,9 @@ check_asmunit() {
   # and so is its `noapp-slot: N pins in <unit>` line (RULING #10043, task
   # #2004), likewise in its exact spelling only
   nd=$(( nd + $(/usr/bin/grep -cE "$ASMUNIT_R1_RE" "$log" || true) ))
+  # and so is its `fpcmp-label: N nops in <unit>` line (task #2604), likewise
+  # in its exact spelling only
+  nd=$(( nd + $(/usr/bin/grep -cE "$ASMUNIT_R2_RE" "$log" || true) ))
   na=$(( $(/usr/bin/grep -c 'asm_unit\.sh:' "$log" || true) - nd ))
   if [ "$n" = 0 ]; then
     ok "ASMUNIT [$REGION]: 0 asm_unit.sh WARNING/REFUSED/FAIL lines in $(wc -l < "$log" | tr -d ' ') log lines"
@@ -687,7 +690,7 @@ check_asmunit() {
     show < <(/usr/bin/grep -nE 'asm_unit\.sh: (WARNING|REFUSED|FAIL):' "$log" | cut -c1-400 | sed 's/^/       /')
   fi
   if [ "$na" != "$n" ]; then
-    warn "ASMUNIT [$REGION]: $((na - n)) asm_unit.sh: line(s) with none of WARNING/REFUSED/FAIL in $log — a diagnostic kind this row does not know; read it and extend the row: $(/usr/bin/grep -n 'asm_unit\.sh:' "$log" | /usr/bin/grep -vE 'asm_unit\.sh: (WARNING|REFUSED|FAIL):' | /usr/bin/grep -vE "$ASMUNIT_DLI_RE" | /usr/bin/grep -vE "$ASMUNIT_LA_RE" | /usr/bin/grep -vE "$ASMUNIT_R1_RE" | cut -c1-200 | tr '\n' ';')"
+    warn "ASMUNIT [$REGION]: $((na - n)) asm_unit.sh: line(s) with none of WARNING/REFUSED/FAIL in $log — a diagnostic kind this row does not know; read it and extend the row: $(/usr/bin/grep -n 'asm_unit\.sh:' "$log" | /usr/bin/grep -vE 'asm_unit\.sh: (WARNING|REFUSED|FAIL):' | /usr/bin/grep -vE "$ASMUNIT_DLI_RE" | /usr/bin/grep -vE "$ASMUNIT_LA_RE" | /usr/bin/grep -vE "$ASMUNIT_R1_RE" | /usr/bin/grep -vE "$ASMUNIT_R2_RE" | cut -c1-200 | tr '\n' ';')"
   fi
 }
 # asm_unit.sh's per-unit transform line, whole-line anchored (task #1205)
@@ -697,6 +700,9 @@ ASMUNIT_LA_RE='^asm_unit\.sh: la-slot: [0-9]+ pins$'
 # and its per-unit no-fill-after-inline-asm line, naming the unit and one
 # function per pin (RULING #10043, task #2004)
 ASMUNIT_R1_RE='^asm_unit\.sh: noapp-slot: [0-9]+ pins in [A-Za-z0-9_./-]+(: [A-Za-z0-9_.$]+( [A-Za-z0-9_.$]+)*)?$'
+# and its per-unit FP-compare post-label nop line, naming the unit and one
+# function per nop (task #2604, FACT #13355)
+ASMUNIT_R2_RE='^asm_unit\.sh: fpcmp-label: [0-9]+ nops in [A-Za-z0-9_./-]+(: [A-Za-z0-9_.$]+( [A-Za-z0-9_.$]+)*)?$'
 
 # ---------------------------------------------------------- NATIVE-ARENA ----
 # check_arena [REGEN_SCRIPT] — the NATIVE-ARENA row (task #1431, on #1419's
@@ -2737,6 +2743,16 @@ selftest_asmunit() {
     if [ "$FAILED" = 0 ] && [ "$WARNED" = 1 ]; then ok "fired: 'asm_unit.sh: noapp-slot: $s' is not the known spelling and WARNs"
     else say "SELFTEST-FAIL (23) 'asm_unit.sh: noapp-slot: $s' was read as the known noapp-slot line (FAILED=$FAILED WARNED=$WARNED):"; show < "$T/asmunit_r1word.txt"; b=1; fi
   done
+  # task #2604: the same for the `fpcmp-label: N nops in <unit>` line
+  local n2; n2=$(/usr/bin/grep -cE "$ASMUNIT_R2_RE" "$log" || true)
+  if [ "$n2" -ge 1 ]; then ok "control: $n2 asm_unit.sh fpcmp-label: line(s) in the exact spelling, none counted as an unknown kind ($(/usr/bin/grep -E "$ASMUNIT_R2_RE" "$log" | cut -d: -f1-3 | sort | uniq -c | sed -E 's/^ +//' | tr '\n' ';' | sed 's/;$//; s/;/ ; /g'))"
+  else say "SELFTEST-FAIL (23) this build's log carries no 'asm_unit.sh: fpcmp-label: N nops in <unit>' line: asm_unit.sh did not emit the task #2604 per-unit line"; b=1; fi
+  for s in '1 nops' '1 nop in text/1B4218: CheckMobyOverWater' '1 nops in text/1B4218 CheckMobyOverWater'; do
+    { cat "$log"; printf 'asm_unit.sh: fpcmp-label: %s\n' "$s"; } > "$T/asmunit_r2word.log"
+    FAILED=0; WARNED=0; STRICT=0; check_asmunit "$T/asmunit_r2word.log" > "$T/asmunit_r2word.txt"
+    if [ "$FAILED" = 0 ] && [ "$WARNED" = 1 ]; then ok "fired: 'asm_unit.sh: fpcmp-label: $s' is not the known spelling and WARNs"
+    else say "SELFTEST-FAIL (23) 'asm_unit.sh: fpcmp-label: $s' was read as the known fpcmp-label line (FAILED=$FAILED WARNED=$WARNED):"; show < "$T/asmunit_r2word.txt"; b=1; fi
+  done
   for s in 'transform (9 allowlist rows for usa)' 'transforms (9 allowlist rows for usa) INERT'; do
     { cat "$log"; printf 'asm_unit.sh: dli: 9 %s\n' "$s"; } > "$T/asmunit_dliword.log"
     FAILED=0; WARNED=0; STRICT=0; check_asmunit "$T/asmunit_dliword.log" > "$T/asmunit_dliword.txt"
@@ -2812,6 +2828,10 @@ selftest_regression_gate() {
 # that names the arm removed and why. Do not read RULING #7317 backwards
 # here: #7317's FAILURE baselines move DOWN only; an arm count is a COVERAGE
 # measure, so it moves UP only.
+# Task #2604 left it at 188: the live run is 220 arms (3e09af647's 209 + 11
+# FPLAB), but the floor must not exceed the arm baseline's names (213: seven
+# arms added since #1538 were never pinned), or (25) refuses the baseline as
+# truncated (measured: FLOOR 220 -> SELFTEST-FAIL (25), 213 < 220).
 ASMUNIT_SELFTEST_FLOOR=188
 # ASMUNIT_SELFTEST_ARMS: the SET of arm names the selftest must PASS (task
 # #1476). The floor counts arms; it cannot see a SUBSTITUTION — one arm
