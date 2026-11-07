@@ -3320,3 +3320,78 @@
     `src/levels/03_endako/L03_003F09C0.c`
     (`func_L03_0041D128`, author commit `431ac503`, llesieur99), task #2655.
     ADAPTED: our name at the v2.00 place; `sda` as `section(".sdata")` (RULING #8620, ablation 42 of 46 words → 0); `D_L03_001B2A1C`/`D_L03_001FB5A0` as `g_mobyTableBase`/`g_mobyGroupLists`, L03's boot-name map names; one callee as L03's copy; s136 -G0, plain as.
+  - **`func_L18_002C2D48`** (`0x002C2D48`, level program 18, Damosel: picks the screen id for the player's current mode) in
+    `going-decompiled/levels/usa/L18/src/func_L18_002C2D48.c`, from
+    `src/levels/18_damosel/L18_002C2D48.c`
+    (`func_L18_002C2D48`, v1.01 address, author commit `7b6cc769`, agent-lvl7-08), task #2662.
+    Verbatim but for names: our name; `D_00139568`/`D_00189E20` as the boot's `g_itemEquippedSlot`/`g_soundBankHandlesBlk`; `D_0026BCF0` as our label `D_L18_0026BC70`; one callee as L18's copy; includes dropped.
+  - **`func_L18_0035C9C8`** (`0x0035C9C8`, level program 18, Damosel: spawns an orbiting record and places it on its circle) in
+    `going-decompiled/levels/usa/L18/src/func_L18_0035C9C8.c`, from
+    `src/levels/18_damosel/L18_002E68B0.c`
+    (`func_L18_0035B6B8`, v1.01 address, author commit `5030340d`, Flavius; parameter order from `a0ffc4d1`, Flavius), task #2662.
+    Verbatim but for names: our name; `D_L18_001FF4D4` as the address-named extern `D_L18_001FF454` (v2.00 target inside `D_L18_001F0000`, RULING #13291 §2); `func_001163B0` as the boot's `rand`; four callees as L18's copies; includes dropped.
+  - **`func_L18_0035CB48`** (`0x0035CB48`, level program 18, Damosel: advances an orbiting record one frame) in
+    `going-decompiled/levels/usa/L18/src/func_L18_0035CB48.c`, from
+    `src/levels/18_damosel/L18_002E68B0.c`
+    (`func_L18_0035B838`, v1.01 address, author commit `ee3fee45`, llesieur99), task #2662.
+    Verbatim but for names: our name; six callees as L18's copies; includes dropped.
+  - **`func_L18_003A1FD8`** (`0x003A1FD8`, level program 18, Damosel: Damosel trigger: hint timer and the skill-point two-zone check) in
+    `going-decompiled/levels/usa/L18/src/func_L18_003A1FD8.c`, from
+    `src/us2/levels/18_damosel/L18_003A1FD8.c`
+    (`func_US2_L18_003A1FD8`, v2.00 address, author commit `c4928ea3`, Flavius, copying bigbeno37's v1.01 text from `e4fd2fe8` (func_L18_003A0C28), which carried Gianni's draft `b32a5088`; RULING #13427 revs 2-4), task #2662.
+    Adapted: `sda` -> `section(".sdata")` on two extern declarations (RULING #8620; ablation 4 of 84 words differ without it, validator #2666) and upstream's `MACRO_ADDR` on a third written out as its `section(".sdata")` expansion; `D_00189E20`/`D_00189EA0`/`D_001A7A60`/`D_001A7AFD` as the boot's `g_soundBankHandlesBlk`/`g_heroPos`/`g_skillPointFlags`/`g_mapDataSet`; `D_0018CF40` and `D_L18_001A903C` kept (address-named / our label); five callees as L18's copies; includes dropped.
+  - **`func_L18_003F90E0`** (`0x003F90E0`, level program 18, Damosel: per-frame state dispatcher of one Damosel object) in
+    `going-decompiled/levels/usa/L18/src/func_L18_003F90E0.c`, from
+    `src/levels/18_damosel/L18_002E68B0.c`
+    (`func_L18_003F7C70`, v1.01 address, author commit `ee3fee45`, llesieur99), task #2662.
+    Verbatim but for names: our name; five level callees at their v2.00 places; includes dropped.
+  - **`func_L18_003FA488`** (`0x003FA488`, level program 18, Damosel: draws two glow effects at an object's point 5) in
+    `going-decompiled/levels/usa/L18/src/func_L18_003FA488.c`, from
+    `src/levels/18_damosel/L18_003F80A0.c`
+    (`func_L18_003F9018`, v1.01 address, author commit `fa8d6672`, llesieur99), task #2662.
+    Verbatim but for names: our name; two callees as L18's copies; includes dropped.
+  - **`func_L18_00430C58`** (`0x00430C58`, level program 18, Damosel: arms an object in state 1 and moves it to state 3) in
+    `going-decompiled/levels/usa/L18/src/func_L18_00430C58.c`, from
+    `src/levels/18_damosel/L18_003F80A0.c`
+    (`func_L18_0042F768`, v1.01 address, author commit `fa8d6672`, llesieur99), task #2662.
+    Verbatim but for names: our name; one callee as L18's copy; includes dropped.
+  - **`func_L18_00430FD0`** (`0x00430FD0`, level program 18, Damosel: plays a camera-facing cue when an offset point is far enough from the camera line) in
+    `going-decompiled/levels/usa/L18/src/func_L18_00430FD0.c`, from
+    `src/levels/18_damosel/L18_003F80A0-g8.c`
+    (`func_L18_0042FAE0`, v1.01 address, author commit `431ac503`, llesieur99), task #2662.
+    Verbatim but for names: our name; `D_001C97C0` as `g_cameraPos`, the level's boot-name map name at that v2.00 address (NAMES rule, task #2646 class); four level data names as our labels `D_L18_001B14C0`..`CC` (upstream's `sda` text kept); seven callees as L18's copies; s136 -G8; includes dropped.
+  - **`func_L18_00431738`** (`0x00431738`, level program 18, Damosel: per-frame state dispatcher of one Damosel object) in
+    `going-decompiled/levels/usa/L18/src/func_L18_00431738.c`, from
+    `src/levels/18_damosel/L18_003F80A0.c`
+    (`func_L18_00430248`, v1.01 address, author commit `fa8d6672`, llesieur99), task #2662.
+    Verbatim but for names: our name; five level callees at their v2.00 places; includes dropped.
+  - **`func_L18_00433A38`** (`0x00433A38`, level program 18, Damosel: faces a target point and sets the turn mode) in
+    `going-decompiled/levels/usa/L18/src/func_L18_00433A38.c`, from
+    `src/levels/18_damosel/L18_003F80A0.c`
+    (`func_L18_00432548`, v1.01 address, author commit `fa8d6672`, llesieur99), task #2662.
+    Verbatim but for names: our name; one callee as L18's copy; includes dropped.
+  - **`func_L18_00435618`** (`0x00435618`, level program 18, Damosel: advances an object's two pairs of oscillators) in
+    `going-decompiled/levels/usa/L18/src/func_L18_00435618.c`, from
+    `src/levels/18_damosel/L18_00433460.c`
+    (`func_L18_00434128`, v1.01 address, author commit `91e04732`, llesieur99), task #2662.
+    Verbatim but for names: our name; three callees as L18's copies; includes dropped and one repeated extern line collapsed; no `long long` in the function, so none respelled.
+  - **`func_L18_004364B0`** (`0x004364B0`, level program 18, Damosel: spawns two glow sprites in front of an object, toward the camera) in
+    `going-decompiled/levels/usa/L18/src/func_L18_004364B0.c`, from
+    `src/levels/18_damosel/L18_00433460.c`
+    (`func_L18_00434FC0`, v1.01 address, author commit `da4beea9`, bigbeno37, closing llesieur99's draft from `ee3fee45`; RULING #13427 rev 2), task #2662.
+    Verbatim but for names: our name; `D_L18_001B97C0` as `g_cameraPos`, the level's boot-name map name at that v2.00 address (NAMES rule, task #2646 class); eight callees as L18's copies; includes dropped and four repeated extern lines collapsed; no `long long` in the function, so none respelled.
+  - **`func_L18_004371B8`** (`0x004371B8`, level program 18, Damosel: starts the level table D_L18_002A9C00 with code 0x12) in
+    `going-decompiled/levels/usa/L18/src/func_L18_004371B8.c`, from
+    `src/levels/18_damosel/L18_00433460.c`
+    (`func_L18_00435CC8`, v1.01 address, author commit `91e04732`, llesieur99), task #2662.
+    Verbatim but for names: our name; `D_L18_002A9C40` as our label `D_L18_002A9C00`; one callee as L18's copy; includes dropped; no `long long` in the function, so none respelled.
+  - **`func_L18_0043B4B8`** (`0x0043B4B8`, level program 18, Damosel: spinning damageable Damosel object) in
+    `going-decompiled/levels/usa/L18/src/func_L18_0043B4B8.c`, from
+    `src/levels/18_damosel/L18_00433460.c`
+    (`func_L18_00439FC8`, v1.01 address, author commit `11a4bac2`, Jacob, closing llesieur99's draft from `ee3fee45`; RULING #13427 rev 2), task #2662.
+    Verbatim but for names: our name; `D_L18_001C9D40` as the address-named extern `D_L18_001C9CC0` (v2.00 target inside `D_L18_001B2B30`, RULING #13291 §2); eight callees as L18's copies; includes dropped and eight repeated extern lines collapsed; no `long long` in the function, so none respelled.
+  - **`func_L18_00442928`** (`0x00442928`, level program 18, Damosel: Damosel damage controller: releases its sound anchor, takes hits, explodes at zero health) in
+    `going-decompiled/levels/usa/L18/src/func_L18_00442928.c`, from
+    `src/levels/18_damosel/L18_00433460.c`
+    (`func_L18_00441438`, v1.01 address, author commit `132104a3`, Louis-Philippe Le Sieur), task #2662.
+    Verbatim but for names: our name; `D_00188660`/`D_00189EA0` as the boot's `g_listenerPosHistory`/`g_heroPos`; sixteen callees as L18's copies; includes dropped and eleven repeated extern lines collapsed; no `long long` in the function, so none respelled.

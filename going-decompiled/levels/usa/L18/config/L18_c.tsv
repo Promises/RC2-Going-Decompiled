@@ -1,0 +1,28 @@
+# Functions of level program L18 built from C (task #2662, RULING #13291 row L18-A).
+# One row per function, compiled ALONE as its own TU by tools/levels/level_build.sh
+# and linked at its one place in place of its split asm (gen_ld.py cuts the
+# function's block out of the .text asm). Single placement only (row L7 is the
+# multi-placement design).
+#   function: the glabel in the split .text asm (its address is in its name)
+#   source:   path under going-decompiled/levels/usa/L18/
+#   arm:      tools/ee/ee_cc1.sh arm (sdk29 | s136 | sn2952); s136 adds -fopt-stack
+#   gflag:    -G0 | -G8, used by cc1 AND the assembler
+#   as:       optional (task #2552): as (plain GNU as) | asm_unit (tools/ee/asm_unit.sh,
+#             the boot's model of SN's assembler); a 4-column row is `as -`
+#   cc1flags: optional, with as: extra cc1 flags, comma-separated, or - for none
+# function	source	arm	gflag
+func_L18_002C2D48	src/func_L18_002C2D48.c	s136	-G0	as	-
+func_L18_0035C9C8	src/func_L18_0035C9C8.c	s136	-G0	as	-
+func_L18_0035CB48	src/func_L18_0035CB48.c	s136	-G0	as	-
+func_L18_003A1FD8	src/func_L18_003A1FD8.c	s136	-G0	as	-
+func_L18_003F90E0	src/func_L18_003F90E0.c	s136	-G0	as	-
+func_L18_003FA488	src/func_L18_003FA488.c	s136	-G0	as	-
+func_L18_00430C58	src/func_L18_00430C58.c	s136	-G0	as	-
+func_L18_00430FD0	src/func_L18_00430FD0.c	s136	-G8	as	-
+func_L18_00431738	src/func_L18_00431738.c	s136	-G0	as	-
+func_L18_00433A38	src/func_L18_00433A38.c	s136	-G0	as	-
+func_L18_00435618	src/func_L18_00435618.c	s136	-G0	as	-
+func_L18_004364B0	src/func_L18_004364B0.c	s136	-G0	as	-
+func_L18_004371B8	src/func_L18_004371B8.c	s136	-G0	as	-
+func_L18_0043B4B8	src/func_L18_0043B4B8.c	s136	-G0	as	-
+func_L18_00442928	src/func_L18_00442928.c	s136	-G0	as	-
