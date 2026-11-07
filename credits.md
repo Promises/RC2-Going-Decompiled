@@ -646,7 +646,7 @@
     byte-exact on our ROM; its one inline `sync` is the hardware barrier
     RULING #12168 allows (task #2297).
 
-- **OpenRAC — `rac2-decomp`, commit `b2a35115`, Window X bodies (text/235FE8, text/1DFF80, text/1D54C0, text/250080, text/188858, text/191238, text/198FA0, text/1B4218, cod/022FA8, cod/015180 and level program 24)** (GPL-3.0)
+- **OpenRAC — `rac2-decomp`, commit `b2a35115`, Window X bodies (text/235FE8, text/1DFF80, text/1D54C0, text/250080, text/188858, text/191238, text/198FA0, text/1B4218, text/1FFBA0, cod/022FA8, cod/015180 and level program 24)** (GPL-3.0)
   <https://github.com/OpenRAC/rac2-decomp> at commit `b2a35115e0cf580a1fdab8dd1071b157799e590e`
   (the same history as `rac2-gc-decomp` above: `96927f87` is an ancestor)
 
@@ -998,6 +998,26 @@
     keeps the ROM's `%gp_rel` read under the unit's `.extern
     g_altGravityEnabled, 16`. s136os arm as the unit is; it closes with
     `tools/ee/asm_unit.sh`'s fpcmp-label pass (task #2604, FACT #13355).
+  - **`func_00300B88`** (`0x00300B88`, the water-surface fade quad: GS
+    register 0x42 = 0x44, then a full-screen white sprite with alpha
+    (1 - frames * rate) * 255) in `going-decompiled/src/usa/text/1FFBA0.cpp`,
+    from `src/game/002FC8D0-fade.c` (`func_002FFCF8`, v1.01 address, author
+    commit `941ee736`, bigbeno37, which carried the signature, `int v;` and
+    the `func_002FC560` call from Louis-Philippe Le Sieur's near-miss draft
+    `nonmatching/game/func_002FFCF8.c`, commit `4e95f3c2`; `PreviewState` is
+    bigbeno37's, `aea3ec3f`; the blob is identical at `b2a35115`, `5776dcc3`
+    (read) and the head `34f0f0b8`). ADAPTED: our symbol names per the ROM's
+    relocations (`AppendGsRegPacket`, `IntToFloat`, `FloatToInt`,
+    `func_0027E4D0`, `g_gadgetDisplay`, `g_gsScreenContext`), `short`/`float`/
+    `unsigned char`/`int` as `s16`/`f32`/`u8`/`s32`, their `long long`
+    parameter as the unit's `s64` prototype, their `sda` dropped for an
+    EE-only FACT #8036 assembler alias `g_gadgetDisplayFade` (equated to
+    `g_gadgetDisplay`, unsized, `.sdata` per RULING #8620, read as `[0].`)
+    that keeps the ROM's nop in the `jal IntToFloat` slot under the unit's
+    `.extern g_gadgetDisplay, 16` (FACT #12214), and their `short[]`
+    `D_001A6480` as an EE-only typed view `g_gsScreenContextHalves` (RULING
+    #13168). s136os arm as the unit is (task #2659, from audit NOTE #13181
+    row 6 / FACT #13187).
   - **`func_00126470`** (`0x00126470`, libgraph's `sceGsSetDefStoreImage`;
     FACT #5541 names it BuildGsStoreImagePacket) in
     `going-decompiled/src/usa/cod/022FA8.c`, from `src/core/0012646C-store.c`

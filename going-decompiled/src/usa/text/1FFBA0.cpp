@@ -421,8 +421,9 @@ void func_00300288(void) {
  * splash/ripple/settle phases. Each case makes its own vector and helper calls
  * (FastDecTimer, ...) and writes back the pool's level/scale fields.
  * Not VU0 code: it has no COP2 opcode, only calls (task #2321). Not attempted.
- * It carries four of the macro-before-jal sites in FACT #12214, so on today's
- * asm_unit.sh it cannot close as func_00300B88 cannot. */
+ * It carries four of the macro-before-jal sites in FACT #12214. func_00300B88
+ * closed its site with an unsized FACT #8036 alias (task #2659); whether the
+ * same device serves these four is not measured. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1FFBA0", func_003002E0);
 #else
@@ -752,25 +753,90 @@ void *func_003009F8(Moby *moby) {
 }
 #endif
 
-/* Emit one water-surface fade quad: append GS reg 0x42 (value 0x44), then draw a
- * full-screen sprite whose alpha = (1 - depthScale * level)*255 (white).
- * NOT byte-matched (task #2321, NOTE #12215). The old "cc1 CSEs the base into s0"
- * note was false. On the s136os arm, with a func_00300E70-style .sdata alias of
- * g_gadgetDisplay, the body is 30 of the ROM's 31 words and every other word is
- * as the ROM has it. The missing word is the nop after `jal IntToFloat`: GNU as
- * 2.40 moves the %lo half of the `lh $4,g_gadgetDisplay+2` macro into that slot,
- * and the SN assembler did not (FACT #12214). That is an asm_unit.sh gap, not a C
- * wall. */
+/* func_00300B88(void): emit one water-surface fade quad. Appends GS register
+ * 0x42 (ALPHA_1) with value 0x44 to the frame packet, then draws a full-screen
+ * sprite (func_0027E4D0, x 0..screen width, y 0..screen height, from
+ * g_gsScreenContext+0x152/+0x150) whose colour is white with alpha
+ * (1 - frames * rate) * 255 in the top byte. frames (+0x2) and rate (+0x4) are
+ * the fade counter and its reciprocal step in the block at g_gadgetDisplay,
+ * which func_002FFF68 seeds from g_heroZoom. No return value.
+ *
+ * Built by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. Native: plain C.
+ *
+ * DEVICE, ADDRESSING MODEL (FACT #8036's assembler alias, RULING #8620 family;
+ * task #2659): the ROM reads frames with `lui $4; lh $4,%lo(g_gadgetDisplay+2)($4)`
+ * and leaves the following `jal IntToFloat` slot a nop (0x300BA8). This unit's
+ * file-scope `.extern g_gadgetDisplay, 16` fixes that one-insn `lh` macro as
+ * absolute when the assembler first meets it, and GNU as then moves the macro's
+ * second word into the reorder-mode jal slot: 30 words where the ROM has 31
+ * (FACT #12214). So the body reads the block through g_gadgetDisplayFade, an
+ * assembler symbol equated to g_gadgetDisplay and given NO size. With no size the
+ * assembler cannot decide gp-relative vs absolute until the end of the file, so
+ * it emits the macro as a relaxable fragment, does not move a relaxable
+ * instruction into a branch slot, and at the end expands it absolute (the symbol
+ * is undefined and unsized). The relocations name g_gadgetDisplay; no alias
+ * symbol reaches the object. It emits nothing. Every other g_gadgetDisplay user
+ * in the unit reads the real name and is unaffected. The alias is declared
+ * `PreviewState[]` (an incomplete array, so cc1 prints no `.extern` size for it
+ * either) with section(".sdata") (RULING #8620: cc1 prints the one-insn macro),
+ * and read as `[0].`. Ablations (task #2659, in-unit splice): reading
+ * g_gadgetDisplay itself -> LENGTH built 30 vs ROM 31; `->` for `[0].` or no
+ * section(".sdata") -> cc1 keeps `la $16,g_gadgetDisplayFade` across the call,
+ * built 32 vs ROM 31.
+ *
+ * DEVICE, TYPED VIEW (RULING #13168): g_gsScreenContextHalves is an EE-only
+ * `s16[]` asm-label view of g_gsScreenContext, standing for their
+ * `short D_001A6480[]`; it gives the ROM's `lui; addiu; lh 0x150; lh 0x152`
+ * order. Ablation: `((s16 *)g_gsScreenContext)[i]` builds 31 words in the wrong
+ * order (unit objdiff row 86.94%). Native: #defines to typed views of the real
+ * objects.
+ *
+ * Source: OpenRAC/rac2-decomp @5776dcc35045fb2320610edd1d2db4fa7660ef37
+ * (GPL-3.0, adopted with the authors' permission per RULINGs #10405/#12108),
+ * src/game/002FC8D0-fade.c, func_002FFCF8 (author commit 941ee736, bigbeno37,
+ * which carried the signature, `int v;` and the func_002FC560 call verbatim
+ * from Louis-Philippe Le Sieur's near-miss draft in
+ * nonmatching/game/func_002FFCF8.c, commit 4e95f3c2; PreviewState is
+ * bigbeno37's, aea3ec3f3, src/game/002FC8D0.c; file blob identical at b2a35115
+ * and at their head 34f0f0b8, read 2026-11-08).
+ * ADAPTED: (1) respellings by ROM-encoded address: func_002FFCF8 =
+ * func_00300B88, func_002FC560 = AppendGsRegPacket, func_00283CE0 = IntToFloat,
+ * func_00283CF0 = FloatToInt, func_0027DE50 = func_0027E4D0, D_001B2310 =
+ * g_gadgetDisplay (read through the EE alias above as g_gadgetDisplayFade[0].
+ * where they write D_001B2310.; their `sda` attribute is dropped, the alias
+ * carries the addressing form), D_001A6480 = g_gsScreenContext (read through
+ * the typed view g_gsScreenContextHalves);
+ * (2) short/float/unsigned char/int respelled s16/f32/u8/s32, and their
+ * `long long` parameter is the unit's s64 AppendGsRegPacket prototype. Control
+ * flow, expressions and local names are theirs. */
+typedef struct {
+    s16 s00;
+    s16 frames;
+    f32 rate;
+    char pad08[0x34 - 0x08];
+    u8 phase;
+    u8 spin;
+} PreviewState;
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1FFBA0", func_00300B88);
+__asm__("g_gadgetDisplayFade = g_gadgetDisplay");
+extern PreviewState g_gadgetDisplayFade[] __attribute__((section(".sdata")));
+extern s16 g_gsScreenContextHalves[] __asm__("g_gsScreenContext");
 #else
-void func_00300B88(void) {
-    s32 alpha;
+#define g_gadgetDisplayFade ((PreviewState *)g_gadgetDisplay)
+#define g_gsScreenContextHalves ((s16 *)g_gsScreenContext)
+#endif
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00300B88)
+S136OS_SLOT(func_00300B88);
+#else
+void func_00300B88(void)
+{
+    s32 v;
     AppendGsRegPacket(0x42, 0x44);
-    alpha = FloatToInt((1.0f - IntToFloat(*(s16 *)(g_gadgetDisplay + 0x2))
-                               * *(f32 *)(g_gadgetDisplay + 0x4)) * 255.0f);
-    func_0027E4D0(0, *(s16 *)(g_gsScreenContext + 0x152), 0,
-                  *(s16 *)(g_gsScreenContext + 0x150), alpha << 24);
+    v = FloatToInt((1.0f - IntToFloat(g_gadgetDisplayFade[0].frames) * g_gadgetDisplayFade[0].rate) * 255.0f);
+    func_0027E4D0(0, g_gsScreenContextHalves[0xA9], 0, g_gsScreenContextHalves[0xA8], (u64)(v << 24));
 }
 #endif
 
@@ -782,7 +848,8 @@ void func_00300B88(void) {
  * Not VU0 code: it has no COP2 opcode, and every vector step is a call (task #2321).
  * Not attempted. It carries one of the macro-before-jal sites in FACT #12214
  * (`lui $4; lh $4,%lo(g_gadgetDisplay+2)($4); jal IntToFloat; nop` at 0x300C9C),
- * so on today's asm_unit.sh it cannot close as func_00300B88 cannot. */
+ * the shape func_00300B88 closed with the unsized g_gadgetDisplayFade alias
+ * (task #2659); not measured for this body. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1FFBA0", func_00300C08);
 #else
