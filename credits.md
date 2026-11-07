@@ -2135,3 +2135,103 @@
     `src/levels/02_maktar_nebula/L02_003DB310.c`
     (`func_L02_003DB938`, author commit `773eafc2`, llesieur99), task #2558.
     VERBATIM but for names.
+  - **`func_L23_0041A588`** (`0x0041A588`, level program 23) in
+    `going-decompiled/levels/usa/L23/src/func_L23_0041A588.c`, from
+    `src/levels/23_damosel_orbit/L23_00416388.c`
+    (`func_L23_00419088`, author commit `ee3fee45`, llesieur99), task
+    #2568. VERBATIM but for names: our name at the v2.00 place.
+  - **`func_L23_0041B1E0`** (`0x0041B1E0`, level program 23) in
+    `going-decompiled/levels/usa/L23/src/func_L23_0041B1E0.c`, from
+    `src/levels/23_damosel_orbit/L23_00416388.c`
+    (`func_L23_00419CE0`, author commit `86ff805f`, bigmak94), task
+    #2568. VERBATIM but for names: our name and 1 callee renamed to the v2.00 disc's own targets.
+  - **`func_L23_0041C978`** (`0x0041C978`, level program 23) in
+    `going-decompiled/levels/usa/L23/src/func_L23_0041C978.c`, from
+    `src/us2/levels/23_damosel_orbit/L23_0041C978.c`
+    (`func_US2_L23_0041C978`, author commit `cde7e4dd`, Flavius), task
+    #2568. VERBATIM but for names: our name and 1 callee renamed to the v2.00 disc's own targets.
+  - **`func_L23_0041CAB0`** (`0x0041CAB0`, level program 23) in
+    `going-decompiled/levels/usa/L23/src/func_L23_0041CAB0.c`, from
+    `src/levels/23_damosel_orbit/L23_00416388.c`
+    (`func_L23_0041B5B0`, author commit `773eafc2`, llesieur99), task
+    #2568. VERBATIM but for names: our name at the v2.00 place.
+  - **`func_L23_0041D5C0`** (`0x0041D5C0`, level program 23) in
+    `going-decompiled/levels/usa/L23/src/func_L23_0041D5C0.c`, from
+    `src/levels/23_damosel_orbit/L23_00416388-g8.c`
+    (`func_L23_0041C0C0`, author commit `773eafc2`, llesieur99), task
+    #2568. VERBATIM but for names: our name and 2 data names renamed to the v2.00 disc's own targets.
+  - **`func_L23_0041EE30`** (`0x0041EE30`, level program 23) in
+    `going-decompiled/levels/usa/L23/src/func_L23_0041EE30.c`, from
+    `src/levels/23_damosel_orbit/L23_00416388-g8.c`
+    (`func_L23_0041D930`, author commit `adcbd51e`, llesieur99), task
+    #2568. VERBATIM but for names: our name, 1 data name and 3 callees renamed to the v2.00 disc's own targets.
+  - **`func_L23_0041EEB0`** (`0x0041EEB0`, level program 23) in
+    `going-decompiled/levels/usa/L23/src/func_L23_0041EEB0.c`, from
+    `src/us2/levels/23_damosel_orbit/L23_0041EEB0-g8.c`
+    (`func_US2_L23_0041EEB0`, author commit `cde7e4dd`, Flavius), task
+    #2568. VERBATIM but for names: our name, 2 data names and 3 callees renamed to the v2.00 disc's own targets, upstream's boot address `D_001395B8` kept address-named (RULING #13291 §2).
+  - **`func_L23_0041F720`** (`0x0041F720`, level program 23) in
+    `going-decompiled/levels/usa/L23/src/func_L23_0041F720.c`, from
+    `src/levels/23_damosel_orbit/L23_00416388.c`
+    (`func_L23_0041E220`, author commit `86ff805f`, bigmak94), task
+    #2568. VERBATIM but for names: our name at the v2.00 place.
+  - **`func_L23_0041F760`** (`0x0041F760`, level program 23) in
+    `going-decompiled/levels/usa/L23/src/func_L23_0041F760.c`, from
+    `src/levels/23_damosel_orbit/L23_00416388-g8.c`
+    (`func_L23_0041E260`, author commit `773eafc2`, llesieur99), task
+    #2568. VERBATIM but for names: our name and 1 data name renamed to the v2.00 disc's own targets.
+  - **`func_L23_0041F918`** (`0x0041F918`, level program 23) in
+    `going-decompiled/levels/usa/L23/src/func_L23_0041F918.c`, from
+    `src/levels/23_damosel_orbit/L23_0041E418-g8.c`
+    (`func_L23_0041E418`, author commit `7a91db15`, bigmak94), task
+    #2568. VERBATIM but for names: our name, the boot's `g_soundBankHandlesBlk`, 3 data names and 1 callee renamed to the v2.00 disc's own targets, `D_L23_001B1F10` address-named inside a larger label (RULING #13291 §2).
+  - **`func_L23_0041FA48`** (`0x0041FA48`, level program 23) in
+    `going-decompiled/levels/usa/L23/src/func_L23_0041FA48.c`, from
+    `src/levels/23_damosel_orbit/L23_0041E418-g8.c`
+    (`func_L23_0041E548`, author commit `264cb2be`, llesieur99), task
+    #2568. VERBATIM but for names: our name and 1 data name renamed to the v2.00 disc's own targets.
+  - **`func_L23_00426EE0`** (`0x00426EE0`, level program 23) in
+    `going-decompiled/levels/usa/L23/src/func_L23_00426EE0.c`, from
+    `src/levels/23_damosel_orbit/L23_0041E418-g8.c`
+    (`func_L23_004259E0`, author commit `00641a1b`, bigmak94), task
+    #2568. VERBATIM but for names: our name, 6 data names and 1 callee renamed to the v2.00 disc's own targets.
+  - **`func_L23_004275F0`** (`0x004275F0`, level program 23) in
+    `going-decompiled/levels/usa/L23/src/func_L23_004275F0.c`, from
+    `src/levels/23_damosel_orbit/L23_0041E418.c`
+    (`func_L23_004260F0`, author commit `ac1d508f`, bigmak94), task
+    #2568. VERBATIM but for names: our name, 1 data name and 8 callees renamed to the v2.00 disc's own targets, `D_L23_001BA5C0` address-named inside a larger label (RULING #13291 §2).
+  - **`func_L23_00428CB8`** (`0x00428CB8`, level program 23) in
+    `going-decompiled/levels/usa/L23/src/func_L23_00428CB8.c`, from
+    `src/levels/23_damosel_orbit/L23_0041E418.c`
+    (`func_L23_004277B8`, author commit `97da1aea`, Louis-Philippe Le Sieur), task
+    #2568. VERBATIM but for names: our name and 2 callees renamed to the v2.00 disc's own targets.
+  - **`func_L23_00428CE8`** (`0x00428CE8`, level program 23) in
+    `going-decompiled/levels/usa/L23/src/func_L23_00428CE8.c`, from
+    `src/levels/23_damosel_orbit/L23_0041E418-g8.c`
+    (`func_L23_004277E8`, author commit `d2e11c19`, bigmak94), task
+    #2568. VERBATIM but for names: our name, 1 data name and 2 callees renamed to the v2.00 disc's own targets, `D_L23_001B367C` address-named inside a larger label (RULING #13291 §2).
+  - **`func_L23_00428DB0`** (`0x00428DB0`, level program 23) in
+    `going-decompiled/levels/usa/L23/src/func_L23_00428DB0.c`, from
+    `src/levels/23_damosel_orbit/L23_0041E418.c`
+    (`func_L23_004278B0`, author commit `264cb2be`, llesieur99), task
+    #2568. VERBATIM but for names: our name at the v2.00 place.
+  - **`func_L23_0042B4F8`** (`0x0042B4F8`, level program 23) in
+    `going-decompiled/levels/usa/L23/src/func_L23_0042B4F8.c`, from
+    `src/levels/23_damosel_orbit/L23_0041E418.c`
+    (`func_L23_00429FF8`, author commit `264cb2be`, llesieur99), task
+    #2568. VERBATIM but for names: our name at the v2.00 place.
+  - **`func_L23_0042C170`** (`0x0042C170`, level program 23) in
+    `going-decompiled/levels/usa/L23/src/func_L23_0042C170.c`, from
+    `src/levels/23_damosel_orbit/L23_0041E418-g8.c`
+    (`func_L23_0042AC70`, author commit `264cb2be`, llesieur99), task
+    #2568. VERBATIM but for names: our name, 2 data names and 1 callee renamed to the v2.00 disc's own targets, `D_L23_001B1B44` address-named inside a larger label (RULING #13291 §2).
+  - **`func_L23_0042C290`** (`0x0042C290`, level program 23) in
+    `going-decompiled/levels/usa/L23/src/func_L23_0042C290.c`, from
+    `src/levels/23_damosel_orbit/L23_0041E418.c`
+    (`func_L23_0042AD90`, author commit `264cb2be`, llesieur99), task
+    #2568. VERBATIM but for names: our name at the v2.00 place.
+  - **`func_L23_00440DF0`** (`0x00440DF0`, level program 23) in
+    `going-decompiled/levels/usa/L23/src/func_L23_00440DF0.c`, from
+    `src/levels/23_damosel_orbit/L23_0041E418.c`
+    (`func_L23_0043F930`, author commit `264cb2be`, llesieur99), task
+    #2568. VERBATIM but for names: our name and 2 callees renamed to the v2.00 disc's own targets.
