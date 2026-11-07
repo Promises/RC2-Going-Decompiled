@@ -1064,18 +1064,19 @@ line.
 
 ### OpenRAC rac2-decomp at b2a35115, cod/022FA8 Window X bodies (GPL-3.0)
 
-Three C function bodies are taken from OpenRAC's `rac2-decomp`,
+Four C function bodies are taken from OpenRAC's `rac2-decomp`,
 <https://github.com/OpenRAC/rac2-decomp> at commit
 `b2a35115e0cf580a1fdab8dd1071b157799e590e` (root `LICENSE`: GNU General Public
 License, version 3), with the authors' permission (RULING #10405/#12108),
-tasks #2474, #2475 and #2476. `func_00129DA8` is VERBATIM: no edits, because
+tasks #2474, #2475, #2476 and #2661. `func_00129DA8` is VERBATIM: no edits, because
 every spelling the body uses was already this file's (landed with task #2206's
-`func_001296A0`); the other two are adapted, with every edit named in the
+`func_001296A0`); the other three are adapted, with every edit named in the
 function's doc comment and its table row.
 
 | Here | Upstream file | Upstream name |
 |---|---|---|
 | `func_00126470` in `going-decompiled/src/usa/cod/022FA8.c` (adapted: their `func_0012646C` named `func_00126470` at our address, the 0xCD fill FRAG at 0x12646C keeping that name; `int` spelled `s32`; `long`/`unsigned long` written `s64`/`u64`, RULING #13197; the unused `u_long_sd` typedef dropped; `u128_sd` carries the unit's TARGET_NATIVE mode(TI) stand-in; their `CpuSync()` written as the RULING #12168 HARDWARE BARRIER inline asm, ROM 0x12659C; the 1CA080.cpp caller declaration's return aligned `void`->`s32` (register-identical, landing_gate decl-def); plain sdk29 `-O2 -G0` arm, no selector row), task #2474 | `src/core/0012646C-store.c` (upstream credits the layout to rac1-decomp `src/core/00122818.c`, revision `bbb526cb`) | `func_0012646C` (author commit `a96d3126e`, Louis-Philippe Le Sieur, 2026-11-03) |
+| `func_00126730` in `going-decompiled/src/usa/cod/022FA8.c` (adapted from upstream's nonmatching draft: their `func_0012672C` named `func_00126730` at our address, the 0xCD fill FRAG at 0x12672C keeping that name; their `SiStoreImage`/`SiBitbltbuf`/`SiTrxreg`/`u128_si` as this file's `SdStoreImage`/`SdBitbltbuf`/`SdTrxreg`/`u128_sd` (same layout); `int` spelled `s32`; `long`/`unsigned long` written `s64`/`u64`, RULING #13197; `func_0011AF40`/`func_0011AF60` spelled `GsGetIMR`/`GsPutIMR`; their `int func_0011C820` diagnostic called through an EE-only `void` prototype view of `Kprintf`, RULING #13287, the SDK header's own `scePrintf` declaration; plain sdk29 `-O2 -G0` arm, no selector row; the blob is identical at `5776dcc3` and the head `34f0f0b8`), task #2661 | `nonmatching/core/func_0012672C.c` (upstream credits the routine to rac1-decomp `src/core/00122AD8.c`, revision `bbb526cb`) | `func_0012672C` (author commit `a96d3126e`, Louis-Philippe Le Sieur, 2026-11-03) |
 | `func_00129DA8` in `going-decompiled/src/usa/cod/022FA8.c` (verbatim, plain sdk29 `-O2 -G0` arm, no devices) | `src/core/00129450.c` | `func_00129DA8` (author commit `bf067513e`, bigbeno37, 2026-11-01) |
 | `func_00130428` in `going-decompiled/src/usa/cod/022FA8.c` (adapted: `s32 *` parameter for our prototype, casts to our callee prototypes, a `func_001306D0` prototype ahead of it; upstream's never-taken branch kept verbatim as the RULING #13126 device), task #2476 | `src/core/00130288.c` (from rac1-decomp `src/core/0012AC80.c`), whose earlier draft says it is transcribed from Lombyte (MIT) `src/assembly/sdk/library/sequenceheader.c` | `func_00130428` (rac1-decomp `mpeg_init_seq`, `func_0012C608`; Lombyte `func_0012C4C8`) |
 

@@ -1747,7 +1747,286 @@ s32 KickGifImageUpload(u64 *packet, void *image) {
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012672C);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00126730);
+extern u64 GsGetIMR(void);
+extern u64 GsPutIMR(u64);
+extern char D_0013B520[];
+extern char D_0013B558[];
+extern char D_0013B588[];
+extern char D_0013B5C8[];
+extern u128_sd D_00137E10;
+
+#ifndef TARGET_NATIVE
+/* CALLEE PROTOTYPE VIEW (RULING #13287, EE arm only): the diagnostic is called
+ * through a `void` prototype of Kprintf, the SDK's own declaration of this
+ * API (include/rtl/ee/eekernel.h: `void scePrintf(const char *fmt, ...)`).
+ * Same symbol and address (the relocations name Kprintf); arguments are
+ * unchanged, and no call site here reads the result. It changes only cc1's
+ * register choice: a call that returns a value leaves $2 busy for the next
+ * insn, so the cleanup temporaries start at $3. Ablation: with the unit's
+ * `void *` Kprintf, or upstream's `int`, 17/419 words differ (+0x3C8..+0x440,
+ * the two error-cleanup blocks). Native calls the real Kprintf. */
+extern void GsDiagPrintf(const char *fmt, ...) __asm__("Kprintf");
+#else
+#define GsDiagPrintf Kprintf
+#endif
+
+/**
+ * libgraph's sceGsExecStoreImage (FACT #5541; its four messages, read from
+ * the ROM, are "sceGsExecStoreImage: ..." followed by D_0013B520 "DMA Ch.1
+ * does not terminate", D_0013B558 "GS does not terminate", D_0013B588 "DMA
+ * Ch.1 (GS->MEM) does not terminate" and D_0013B5C8 "Enough data does not
+ * reach VIF1"): read a GS rectangle back into EE memory. `sp` is the 112-byte
+ * packet func_00126470 built; `dstaddr` receives the image.
+ *
+ * The size in quadwords comes from TRXREG (RRW x RRH) and BITBLTBUF's SPSM
+ * (32/24/16/8/4 bpp; the switch is the ROM's jtbl_0013B600): `nfull` whole
+ * 8-qword blocks go by DMA, `nrem` single quadwords and a final `nbyte`-byte
+ * tail are drained from VIF1_FIFO (0x10005000) by hand, and when the size is
+ * not a whole quadword the transfer is padded to the PSM's row alignment
+ * (TRXREG's height is rewritten through the uncached 0x20000000 alias) and
+ * the `nrest` extra quadwords are read and dropped.
+ *
+ * Sequence: wait for DMA channel 1 (VIF1, CHCR 0x10009000) to be idle; set
+ * IMR bit 0x200 (GsPutIMR(GsGetIMR() | 0x200), old mask kept); GS CSR
+ * (0x12001000) = 2; send the 7-qword packet on channel 1 (scratchpad
+ * addresses get the SPR bit 0x80000000); wait for CSR FINISH; reverse VIF1
+ * (STAT FDR 0x800000, BUSDIR 0x12001040 = 1); DMA `nfull` qwords into
+ * `dstaddr`, then drain the rest; finally restore VIF1, BUSDIR and the IMR,
+ * set CSR = 2 and push D_00137E10 into VIF1_FIFO (its first word is
+ * 0x06000000, VIFcode MSKPATH3 0: PATH3 unmasked again).
+ *
+ * @param sp      the store-image packet
+ * @param dstaddr EE destination, quadword aligned
+ * @return 0, or -1 after a diagnostic when any wait passes 0x1000000 polls
+ *         (one counter across all waits). A timeout after the transfer has
+ *         started resets GS CSR (0x100), BUSDIR, GIF_CTRL and VIF1_FBRST first;
+ *         cc1 merges those cleanup copies into one block, as in the ROM.
+ *
+ * Source: OpenRAC/rac2-decomp @b2a35115e0cf580a1fdab8dd1071b157799e590e
+ * (GPL-3.0, adopted with the authors' permission per RULING #10405/#12108),
+ * nonmatching/core/func_0012672C.c, func_0012672C (author commit a96d3126,
+ * Louis-Philippe Le Sieur, 2026-11-03; `git blame -M -C` gives all 264 lines
+ * of the file to it; the blob is identical at 5776dcc3 and at the head
+ * 34f0f0b8, where it is still upstream's nonmatching draft: "1676/1676 bytes,
+ * 0/1 each; the checker first reports +0x3CC" on their own toolchain).
+ * Upstream credits the routine to rac1-decomp src/core/00122AD8.c, revision
+ * bbb526cb (GPL-3.0). ADAPTED: their `func_0012672C` named `func_00126730`
+ * at our address (the 0xCD fill FRAG at 0x12672C keeps that name, FACT
+ * #7390); their SiStoreImage / SiBitbltbuf / SiTrxreg / u128_si written as
+ * this file's SdStoreImage / SdBitbltbuf / SdTrxreg / u128_sd (the same
+ * 112-byte layout and fields); `int` spelled `s32`; `long`/`unsigned long`
+ * written `s64`/`u64` (RULING #13197); func_0011AF40 / func_0011AF60 spelled
+ * GsGetIMR / GsPutIMR; their `int func_0011C820(const char *, ...)` called as
+ * the `void` GsDiagPrintf view above (the one device). Plain sdk29 `-O2 -G0`
+ * arm, no selector row.
+ */
+s32 func_00126730(SdStoreImage *sp, u128_sd *dstaddr)
+{
+    unsigned int cnt = 0;
+    int nfull = 0, nrem = 0, nbyte = 0, nrest = 0;
+    int w, h, psm, bytes, i, n;
+    u64 old;
+    int h2;
+    union { u128_sd q; unsigned char c[16]; } buf;
+
+    w = sp->trxreg.RRW;
+    h = sp->trxreg.RRH;
+    psm = sp->bitbltbuf.SPSM;
+    h2 = 0;
+    switch (psm) {
+    case 0x00:
+    case 0x30:
+        bytes = w * h * 4;
+        nbyte = bytes & 0xF;
+        nfull = (bytes >> 4) & ~7u;
+        nrem = (bytes >> 4) & 7;
+        if (!nbyte) {
+            h2 = h;
+            nrest = 0;
+        } else {
+            h2 = (h + 3) & ~3;
+            n = w * h2;
+            nrest = (n >> 2) - nfull - nrem - 1;
+        }
+        break;
+    case 0x01:
+    case 0x31:
+        bytes = w * h * 3;
+        nbyte = bytes & 0xF;
+        nfull = (bytes >> 4) & ~7u;
+        nrem = (bytes >> 4) & 7;
+        if (!nbyte) {
+            h2 = h;
+            nrest = 0;
+        } else {
+            h2 = (h + 15) & ~15;
+            n = w * h2;
+            n = ((n * 3) >> 4) - nfull;
+            nrest = n - nrem - 1;
+        }
+        break;
+    case 0x02:
+    case 0x0A:
+    case 0x32:
+    case 0x3A:
+        bytes = w * h * 2;
+        nbyte = bytes & 0xF;
+        nrem = (bytes >> 4) & 7;
+        nfull = (bytes >> 4) & ~7u;
+        if (!nbyte) {
+            h2 = h;
+            nrest = 0;
+        } else {
+            h2 = (h + 7) & ~7u;
+            n = w * h2;
+            nrest = (n >> 3) - nfull - nrem - 1;
+        }
+        break;
+    case 0x13:
+    case 0x1B:
+        bytes = w * h;
+        nbyte = bytes & 0xF;
+        nrem = (bytes >> 4) & 7;
+        nfull = (bytes >> 4) & ~7u;
+        if (!nbyte) {
+            h2 = h;
+            nrest = 0;
+        } else {
+            h2 = (h + 7) & ~7u;
+            n = w * h2;
+            nrest = (n >> 4) - nfull - nrem - 1;
+        }
+        break;
+    case 0x14:
+    case 0x24:
+    case 0x2C:
+        bytes = (w * h) >> 1;
+        nbyte = bytes & 0xF;
+        nrem = (bytes >> 4) & 7;
+        nfull = (bytes >> 4) & ~7u;
+        if (!nbyte) {
+            h2 = h;
+            nrest = 0;
+        } else {
+            h2 = (h + 7) & ~7u;
+            n = w * h2;
+            nrest = (n >> 5) - nfull - nrem - 1;
+        }
+        break;
+    }
+
+    if (nbyte) {
+        *(s64 *)((unsigned int)&sp->trxreg | 0x20000000) = (s64)(int)sp->trxreg.RRW | ((s64)h2 << 32);
+    }
+
+    while (*(volatile int *)0x10009000 & 0x100) {
+        if (cnt++ > 0x1000000) {
+            GsDiagPrintf(D_0013B520);
+            return -1;
+        }
+    }
+
+    old = GsPutIMR(GsGetIMR() | 0x200);
+    *(volatile s64 *)0x12001000 = 2;
+    *(volatile int *)0x10009020 = 7;
+    if (((unsigned int)sp & 0x70000000) == 0x70000000) {
+        *(volatile int *)0x10009010 = ((unsigned int)sp & 0x0FFFFFFF) | 0x80000000;
+    } else {
+        *(volatile int *)0x10009010 = (unsigned int)sp & 0x0FFFFFFF;
+    }
+    *(volatile int *)0x10009000 = 0x101;
+    while (*(volatile int *)0x10009000 & 0x100) {
+        if (cnt++ > 0x1000000) {
+            GsDiagPrintf(D_0013B520);
+            return -1;
+        }
+    }
+
+    while (!(*(volatile s64 *)0x12001000 & 2)) {
+        if (cnt++ > 0x1000000) {
+            GsDiagPrintf(D_0013B558);
+            *(volatile u128_sd *)0x10005000 = D_00137E10;
+            return -1;
+        }
+    }
+
+    *(volatile int *)0x10003C00 = 0x800000;
+    *(volatile s64 *)0x12001040 = 1;
+
+    if (nfull) {
+        *(volatile int *)0x10009020 = nfull;
+        if (((unsigned int)dstaddr & 0x70000000) == 0x70000000) {
+            *(volatile int *)0x10009010 = ((unsigned int)dstaddr & 0x0FFFFFFF) | 0x80000000;
+        } else {
+            *(volatile int *)0x10009010 = (unsigned int)dstaddr & 0x0FFFFFFF;
+        }
+        *(volatile int *)0x10009000 = 0x100;
+        while (*(volatile int *)0x10009000 & 0x100) {
+            if (cnt++ > 0x1000000) {
+                GsDiagPrintf(D_0013B588);
+                *(volatile s64 *)0x12001000 = 0x100;
+                *(volatile s64 *)0x12001040 = 0;
+                *(volatile int *)0x10003000 = 1;
+                *(volatile int *)0x10003C10 = 1;
+                return -1;
+            }
+        }
+    }
+
+    for (i = 0; i < nrem; i++) {
+        while (!(*(volatile int *)0x10003C00 & 0x1F000000)) {
+            if (cnt++ > 0x1000000) {
+                GsDiagPrintf(D_0013B5C8);
+                *(volatile s64 *)0x12001000 = 0x100;
+                *(volatile s64 *)0x12001040 = 0;
+                *(volatile int *)0x10003000 = 1;
+                *(volatile int *)0x10003C10 = 1;
+                return -1;
+            }
+        }
+        dstaddr[nfull + i] = *(volatile u128_sd *)0x10005000;
+    }
+
+    if (nbyte) {
+        while (!(*(volatile int *)0x10003C00 & 0x1F000000)) {
+            if (cnt++ > 0x1000000) {
+                GsDiagPrintf(D_0013B5C8);
+                *(volatile s64 *)0x12001000 = 0x100;
+                *(volatile s64 *)0x12001040 = 0;
+                *(volatile int *)0x10003000 = 1;
+                *(volatile int *)0x10003C10 = 1;
+                return -1;
+            }
+        }
+        buf.q = *(volatile u128_sd *)0x10005000;
+        for (i = 0; i < nbyte; i++) {
+            ((unsigned char *)&dstaddr[nfull + nrem])[i] = buf.c[i];
+        }
+        for (i = 0; i < nrest; i++) {
+            while (!(*(volatile int *)0x10003C00 & 0x1F000000)) {
+                if (cnt++ > 0x1000000) {
+                    GsDiagPrintf(D_0013B5C8);
+                    *(volatile s64 *)0x12001000 = 0x100;
+                    *(volatile s64 *)0x12001040 = 0;
+                    *(volatile int *)0x10003000 = 1;
+                    *(volatile int *)0x10003C10 = 1;
+                    return -1;
+                }
+            }
+            buf.q = *(volatile u128_sd *)0x10005000;
+        }
+    }
+
+    *(volatile int *)0x10003C00 = 0;
+    *(volatile s64 *)0x12001040 = 0;
+    GsPutIMR(old);
+    {
+        u128_sd t = D_00137E10;
+        *(volatile s64 *)0x12001000 = 2;
+        *(volatile u128_sd *)0x10005000 = t;
+    }
+    return 0;
+}
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00126DBC);
 

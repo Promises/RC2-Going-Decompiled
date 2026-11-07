@@ -1010,6 +1010,18 @@
     unused `u_long_sd` typedef dropped, `u128_sd` with the unit's
     TARGET_NATIVE mode(TI) stand-in, their `CpuSync()` as the RULING #12168
     HARDWARE BARRIER inline asm (ROM `0x12659C`) (task #2474).
+  - **`func_00126730`** (`0x00126730`, libgraph's `sceGsExecStoreImage`,
+    FACT #5541) in `going-decompiled/src/usa/cod/022FA8.c`, from upstream's
+    nonmatching draft `nonmatching/core/func_0012672C.c` (`func_0012672C`,
+    their name at our address; our 0xCD fill FRAG at `0x0012672C` owns that
+    name; author commit `a96d3126e`, Louis-Philippe Le Sieur, whose file
+    credits the routine to OpenRAC `rac1-decomp` `src/core/00122AD8.c`,
+    revision `bbb526cb`). ADAPTED: name at our address, their `Si*` types as
+    this file's `Sd*` types (same layout), `int` spelled `s32`,
+    `long`/`unsigned long` written `s64`/`u64` (RULING #13197), the IMR
+    syscalls spelled `GsGetIMR`/`GsPutIMR`, and the diagnostic called through
+    an EE-only `void` prototype view of `Kprintf` (RULING #13287), which is
+    what closes upstream's own error-path residual (task #2661).
 
 - **Newlib** (<https://sourceware.org/git/newlib-cygwin.git>, tag
   `newlib-2000-02-17`, commit `061afe83dc04a43321d69b5f04860e5de799665c`;
