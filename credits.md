@@ -1158,3 +1158,95 @@
     (RULING #8620), the boot's `g_soundBankHandlesBlk`, two level data names
     and eight callees renamed to the v2.00 disc's targets; assembled through
     `tools/ee/asm_unit.sh`.
+  - **`func_L11_003417D0`** (`0x003417D0`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_003417D0.c`, from
+    `src/levels/11_joba/L11_002DE9E0.c` (`func_L11_00340500`, author commit `c7d9e30a`, bigbeno37),
+    task #2553. VERBATIM but for names: our name at the v2.00 place; callees func_00282CF0 and func_L02_00333480 as L11's copies func_L11_00301210 and func_L11_003415E8.
+  - **`func_L11_0036A7F8`** (`0x0036A7F8`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_0036A7F8.c`, from
+    `src/levels/11_joba/L11_00369700-init-g8.c` (`func_L11_00369700`, author commit `a96d3126`, Louis-Philippe Le Sieur),
+    task #2553. VERBATIM but for names: our name at the v2.00 place; the boot's `g_anAvailableLevelOrder`; five level data names renamed to the v2.00 ROM's relocation targets, three of them address-named inside larger labels (RULING #13291 §2); `include_asm.h` dropped.
+  - **`func_L11_003F4310`** (`0x003F4310`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_003F4310.c`, from
+    `src/levels/11_joba/L11_003D6270.c` (`func_L11_003F2E00`, author commit `ee3fee45`, llesieur99),
+    task #2553. ADAPTED: our name at the v2.00 place; `sda` as `section(".sdata")` (RULING #8620); `common.h` dropped, its typedefs written out.
+  - **`func_L11_00414290`** (`0x00414290`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_00414290.c`, from
+    `src/levels/11_joba/L11_00412B20-g8.c` (`func_L11_00412B20`, author commit `c7d9e30a`, bigbeno37),
+    task #2553. ADAPTED: our name at the v2.00 place; `sda`/`NOT_SDA` as `section(".sdata")`/`section(".data")` (RULING #8620); the boot's `g_heroPos`; four callees as L11's copies; two data names renamed to the v2.00 ROM's relocation targets, address-named (RULING #13291 §2); `common.h` dropped.
+  - **`func_L11_00427310`** (`0x00427310`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_00427310.c`, from
+    `src/levels/11_joba/L11_00420C88.c` (`func_L11_00425AF8`, author commit `ba383701`, bigbeno37),
+    task #2553. ADAPTED: our name at the v2.00 place; `sda` as `section(".sdata")` (RULING #8620); two data names renamed to the v2.00 ROM's relocation targets, address-named (RULING #13291 §2); `include_asm.h` dropped.
+  - **`func_L11_0042BCF8`** (`0x0042BCF8`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_0042BCF8.c`, from
+    `src/levels/11_joba/L11_00425F10.c` (`func_L11_0042A4C8`, author commit `ba383701`, bigbeno37),
+    task #2553. ADAPTED: our name at the v2.00 place; `sda` as `section(".sdata")` (RULING #8620); two data names renamed to the v2.00 ROM's relocation targets, address-named (RULING #13291 §2); `common.h` dropped.
+  - **`func_L11_00439600`** (`0x00439600`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_00439600.c`, from
+    `src/levels/11_joba/L11_00432628.c` (`func_L11_00437DC0`, author commit `fa8d6672`, llesieur99),
+    task #2553. ADAPTED: our name at the v2.00 place; `sda` as `section(".sdata")` (RULING #8620); the record base renamed to the v2.00 target, address-named (RULING #13291 §2); one callee as L11's copy; `common.h` dropped.
+  - **`func_L11_004396A8`** (`0x004396A8`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_004396A8.c`, from
+    `src/levels/11_joba/L11_00432628.c` (`func_L11_00437E68`, author commit `6b943916`, Louis-Philippe Le Sieur),
+    task #2553. ADAPTED: our name at the v2.00 place; `sda` as `section(".sdata")` (RULING #8620); the record base renamed to the v2.00 target, address-named (RULING #13291 §2); one callee as L11's copy; `common.h` dropped.
+  - **`func_L11_0043B430`** (`0x0043B430`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_0043B430.c`, from
+    `src/levels/11_joba/L11_00432628.c` (`func_L11_00439BF0`, author commit `431ac503`, llesieur99),
+    task #2553. ADAPTED: our name at the v2.00 place; `sda` as `section(".sdata")` (RULING #8620); the boot's `g_listenerPosHistory`; the record base renamed to the v2.00 target, address-named (RULING #13291 §2); three callees as L11's copies; `common.h` dropped.
+  - **`func_L11_00442A18`** (`0x00442A18`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_00442A18.c`, from
+    `src/levels/11_joba/L11_0043E1A0.c` (`func_L11_004411C8`, author commit `f6353318`, DrLegitamate),
+    task #2553. ADAPTED: our name at the v2.00 place; `sda` as `section(".sdata")` (RULING #8620); their asm-label view `D_L11_001B359C_base` written as the one direct declaration `D_L11_001B361C` (no asm label); two data names renamed to the v2.00 targets, address-named (RULING #13291 §2); nine handlers renamed to their v2.00 places; `common.h` dropped.
+  - **`func_L11_00443038`** (`0x00443038`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_00443038.c`, from
+    `src/levels/11_joba/L11_0043E1A0.c` (`func_L11_004417E8`, author commit `264cb2be`, llesieur99),
+    task #2553. ADAPTED: our name at the v2.00 place; `sda` as `section(".sdata")` (RULING #8620); the table base renamed to the v2.00 target, address-named (RULING #13291 §2); `common.h` dropped.
+  - **`func_L11_00443E18`** (`0x00443E18`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_00443E18.c`, from
+    `src/levels/11_joba/L11_004425C8.c` (`func_L11_004425C8`, author commit `3cd8af2d`, bigbeno37),
+    task #2553. ADAPTED: our name at the v2.00 place; `sda` as `section(".sdata")` (RULING #8620) on two externs; the boot's `g_heroPos`; two data names renamed to the v2.00 targets, address-named (RULING #13291 §2); ten callees as L11's own functions or copies.
+  - **`func_L11_00456538`** (`0x00456538`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_00456538.c`, from
+    `src/levels/11_joba/L11_00453358.c` (`func_L11_00454AE0`, author commit `91e04732`, llesieur99),
+    task #2553. ADAPTED: our name at the v2.00 place; two callees as L11's copies; the body otherwise verbatim, and the audit's `long long` respelling not needed (no `long long` in this function); `common.h` dropped.
+  - **`func_L11_004565B8`** (`0x004565B8`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_004565B8.c`, from
+    `src/levels/11_joba/L11_00453358.c` (`func_L11_00454B60`, author commit `5964c620`, Flavius),
+    task #2553. ADAPTED: our name at the v2.00 place; three callees renamed to their v2.00 targets; the body otherwise verbatim, and the audit's `long long` respelling not needed (no `long long` in this function); `common.h` dropped.
+  - **`func_L11_004566D0`** (`0x004566D0`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_004566D0.c`, from
+    `src/levels/11_joba/L11_00453358.c` (`func_L11_00454C78`, author commit `daf0e4a1`, Flavius),
+    task #2553. ADAPTED: our name at the v2.00 place; six callees renamed to their v2.00 targets; the body otherwise verbatim, and the audit's `long long` respelling not needed (no `long long` in this function); `common.h` dropped.
+  - **`func_L11_00456830`** (`0x00456830`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_00456830.c`, from
+    `src/levels/11_joba/L11_00453358.c` (`func_L11_00454DD8`, author commit `daf0e4a1`, Flavius),
+    task #2553. ADAPTED: our name at the v2.00 place; the boot's `g_listenerPosHistory`; seven callees renamed to their v2.00 targets; the body otherwise verbatim, and the audit's `long long` respelling not needed (no `long long` in this function); `common.h` dropped.
+  - **`func_L11_00457A68`** (`0x00457A68`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_00457A68.c`, from
+    `src/levels/11_joba/L11_00453358.c` (`func_L11_00456010`, author commit `91e04732`, llesieur99),
+    task #2553. ADAPTED: our name at the v2.00 place; one callee as L11's copy; the body otherwise verbatim, and the audit's `long long` respelling not needed (no `long long` in this function); `common.h` dropped.
+  - **`func_L11_00457DD0`** (`0x00457DD0`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_00457DD0.c`, from
+    `src/levels/11_joba/L11_00453358.c` (`func_L11_00456378`, author commit `5964c620`, Flavius),
+    task #2553. ADAPTED: our name at the v2.00 place; two callees renamed to their v2.00 targets; the body otherwise verbatim, and the audit's `long long` respelling not needed (no `long long` in this function); `common.h` dropped.
+  - **`func_L11_00457F98`** (`0x00457F98`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_00457F98.c`, from
+    `src/levels/11_joba/L11_00453358.c` (`func_L11_00456540`, author commit `431ac503`, llesieur99),
+    task #2553. ADAPTED: our name at the v2.00 place; four callees renamed to their v2.00 targets; the body otherwise verbatim, and the audit's `long long` respelling not needed (no `long long` in this function); `common.h` dropped.
+  - **`func_L11_00458678`** (`0x00458678`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_00458678.c`, from
+    `src/levels/11_joba/L11_00453358.c` (`func_L11_00456C20`, author commit `3cd8af2d`, bigbeno37),
+    task #2553. ADAPTED: our name at the v2.00 place; twelve callees renamed to their v2.00 targets; the body otherwise verbatim, and the audit's `long long` respelling not needed (no `long long` in this function); `common.h` dropped.
+  - **`func_L11_0045A840`** (`0x0045A840`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_0045A840.c`, from
+    `src/levels/11_joba/L11_00453358.c` (`func_L11_00458D88`, author commit `7fccf735`, Flavius),
+    task #2553. ADAPTED: our name at the v2.00 place; one callee as L11's copy; the body otherwise verbatim, and the audit's `long long` respelling not needed (no `long long` in this function); `common.h` dropped.
+  - **`func_L11_0045AA10`** (`0x0045AA10`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_0045AA10.c`, from
+    `src/levels/11_joba/L11_00453358.c` (`func_L11_00458F58`, author commit `91e04732`, llesieur99),
+    task #2553. ADAPTED: our name at the v2.00 place; one callee as L11's copy; the body otherwise verbatim, and the audit's `long long` respelling not needed (no `long long` in this function); `common.h` dropped.
+  - **`func_L11_00461AD8`** (`0x00461AD8`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_00461AD8.c`, from
+    `src/levels/11_joba/L11_00453358.c` (`func_L11_00460038`, author commit `7fccf735`, Flavius),
+    task #2553. ADAPTED: our name at the v2.00 place; one callee as L11's copy; the body otherwise verbatim, and the audit's `long long` respelling not needed (no `long long` in this function); `common.h` dropped.
