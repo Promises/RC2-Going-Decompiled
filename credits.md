@@ -2033,3 +2033,105 @@
     `src/levels/23_damosel_orbit/L23_00416388-g8.c`
     (`func_L23_0041C7D8`, author commit `babfe411`, bigmak94), task #2567.
     ADAPTED: our name; level data names and callees renamed to the v2.00 disc's targets, L23's own functions; `nosda` as `section(".data")` on the boot's `g_pHeroMoby` for `D_0018C0B0` (RULING #8620); an address-named extern (RULING #13291 section 2).
+  - **`func_L02_003D38E8`** (`0x003D38E8`, level program 02) in
+    `going-decompiled/levels/usa/L02/src/func_L02_003D38E8.c`, from
+    `src/levels/02_maktar_nebula/L02_003D2390.c`
+    (`func_L02_003D2390`, author commit `291c840e`, Flavius), task #2558.
+    VERBATIM but for names.
+  - **`func_L02_003D5C20`** (`0x003D5C20`, level program 02) in
+    `going-decompiled/levels/usa/L02/src/func_L02_003D5C20.c`, from
+    `src/levels/02_maktar_nebula/L02_003D26B0.c`
+    (`func_L02_003D46B8`, author commit `e80a585a`, Flavius), task #2558.
+    VERBATIM but for names; `D_0018C2BC` stays an address-named extern
+    (RULING #13291 §2).
+  - **`func_L02_003D5E68`** (`0x003D5E68`, level program 02) in
+    `going-decompiled/levels/usa/L02/src/func_L02_003D5E68.c`, from
+    `src/levels/02_maktar_nebula/L02_003D26B0.c`
+    (`func_L02_003D4900`, author commit `431ac503`, llesieur99), task #2558.
+    VERBATIM but for names.
+  - **`func_L02_003D5EE8`** (`0x003D5EE8`, level program 02) in
+    `going-decompiled/levels/usa/L02/src/func_L02_003D5EE8.c`, from
+    `src/levels/02_maktar_nebula/L02_003D26B0.c`
+    (`func_L02_003D4980`, author commit `431ac503`, llesieur99), task #2558.
+    VERBATIM but for names.
+  - **`func_L02_003D5EF8`** (`0x003D5EF8`, level program 02) in
+    `going-decompiled/levels/usa/L02/src/func_L02_003D5EF8.c`, from
+    `src/levels/02_maktar_nebula/L02_003D26B0.c`
+    (`func_L02_003D4990`, author commit `ac1ee013`, bigmak94), task #2558.
+    VERBATIM but for names.
+  - **`func_L02_003D5FB0`** (`0x003D5FB0`, level program 02) in
+    `going-decompiled/levels/usa/L02/src/func_L02_003D5FB0.c`, from
+    `src/levels/02_maktar_nebula/L02_003D26B0.c`
+    (`func_L02_003D4A48`, author commit `773eafc2`, llesieur99), task #2558.
+    VERBATIM but for names.
+  - **`func_L02_003D5FC8`** (`0x003D5FC8`, level program 02) in
+    `going-decompiled/levels/usa/L02/src/func_L02_003D5FC8.c`, from
+    `src/levels/02_maktar_nebula/L02_003D26B0.c`
+    (`func_L02_003D4A60`, author commit `773eafc2`, llesieur99), task #2558.
+    VERBATIM but for names.
+  - **`func_L02_003D6268`** (`0x003D6268`, level program 02) in
+    `going-decompiled/levels/usa/L02/src/func_L02_003D6268.c`, from
+    `src/levels/02_maktar_nebula/L02_003D26B0.c`
+    (`func_L02_003D4D00`, author commit `773eafc2`, llesieur99), task #2558.
+    VERBATIM but for names.
+  - **`func_L02_003D6538`** (`0x003D6538`, level program 02) in
+    `going-decompiled/levels/usa/L02/src/func_L02_003D6538.c`, from
+    `src/levels/02_maktar_nebula/L02_003D26B0.c`
+    (`func_L02_003D4FD0`, author commit `ee3fee45`, llesieur99), task #2558.
+    VERBATIM but for names.
+  - **`func_L02_003D6BC8`** (`0x003D6BC8`, level program 02) in
+    `going-decompiled/levels/usa/L02/src/func_L02_003D6BC8.c`, from
+    `src/levels/02_maktar_nebula/L02_003D26B0.c`
+    (`func_L02_003D5660`, author commit `431ac503`, llesieur99), task #2558.
+    VERBATIM but for names.
+  - **`func_L02_003D70F8`** (`0x003D70F8`, level program 02) in
+    `going-decompiled/levels/usa/L02/src/func_L02_003D70F8.c`, from
+    `src/levels/02_maktar_nebula/L02_003D26B0.c`
+    (`func_L02_003D5B90`, author commit `773eafc2`, llesieur99), task #2558.
+    VERBATIM but for names.
+  - **`func_L02_003D7188`** (`0x003D7188`, level program 02) in
+    `going-decompiled/levels/usa/L02/src/func_L02_003D7188.c`, from
+    `src/levels/02_maktar_nebula/L02_003D26B0.c`
+    (`func_L02_003D5C20`, author commit `e80a585a`, Flavius), task #2558.
+    VERBATIM but for names.
+  - **`func_L02_003D7858`** (`0x003D7858`, level program 02) in
+    `going-decompiled/levels/usa/L02/src/func_L02_003D7858.c`, from
+    `src/levels/02_maktar_nebula/L02_003D26B0.c`
+    (`func_L02_003D62F0`, author commit `773eafc2`, llesieur99), task #2558.
+    Adapted: names, and a prototype for func_L02_003D7F88, which upstream
+    calls undeclared (byte-neutral).
+  - **`func_L02_003D78B0`** (`0x003D78B0`, level program 02) in
+    `going-decompiled/levels/usa/L02/src/func_L02_003D78B0.c`, from
+    `src/levels/02_maktar_nebula/L02_003D26B0.c`
+    (`func_L02_003D6348`, author commit `773eafc2`, llesieur99), task #2558.
+    VERBATIM but for names.
+  - **`func_L02_003D7AA0`** (`0x003D7AA0`, level program 02) in
+    `going-decompiled/levels/usa/L02/src/func_L02_003D7AA0.c`, from
+    `src/levels/02_maktar_nebula/L02_003D26B0.c`
+    (`func_L02_003D6538`, author commit `773eafc2`, llesieur99), task #2558.
+    VERBATIM but for names.
+  - **`func_L02_003D8118`** (`0x003D8118`, level program 02) in
+    `going-decompiled/levels/usa/L02/src/func_L02_003D8118.c`, from
+    `src/levels/02_maktar_nebula/L02_003D26B0.c`
+    (`func_L02_003D6BB0`, author commit `773eafc2`, llesieur99), task #2558.
+    VERBATIM but for names.
+  - **`func_L02_003DC858`** (`0x003DC858`, level program 02) in
+    `going-decompiled/levels/usa/L02/src/func_L02_003DC858.c`, from
+    `src/levels/02_maktar_nebula/L02_003D26B0.c`
+    (`func_L02_003DB2F0`, author commit `773eafc2`, llesieur99), task #2558.
+    VERBATIM but for names.
+  - **`func_L02_003DCDD8`** (`0x003DCDD8`, level program 02) in
+    `going-decompiled/levels/usa/L02/src/func_L02_003DCDD8.c`, from
+    `src/levels/02_maktar_nebula/L02_003DB310.c`
+    (`func_L02_003DB870`, author commit `adcbd51e`, llesieur99), task #2558.
+    VERBATIM but for names.
+  - **`func_L02_003DCDE8`** (`0x003DCDE8`, level program 02) in
+    `going-decompiled/levels/usa/L02/src/func_L02_003DCDE8.c`, from
+    `src/levels/02_maktar_nebula/L02_003DB310.c`
+    (`func_L02_003DB880`, author commit `a2d495f1`, Flavius), task #2558.
+    VERBATIM but for names.
+  - **`func_L02_003DCEA0`** (`0x003DCEA0`, level program 02) in
+    `going-decompiled/levels/usa/L02/src/func_L02_003DCEA0.c`, from
+    `src/levels/02_maktar_nebula/L02_003DB310.c`
+    (`func_L02_003DB938`, author commit `773eafc2`, llesieur99), task #2558.
+    VERBATIM but for names.
