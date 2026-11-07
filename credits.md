@@ -1541,6 +1541,10 @@
     `going-decompiled/levels/usa/L14/src/func_L14_0032A188.c`, from
     `src/levels/14_aranos_prison/L14_00304190.c` (`func_L14_00328E90`, author commit `db93b56d`, llesieur99),
     task #2563. VERBATIM but for names: our name at the v2.00 place; three callees as L14's copies.
+  - **`func_L14_003606E8`** (`0x003606E8`, level program 14) in
+    `going-decompiled/levels/usa/L14/src/func_L14_003606E8.c`, from
+    `src/levels/14_aranos_prison/L14_0035F510-g8.c` (`func_L14_0035F510`, author commit `7c3ea917`, Fromnowhere, copying bigbeno37's text from `6001495a` (func_L00_00354DF8; RULING #13427 rev 4)),
+    task #2564. VERBATIM but for names: our name at the v2.00 place; the boot's `g_anAvailableLevelOrder`; two level data names as our labels `D_L14_001AA790`/`D_L14_0028D1B0`; two level data names as address-named externs `D_L14_0021D5E0`/`D_L14_001C9A60`, the v2.00 targets inside larger split labels (RULING #13291 §2); `D_L14_00291720` kept (the v2.00 label there has the same name); s136 -G8, plain as.
   - **`func_L14_00392440`** (`0x00392440`, level program 14) in
     `going-decompiled/levels/usa/L14/src/func_L14_00392440.c`, from
     `src/levels/14_aranos_prison/L14_00304190.c` (`func_L14_00390FE8`, author commit `adcbd51e`, llesieur99),
@@ -1553,6 +1557,10 @@
     `going-decompiled/levels/usa/L14/src/func_L14_003CAA18.c`, from
     `src/levels/14_aranos_prison/L14_00304190.c` (`func_L14_003C9548`, author commit `db93b56d`, llesieur99),
     task #2563. VERBATIM but for names: our name at the v2.00 place; no other symbol.
+  - **`func_L14_003DF7E8`** (`0x003DF7E8`, level program 14) in
+    `going-decompiled/levels/usa/L14/src/func_L14_003DF7E8.c`, from
+    `src/levels/14_aranos_prison/L14_003DE310-rc2.c` (`func_L14_003DE310`, author commit `fe9859d7`, Sergio Rodmauser),
+    task #2564. VERBATIM but for names: our name at the v2.00 place; no callee; the typedefs s8/s32/f32 written out with upstream include/common.h's own definitions; the file's own MIT notice ("Forja contributors") kept verbatim in the TU (RULING #12108); sdk29 -G0, plain as.
   - **`func_L14_003DF838`** (`0x003DF838`, level program 14) in
     `going-decompiled/levels/usa/L14/src/func_L14_003DF838.c`, from
     `src/levels/14_aranos_prison/L14_00304190.c` (`func_L14_003DE360`, author commit `913bd1bc`, Gianni),
@@ -1581,6 +1589,10 @@
     `going-decompiled/levels/usa/L14/src/func_L14_003E0B68.c`, from
     `src/levels/14_aranos_prison/L14_00304190.c` (`func_L14_003DF650`, author commit `db93b56d`, llesieur99),
     task #2563. VERBATIM but for names: our name at the v2.00 place; two callees at their v2.00 places.
+  - **`func_L14_003E0BA8`** (`0x003E0BA8`, level program 14) in
+    `going-decompiled/levels/usa/L14/src/func_L14_003E0BA8.c`, from
+    `src/levels/14_aranos_prison/L14_00304190.c` (`func_L14_003DF690`, author commit `adcbd51e`, llesieur99),
+    task #2564. VERBATIM but for names: our name at the v2.00 place; no other symbol; sdk29 -G0, plain as.
   - **`func_L14_003E0BB8`** (`0x003E0BB8`, level program 14) in
     `going-decompiled/levels/usa/L14/src/func_L14_003E0BB8.c`, from
     `src/levels/14_aranos_prison/L14_003DF6A0-g8.c` (`func_L14_003DF6A0`, author commit `bf60a47f`, Louis-Philippe Le Sieur),
@@ -1589,6 +1601,18 @@
     `going-decompiled/levels/usa/L14/src/func_L14_003E0D10.c`, from
     `src/levels/14_aranos_prison/L14_00304190-g8.c` (`func_L14_003DF7F8`, author commit `ee3fee45`, llesieur99),
     task #2581. VERBATIM but for names: our name at the v2.00 place; fourteen callees as L14's copies / v2.00 places; three `.sdata` floats as our labels `D_L14_001B0338`/`033C`/`0340`; `sda` kept as written; a repeated declaration carried once; the file's include, other functions and their externs not carried; asm_unit route, s136 -G8.
+  - **`func_L14_003E0F28`** (`0x003E0F28`, level program 14) in
+    `going-decompiled/levels/usa/L14/src/func_L14_003E0F28.c`, from
+    `src/levels/14_aranos_prison/L14_00304190.c` (`func_L14_003DFA10`, author commit `adcbd51e`, llesieur99),
+    task #2564. VERBATIM but for names: our name at the v2.00 place; two callees as L14's copies.
+  - **`func_L14_003E32E8`** (`0x003E32E8`, level program 14) in
+    `going-decompiled/levels/usa/L14/src/func_L14_003E32E8.c`, from
+    `src/levels/14_aranos_prison/L14_00304190.c` (`func_L14_003E1DD0`, author commit `adcbd51e`, llesieur99),
+    task #2564. VERBATIM but for names: our name at the v2.00 place; three callees as L14's copies.
+  - **`func_L14_003E3750`** (`0x003E3750`, level program 14) in
+    `going-decompiled/levels/usa/L14/src/func_L14_003E3750.c`, from
+    `src/levels/14_aranos_prison/L14_00304190.c` (`func_L14_003E2238`, author commit `db93b56d`, llesieur99),
+    task #2564. VERBATIM but for names: our name at the v2.00 place; four callees as L14's copies.
   - **`func_L14_003E3BA0`** (`0x003E3BA0`, level program 14) in
     `going-decompiled/levels/usa/L14/src/func_L14_003E3BA0.c`, from
     `src/levels/14_aranos_prison/L14_00304190-g8.c` (`func_L14_003E2688`, author commit `bde5ccd6`, DrLegitamate),
@@ -1597,10 +1621,38 @@
     `going-decompiled/levels/usa/L14/src/func_L14_003E5F58.c`, from
     `src/levels/14_aranos_prison/L14_00304190.c` (`func_L14_003E4A40`, author commit `913bd1bc`, Gianni),
     task #2581. ADAPTED: built at -G8 where upstream builds the file at -G0 (a tsv gflag setting; at -G0 .text is 0x154, not 0x158); our name at the v2.00 place; five callees as L14's copies; the boot's `g_listenerPosHistory`; a repeated declaration carried once; the file's include, other functions and their externs not carried; asm_unit route, s136.
+  - **`func_L14_003E65D0`** (`0x003E65D0`, level program 14) in
+    `going-decompiled/levels/usa/L14/src/func_L14_003E65D0.c`, from
+    `src/levels/14_aranos_prison/L14_00304190.c` (`func_L14_003E50B8`, author commit `b9d9d0d4`, bigbeno37),
+    task #2564. VERBATIM but for names: our name at the v2.00 place; one callee as L14's copy; the typedefs u8/u16/s16 written out with upstream include/common.h's own definitions; s136 -G0, plain as.
+  - **`func_L14_003E66A8`** (`0x003E66A8`, level program 14) in
+    `going-decompiled/levels/usa/L14/src/func_L14_003E66A8.c`, from
+    `src/levels/14_aranos_prison/L14_00304190.c` (`func_L14_003E5190`, author commit `db93b56d`, llesieur99),
+    task #2564. VERBATIM but for names: our name at the v2.00 place; no other symbol; sdk29 -G0, plain as.
+  - **`func_L14_003E66C8`** (`0x003E66C8`, level program 14) in
+    `going-decompiled/levels/usa/L14/src/func_L14_003E66C8.c`, from
+    `src/levels/14_aranos_prison/L14_00304190.c` (`func_L14_003E51B0`, author commit `ee3fee45`, llesieur99),
+    task #2564. VERBATIM but for names: our name at the v2.00 place; no callee; the typedef s16 written out with upstream include/common.h's own definition; sdk29 -G0, plain as.
+  - **`func_L14_003E6730`** (`0x003E6730`, level program 14) in
+    `going-decompiled/levels/usa/L14/src/func_L14_003E6730.c`, from
+    `src/levels/14_aranos_prison/L14_00304190.c` (`func_L14_003E5218`, author commit `4912fc03`, bigbeno37),
+    task #2564. VERBATIM but for names: our name at the v2.00 place; no other symbol; sdk29 -G0, plain as.
+  - **`func_L14_003F2298`** (`0x003F2298`, level program 14) in
+    `going-decompiled/levels/usa/L14/src/func_L14_003F2298.c`, from
+    `src/levels/14_aranos_prison/L14_00304190.c` (`func_L14_003F0D50`, author commit `daf0e4a1`, Flavius),
+    task #2564. VERBATIM but for names: our name at the v2.00 place; four callees and the queued callback's function name as L14's copies; s136 -G0, plain as.
+  - **`func_L14_003F23E0`** (`0x003F23E0`, level program 14) in
+    `going-decompiled/levels/usa/L14/src/func_L14_003F23E0.c`, from
+    `src/levels/14_aranos_prison/L14_00304190.c` (`func_L14_003F0E98`, author commit `7495b38a`, Louis-Philippe Le Sieur),
+    task #2564. VERBATIM but for names: our name at the v2.00 place; no other symbol; upstream's two `long long` stores kept as written - the arm is sdk29, where they compile; sdk29 -G0, plain as.
   - **`func_L14_0040B080`** (`0x0040B080`, level program 14) in
     `going-decompiled/levels/usa/L14/src/func_L14_0040B080.c`, from
     `src/levels/14_aranos_prison/L14_003F4F98-g8.c` (`func_L14_00409B20`, author commit `daf0e4a1`, Flavius),
     task #2581. VERBATIM but for names: our name at the v2.00 place; eight callees as L14's copies; `D_L14_001B259C` as the v2.00 relocation target `D_L14_001B251C`, address-named (RULING #13291 §2); `sda` kept as written; a repeated declaration carried once; the file's include, other functions and their externs not carried; asm_unit route, s136 -G8.
+  - **`func_L14_00414DA8`** (`0x00414DA8`, level program 14) in
+    `going-decompiled/levels/usa/L14/src/func_L14_00414DA8.c`, from
+    `src/levels/14_aranos_prison/L14_003F4F98.c` (`func_L14_004137F8`, author commit `7fccf735`, Flavius),
+    task #2564. VERBATIM but for names: our name at the v2.00 place; no other symbol; sdk29 -G0, plain as.
   - **`func_L14_00415288`** (`0x00415288`, level program 14) in
     `going-decompiled/levels/usa/L14/src/func_L14_00415288.c`, from
     `src/levels/14_aranos_prison/L14_003F4F98.c` (`func_L14_00413CD8`, author commit `7fccf735`, Flavius; upstream's root commit, which squashed the earlier RAC2 history),
@@ -1625,6 +1677,14 @@
     `going-decompiled/levels/usa/L14/src/func_L14_004283B8.c`, from
     `src/levels/14_aranos_prison/L14_003F4F98.c` (`func_L14_00426DE8`, author commit `431ac503`, llesieur99),
     task #2563. ADAPTED: our name at the v2.00 place; the boot's `g_gsScreenContext` (upstream's `short []` type kept); two callees as L14's copies; one `unsigned long` parameter written `u64` (RULING #13197), typedef written out.
+  - **`func_L14_00428430`** (`0x00428430`, level program 14) in
+    `going-decompiled/levels/usa/L14/src/func_L14_00428430.c`, from
+    `src/levels/14_aranos_prison/L14_003F4F98-g8.c` (`func_L14_00426E60`, author commit `8422a726`, Fromnowhere),
+    task #2564. VERBATIM but for names: our name at the v2.00 place; two `.sdata` floats as our labels `D_L14_001B1758`/`D_L14_001B175C`; the boot's `g_heroPos`; three callees as L14's copies; `sda` kept as written (ignored by this cc1); the typedef EffectPair kept in upstream's order after the externs; s136 -G8, plain as.
+  - **`func_L14_004287F0`** (`0x004287F0`, level program 14) in
+    `going-decompiled/levels/usa/L14/src/func_L14_004287F0.c`, from
+    `src/levels/14_aranos_prison/L14_00427210-rc2.c` (`func_L14_00427210`, author commit `fe9859d7`, Sergio Rodmauser),
+    task #2564. VERBATIM but for names: our name at the v2.00 place; no callee; the typedefs u8/s8/s32 written out with upstream include/common.h's own definitions; the file's own MIT notice ("RC2 decomp contributions") kept verbatim in the TU (RULING #12108); sdk29 -G0, plain as.
   - **`func_L14_00429CD8`** (`0x00429CD8`, level program 14) in
     `going-decompiled/levels/usa/L14/src/func_L14_00429CD8.c`, from
     `src/levels/14_aranos_prison/L14_003F4F98.c` (`func_L14_004286F8`, author commit `4541c4ce`, ReaperOfVeriod),
@@ -1637,6 +1697,18 @@
     `going-decompiled/levels/usa/L14/src/func_L14_004310F0.c`, from
     `src/levels/14_aranos_prison/L14_0042FB10-effect-g8.c` (`func_L14_0042FB10`, author commit `4912fc03`, bigbeno37),
     task #2581. ADAPTED: its two `sda` attributes written `section(".sdata")` (RULING #8620; with `sda`, 12 bytes differ); `NOT_SDA` written out as its `section(".data")` expansion; our name at the v2.00 place; ten callees as L14's copies; the boot's `g_listenerPosHistory` and `g_soundBankHandlesBlk`; `D_001395E3` respelled `D_1395E3`, the boot's existing dlabel at that address (task #2621), address-named; `D_L14_001B259C` / `D_L14_001B259C_1` as `D_L14_001B251C` / `D_001B251C`, two address-named spellings of the one v2.00 target (RULING #13291 §2; C cannot give one name the two types upstream declares); the file's include not carried; asm_unit route, s136 -G8.
+  - **`func_L14_00431E78`** (`0x00431E78`, level program 14) in
+    `going-decompiled/levels/usa/L14/src/func_L14_00431E78.c`, from
+    `src/levels/14_aranos_prison/L14_003F4F98.c` (`func_L14_00430898`, author commit `91e04732`, llesieur99),
+    task #2564. VERBATIM but for names: our name at the v2.00 place; one callee as L14's copy; sdk29 -G0, plain as.
+  - **`func_L14_004337A0`** (`0x004337A0`, level program 14) in
+    `going-decompiled/levels/usa/L14/src/func_L14_004337A0.c`, from
+    `src/levels/14_aranos_prison/L14_003F4F98.c` (`func_L14_004321C0`, author commit `42e0babe`, Louis-Philippe Le Sieur),
+    task #2564. VERBATIM but for names: our name at the v2.00 place; no other symbol; sdk29 -G0, plain as.
+  - **`func_L14_004337A8`** (`0x004337A8`, level program 14) in
+    `going-decompiled/levels/usa/L14/src/func_L14_004337A8.c`, from
+    `src/levels/14_aranos_prison/L14_003F4F98.c` (`func_L14_004321C8`, author commit `42e0babe`, Louis-Philippe Le Sieur),
+    task #2564. VERBATIM but for names: our name at the v2.00 place; no other symbol; sdk29 -G0, plain as.
   - **`func_L14_004337B0`** (`0x004337B0`, level program 14) in
     `going-decompiled/levels/usa/L14/src/func_L14_004337B0.c`, from
     `src/levels/14_aranos_prison/L14_003F4F98.c` (`func_L14_004321D0`, author commit `312b7eea`, Louis-Philippe Le Sieur),
