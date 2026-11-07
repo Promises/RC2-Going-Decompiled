@@ -742,7 +742,7 @@
   - **`PatchShrubPacketTex0`** (`0x002E1ED0`, patches the TEX0 TBP fields
     of the visible shrubs' draw packets) in
     `going-decompiled/src/usa/text/1DFF80.cpp`, from `src/game/002E10B8.c`
-    (`func_002E10B8`, v1.01 address, author commit `7fccf735`, Flavius).
+    (`func_002E10B8`, v1.01 address, author commit `7fccf735`, Flavius; upstream's root commit, which squashed the earlier RAC2 history).
     ADAPTED: our symbol names by address, their {short, short} table entry
     as our `ShrubTexVramPair` view, `int`/`short`/`unsigned char` spelled
     `s32`/`s16`/`u8`, an `(s32 *)` cast on `g_shrubClassTable[*list]` (ours
@@ -1372,7 +1372,7 @@
     task #2553. ADAPTED: our name at the v2.00 place; twelve callees renamed to their v2.00 targets; the body otherwise verbatim, and the audit's `long long` respelling not needed (no `long long` in this function); `common.h` dropped.
   - **`func_L11_0045A840`** (`0x0045A840`, level program 11) in
     `going-decompiled/levels/usa/L11/src/func_L11_0045A840.c`, from
-    `src/levels/11_joba/L11_00453358.c` (`func_L11_00458D88`, author commit `7fccf735`, Flavius),
+    `src/levels/11_joba/L11_00453358.c` (`func_L11_00458D88`, author commit `7fccf735`, Flavius; upstream's root commit, which squashed the earlier RAC2 history),
     task #2553. ADAPTED: our name at the v2.00 place; one callee as L11's copy; the body otherwise verbatim, and the audit's `long long` respelling not needed (no `long long` in this function); `common.h` dropped.
   - **`func_L11_0045AA10`** (`0x0045AA10`, level program 11) in
     `going-decompiled/levels/usa/L11/src/func_L11_0045AA10.c`, from
@@ -1380,7 +1380,7 @@
     task #2553. ADAPTED: our name at the v2.00 place; one callee as L11's copy; the body otherwise verbatim, and the audit's `long long` respelling not needed (no `long long` in this function); `common.h` dropped.
   - **`func_L11_00461AD8`** (`0x00461AD8`, level program 11) in
     `going-decompiled/levels/usa/L11/src/func_L11_00461AD8.c`, from
-    `src/levels/11_joba/L11_00453358.c` (`func_L11_00460038`, author commit `7fccf735`, Flavius),
+    `src/levels/11_joba/L11_00453358.c` (`func_L11_00460038`, author commit `7fccf735`, Flavius; upstream's root commit, which squashed the earlier RAC2 history),
     task #2553. ADAPTED: our name at the v2.00 place; one callee as L11's copy; the body otherwise verbatim, and the audit's `long long` respelling not needed (no `long long` in this function); `common.h` dropped.
   - **`func_L02_003DCEB8`** (`0x003DCEB8`, level program 02) in
     `going-decompiled/levels/usa/L02/src/func_L02_003DCEB8.c`, from
@@ -1489,16 +1489,16 @@
     (`func_L11_004417A8`, v1.01 address, author commit `264cb2be`, llesieur99). VERBATIM but for names: our name, `D_L11_001BA780` as the address-named `D_L11_001BA800`, `include_asm.h`/`common.h` dropped, typedefs written in the TU. Task #2555.
   - **`func_L11_00443058`** (level program 11, Joba, at `0x00443058`) in
     `going-decompiled/levels/usa/L11/src/func_L11_00443058.c`, from `src/levels/11_joba/L11_0043E1A0.c`
-    (`func_L11_00441808`, v1.01 address, author commit `7fccf735`, Flavius). VERBATIM but for names: our name, `D_L11_001FF580` as the address-named `D_L11_001FF600`, `func_002A8AF0` as `func_L11_0032F328`, `include_asm.h`/`common.h` dropped, typedefs written in the TU. Task #2555.
+    (`func_L11_00441808`, v1.01 address, author commit `7fccf735`, Flavius; upstream's root commit, which squashed the earlier RAC2 history). VERBATIM but for names: our name, `D_L11_001FF580` as the address-named `D_L11_001FF600`, `func_002A8AF0` as `func_L11_0032F328`, `include_asm.h`/`common.h` dropped, typedefs written in the TU. Task #2555.
   - **`func_L11_004430A8`** (level program 11, Joba, at `0x004430A8`) in
     `going-decompiled/levels/usa/L11/src/func_L11_004430A8.c`, from `src/levels/11_joba/L11_0043E1A0.c`
     (`func_L11_00441858`, v1.01 address, author commit `431ac503`, llesieur99). VERBATIM but for names: our name, `include_asm.h`/`common.h` dropped, typedefs written in the TU. Task #2555.
   - **`func_L11_004430B8`** (level program 11, Joba, at `0x004430B8`) in
     `going-decompiled/levels/usa/L11/src/func_L11_004430B8.c`, from `src/levels/11_joba/L11_0043E1A0.c`
-    (`func_L11_00441868`, v1.01 address, author commit `7fccf735`, Flavius). VERBATIM but for names: our name, `include_asm.h`/`common.h` dropped, typedefs written in the TU. Task #2555.
+    (`func_L11_00441868`, v1.01 address, author commit `7fccf735`, Flavius; upstream's root commit, which squashed the earlier RAC2 history). VERBATIM but for names: our name, `include_asm.h`/`common.h` dropped, typedefs written in the TU. Task #2555.
   - **`func_L11_004431C8`** (level program 11, Joba, at `0x004431C8`) in
     `going-decompiled/levels/usa/L11/src/func_L11_004431C8.c`, from `src/levels/11_joba/L11_0043E1A0.c`
-    (`func_L11_00441978`, v1.01 address, author commit `7fccf735`, Flavius). VERBATIM but for names: our name, `include_asm.h`/`common.h` dropped, typedefs written in the TU. Task #2555.
+    (`func_L11_00441978`, v1.01 address, author commit `7fccf735`, Flavius; upstream's root commit, which squashed the earlier RAC2 history). VERBATIM but for names: our name, `include_asm.h`/`common.h` dropped, typedefs written in the TU. Task #2555.
   - **`func_L11_00447750`** (level program 11, Joba, at `0x00447750`) in
     `going-decompiled/levels/usa/L11/src/func_L11_00447750.c`, from `src/levels/11_joba/L11_0043E1A0.c`
     (`func_L11_00445D28`, v1.01 address, author commit `4541c4ce`, ReaperOfVeriod). VERBATIM but for names: our name, `D_001A63A8` as the boot's `g_fileLoadVoiceState`, `include_asm.h`/`common.h` dropped, typedefs written in the TU. Task #2555.
@@ -1589,7 +1589,7 @@
     task #2581. VERBATIM but for names: our name at the v2.00 place; eight callees as L14's copies; `D_L14_001B259C` as the v2.00 relocation target `D_L14_001B251C`, address-named (RULING #13291 §2); `sda` kept as written; a repeated declaration carried once; the file's include, other functions and their externs not carried; asm_unit route, s136 -G8.
   - **`func_L14_00415288`** (`0x00415288`, level program 14) in
     `going-decompiled/levels/usa/L14/src/func_L14_00415288.c`, from
-    `src/levels/14_aranos_prison/L14_003F4F98.c` (`func_L14_00413CD8`, author commit `7fccf735`, Flavius),
+    `src/levels/14_aranos_prison/L14_003F4F98.c` (`func_L14_00413CD8`, author commit `7fccf735`, Flavius; upstream's root commit, which squashed the earlier RAC2 history),
     task #2563. VERBATIM but for names: our name at the v2.00 place; four callees as L14's copies; `D_L14_001BF980` as the v2.00 relocation target `D_L14_001BF900`, address-named (RULING #13291 §2); the audit's `long long`->`long` respelling touches no line carried.
   - **`func_L14_004220D0`** (`0x004220D0`, level program 14) in
     `going-decompiled/levels/usa/L14/src/func_L14_004220D0.c`, from
