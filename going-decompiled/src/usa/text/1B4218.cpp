@@ -52,7 +52,9 @@
  * StartFileLoadWithCallback StartFileLoadPumpingVoice PumpDialogVoiceSystem),
  * and 24 were still INCLUDE_ASM. Of those 24, AcquireMobyAutoTarget and
  * StartDialogVoice were in FACT #9873's census (C arm does not compile solo),
- * CheckMobyOverWater's residual is the assembler hazard-nop (FACT #9545), and
+ * CheckMobyOverWater's residual was the assembler hazard-nop (FACT #9545;
+ * matched on the s136os arm from OpenRAC's C once asm_unit.sh placed that nop
+ * after the merge label, task #2604), and
  * ResetDialogVoiceChannels has been byte-exact on the s136os arm since task
  * #2049 (its residual was R5900 short-loop nop pads and one store order, not
  * the save stride). For the other 20 (UpdateMobyThreatFlashAndBurst
@@ -743,8 +745,10 @@ s32 func_002B47D0(Moby *moby) {
  * FORWARD NOTE (validator #2599, FACT #13388): the file-scope `.extern
  * g_altGravityEnabled, 16` forces the absolute form for EVERY cc1-emitted
  * access in this unit, but the ROM reads the flag %gp_rel at 0x2B4BE0 and
- * 0x2B4EC8 (AcquireMobyAutoTarget) and 0x2B7320 (CheckMobyOverWater). Both are
- * still asm; promoting either to C needs a per-site device or a ruling.
+ * 0x2B4EC8 (AcquireMobyAutoTarget) and 0x2B7320 (CheckMobyOverWater).
+ * CheckMobyOverWater (task #2604) reads it through the FACT #8036 alias
+ * g_altGravityEnabledGp (sized 4, equated to the real symbol; see its doc);
+ * AcquireMobyAutoTarget is still asm and can take the same alias.
  */
 #if !defined(TARGET_NATIVE) && !defined(S136OS_CalcMobyTargetThreatDist)
 S136OS_SLOT(CalcMobyTargetThreatDist);
@@ -2996,44 +3000,86 @@ s32 CheckMobyPathBlocked(Moby *moby) {
 }
 #endif
 
-/* Test whether a moby is submerged in a water volume. Quick-rejects (returns 0) when
- * the moby's Y (+0x18) is at or below the passed volume's top plane (+0x90). Otherwise
- * looks up the water body actually under the moby (func_002AC088); if none, returns 0.
- * Then compares the moby Y against that body's surface height (+0x40) minus 0.5:
- * returns 1 when the moby sits below it. Under alternate gravity (g_altGravityEnabled != 0) the
- * compared height is the f32 that func_002B11C8(moby+0x10) returns (the ROM uses its
- * $f0 at 0x2B7350; the arm used to discard it and compare the entry-time Y);
- * otherwise it compares the moby's current Y directly.
- * WALL: assembler hazard-nop placement (FACT #9545), not save layout. On the s136os
- * arm SN 1.36 cc1plus emits this body instruction-identical to the ROM, 3-callee-save
- * packed frame included, at 47 = 47 words. The one differing word is the `b` at
- * 0x2B7354: our gas puts the c.cond->bc1 hazard nop BEFORE the merge label, the ROM
- * has it AFTER (NOTE #8972's class), so the branch lands one word late. Closing it
- * is an asm_unit/gas change under tools/ee (RULING #7207), not a C re-spelling.
- * The old "save-layout" label described the 2.9 arm only. Matching arm stays
- * INCLUDE_ASM, portable #else below. */
+/* CheckMobyOverWater(moby, waterVol) - is the moby below the surface of the water
+ * body under it?
+ *   moby      the moby tested (+0x10 its position Vec4, +0x18 its Y)
+ *   waterVol  the volume the caller already found it in (+0x90 that volume's top)
+ *   returns   1 when the moby sits more than 0.5 below the surface, else 0
+ * Quick-rejects (0) when the moby's Y is at or below the volume's top plane. Otherwise
+ * it looks up the water body actually under the moby (func_002AC088, 0 if none) and
+ * compares a height against that body's surface (+0x40) minus 0.5. Under alternate
+ * gravity (g_altGravityEnabled != 0) the height is the f32 func_002B11C8 returns for
+ * the moby's position (the radial-gravity "up" height); otherwise it is the moby's Y.
+ *
+ * ADOPTED on the s136os arm as the unit is (task #2604): selector row
+ * `usa text/1B4218 CheckMobyOverWater`, no S136EXTRA override (the unit runs the arm
+ * without -fno-gcse, RULING #9004). GUARD: on EE this C is the image's body, compiled
+ * alone by SN 2.95.3 v1.36 cc1plus -fopt-stack and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh; there is no asm fallback. On native it is plain C.
+ * It closes only with tools/ee/asm_unit.sh's fpcmp-label pass (task #2604): cc1plus
+ * merges both arms' compares at one label right before the shared bc1tl, GNU as
+ * would put the c.lt.s->bc1tl hazard nop BEFORE that label and the ROM has it AFTER
+ * (0x2B7374, NOTE #8972), so without the pass the `b` at 0x2B7354 reads 10000008
+ * where the ROM has 10000007 (FACT #9545, FACT #13355).
+ *
+ * DEVICE, ADDRESSING MODEL (FACT #8036's assembler alias; RULING #8620 family): the
+ * ROM reads the flag %gp_rel at 0x2B7320, but this unit's file-scope
+ * `.extern g_altGravityEnabled, 16` (CalcMobyTargetThreatDist's device, task #2506)
+ * makes every cc1 read of that name absolute. So the body reads it through
+ * g_altGravityEnabledGp, an assembler symbol equated to g_altGravityEnabled and sized
+ * 4: GNU as expands the one-insn `lw` gp-relative and the GPREL16 relocation names
+ * g_altGravityEnabled (no alias symbol reaches the object). It emits nothing. Removal
+ * probe: reading g_altGravityEnabled directly takes the absolute form and the splice
+ * refuses the block LENGTH, built 49 words vs ROM 47 (task #2604). CalcMobyTargetThreatDist
+ * is unaffected (it reads the real name, still absolute).
+ *
+ * Source: OpenRAC/rac2-decomp @5776dcc35045fb2320610edd1d2db4fa7660ef37
+ * (GPL-3.0, adopted with the authors' permission per RULINGs #10405/#12108),
+ * src/game/002B6120-hz.c, func_002B63C0 (author commit 4dda186a, Flavius; the body
+ * text is unchanged through their head d88fe892, read 2026-11-07).
+ * ADAPTED: (1) respellings by ROM-encoded address: func_002B63C0 = CheckMobyOverWater,
+ * func_002AB220 = func_002AC088, func_002B0360 = func_002B11C8, D_001A8CA0 =
+ * g_altGravityEnabled (read through the EE alias above; their `sda` attribute is
+ * dropped, the alias carries the addressing form); (2) locals and parameters renamed
+ * (a0 = moby, a1 = waterVol, s0 = body, s2 = under, f = height); (3) int/float
+ * respelled s32/f32, and func_002B11C8 takes the unit's Vec4 * prototype, so the
+ * argument is cast to (Vec4 *) where they pass (char *) + 0x10. Control flow and
+ * expressions are theirs. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", CheckMobyOverWater);
+__asm__(".extern g_altGravityEnabledGp, 4\n\tg_altGravityEnabledGp = g_altGravityEnabled");
+extern s32 g_altGravityEnabledGp;
 #else
+#define g_altGravityEnabledGp g_altGravityEnabled
+#endif
 extern void *func_002AC088(void *moby);           /* 0x2AC088 water body under the moby, or NULL */
 extern f32 func_002B11C8(Vec4 *pos);              /* 0x2B11C8 radial-gravity height probe (def 1A8180.c) */
-s32 CheckMobyOverWater(void *moby, void *waterVol) {
+#if !defined(TARGET_NATIVE) && !defined(S136OS_CheckMobyOverWater)
+S136OS_SLOT(CheckMobyOverWater);
+#else
+s32 CheckMobyOverWater(void *moby, void *waterVol)
+{
     void *body;
     s32 under;
+    f32 height;
 
-    if (*(f32 *)((u8 *)moby + 0x18) <= *(f32 *)((u8 *)waterVol + 0x90))
+    if (*(f32 *)((char *)moby + 0x18) <= *(f32 *)((char *)waterVol + 0x90)) {
         return 0;
-
+    }
     body = func_002AC088(moby);
-    if (body == NULL)
+    if (body == 0) {
         return 0;
-
+    }
     under = 0;
-    if (g_altGravityEnabled != 0) {
-        if (func_002B11C8((Vec4 *)((u8 *)moby + 0x10)) < *(f32 *)((u8 *)body + 0x40) - 0.5f)
+    if (g_altGravityEnabledGp != 0) {
+        height = func_002B11C8((Vec4 *)((char *)moby + 0x10));
+        if (height < *(f32 *)((char *)body + 0x40) - 0.5f) {
             under = 1;
-    } else if (*(f32 *)((u8 *)moby + 0x18) < *(f32 *)((u8 *)body + 0x40) - 0.5f) {
-        under = 1;
+        }
+    } else {
+        height = *(f32 *)((char *)moby + 0x18);
+        if (height < *(f32 *)((char *)body + 0x40) - 0.5f) {
+            under = 1;
+        }
     }
     return under;
 }

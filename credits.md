@@ -980,6 +980,20 @@
     prototypes `Dist3DVu0`/`WrapAngleAbsDiff` renamed to the canonical
     `Vec3DistVu0`/`AngleAbsDiffPi`. s136os arm as the unit is (task #2506,
     from audit NOTE #13181 row 10 / FACT #13187).
+  - **`CheckMobyOverWater`** (`0x002B72E0`, is a moby below the surface of the
+    water body under it: the moby's Y, or under alternate gravity the
+    radial-gravity height, against the body's surface less 0.5) in
+    `going-decompiled/src/usa/text/1B4218.cpp`, from `src/game/002B6120-hz.c`
+    (`func_002B63C0`, v1.01 address, author commit `4dda186a`, Flavius; the
+    blob is identical at `b2a35115`, `5776dcc3` (read) and the head
+    `d88fe892`). ADAPTED: our symbol names per the ROM's relocations
+    (`func_002AC088`, `func_002B11C8`, `g_altGravityEnabled`), locals and
+    parameters renamed, `int`/`float` as `s32`/`f32`, the unit's `Vec4 *`
+    prototype for `func_002B11C8` with a cast, and their `sda` dropped for an
+    EE-only FACT #8036 assembler alias `g_altGravityEnabledGp` (sized 4) that
+    keeps the ROM's `%gp_rel` read under the unit's `.extern
+    g_altGravityEnabled, 16`. s136os arm as the unit is; it closes with
+    `tools/ee/asm_unit.sh`'s fpcmp-label pass (task #2604, FACT #13355).
   - **`func_00126470`** (`0x00126470`, libgraph's `sceGsSetDefStoreImage`;
     FACT #5541 names it BuildGsStoreImagePacket) in
     `going-decompiled/src/usa/cod/022FA8.c`, from `src/core/0012646C-store.c`
