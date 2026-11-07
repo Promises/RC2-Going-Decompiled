@@ -1,0 +1,29 @@
+# Functions of level program L08 built from C (task #2627, RULING #13291 row L08-G1).
+# One row per function, compiled ALONE as its own TU by tools/levels/level_build.sh
+# and linked at its one place in place of its split asm (gen_ld.py cuts the
+# function's block out of the .text asm). Single placement only (row L7 is the
+# multi-placement design).
+#   function: the glabel in the split .text asm (its address is in its name)
+#   source:   path under going-decompiled/levels/usa/L08/
+#   arm:      tools/ee/ee_cc1.sh arm (sdk29 | s136 | sn2952); s136 adds -fopt-stack
+#   gflag:    -G0 | -G8, used by cc1 AND the assembler
+#   as:       optional (task #2552): as (plain GNU as) | asm_unit (tools/ee/asm_unit.sh,
+#             the boot's model of SN's assembler); a 4-column row is `as -`
+#   cc1flags: optional, with as: extra cc1 flags, comma-separated, or - for none
+# function	source	arm	gflag	as	cc1flags
+func_L08_0032B038	src/func_L08_0032B038.c	sdk29	-G0	as	-
+func_L08_0032FBD8	src/func_L08_0032FBD8.c	s136	-G0	as	-
+func_L08_00330050	src/func_L08_00330050.c	s136	-G0	as	-
+func_L08_003300F8	src/func_L08_003300F8.c	s136	-G0	as	-
+func_L08_003CE178	src/func_L08_003CE178.c	s136	-G8	as	-
+func_L08_003CE1A8	src/func_L08_003CE1A8.c	s136	-G8	as	-
+func_L08_003D1440	src/func_L08_003D1440.c	s136	-G0	as	-
+func_L08_003D1468	src/func_L08_003D1468.c	s136	-G0	as	-
+func_L08_003D1498	src/func_L08_003D1498.c	s136	-G0	as	-
+func_L08_003D14F0	src/func_L08_003D14F0.c	s136	-G8	as	-
+func_L08_003D9D70	src/func_L08_003D9D70.c	s136	-G8	as	-
+func_L08_003D9DA0	src/func_L08_003D9DA0.c	sdk29	-G8	as	-
+func_L08_003D9DE8	src/func_L08_003D9DE8.c	sdk29	-G8	as	-
+func_L08_003D9E30	src/func_L08_003D9E30.c	sdk29	-G8	as	-
+func_L08_00423FD0	src/func_L08_00423FD0.c	s136	-G8	as	-
+func_L08_00424000	src/func_L08_00424000.c	sdk29	-G8	as	-

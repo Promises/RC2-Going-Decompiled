@@ -2850,3 +2850,83 @@
     `going-decompiled/levels/usa/L09/src/func_L09_00423260.c`, from
     `src/levels/09_dobbo/L09_003FEA48.c` (`func_L09_00421D60`, author commit `27b929ce`, Lynder063),
     task #2562. VERBATIM but for names: our name at the v2.00 place; four callees as L09's copies at their v2.00 places.
+  - **`func_L08_0032B038`** (`0x0032B038`, level program 08) in
+    `going-decompiled/levels/usa/L08/src/func_L08_0032B038.c`, from
+    `src/levels/08_tabora/L08_002D90C8.c`
+    (`func_L08_00329EC0`, author commit `b31a91e7`, MantraAU), task #2627.
+    Verbatim but for names: our name at the v2.00 place; no other symbol appears.
+  - **`func_L08_0032FBD8`** (`0x0032FBD8`, level program 08) in
+    `going-decompiled/levels/usa/L08/src/func_L08_0032FBD8.c`, from
+    `src/levels/08_tabora/L08_002D90C8.c`
+    (`func_L08_0032EA60`, author commit `ee3fee45`, llesieur99), task #2627.
+    Verbatim but for names: our name at the v2.00 place; callees func_2F9E60, func_2F9DF0 and func_2F9FD0 as L08's copies func_L08_002FAAB0, func_L08_002FAA40 and func_L08_002FAC20.
+  - **`func_L08_00330050`** (`0x00330050`, level program 08) in
+    `going-decompiled/levels/usa/L08/src/func_L08_00330050.c`, from
+    `src/levels/08_tabora/L08_002D90C8.c`
+    (`func_L08_0032EED8`, author commit `b31a91e7`, MantraAU), task #2627.
+    Verbatim but for names: our name at the v2.00 place; `D_L08_001FE7C0` kept address-named inside the split label `D_L08_001F0000` (RULING #13291 §2); func_00282E80 as L08's copy func_L08_002FAC20, the v2.00 disc's own target for the call.
+  - **`func_L08_003300F8`** (`0x003300F8`, level program 08) in
+    `going-decompiled/levels/usa/L08/src/func_L08_003300F8.c`, from
+    `src/levels/08_tabora/L08_002D90C8.c`
+    (`func_L08_0032EF80`, author commit `b31a91e7`, MantraAU), task #2627.
+    Adapted (byte-identical): our name at the v2.00 place; the four callees respelled to the v2.00 level split names at their disc-implied targets, func_L08_00330050 among them (adopted in this same row); the return type written `f32` for upstream's `float`, and a `func_L08_00330050` prototype added (both byte-neutral; validator #2637).
+  - **`func_L08_003CE178`** (`0x003CE178`, level program 08) in
+    `going-decompiled/levels/usa/L08/src/func_L08_003CE178.c`, from
+    `src/levels/08_tabora/L08_002D90C8-g8.c`
+    (`func_L08_003CCD28`, author commit `886754b0`, Louis-Philippe Le Sieur), task #2627.
+    Verbatim but for names: our name at the v2.00 place; `D_L08_001B29DC` kept address-named inside the split label `D_L08_001B2200` (RULING #13291 §2), upstream's `sda` attribute kept verbatim, our stock cc1 ignores it, byte-inert; `common.h` dropped.
+  - **`func_L08_003CE1A8`** (`0x003CE1A8`, level program 08) in
+    `going-decompiled/levels/usa/L08/src/func_L08_003CE1A8.c`, from
+    `src/levels/08_tabora/L08_002D90C8-g8.c`
+    (`func_L08_003CCD58`, author commit `b31a91e7`, MantraAU), task #2627.
+    Verbatim but for names: our name at the v2.00 place; `D_L08_001B29DC` kept address-named inside `D_L08_001B2200` (RULING #13291 §2), upstream's `sda` attribute kept verbatim, byte-inert; `common.h` dropped.
+  - **`func_L08_003D1440`** (`0x003D1440`, level program 08) in
+    `going-decompiled/levels/usa/L08/src/func_L08_003D1440.c`, from
+    `src/levels/08_tabora/L08_002D90C8.c`
+    (`func_L08_003CFFE8`, author commit `b31a91e7`, MantraAU), task #2627.
+    Verbatim but for names: our name at the v2.00 place; `D_L08_002A0D00` as the split label `D_L08_002A0D80`; func_L04_003A21F8 as L08's copy func_L08_0038E260; `include_asm.h` dropped.
+  - **`func_L08_003D1468`** (`0x003D1468`, level program 08) in
+    `going-decompiled/levels/usa/L08/src/func_L08_003D1468.c`, from
+    `src/levels/08_tabora/L08_002D90C8.c`
+    (`func_L08_003D0010`, author commit `b31a91e7`, MantraAU), task #2627.
+    Verbatim but for names: our name at the v2.00 place; `D_L08_002A0D00` as the split label `D_L08_002A0D80`; func_L04_003A02A0 as L08's copy func_L08_0038C308; `include_asm.h` dropped.
+  - **`func_L08_003D1498`** (`0x003D1498`, level program 08) in
+    `going-decompiled/levels/usa/L08/src/func_L08_003D1498.c`, from
+    `src/levels/08_tabora/L08_002D90C8.c`
+    (`func_L08_003D0040`, author commit `b31a91e7`, MantraAU), task #2627.
+    Verbatim but for names: our name at the v2.00 place; func_0029FCC0 as L08's copy func_L08_0031F7C8; `include_asm.h` dropped.
+  - **`func_L08_003D14F0`** (`0x003D14F0`, level program 08) in
+    `going-decompiled/levels/usa/L08/src/func_L08_003D14F0.c`, from
+    `src/levels/08_tabora/L08_002D90C8-g8.c`
+    (`func_L08_003D0098`, author commit `886754b0`, Louis-Philippe Le Sieur), task #2627.
+    Verbatim but for names: our name at the v2.00 place; `D_L08_001B29DC` kept address-named inside `D_L08_001B2200` (RULING #13291 §2), upstream's `sda` attribute kept verbatim, byte-inert; `common.h` dropped.
+  - **`func_L08_003D9D70`** (`0x003D9D70`, level program 08) in
+    `going-decompiled/levels/usa/L08/src/func_L08_003D9D70.c`, from
+    `src/levels/08_tabora/L08_003D8348-g8.c`
+    (`func_L08_003D8918`, author commit `91e04732`, llesieur99), task #2627.
+    Verbatim but for names: our name at the v2.00 place; `D_L08_001B29DC` kept address-named inside `D_L08_001B2200` (RULING #13291 §2), upstream's `sda` attribute kept verbatim, byte-inert; `include_asm.h` dropped.
+  - **`func_L08_003D9DA0`** (`0x003D9DA0`, level program 08) in
+    `going-decompiled/levels/usa/L08/src/func_L08_003D9DA0.c`, from
+    `src/levels/08_tabora/L08_003D8348-g8.c`
+    (`func_L08_003D8948`, author commit `91e04732`, llesieur99), task #2627.
+    Verbatim but for names: our name at the v2.00 place; `D_L08_001B29DC` kept address-named inside `D_L08_001B2200` (RULING #13291 §2), upstream's `sda` attribute kept verbatim, byte-inert; `include_asm.h` dropped.
+  - **`func_L08_003D9DE8`** (`0x003D9DE8`, level program 08) in
+    `going-decompiled/levels/usa/L08/src/func_L08_003D9DE8.c`, from
+    `src/levels/08_tabora/L08_003D8348-g8.c`
+    (`func_L08_003D8990`, author commit `91e04732`, llesieur99), task #2627.
+    Verbatim but for names: our name at the v2.00 place; `D_L08_001B29DC` kept address-named inside `D_L08_001B2200` (RULING #13291 §2), upstream's `sda` attribute kept verbatim, byte-inert; `include_asm.h` dropped.
+  - **`func_L08_003D9E30`** (`0x003D9E30`, level program 08) in
+    `going-decompiled/levels/usa/L08/src/func_L08_003D9E30.c`, from
+    `src/levels/08_tabora/L08_003D8348-g8.c`
+    (`func_L08_003D89D8`, author commit `91e04732`, llesieur99), task #2627.
+    Verbatim but for names: our name at the v2.00 place; `D_L08_001B29DC` kept address-named inside `D_L08_001B2200` (RULING #13291 §2), upstream's `sda` attribute kept verbatim, byte-inert; `include_asm.h` dropped.
+  - **`func_L08_00423FD0`** (`0x00423FD0`, level program 08) in
+    `going-decompiled/levels/usa/L08/src/func_L08_00423FD0.c`, from
+    `src/levels/08_tabora/L08_003D8348-g8.c`
+    (`func_L08_004229C8`, author commit `91e04732`, llesieur99), task #2627.
+    Verbatim but for names: our name at the v2.00 place; `D_L08_001B29DC` kept address-named inside `D_L08_001B2200` (RULING #13291 §2), upstream's `sda` attribute kept verbatim, byte-inert; `include_asm.h` dropped.
+  - **`func_L08_00424000`** (`0x00424000`, level program 08) in
+    `going-decompiled/levels/usa/L08/src/func_L08_00424000.c`, from
+    `src/levels/08_tabora/L08_003D8348-g8.c`
+    (`func_L08_004229F8`, author commit `91e04732`, llesieur99), task #2627.
+    Verbatim but for names: our name at the v2.00 place; `D_L08_001B29DC` kept address-named inside `D_L08_001B2200` (RULING #13291 §2), upstream's `sda` attribute kept verbatim, byte-inert; `include_asm.h` dropped.
