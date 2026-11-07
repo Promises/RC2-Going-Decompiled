@@ -24,10 +24,12 @@ extern void func_L02_00360B18(void *, void *);
 extern void func_L02_00335928(int, int);
 /* Inside the larger split label D_L02_001B3930: address-named (RULING #13291 §2). */
 extern int D_L02_001CAA80;
-/* The boot's own D_1395B8 (core, below 0x1A7C80; its own label in the boot
- * split, not inside g_quickSelectMap): address-named, a second spelling of
- * D_1395B8 (validator #2598). */
-extern u8 D_001395B8[];
+/* The boot's D_1395B8 (core, below 0x1A7C80): the name the boot's code uses
+ * for this address, an operand name inside the boot label D_139599 rather
+ * than a label of its own, and not inside g_quickSelectMap; spelled as the
+ * boot and the L02 split asm spell it (task #2601, FACT #13369; validator
+ * #2602). */
+extern u8 D_1395B8[];
 /* Two tables of 128-byte records, inside the larger split label
  * D_L02_001B2D80: address-named. ADDRESSING-MODEL DEVICE (RULING #8620, EE
  * arm only) on these three: `.sdata` on the extern declaration makes cc1
@@ -46,7 +48,7 @@ extern int D_L02_001AA1B0 __attribute__((section(".sdata")));
  * the state holds at +0xC0 (func_L02_002DAA58) and clears the slot. When
  * D_L02_001CAA80 is set, calls func_L02_003082E0(0, state +0x224). Then
  * zeroes a vector (func_L02_002F2D20) and, by the flag
- * D_001395B8[func_L02_003FB110(0)], sets its third float to -1.59 and hands
+ * D_1395B8[func_L02_003FB110(0)], sets its third float to -1.59 and hands
  * it with the record state +0x74 of D_L02_001B369C, or to 2.16 with the
  * record state +0x78 of D_L02_001B368C (each at +0x30), to
  * func_L02_002BD368. Then func_L02_00360B18 on g_heroPos and g_heroPos+0x10,
@@ -74,10 +76,12 @@ extern int D_L02_001AA1B0 __attribute__((section(".sdata")));
  *     func_L02_003FD808, func_L02_003FC518 -> func_L02_003FDAB8,
  *     func_L01_00323310 -> func_L02_00335928: our split names at the v2.00
  *     addresses the ROM's own relocations imply (relverify, task #2557);
- *   - D_L02_001CAA80, D_001395B8, D_L02_001B368C, D_L02_001B369C and
- *     D_L02_001AA1B0 keep their upstream names, which already state their
- *     v2.00 addresses (all but the last address-named, RULING #13291 §2;
- *     D_L02_001AA1B0 is our split label);
+ *   - D_001395B8 -> D_1395B8: the same address, respelled to the boot's and
+ *     the L02 split asm's existing name for it (task #2601, FACT #13369);
+ *   - D_L02_001CAA80, D_L02_001B368C, D_L02_001B369C and D_L02_001AA1B0
+ *     keep their upstream names, which already state their v2.00 addresses
+ *     (all but the last address-named, RULING #13291 §2; D_L02_001AA1B0 is
+ *     our split label);
  *   - `__attribute__((sda))` -> `__attribute__((section(".sdata")))` on the
  *     D_L02_001B368C, D_L02_001B369C and D_L02_001AA1B0 declarations (RULING
  *     #8620; upstream's `sda` is a marker for its own patched compiler,
@@ -101,7 +105,7 @@ void func_L02_003FE020(char *a0) {
     if (D_L02_001CAA80 != 0)
         func_L02_003082E0(0, *(s32 *)(s1 + 0x224));
     func_L02_002F2D20(v);
-    if (D_001395B8[func_L02_003FB110(0)] != 0) {
+    if (D_1395B8[func_L02_003FB110(0)] != 0) {
         v[2] = -1.59f;
         func_L02_002BD368(D_L02_001B369C + *(s32 *)(s1 + 0x74) * 128 + 0x30, v, 0, 1);
     } else {

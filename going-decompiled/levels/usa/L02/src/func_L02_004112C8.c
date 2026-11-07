@@ -18,9 +18,11 @@ extern void func_L02_0031F998();
  * one-instruction `lbu` macro, which GNU as expands absolute at -G0, as
  * retail has it. It moves no data and emits nothing. */
 extern u8 D_1A7BD3 __attribute__((section(".sdata")));
-/* The boot's own D_1395B8 (core; its own label in the boot split, not inside
- * g_quickSelectMap): address-named, a second spelling of D_1395B8. */
-extern u8 D_001395B8[];
+/* The boot's D_1395B8 (core): the name the boot's code uses for this address,
+ * an operand name inside the boot label D_139599 rather than a label of its
+ * own, and not inside g_quickSelectMap; spelled as the boot and the L02 split
+ * asm spell it (task #2601, FACT #13369; validator #2602). */
+extern u8 D_1395B8[];
 /* Inside the larger split label D_L02_001B3930: address-named. */
 extern u8 D_L02_001C0700[];
 extern char g_heroPos[];
@@ -38,10 +40,10 @@ extern void func_L02_003157A0(u8 *);
  *
  * Kind 0: hands the actor to func_L02_003157A0 when it holds no record, else
  * calls func_L02_0031F998(@a0, 1, -1). Kind 1: when D_1A7BD3 and the byte
- * D_001395B8[4] are clear, func_L02_00325C50 accepts g_heroPos with the
+ * D_1395B8[4] are clear, func_L02_00325C50 accepts g_heroPos with the
  * record's index at +0xC, and func_L02_002F8E70 accepts message 0x2D on
  * D_L02_001C0700, it queues 3 and 0x2E too, commits them
- * (func_L02_002F8FB8), sets D_001395B8[4] and calls func_L02_0031F998(@a0,
+ * (func_L02_002F8FB8), sets D_1395B8[4] and calls func_L02_0031F998(@a0,
  * 2, -1). Kind 2: unless func_L02_00379338 answers yes, runs
  * func_L02_00326B28 and func_L02_003296D0 with 3 and calls
  * func_L02_0031F998(@a0, 3, -1).
@@ -62,9 +64,11 @@ extern void func_L02_003157A0(u8 *);
  *     address-named, the boot's existing spelling of that address (its own
  *     dlabel, core.lit/0A7400.data.s:1150). Provenance of the respelling:
  *     D_001A7BD3 -> D_1A7BD3 (task #2621, census NOTE #13409);
- *   - D_L02_001395B8 -> D_001395B8: the same address, a core one (below
- *     0x1A7C80), spelled without the level prefix; address-named, the boot's
- *     own D_1395B8 (not inside g_quickSelectMap, validator #2598);
+ *   - D_L02_001395B8 -> D_1395B8: the same address, a core one (below
+ *     0x1A7C80), respelled to the name the boot's code and the L02 split asm
+ *     already use for it: an operand name inside the boot label D_139599,
+ *     not a label of its own, and not inside g_quickSelectMap (task #2601,
+ *     FACT #13369; validator #2602);
  *   - func_002A7750 -> func_L02_0031F998, func_002ACBC8 -> func_L02_00325C50,
  *     func_00288AA0 -> func_L02_002F8E70, func_00288BE8 -> func_L02_002F8FB8,
  *     func_002F5D10 -> func_L02_00379338, func_002AD7B8 -> func_L02_00326B28,
@@ -90,13 +94,13 @@ void func_L02_004112C8(u8 *a0) {
             func_L02_0031F998(a0, 1, -1);
         break;
     case 1:
-        if (D_1A7BD3 == 0 && D_001395B8[4] == 0 &&
+        if (D_1A7BD3 == 0 && D_1395B8[4] == 0 &&
             func_L02_00325C50(g_heroPos, *(s32 *)(state + 0xC)) != 0 &&
             func_L02_002F8E70(D_L02_001C0700, 0x2D) != 0) {
             func_L02_002F8E70(D_L02_001C0700, 3);
             func_L02_002F8E70(D_L02_001C0700, 0x2E);
             func_L02_002F8FB8(D_L02_001C0700);
-            D_001395B8[4] = 1;
+            D_1395B8[4] = 1;
             func_L02_0031F998(a0, 2, -1);
         }
         break;
