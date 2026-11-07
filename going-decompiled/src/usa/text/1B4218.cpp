@@ -56,7 +56,8 @@
  * ResetDialogVoiceChannels has been byte-exact on the s136os arm since task
  * #2049 (its residual was R5900 short-loop nop pads and one store order, not
  * the save stride). For the other 20 (UpdateMobyThreatFlashAndBurst
- * ClassifyTargetProximity BindMobyToParent CalcMobyTargetThreatDist
+ * ClassifyTargetProximity BindMobyToParent CalcMobyTargetThreatDist [since
+ * matched on the s136os arm from OpenRAC's C, task #2506]
  * FindTargetInGroup ApplyMobyLocalTransformDelta [since matched on the s136os
  * arm from OpenRAC's C, task #2207] InitMobySpringFollowState
  * StepMobySpringFollow RequestGameStateChange UpdateGameState StepMobyMotion
@@ -460,13 +461,21 @@ s32 UpdateMobyThreatFlashAndBurst(Moby *moby, MobyThreatState *ts, MobyThreatGau
 __asm__(".extern g_nGameState, 16");
 extern Moby *g_pHeroMoby ABSOLUTE_GLOBAL; /* 0x18C0B0 hero (Ratchet) moby — lock-on anchor */
 extern s32   g_nGameState;       /* 0x1A8BB0 current top-level game/screen state id */
+/* ADDRESSING MODEL DEVICE (RULING #12316 Q1, set by CalcMobyTargetThreatDist's
+ * adoption, task #2506): g_altGravityEnabled is <= 8 bytes, so -G8 would class
+ * it gp-small, but its ROM accesses in this unit are the absolute assembler
+ * macro (`lui $2,%hi; lw $2,%lo(g_altGravityEnabled)($2)` at 0x2B4818 and
+ * 0x2B4830). Sized out of small data like g_nGameState above; emits nothing.
+ * Removal probe: both sites go %gp_rel -> splice FATAL LENGTH, built 51 words
+ * vs ROM 53 (probe P1, gatelogs/t2506-probe-P1-no-extern-usa.log). */
+__asm__(".extern g_altGravityEnabled, 16");
 extern s32   g_altGravityEnabled; /* 0x1A8CA0 alternate-gravity flag (see above) */
 extern u8    D_001F0000[];       /* 0x1F0000 per-level effect/zone data segment */
 
 extern f32 DistXYVu0(Vec4 *a, Vec4 *b);   /* 0x283830 horizontal XY distance, VU0 */
-extern f32 Dist3DVu0(Vec4 *a, Vec4 *b);   /* 0x2837F8 3D (xyz) distance, VU0 */
+extern f32 Vec3DistVu0(Vec4 *a, Vec4 *b); /* 0x2837F8 3D (xyz) distance, VU0 */
 extern f32 Atan2fPoly(f32 y, f32 x);      /* 0x283BF8 2-arg arctangent (VU0/FPU) */
-extern f32 WrapAngleAbsDiff(f32 a, f32 b);/* 0x284630 |a-b| folded into [0,pi] */
+extern f32 AngleAbsDiffPi(f32 a, f32 b);  /* 0x284630 |a-b| folded into [0,pi] */
 
 /* Point-in-zone test: 1 if hero-pos lies inside the named target zone polygon,
  * else 0. (0x2A9958 — self-contained crossing-number test.) */
@@ -672,48 +681,79 @@ s32 func_002B47D0(Moby *moby) {
     return moby->animFlags & 4;
 }
 
-/* Auto-target threat/scoring metric: how "costly" `target` is for `moby` to
+/* Auto-target threat/scoring metric: how "costly" `target` is for `object` to
  * engage. Lower = more attractive. Starts as the planar XY distance between the
- * two mobys' world positions (moby+0x10 / target+0x10), then:
- *   - under alternate gravity (g_altGravityEnabled != 0) it uses the full 3D distance
- *     instead and applies no facing penalty;
+ * two mobys' world positions (+0x10), then:
+ *   - under alternate gravity (g_altGravityEnabled != 0) it uses the full 3D
+ *     distance instead and applies no facing penalty;
  *   - otherwise it adds a facing-misalignment penalty: the angle between the
  *     direction toward the target (atan2 of the XY delta) and the moby's own
- *     facing yaw (moby+0xF8), scaled by the base distance — so targets behind
- *     the moby score worse;
- *   - finally, if the target IS the hero moby, a flat +42 bias is added so the
- *     player is de-prioritised relative to equidistant enemies.
+ *     facing yaw (+0xF8), folded into [0,pi] and scaled by the base distance
+ *     (score += penalty * score) — so targets behind the moby score worse;
+ *   - finally, if the target IS the hero moby, a flat +42.0f bias is added so
+ *     the player is de-prioritised relative to equidistant enemies.
  *
- * @param moby   the seeking moby (its world pos +0x10 and facing yaw +0xF8)
+ * @param object the seeking moby (its world pos +0x10 and facing yaw +0xF8)
  * @param target the candidate target moby (its world pos +0x10)
  * @return the threat-distance score (f32)
  *
- * NATIVE SHIM (no byte target; matching build uses INCLUDE_ASM above). Derived
- * register-exact from CalcMobyTargetThreatDist.s @0x2B47E0.
+ * ADOPTED on the s136os arm as the unit is (task #2506; audit NOTE #13181 row
+ * 10 / FACT #13187): selector row `usa text/1B4218 CalcMobyTargetThreatDist`,
+ * no S136EXTRA override (the unit runs the arm without -fno-gcse, RULING
+ * #9004). GUARD: on EE this C is the image's body, compiled alone by SN 2.95.3
+ * v1.36 cc1plus -fopt-stack and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh; there is no asm fallback. On native it is plain C.
  *
- * WALL (matching build): save-layout — 4 callee-saves + $ra at 8-byte spacing,
- * with an $f20 fp temp. cmp-oracle validated. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", CalcMobyTargetThreatDist);
+ * DEVICE, ADDRESSING MODEL (RULING #12316 Q1): the file-scope
+ * `.extern g_altGravityEnabled, 16` above sizes the <=8-byte flag out of -G8
+ * small data, so the assembler expands cc1's one-insn macro into the ROM's
+ * absolute two-insn form (`lui $2,%hi; lw $2,%lo(g_altGravityEnabled)($2)` at
+ * 0x2B4818 and 0x2B4830) — the same cc1-small / assembler-absolute model as
+ * g_nGameState above. It emits nothing. Removal probe: without it both sites
+ * go %gp_rel and the splice refuses the block LENGTH (built 51 words vs
+ * ROM 53; gatelogs/t2506-probe-P1-no-extern-usa.log). Upstream's `sda`
+ * attribute on D_001A8CA0 is dropped: the sizing line above carries the whole
+ * addressing form, so no section attribute is spelled on the extern.
+ * g_pHeroMoby needs no new device: the unit's own ABSOLUTE_GLOBAL declaration
+ * (RULING #8620, set by ClassifyTargetProximity, task #2389) already makes cc1
+ * split the address itself, as the ROM has it at 0x2B4870. Probe: reading it
+ * through a plain extern view instead is REFUSED (ADDRESSING) by the splice —
+ * the view is declared only in the s136 TU, so the symbol's class differs
+ * between the TUs (gatelogs/t2506-probe-P2-plain-hero-usa.log).
+ *
+ * Source: OpenRAC/rac2-decomp @5776dcc35045fb2320610edd1d2db4fa7660ef37
+ * (GPL-3.0, adopted with the authors' permission per RULINGs #10405/#12108),
+ * src/game/002B3868.c, func_002B38C8 (author commit e1ef4e67, ThorpenCodes;
+ * the body text is unchanged through their head 71af8fdc today).
+ * ADAPTED: (1) our signature (Moby *, Moby *): the world positions are read as
+ * &moby->facingTarget and the yaw as moby->moveSpeed (their char* offsets
+ * 0x10/0xF8); (2) respellings by ROM-encoded address: func_00282E80 =
+ * DistXYVu0, func_00282E48 = Vec3DistVu0, func_00283248 = Atan2fPoly,
+ * func_00283C80 = AngleAbsDiffPi, D_001A8CA0 = g_altGravityEnabled,
+ * D_0018C0B0 = g_pHeroMoby; (3) float respelled f32; (4) this unit's local
+ * alias prototypes Dist3DVu0/WrapAngleAbsDiff (the same two addresses, whose
+ * only user was the native shim this adoption replaces) renamed to the
+ * canonical Vec3DistVu0/AngleAbsDiffPi, and the `.extern g_altGravityEnabled,
+ * 16` line above added. Control flow and expressions are theirs.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_CalcMobyTargetThreatDist)
+S136OS_SLOT(CalcMobyTargetThreatDist);
 #else
-f32 CalcMobyTargetThreatDist(Moby *moby, Moby *target) {
-    f32 score;
-
-    if (g_altGravityEnabled != 0) {
-        score = Dist3DVu0(&moby->facingTarget, &target->facingTarget);
-    } else {
-        f32 dx = target->facingTarget.x - moby->facingTarget.x;
-        f32 dy = target->facingTarget.y - moby->facingTarget.y;
-        f32 facingPenalty;
-        score = DistXYVu0(&moby->facingTarget, &target->facingTarget);
-        facingPenalty = WrapAngleAbsDiff(Atan2fPoly(dx, dy),
-                                         moby->moveSpeed /* +0xF8 facing yaw */);
-        score += facingPenalty * score;
+f32 CalcMobyTargetThreatDist(Moby *object, Moby *target) {
+    f32 distance;
+    f32 value = DistXYVu0(&object->facingTarget, &target->facingTarget);
+    if (g_altGravityEnabled != 0)
+        value = Vec3DistVu0(&object->facingTarget, &target->facingTarget);
+    distance = value;
+    if (g_altGravityEnabled == 0) {
+        f32 angle = Atan2fPoly(target->facingTarget.x - object->facingTarget.x,
+                               target->facingTarget.y - object->facingTarget.y);
+        angle = AngleAbsDiffPi(angle, object->moveSpeed);
+        distance = distance + angle * distance;
     }
-    if (target == g_pHeroMoby) {
-        score += 42.0f;
-    }
-    return score;
+    if (target == g_pHeroMoby)
+        distance += 42.0f;
+    return distance;
 }
 #endif
 

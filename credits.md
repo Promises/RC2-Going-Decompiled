@@ -646,7 +646,7 @@
     byte-exact on our ROM; its one inline `sync` is the hardware barrier
     RULING #12168 allows (task #2297).
 
-- **OpenRAC — `rac2-decomp`, commit `b2a35115`, Window X bodies (text/235FE8, text/1DFF80, text/1D54C0, text/250080, text/188858, text/191238, text/198FA0, cod/015180 and level program 24)** (GPL-3.0)
+- **OpenRAC — `rac2-decomp`, commit `b2a35115`, Window X bodies (text/235FE8, text/1DFF80, text/1D54C0, text/250080, text/188858, text/191238, text/198FA0, text/1B4218, cod/015180 and level program 24)** (GPL-3.0)
   <https://github.com/OpenRAC/rac2-decomp> at commit `b2a35115e0cf580a1fdab8dd1071b157799e590e`
   (the same history as `rac2-gc-decomp` above: `96927f87` is an ancestor)
 
@@ -657,7 +657,7 @@
   re-checked byte-exact against our v2.00 ROM (the boot ELF, or the level
   program off the disc) on the s136os arm, or for the five cod/015180 malloc
   bodies on the sn2952 arm (RULING #12157). Contributors so far: bigbeno37,
-  Flavius, Louis-Philippe Le Sieur and ReaperOfVeriod.
+  Flavius, Louis-Philippe Le Sieur, ReaperOfVeriod and ThorpenCodes.
   Each doc comment carries the `Source:` line, which names every respelling.
 
   Used so far:
@@ -952,6 +952,21 @@
     solo harness can see. A `.extern g_pLevelOrder, 4` line once carried for a
     LENGTH refusal is not load-bearing at the landed body and was removed
     (task #2586: 168 = 168 without it, unit object cmp-identical).
+  - **`CalcMobyTargetThreatDist`** (`0x002B47E0`, the lock-on threat scorer:
+    planar distance, a facing-misalignment penalty, and +42 toward the hero
+    moby) in `going-decompiled/src/usa/text/1B4218.cpp`, from
+    `src/game/002B3868.c` (`func_002B38C8`, v1.01 address, author commit
+    `e1ef4e67`, ThorpenCodes; the blob is identical at `b2a35115`, `5776dcc3`
+    — where the sda re-screen NOTE #13181 found it — and the head
+    `71af8fdc`). ADAPTED: our symbol names per the ROM's relocations, our
+    `(Moby *, Moby *)` signature with `&moby->facingTarget` /
+    `moby->moveSpeed` reads, `float` as `f32`, their `sda` dropped for the
+    file-scope `.extern g_altGravityEnabled, 16` sizing (RULING #12316 Q1)
+    and their `.data` `g_pHeroMoby` carried by the unit's existing
+    `ABSOLUTE_GLOBAL` declaration (RULING #8620); the unit's local alias
+    prototypes `Dist3DVu0`/`WrapAngleAbsDiff` renamed to the canonical
+    `Vec3DistVu0`/`AngleAbsDiffPi`. s136os arm as the unit is (task #2506,
+    from audit NOTE #13181 row 10 / FACT #13187).
 - **Newlib** (<https://sourceware.org/git/newlib-cygwin.git>, tag
   `newlib-2000-02-17`, commit `061afe83dc04a43321d69b5f04860e5de799665c`;
   Red Hat / Cygnus Solutions and contributors)
