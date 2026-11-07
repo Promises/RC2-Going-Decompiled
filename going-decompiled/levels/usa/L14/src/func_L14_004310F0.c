@@ -42,7 +42,10 @@ extern PrisonHero g_soundBankHandlesBlk;
 extern unsigned char g_listenerPosHistory[];
 extern unsigned char *D_L14_001B251C __attribute__((section(".sdata")));
 extern unsigned char *D_001B251C[] __attribute__((section(".sdata")));
-extern unsigned char D_001395E3 __attribute__((section(".data")));
+/* 0x1395E3: the boot's own dlabel D_1395E3, its own label in the boot split
+ * (asm/usa/data/cod/033B00.data.s:7605, also the operand at
+ * asm/usa/text/1E6ED0.s:7257); address-named (RULING #13291 section 2). */
+extern unsigned char D_1395E3 __attribute__((section(".data")));
 
 /**
  * func_L14_004310F0 - a pulsing pickup pad: glow, and when the hero stands on
@@ -61,7 +64,7 @@ extern unsigned char D_001395E3 __attribute__((section(".data")));
  * g_soundBankHandlesBlk (the boot's name at 0x00189E20; upstream types it as
  * the hero, PrisonHero) has this object as owner, is active and is within 0.5
  * (func_L14_002F6C18): sets stage 2, releases its entry, plays two sounds, sets
- * the byte D_001395E3 (0x5C into g_quickSelectMap), calls func_L14_00333698 on
+ * the byte D_1395E3 (the boot's label at 0x1395E3), calls func_L14_00333698 on
  * the two moby records of D_L14_001B251C named by state +0x00 and +0x04 when
  * +0x00 is not -1, and calls func_L14_0031AC78(state +0x10). Its colour word is
  * 0x80000000 | the glow in byte 0 (stage 1), or in bytes 1 and 2 (stage 2).
@@ -80,6 +83,8 @@ extern unsigned char D_001395E3 __attribute__((section(".data")));
  *     place);
  *   - D_00188660 -> g_listenerPosHistory (the boot's name at that address);
  *   - D_00189E20 -> g_soundBankHandlesBlk (the boot's name at that address);
+ *   - D_001395E3 -> D_1395E3: the same address, respelled to the boot's
+ *     existing dlabel there (task #2621, census NOTE #13409, FACT #13403);
  *   - D_L14_001B259C -> D_L14_001B251C (address-named, inside
  *     D_L14_001B1D00+0x81C; RULING #13291 section 2);
  *   - D_L14_001B259C_1 -> D_001B251C (address-named, inside
@@ -151,7 +156,7 @@ void func_L14_004310F0(unsigned char *object)
             *(int *)(state + 0x14) = -1;
             func_L14_0036ADA0(0, 0, object);
             func_L14_0036ADA0(2, 0, object);
-            D_001395E3 = 1;
+            D_1395E3 = 1;
             if (*(int *)state != -1) {
                 func_L14_00333698(D_L14_001B251C + (*(int *)state << 8), 1);
                 {
