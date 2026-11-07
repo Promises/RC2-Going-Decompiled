@@ -48,7 +48,11 @@ extern struct { char pad[0x230]; int selected; } D_L02_001CAAE0;
  * Le Sieur), a rename-copy of bigbeno37's func_L00_00354DF8 in
  * src/levels/00_aranos_tutorial/L00_002FC7A8-g8.c (author commit 6001495a):
  * the body is token-identical to it but for symbol names and the struct
- * field `callback` -> `payload` (RULING #13427 rev 4, task #2645). Lombyte
+ * field `callback` -> `payload` (RULING #13427 rev 4, task #2645). Two of
+ * its lines, `D_L02_0021E630[i].kind = 3;` and `D_L02_0021E630[i].id = 0;`,
+ * were first written by bigmak94 in the since-deleted draft
+ * nonmatching/levels/func_L02_0035BD60.c (author commit 96f1ea70,
+ * 2026-10-20, before 6001495a; RULING #13541, validator #2650). Lombyte
  * mentions in the file: 0. Adopted with the authors'
  * permission (RULINGs #10405, #12108, #13082, #13291). BYTE-IDENTICAL:
  * verbatim but for names, at upstream's -G8 (the `volatile` and the `sda`
