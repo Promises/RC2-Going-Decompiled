@@ -17,8 +17,5 @@ L02	func_L02_003D5C20	D_0018C2BC	PENDING	D_18C2BC	census #13409 A1O (boot operan
 L02	func_L02_003FE020	D_001395B8	PENDING	D_1395B8	census #13409 A1L (boot operand name D_1395B8, L02_boot_names core entry); awaiting respell (#2601)
 L02	func_L02_004112C8	D_001395B8	PENDING	D_1395B8	census #13409 A1L; awaiting respell (#2601)
 L02	func_L02_004112C8	D_001A7BD3	PENDING	D_1A7BD3	census #13409 A1L (boot dlabel D_1A7BD3, core.lit/0A7400.data.s); awaiting respell
-L11	func_L11_00443E18	D_001395B8	PENDING	D_1395B8	census #13409 A1O; awaiting respell (#2603)
-L11	func_L11_00444CE8	D_001395B8	PENDING	D_1395B8	census #13409 A1O; awaiting respell (#2603)
 L11	func_L11_00444CE8	D_00138180	PENDING	D_138180	census #13409 A1O (boot operand name D_138180); awaiting respell
-L23	func_L23_0041EEB0	D_001395B8	PENDING	D_1395B8	census #13409 A1O; awaiting respell (#2606)
 L24	func_L24_0037AE10	D_00138324	PENDING	D_138324	census #13409 A1L (boot operand name D_138324, L24_boot_names core entry); awaiting respell
