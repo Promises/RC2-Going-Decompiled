@@ -1018,6 +1018,25 @@
     `D_001A6480` as an EE-only typed view `g_gsScreenContextHalves` (RULING
     #13168). s136os arm as the unit is (task #2659, from audit NOTE #13181
     row 6 / FACT #13187).
+  - **`FreeMenuWorkBuffer`** (`0x002DF428`, releases a menu work buffer back
+    to the 5-slot pool, stopping a pending stream load first) in
+    `going-decompiled/src/usa/text/1D54C0.cpp`, from `src/game/002DDEC8.c`
+    (`func_002DE618`, v1.01 address, author commit `5ae008de`, bigbeno37,
+    2026-10-29, read at `34f0f0b8`; the file is identical at `5776dcc3`,
+    the audit's snapshot). Three non-trivial lines (the signature, `int i;`
+    and the `for` header; the bare `func_002B7AD0` call is trivial) survive verbatim from
+    cadelass's near-miss draft `nonmatching/game/func_002DE618.c`
+    (`9546b418`, 2026-10-28), which `5ae008de` deleted (RULINGs #13427 rev 2
+    and #13541); the slot type and its `D_001B1F50_slots` declaration are
+    bigbeno37's, from `b073e803`. ADAPTED: their `sda` slot table as an
+    EE-only nonzero-offset assembler equate `g_menuWorkSlotsAbs =
+    D_001B1E90 + 0x40` sized 16 and declared `section(".sdata")` (FACT #8036
+    form, RULING #9574 under #8620; the plain offset view gives 42 words vs
+    53); `func_002B7AD0` = `StopFileLoad`, `D_001F2840` =
+    `g_menuScreenBlock`; their `ChunkSlot` as `MenuWorkSlot`, `int`/`unsigned
+    char` as `s32`/`u8`. s136os arm as the unit is (task #2658, from audit
+    NOTE #13181 row 11; task #2502 had withdrawn a rewritten spelling at 52
+    words, FACT #13300).
   - **`func_00126470`** (`0x00126470`, libgraph's `sceGsSetDefStoreImage`;
     FACT #5541 names it BuildGsStoreImagePacket) in
     `going-decompiled/src/usa/cod/022FA8.c`, from `src/core/0012646C-store.c`

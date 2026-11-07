@@ -5967,10 +5967,11 @@ extern MenuWorkSlot g_menuWorkSlotsAbs[] __attribute__((section(".sdata")));
  * #12108; the file is identical at 5776dcc35045fb2320610edd1d2db4fa7660ef37,
  * the audit's snapshot), src/game/002DDEC8.c, func_002DE618 (v1.01 address).
  * Author commit 5ae008de (bigbeno37, 2026-10-29), which wrote the body and
- * deleted the near-miss draft nonmatching/game/func_002DE618.c; four
+ * deleted the near-miss draft nonmatching/game/func_002DE618.c; three
  * non-trivial lines of that draft as rewritten by cadelass in 9546b418
- * (2026-10-28) survive verbatim (the signature line, `int i;`, the `for`
- * header and the func_002B7AD0 call; RULINGs #13427 rev 2 and #13541; the
+ * (2026-10-28) survive verbatim (the signature line, `int i;` and the
+ * `for` header; the bare func_002B7AD0 call is trivial, validator #2684;
+ * RULINGs #13427 rev 2 and #13541; the
  * draft carries `SPDX-License-Identifier: MIT` and no other notice). The
  * ChunkSlot type and its D_001B1F50_slots declaration are bigbeno37's, from
  * b073e803. ADAPTED, every edit: (1) their D_001B1F50_slots (an asm-label
