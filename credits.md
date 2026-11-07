@@ -734,7 +734,11 @@
     in `going-decompiled/levels/usa/L24/src/func_L24_0034D598.c`, the first
     level function built from C. From
     `src/levels/24_ship_shack/L24_0034C450-init-g8.c` (`func_L24_0034C450`,
-    author commit `a96d3126`, Louis-Philippe Le Sieur), read at the head
+    author commit `a96d3126`, Louis-Philippe Le Sieur; a rename-copy of
+    bigbeno37's `func_L00_00354DF8` in
+    `src/levels/00_aranos_tutorial/L00_002FC7A8-g8.c`, author commit
+    `6001495a`: token-identical but for symbol names and the struct field
+    `callback` -> `payload`, RULING #13427 rev 4, task #2645), read at the head
     `5833be5b`, where the blob is identical to `b2a35115`'s. ADAPTED: our
     name at the v2.00 place, the boot's `g_anAvailableLevelOrder` for
     `D_00139948`, four level symbols renamed to the v2.00 ROM's relocation
@@ -1728,7 +1732,7 @@
     `src/levels/14_aranos_prison/L14_003F4F98.c` (`func_L14_004321D0`, author commit `312b7eea`, Louis-Philippe Le Sieur),
     task #2563. VERBATIM but for names: our name at the v2.00 place; the boot's `g_listenerPosHistory`; eight callees as L14's copies / v2.00 places, one of them through upstream's asm label; the audit's `long long`->`long` respelling touches no line carried.
   - **`func_L02_002EE5A0`** (level program 02, Maktar Nebula: shifts the records of two tables by one period toward the side of a limit) from `src/levels/02_maktar_nebula/L02_002ED7B0.c` (`func_L02_002ED7B0`, v1.01 address, author commit `6e138d9a`, bigmak94). ADAPTED: `sda` -> `section(".sdata")` on four extern declarations (RULING #8620); the four address-named externs keep their upstream names (RULING #13291 §2); includes and unused declarations dropped. Task #2557.
-  - **`func_L02_0035CF30`** (level program 02, Maktar Nebula: builds the level-ordered menu rows and selects the current owner's entry; level 24's func_L24_0034D598 is the same function) from `src/levels/02_maktar_nebula/L02_0035BD60-init-g8.c` (`func_L02_0035BD60`, v1.01 address, author commit `a96d3126`, Louis-Philippe Le Sieur). VERBATIM but for names: the boot's `g_anAvailableLevelOrder`; three level symbols to our split labels and `D_L02_0021E630` to the address-named `D_L02_0021E660`; `volatile` and `sda` kept; includes and unused declarations dropped. Task #2557.
+  - **`func_L02_0035CF30`** (level program 02, Maktar Nebula: builds the level-ordered menu rows and selects the current owner's entry; level 24's func_L24_0034D598 is the same function) from `src/levels/02_maktar_nebula/L02_0035BD60-init-g8.c` (`func_L02_0035BD60`, v1.01 address, author commit `a96d3126`, Louis-Philippe Le Sieur; a rename-copy of bigbeno37's `func_L00_00354DF8` in `src/levels/00_aranos_tutorial/L00_002FC7A8-g8.c` (author commit `6001495a`), token-identical but for symbol names and the struct field `callback` -> `payload`, RULING #13427 rev 4, task #2645). VERBATIM but for names: the boot's `g_anAvailableLevelOrder`; three level symbols to our split labels and `D_L02_0021E630` to the address-named `D_L02_0021E660`; `volatile` and `sda` kept; includes and unused declarations dropped. Task #2557.
   - **`func_L02_003CC348`** (level program 02, Maktar Nebula: runs an actor's move query and passes its result on) from `src/levels/02_maktar_nebula/L02_002ED7B0.c` (`func_L02_003CADF0`, v1.01 address, author commit `91e04732`, llesieur99). VERBATIM but for names: two callees to our split names; includes and unused declarations dropped. Task #2557.
   - **`func_L02_003CEB08`** (level program 02, Maktar Nebula: finds the first entity of a group whose state byte is 0x17) from `src/levels/02_maktar_nebula/L02_002ED7B0.c` (`func_L02_003CD5B0`, v1.01 address, author commit `ac1ee013`, bigmak94). ADAPTED: `sda` -> `section(".sdata")` on two extern declarations (RULING #8620); three address-named externs keep their upstream names; includes and unused declarations dropped. Task #2557.
   - **`func_L02_003D2988`** (level program 02, Maktar Nebula: updates an actor and the sub-object its state holds) from `src/levels/02_maktar_nebula/L02_002ED7B0.c` (`func_L02_003D1430`, v1.01 address, author commit `91e04732`, llesieur99). VERBATIM but for names: four callees to our split names; includes and unused declarations dropped. Task #2557.

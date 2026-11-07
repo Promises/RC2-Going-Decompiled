@@ -45,7 +45,11 @@ extern struct { char pad[0x230]; int selected; } D_L02_001CAAE0;
  * carries no notice of its own), file
  * src/levels/02_maktar_nebula/L02_0035BD60-init-g8.c, function
  * func_L02_0035BD60 (v1.01 address), author commit a96d3126 (Louis-Philippe
- * Le Sieur). Lombyte mentions in the file: 0. Adopted with the authors'
+ * Le Sieur), a rename-copy of bigbeno37's func_L00_00354DF8 in
+ * src/levels/00_aranos_tutorial/L00_002FC7A8-g8.c (author commit 6001495a):
+ * the body is token-identical to it but for symbol names and the struct
+ * field `callback` -> `payload` (RULING #13427 rev 4, task #2645). Lombyte
+ * mentions in the file: 0. Adopted with the authors'
  * permission (RULINGs #10405, #12108, #13082, #13291). BYTE-IDENTICAL:
  * verbatim but for names, at upstream's -G8 (the `volatile` and the `sda`
  * attribute kept); respellings:
