@@ -2930,3 +2930,67 @@
     `src/levels/08_tabora/L08_003D8348-g8.c`
     (`func_L08_004229F8`, author commit `91e04732`, llesieur99), task #2627.
     Verbatim but for names: our name at the v2.00 place; `D_L08_001B29DC` kept address-named inside `D_L08_001B2200` (RULING #13291 §2), upstream's `sda` attribute kept verbatim, byte-inert; `include_asm.h` dropped.
+  - **`func_L01_003A79B0`** (`0x003A79B0`, level program 01) in
+    `going-decompiled/levels/usa/L01/src/func_L01_003A79B0.c`, from
+    `src/levels/01_oozla/L01_003835D8-g8.c` (`func_L01_003A65B0`, author commit `91e04732`, llesieur99),
+    task #2626. VERBATIM but for names: our name at the v2.00 place; D_L01_001AF87C as our .lit label D_L01_001AF83C; the suffix table kept address-named as D_L01_001BF930 (g_collHitEventRing+0x7B0, RULING #13291 section 2); four callees as L01's copies at their v2.00 places; the file's other declarations dropped.
+  - **`func_L01_003B6698`** (`0x003B6698`, level program 01) in
+    `going-decompiled/levels/usa/L01/src/func_L01_003B6698.c`, from
+    `src/levels/01_oozla/L01_003835D8-g8.c` (`func_L01_003B5290`, author commit `91e04732`, llesieur99),
+    task #2626. VERBATIM but for names: our name at the v2.00 place; both tables kept address-named as D_L01_001B255C (D_001B2354+0x208) and D_L01_001FB020 (g_pTextTableLoadBuf+0x8748) (RULING #13291 section 2); the file's other declarations dropped.
+  - **`func_L01_003BC3B8`** (`0x003BC3B8`, level program 01) in
+    `going-decompiled/levels/usa/L01/src/func_L01_003BC3B8.c`, from
+    `src/levels/01_oozla/L01_003835D8-g8.c` (`func_L01_003BAFB0`, author commit `ee3fee45`, llesieur99),
+    task #2626. VERBATIM but for names: our name at the v2.00 place; D_L01_001AFE18 as our .lit label D_L01_001AFDD8; the file's other declarations dropped.
+  - **`func_L01_003B59E0`** (`0x003B59E0`, level program 01) in
+    `going-decompiled/levels/usa/L01/src/func_L01_003B59E0.c`, from
+    `src/levels/01_oozla/L01_003835D8.c` (`func_L01_003B45D8`, author commit `c9a5add7`, Flavius; one body line from `ec778f01`, Flavius),
+    task #2626. VERBATIM but for names: our name at the v2.00 place; func_00115484 as the boot's memset (0x00115484, codegen-neutral on this arm); func_00277F48 as L01's copy func_L01_002D6C20; the entity table kept address-named as D_L01_001C3980 (g_pointLights+0xEC0, RULING #13291 section 2); the file's other declarations dropped. common.h's typedefs written in the TU.
+  - **`func_L01_003B5AD0`** (`0x003B5AD0`, level program 01) in
+    `going-decompiled/levels/usa/L01/src/func_L01_003B5AD0.c`, from
+    `src/levels/01_oozla/L01_003835D8.c` (`func_L01_003B46C8`, author commit `91e04732`, llesieur99),
+    task #2626. VERBATIM but for names: our name at the v2.00 place; the body references no other symbol (0 relocations); the file's other declarations dropped.
+  - **`func_L01_003B5FE0`** (`0x003B5FE0`, level program 01) in
+    `going-decompiled/levels/usa/L01/src/func_L01_003B5FE0.c`, from
+    `src/levels/01_oozla/L01_003835D8.c` (`func_L01_003B4BD8`, author commit `91e04732`, llesieur99),
+    task #2626. VERBATIM but for names: our name at the v2.00 place; func_00282948 as L01's copy func_L01_002E3DE8 (upstream's prototype-less declaration kept); the file's other declarations dropped.
+  - **`func_L01_003B6028`** (`0x003B6028`, level program 01) in
+    `going-decompiled/levels/usa/L01/src/func_L01_003B6028.c`, from
+    `src/levels/01_oozla/L01_003835D8.c` (`func_L01_003B4C20`, author commit `91e04732`, llesieur99),
+    task #2626. VERBATIM but for names: our name at the v2.00 place; the body references no other symbol (0 relocations); the file's other declarations dropped.
+  - **`func_L01_003B6718`** (`0x003B6718`, level program 01) in
+    `going-decompiled/levels/usa/L01/src/func_L01_003B6718.c`, from
+    `src/levels/01_oozla/L01_003835D8.c` (`func_L01_003B5310`, author commit `cd8c62bc`, Louis-Philippe Le Sieur, keeping 13 of 18 lines of the same author's draft `b18262d1`),
+    task #2626. Adapted (byte-identical): our name at the v2.00 place; func_002A7820, func_00282948 (prototype-less declaration kept) and func_002B0990 as L01's copies func_L01_00311748, func_L01_002E3DE8 and func_L01_0031CFA0; the file's other declarations dropped; func_L01_0031CFA0's prototype types written void */int/float for upstream's u8 */s32/f32 (byte-neutral); common.h's typedefs written in the TU.
+  - **`func_L01_003C1548`** (`0x003C1548`, level program 01) in
+    `going-decompiled/levels/usa/L01/src/func_L01_003C1548.c`, from
+    `src/levels/01_oozla/L01_003BB9D0-g8.c` (`func_L01_003C0140`, author commit `91e04732`, llesieur99),
+    task #2626. VERBATIM but for names: our name at the v2.00 place; D_L01_001AFEFC as our .lit label D_L01_001AFEBC; func_002AB8C0, func_00282978 and func_002B0990 as L01's copies func_L01_00316288, func_L01_002E3E18 and func_L01_0031CFA0; include_asm.h and the file's other declarations dropped.
+  - **`func_L01_003C1AF0`** (`0x003C1AF0`, level program 01) in
+    `going-decompiled/levels/usa/L01/src/func_L01_003C1AF0.c`, from
+    `src/levels/01_oozla/L01_003BB9D0-g8.c` (`func_L01_003C06E8`, author commit `91e04732`, llesieur99),
+    task #2626. VERBATIM but for names: our name at the v2.00 place; func_001163B0 as the boot's rand (0x001163B0, codegen-neutral on this arm); D_L01_001AFED4 as our .lit label D_L01_001AFE94; func_002A7820, func_002A7750 and func_L01_003BFDC8 as L01's func_L01_00311748, func_L01_00311638 and func_L01_003C11D0; include_asm.h and the file's other declarations dropped.
+  - **`func_L01_003C1B68`** (`0x003C1B68`, level program 01) in
+    `going-decompiled/levels/usa/L01/src/func_L01_003C1B68.c`, from
+    `src/levels/01_oozla/L01_003BB9D0-g8.c` (`func_L01_003C0760`, author commit `91e04732`, llesieur99),
+    task #2626. VERBATIM but for names: our name at the v2.00 place; D_L01_001AFED4 as our .lit label D_L01_001AFE94; func_002A7820, func_002A7750 and func_L01_003BFDC8 as L01's func_L01_00311748, func_L01_00311638 and func_L01_003C11D0; include_asm.h and the file's other declarations dropped.
+  - **`func_L01_003C1BD0`** (`0x003C1BD0`, level program 01) in
+    `going-decompiled/levels/usa/L01/src/func_L01_003C1BD0.c`, from
+    `src/levels/01_oozla/L01_003BB9D0-g8.c` (`func_L01_003C07C8`, author commit `91e04732`, llesieur99),
+    task #2626. VERBATIM but for names: our name at the v2.00 place; D_L01_001AFED8 as our .lit label D_L01_001AFE98; func_002A7820, func_002A7750 and func_L01_003BFDC8 as L01's func_L01_00311748, func_L01_00311638 and func_L01_003C11D0; include_asm.h and the file's other declarations dropped.
+  - **`func_L01_003C1C38`** (`0x003C1C38`, level program 01) in
+    `going-decompiled/levels/usa/L01/src/func_L01_003C1C38.c`, from
+    `src/levels/01_oozla/L01_003BB9D0-g8.c` (`func_L01_003C0830`, author commit `91e04732`, llesieur99),
+    task #2626. VERBATIM but for names: our name at the v2.00 place; D_L01_001AFEDC as our .lit label D_L01_001AFE9C; func_002A7820, func_002A7750 and func_L01_003BFDC8 as L01's func_L01_00311748, func_L01_00311638 and func_L01_003C11D0; include_asm.h and the file's other declarations dropped.
+  - **`func_L01_003BEF30`** (`0x003BEF30`, level program 01) in
+    `going-decompiled/levels/usa/L01/src/func_L01_003BEF30.c`, from
+    `src/levels/01_oozla/L01_003BB9D0.c` (`func_L01_003BDB28`, author commit `4541c4ce`, ReaperOfVeriod),
+    task #2626. VERBATIM but for names: our name at the v2.00 place; func_002A8598 as L01's copy func_L01_003127B8; common.h and the file's other declarations dropped.
+  - **`func_L01_003BEFB8`** (`0x003BEFB8`, level program 01) in
+    `going-decompiled/levels/usa/L01/src/func_L01_003BEFB8.c`, from
+    `src/levels/01_oozla/L01_003BB9D0.c` (`func_L01_003BDBB0`, author commit `91e04732`, llesieur99),
+    task #2626. VERBATIM but for names: our name at the v2.00 place; func_00282948 as L01's copy func_L01_002E3DE8; common.h and the file's other declarations dropped.
+  - **`func_L01_003BF330`** (`0x003BF330`, level program 01) in
+    `going-decompiled/levels/usa/L01/src/func_L01_003BF330.c`, from
+    `src/levels/01_oozla/L01_003BB9D0.c` (`func_L01_003BDF28`, author commit `ee3fee45`, llesieur99),
+    task #2626. VERBATIM but for names: our name at the v2.00 place; D_00189EA0 as the boot's g_heroPos; func_00283180, func_00283198, func_002A7878, func_00282CC0, func_00282CF0, func_00282F20 and func_L01_003BDBE8 as L01's copies func_L01_002E4750, func_L01_002E4768, func_L01_003117A0, func_L01_002E4178, func_L01_002E41A8, func_L01_002E4440 and func_L01_003BEFF0; common.h and the file's other declarations dropped.
