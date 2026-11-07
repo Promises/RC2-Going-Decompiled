@@ -27,7 +27,8 @@ name by the v2.00 ROM's own relocations at this place (draft relverify,
 task #2558): func_L02_003D5F50 -> func_L02_003D74B8,
 func_L00_002E6EF8 -> func_L02_002EAE30, func_L02_003D62F0 -> func_L02_003D7858,
 func_002B0990 -> func_L02_0032C1D0. D_0018C2BC -> D_18C2BC (task #2621,
-census NOTE #13409): the same address, 0x18C2BC (g_activeGadgetItem+0x1D4),
+census NOTE #13409): the same address, 0x18C2BC (g_activeGadgetItem+0x1D4,
+inside that larger split label),
 respelled to the name the boot asm already uses for it, the %hi/%lo operand
 at asm/usa/text/208010.s:33524; it stays an address-named extern (RULING
 #13291 §2, the name states the address). Extern decls written out; #include
