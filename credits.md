@@ -1550,3 +1550,195 @@
   - **`func_L02_00402258`** (level program 02, Maktar Nebula: runs the per-kind handler of every object in a list) from `src/levels/02_maktar_nebula/L02_003F5430.c` (`func_L02_00400B10`, v1.01 address, author commit `6eae4d38`, bigmak94). ADAPTED: nine callees to our split names; `sda` -> `section(".sdata")` on the `D_L02_001B35A8` extern declaration (RULING #8620), which keeps its address name; includes and unused declarations dropped. Task #2557.
   - **`func_L02_004112C8`** (level program 02, Maktar Nebula: steps an actor by its kind byte) from `src/us2/levels/02_maktar_nebula/L02_004112C8.c` (`func_US2_L02_004112C8`, v2.00 address, author commit `50c79a7f`, Flavius). ADAPTED: the boot's `g_heroPos` for `D_00189EA0`; `D_001A7BCB` to `D_001A7BD3` (the address the ROM's relocations imply) and `D_L02_001395B8` to `D_001395B8` (a core address), both address-named; eight callees to our split names; `sda` -> `section(".sdata")` on the `D_001A7BD3` extern declaration (RULING #8620); includes and unused declarations dropped. Task #2557.
   - **`func_L02_00425010`** (level program 02, Maktar Nebula: throws twenty sparks from an actor) from `src/levels/02_maktar_nebula/L02_0040A4A8.c` (`func_L02_00423838`, v1.01 address, author commit `11c21414`, bigmak94). ADAPTED: two colour-pair symbols and eight callees to our split names; `sda` -> `section(".sdata")` on the two colour-pair extern declarations (RULING #8620); includes and unused declarations dropped. Task #2557.
+  - **`func_L11_003983E0`** (`0x003983E0`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_003983E0.c`, from
+    `src/levels/11_joba/L11_002DE9E0-g8.c`
+    (`func_L11_00397068`, author commit `daf0e4a1`, Flavius), task #2578.
+    Verbatim but for names: our name, 1 data name, 6 callees renamed to
+    the v2.00 disc's own relocation targets; `common.h` dropped,
+    typedefs written; assembled through `tools/ee/asm_unit.sh`.
+  - **`func_L11_003F3178`** (`0x003F3178`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_003F3178.c`, from
+    `src/levels/11_joba/L11_003D6270.c`
+    (`func_L11_003F1C68`, author commit `91e04732`, llesieur99), task #2578.
+    Adapted: built at -G8 (upstream -G0), text verbatim but for names;
+    our name, 1 data name, 8 callees renamed to the v2.00 disc's own
+    relocation targets; `common.h` dropped, typedefs written; assembled
+    through `tools/ee/asm_unit.sh`.
+  - **`func_L11_003F4448`** (`0x003F4448`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_003F4448.c`, from
+    `src/levels/11_joba/L11_003F2F38-g8.c`
+    (`func_L11_003F2F38`, author commit `eabc4759`, Flavius), task #2578.
+    Verbatim but for names: our name, 2 data names, 8 callees renamed to
+    the v2.00 disc's own relocation targets; `common.h` dropped,
+    typedefs written; assembled through `tools/ee/asm_unit.sh`.
+  - **`func_L11_00418AB0`** (`0x00418AB0`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_00418AB0.c`, from
+    `src/levels/11_joba/L11_003D6270-g8.c`
+    (`func_L11_00417340`, author commit `aaa28c3b`, Flavius), task #2578.
+    Verbatim but for names: our name, 2 data names
+    (`g_soundBankHandlesBlk` the boot's), 11 callees renamed to the
+    v2.00 disc's own relocation targets; `common.h` dropped, typedefs
+    written; assembled through `tools/ee/asm_unit.sh`.
+  - **`func_L11_00426FA0`** (`0x00426FA0`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_00426FA0.c`, from
+    `src/levels/11_joba/L11_00420C88.c`
+    (`func_L11_00425788`, author commit `aaa28c3b`, Flavius), task #2578.
+    Adapted: built at -G8 (upstream -G0), text verbatim but for names;
+    our name, 10 callees renamed to the v2.00 disc's own relocation
+    targets; `common.h` dropped, typedefs written; assembled through
+    `tools/ee/asm_unit.sh`.
+  - **`func_L11_0042B988`** (`0x0042B988`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_0042B988.c`, from
+    `src/levels/11_joba/L11_00425F10.c`
+    (`func_L11_0042A158`, author commit `76d5f55b`, Flavius), task #2578.
+    Adapted: built at -G8 (upstream -G0), text verbatim but for names;
+    our name, 10 callees renamed to the v2.00 disc's own relocation
+    targets; `common.h` dropped, typedefs written; assembled through
+    `tools/ee/asm_unit.sh`.
+  - **`func_L11_00436338`** (`0x00436338`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_00436338.c`, from
+    `src/levels/11_joba/L11_00432628-g8.c`
+    (`func_L11_00434AF8`, author commit `9ad4d690`, Flavius), task #2578.
+    Adapted: `sda` as `section(".sdata")` (RULING #8620); our name, 5
+    data names, 6 callees renamed to the v2.00 disc's own relocation
+    targets; `common.h` dropped, typedefs written; assembled through
+    `tools/ee/asm_unit.sh`.
+  - **`func_L11_00437B90`** (`0x00437B90`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_00437B90.c`, from
+    `src/levels/11_joba/L11_00436350-g8.c`
+    (`func_L11_00436350`, author commit `644c5b4d`, bigbeno37), task #2578.
+    Verbatim but for names: our name, 1 data name, 20 callees renamed to
+    the v2.00 disc's own relocation targets; `common.h` dropped,
+    typedefs written; assembled through `tools/ee/asm_unit.sh`.
+  - **`func_L11_0043AE08`** (`0x0043AE08`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_0043AE08.c`, from
+    `src/levels/11_joba/L11_00432628-g8.c`
+    (`func_L11_004395C8`, author commit `4541c4ce`, ReaperOfVeriod), task #2578.
+    Verbatim but for names: our name, 1 data name renamed to the v2.00
+    disc's own relocation targets; `common.h` dropped, typedefs written;
+    assembled through `tools/ee/asm_unit.sh`.
+  - **`func_L11_0043BC38`** (`0x0043BC38`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_0043BC38.c`, from
+    `src/levels/11_joba/L11_00432628.c`
+    (`func_L11_0043A3F8`, author commit `5acf9869`, Flavius), task #2578.
+    Adapted: built at -G8 (upstream -G0), text verbatim but for names;
+    our name, 1 data name, 9 callees renamed to the v2.00 disc's own
+    relocation targets; `common.h` dropped, typedefs written; assembled
+    through `tools/ee/asm_unit.sh`.
+  - **`func_L11_0043C218`** (`0x0043C218`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_0043C218.c`, from
+    `src/levels/11_joba/L11_00432628-g8.c`
+    (`func_L11_0043A9D8`, author commit `47360109`, Flavius), task #2578.
+    Verbatim but for names: our name, 1 data name, 5 callees renamed to
+    the v2.00 disc's own relocation targets; `common.h` dropped,
+    typedefs written; assembled through `tools/ee/asm_unit.sh`.
+  - **`func_L11_00442668`** (`0x00442668`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_00442668.c`, from
+    `src/levels/11_joba/L11_0043E1A0-g8.c`
+    (`func_L11_00440E18`, author commit `d932dae8`, bigmak94), task #2578.
+    Adapted: `sda` as `section(".sdata")` (RULING #8620); our name, 5
+    data names (`g_heroPos` the boot's), 3 callees renamed to the v2.00
+    disc's own relocation targets; `common.h` dropped, typedefs written;
+    assembled through `tools/ee/asm_unit.sh`.
+  - **`func_L11_00443C48`** (`0x00443C48`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_00443C48.c`, from
+    `src/levels/11_joba/L11_0043E1A0-g8.c`
+    (`func_L11_004423F8`, author commit `c7d9e30a`, bigbeno37), task #2578.
+    Verbatim but for names: our name, 16 data names
+    (`g_soundBankHandlesBlk` the boot's), 4 callees renamed to the v2.00
+    disc's own relocation targets; `common.h` dropped, typedefs written;
+    assembled through `tools/ee/asm_unit.sh`.
+  - **`func_L11_00443F60`** (`0x00443F60`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_00443F60.c`, from
+    `src/levels/11_joba/L11_0043E1A0-g8.c`
+    (`func_L11_00442710`, author commit `daf0e4a1`, Flavius), task #2578.
+    Verbatim but for names: our name, 1 data name renamed to the v2.00
+    disc's own relocation targets; `common.h` dropped, typedefs written;
+    assembled through `tools/ee/asm_unit.sh`.
+  - **`func_L11_00444BD0`** (`0x00444BD0`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_00444BD0.c`, from
+    `src/levels/11_joba/L11_0043E1A0-g8.c`
+    (`func_L11_00443380`, author commit `264cb2be`, llesieur99), task #2578.
+    Verbatim but for names: our name, 4 data names, 5 callees renamed to
+    the v2.00 disc's own relocation targets; `common.h` dropped,
+    typedefs written; assembled through `tools/ee/asm_unit.sh`.
+  - **`func_L11_00444CE8`** (`0x00444CE8`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_00444CE8.c`, from
+    `src/levels/11_joba/L11_00443498-g8.c`
+    (`func_L11_00443498`, author commit `3cd8af2d`, bigbeno37), task #2578.
+    Verbatim but for names: our name, 5 data names (`g_heroState`,
+    `g_itemEquippedSlot` the boot's), 15 callees renamed to the v2.00
+    disc's own relocation targets; `common.h` dropped, typedefs written;
+    assembled through `tools/ee/asm_unit.sh`.
+  - **`func_L11_00449ED0`** (`0x00449ED0`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_00449ED0.c`, from
+    `src/levels/11_joba/L11_004465F8-g8.c`
+    (`func_L11_004484A8`, author commit `3cd8af2d`, bigbeno37), task #2578.
+    Verbatim but for names: our name, 2 data names, 16 callees renamed
+    to the v2.00 disc's own relocation targets; `common.h` dropped,
+    typedefs written; assembled through `tools/ee/asm_unit.sh`.
+  - **`func_L11_0044A4D0`** (`0x0044A4D0`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_0044A4D0.c`, from
+    `src/levels/11_joba/L11_00448AA8.c`
+    (`func_L11_00448AA8`, author commit `d282effa`, Flavius), task #2578.
+    Adapted: built at -G8 (upstream -G0), text verbatim but for names;
+    our name, 1 data name (`g_heroPos` the boot's), 9 callees renamed to
+    the v2.00 disc's own relocation targets; `common.h` dropped,
+    typedefs written; assembled through `tools/ee/asm_unit.sh`.
+  - **`func_L11_0044AAC0`** (`0x0044AAC0`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_0044AAC0.c`, from
+    `src/levels/11_joba/L11_004465F8.c`
+    (`func_L11_00449098`, author commit `5acf9869`, Flavius), task #2578.
+    Adapted: built at -G8 (upstream -G0), text verbatim but for names;
+    our name, 7 callees renamed to the v2.00 disc's own relocation
+    targets; `common.h` dropped, typedefs written; assembled through
+    `tools/ee/asm_unit.sh`.
+  - **`func_L11_0044AD58`** (`0x0044AD58`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_0044AD58.c`, from
+    `src/levels/11_joba/L11_00449330.c`
+    (`func_L11_00449330`, author commit `72a6596f`, Flavius), task #2578.
+    Adapted: built at -G8 (upstream -G0); `sda` as `section(".sdata")`
+    (RULING #8620); our name, 4 callees renamed to the v2.00 disc's own
+    relocation targets; `common.h` dropped, typedefs written; assembled
+    through `tools/ee/asm_unit.sh`.
+  - **`func_L11_0044D7A0`** (`0x0044D7A0`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_0044D7A0.c`, from
+    `src/levels/11_joba/L11_0044BD68-g8.c`
+    (`func_L11_0044BD68`, author commit `644c5b4d`, bigbeno37), task #2578.
+    Adapted: `sda` as `section(".sdata")` (RULING #8620); our name, 2
+    data names, 17 callees renamed to the v2.00 disc's own relocation
+    targets; `common.h` dropped, typedefs written; assembled through
+    `tools/ee/asm_unit.sh`.
+  - **`func_L11_00453EA8`** (`0x00453EA8`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_00453EA8.c`, from
+    `src/levels/11_joba/L11_004465F8-g8.c`
+    (`func_L11_00452450`, author commit `96f56db3`, bigbeno37), task #2578.
+    Verbatim but for names: our name, 2 data names, 19 callees renamed
+    to the v2.00 disc's own relocation targets; `common.h` dropped,
+    typedefs written; assembled through `tools/ee/asm_unit.sh`.
+  - **`func_L11_00455F60`** (`0x00455F60`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_00455F60.c`, from
+    `src/levels/11_joba/L11_00453358-g8.c`
+    (`func_L11_00454508`, author commit `4014e0b6`, Flavius), task #2578.
+    Verbatim but for names: our name, 2 data names
+    (`g_listenerPosHistory` the boot's), 27 callees renamed to the v2.00
+    disc's own relocation targets; no `long long` in this body, so no
+    respelling (FACT #13321); `common.h` dropped, typedefs written;
+    assembled through `tools/ee/asm_unit.sh`.
+  - **`func_L11_0045A6F0`** (`0x0045A6F0`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_0045A6F0.c`, from
+    `src/levels/11_joba/L11_00458C38-g8.c`
+    (`func_L11_00458C38`, author commit `5f3b0386`, Louis-Philippe Le Sieur), task #2578.
+    Verbatim but for names: our name, 4 data names, 4 callees renamed to
+    the v2.00 disc's own relocation targets; upstream's `SDATA()` macro
+    written out as its section attribute; `common.h` dropped, typedefs
+    written; assembled through `tools/ee/asm_unit.sh`.
+  - **`func_L11_0045B800`** (`0x0045B800`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_0045B800.c`, from
+    `src/levels/11_joba/L11_00453358-g8.c`
+    (`func_L11_00459D48`, author commit `431ac503`, llesieur99), task #2578.
+    Verbatim but for names: our name, 1 data name, 8 callees renamed to
+    the v2.00 disc's own relocation targets; no `long long` in this
+    body, so no respelling (FACT #13321); `common.h` dropped, typedefs
+    written; assembled through `tools/ee/asm_unit.sh`.
