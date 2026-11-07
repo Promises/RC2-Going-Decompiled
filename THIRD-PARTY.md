@@ -210,6 +210,21 @@ rac1-decomp `src/core/00116FA0.c`.
 
 The GPL-2.0-or-later note in the section "OpenRAC rac2-gc-decomp (GPL-3.0)" above applies to these bodies too.
 
+### OpenRAC rac2-decomp at fe6adf9b, level programs
+
+C function bodies of the USA v2.00 level programs are taken from OpenRAC's
+`rac2-decomp`, <https://github.com/OpenRAC/rac2-decomp> at commit
+`fe6adf9baddcd31323c35adf102d078aa250852d` (licence per row: GPL-3.0 (root
+LICENSE) unless the row names a file's own MIT notice), with the authors'
+permission (RULINGs #10405, #12108, #13082 and #13291). Each is adapted, with
+every respelling named in the function's `Source:` line.
+
+| Here | Upstream file | Upstream name |
+|---|---|---|
+| `func_L24_0037AE10` in `going-decompiled/levels/usa/L24/src/func_L24_0037AE10.c`, level program 24 (adapted: our name; their `sda`/`nosda` as `section(".sdata")`/`section(".data")` (RULING #8620); the boot's `g_soundBankHandlesBlk` for `D_00189E20`; two level data names and eight callees renamed to the v2.00 disc's own targets, L24's copies of boot code; assembled through `tools/ee/asm_unit.sh`), task #2552; GPL-3.0, no notice in the file, no Lombyte mention | `src/us2/levels/24_ship_shack/L24_0037AE10-g8.c` (author commit `c4928ea3`, Flavius) | `func_US2_L24_0037AE10` (v2.00 address) |
+
+The GPL-2.0-or-later note in the section "OpenRAC rac2-gc-decomp (GPL-3.0)" above applies to these bodies too.
+
 ### Newlib, origin files with no in-file notice
 
 C bodies in `going-decompiled/src/usa/cod/015180.c`, taken from OpenRAC

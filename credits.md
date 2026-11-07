@@ -1088,3 +1088,23 @@
     (`func_00115E68`, author commit `7b023993`, Louis-Philippe Le Sieur).
     ADAPTED: callee `func_001175F0` keeps its name (this unit's own
     symbol), `long` written `s64`, `int` written `s32`, `NULL` written 0.
+
+- **OpenRAC — `rac2-decomp`, commit `fe6adf9b`, level programs** (GPL-3.0)
+  <https://github.com/OpenRAC/rac2-decomp> at commit `fe6adf9baddcd31323c35adf102d078aa250852d`
+
+  C bodies of the USA v2.00 level programs, adopted per RULINGs #13082 and
+  #13291 from the audit of task #2539 (NOTE #13290) and re-checked in a full
+  level build against the disc (`tools/levels/level_gate.sh`). Each doc
+  comment carries the `Source:` line, which names every change; the licence
+  per row is in THIRD-PARTY.md ("OpenRAC rac2-decomp at fe6adf9b, level
+  programs").
+
+  Used so far:
+  - **`func_L24_0037AE10`** (`0x0037AE10`, level program 24) in
+    `going-decompiled/levels/usa/L24/src/func_L24_0037AE10.c`, from
+    `src/us2/levels/24_ship_shack/L24_0037AE10-g8.c`
+    (`func_US2_L24_0037AE10`, author commit `c4928ea3`, Flavius), task
+    #2552. ADAPTED: our name, `sda`/`nosda` as section attributes
+    (RULING #8620), the boot's `g_soundBankHandlesBlk`, two level data names
+    and eight callees renamed to the v2.00 disc's targets; assembled through
+    `tools/ee/asm_unit.sh`.
