@@ -3841,103 +3841,200 @@ s32 func_002D02A0(void) {
 }
 #endif
 
-/* UpdateCheatMenuInput: per-frame input for the cheats menu (cursor D_1ABA30 over
- * the 12-entry table D_1ABD50, stride 4: +0x2 cheat id, +0x3 unlock gate). Reads the
- * screen's held buttons (D_138180+0x1C4). Back (0x10) resets the cursor and pops the
- * menu-screen block. Exit (0x900) resets the cursor and returns 1. Up (0x1000)/down
- * (0x4000) move to the previous/next non-disabled entry (gate 0x64 = disabled),
- * wrapping, with the move sound. Confirm (0x40) is allowed when the entry is
- * unlocked — the special gate 0x5A requires g_skillPointFlags, otherwise the player's
- * completed skill-point count must reach the gate value; on allow it plays the accept
- * sound and toggles g_cheatFlags[cheatId], reloading the player display model for the
- * model-changing cheats (2/9/10/0xB); on deny it plays the reject sound. Returns 1 on
- * exit, the popped value on back, else 0. */
-/* s136os arm, measured by task #2117 (SN 1.36 -O2 -G8 -fstrict-aliasing -fopt-stack, gcse on):
- * this #else body builds 136 words against the ROM's 144 (SHORTER), so the splice refuses it on
- * LENGTH. Residual class: length/structure, not yet attributed. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", UpdateCheatMenuInput);
+/**
+ * UpdateCheatMenuInput — per-frame input for the Cheats menu. Takes no arguments;
+ * returns 1 on exit, the back result on back, else 0.
+ *
+ * Reads the pad buttons pressed this frame (D_138180+0x1C4) and the cursor D_1ABA30
+ * over the 12-entry cheat table D_1ABD50 (4-byte rows: +0x2 the g_cheatFlags index,
+ * +0x3 the unlock gate).
+ *   - Back (0x10): resets the cursor, then hands the active screen's pending
+ *     sub-result (g_menuScreenBlock+0x14 -> +0xE0) to the block and returns 0; with no
+ *     pending result it returns -1 when the block's fallback word is 0, else 0.
+ *   - Exit (0x900): resets the cursor and returns 1.
+ *   - Up (0x1000) / down (0x4000): sound 3, then moves to the previous / next row
+ *     whose gate is not 100 (hidden), wrapping 0..11.
+ *   - Confirm (0x40), checked after any move: a row unlocks when its gate is not
+ *     0x5A and is at most the completed skill-point count (CountSkillPointsCompleted),
+ *     or when its gate is 0x5A and g_skillPointFlags (the first skill-point flag) is
+ *     set. An unlocked row plays sound 4 and toggles its g_cheatFlags byte. Cheats
+ *     2, 9, 10 and 11 then reload the player display model for g_equippedArmor.
+ *     A locked row plays sound 5.
+ *
+ * Non-obvious: the row is read through the shop_entry/shop_cost/shop_item inline
+ * helpers and through the `slot` pointer, which first holds the table base and later
+ * the g_cheatFlags byte. Upstream says the reuse is what puts the base in $a0 as the
+ * ROM does. `flags` is reused for the cheat id, and its last two compares go through
+ * (unsigned char) (the ROM has `andi 0xff` there, 0x2D06F4; which spelling produces it
+ * was not ablated here, FACT #9976 has the mechanism). These are upstream's own
+ * spellings, kept verbatim.
+ *
+ * MATCHED on the s136os arm (SN 2.95.3 v1.36 cc1plus -O2 -G8 -fopt-stack, the unit's
+ * S136EXTRA -fstrict-aliasing, gcse on), as the unit is: no unpin, no flag change,
+ * no alias. Row in tools/ee/s136os_functions.txt, spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh; there is no asm fallback, so a build that skips the
+ * splice drops the function. On native it is plain C. Retires the earlier #else
+ * (136 words against the ROM's 144 on this arm, task #2117; 14 words by NOTE #9972).
+ *
+ * One device. ADDRESSING-MODEL DEVICE (RULING #8620), EE arm only: section(".sdata")
+ * on the EXTERN declaration of D_1ABD50. This is upstream's own MACRO_ADDR marking.
+ * cc1 then prints the one-insn `la` macro for the table base, which the assembler
+ * expands to the ROM's adjacent `lui/addiu` pair. It emits nothing and moves no data,
+ * and the relocations name D_1ABD50. Ablated: without it the splice refuses on LENGTH,
+ * 149 words against the ROM's 144. Native declares the unit's u8 table and reads it
+ * through the same typed view. The unit's `.extern D_138180, 16` does not reach this
+ * body: D_138180 is an unsized array, so cc1 splits %hi/%lo itself (ROM `lui;
+ * daddu $16; addiu`), and no alias is needed (task #2664). FACT #12214's jal-slot
+ * hazard on `g_equippedArmor` (`.extern …, 16`) does not arise either: cc1 puts the
+ * `lh` macro in the `jal LoadPlayerDisplayModel` slot under noreorder, and
+ * asm_unit.sh's existing slot-hoist pin assembles it as the ROM's `lui; lh; jal; nop`
+ * (0x2D070C).
+ *
+ * Source: OpenRAC/rac2-decomp @34f0f0b84a04caee1a785e2192aefb067ef597ca (GPL-3.0,
+ * adopted with the authors' permission per RULING #10405 and #12108; no third-party
+ * notice in either file), src/us2/game/002D0510-cc.c, func_US2_002D0510.
+ *   - Introducing commit 670da842 (bigbeno37, 2026-11-07). It is a rename-copy of v1.01
+ *     func_002CF5B0 (src/game/002CF5B0-g32.c), token-identical except func_002923C0 ->
+ *     func_US2_00292C70 (RULING #13427 rev 4). That file was introduced by c703baf8
+ *     (Lynder063), which moved the text from the nonmatching draft
+ *     nonmatching/game/func_002CF5B0.c.
+ *   - Writers of the surviving non-trivial lines (`git blame -M -C` at the pin,
+ *     RULING #13427 rev 3 / #13541): Flavius (0eb05a7c, 0f3403f8, 2f2ba9ac),
+ *     bigbeno37 (2000608f) and Lynder063 (1e559139, f14ea96a, c703baf8).
+ *   - Not credited: the Settings_002F9198 view (f758aba1, bigbeno37) and the
+ *     func_002923C0 prototype (b0b19050, Louis-Philippe Le Sieur). Both are replaced
+ *     by our declarations below.
+ * ADAPTED. Statements are identical apart from these edits:
+ *   - Our names per the ROM's relocations: D_00138180 = D_138180, read through the
+ *     g_cheatMenuPad view; D_001F2840 = g_menuScreenBlock, read through the unit's
+ *     g_menuSelection view (upstream's identical SelectionCallback typedef is
+ *     already at file scope); D_001AB9EC = D_1ABA30; D_001ABCD0 = D_1ABD50, as
+ *     g_cheatMenuEntries; D_001A7A40 = g_cheatFlags, whose EE `.sdata` declaration
+ *     the unit already carries; func_002B0E90 = CountSkillPointsCompleted;
+ *     func_002E5E58 = PlayGlobalSound, with the unit's prototype; func_US2_00292C70
+ *     = LoadPlayerDisplayModel, with its definition's `(s32 variant)` prototype in
+ *     place of `(void *)`.
+ *   - D_001A7A60[0] (MACRO_ADDR) read as the unit's g_skillPointFlags scalar.
+ *   - D_001A79F8.level (MACRO_ADDR, +0x20) read as g_equippedArmor (FACT #5814: a
+ *     halfword), passed as `(s32)` without upstream's further `(void *)` cast.
+ *   - Upstream's `sda` on D_001AB9EC dropped: our cc1 ignores it, and -G8 sizing gives
+ *     the same %gp_rel class.
+ *   - Their CallbackMenuState typedef kept, used through the macro view.
+ * Byte-exact on our ROM (task #2664): splice length 144 = 144; vmu BYTE IDENTICAL
+ * 144/144 (36 relocs), base-seeded rc 1; 36 relocations equal the frozen .s by name;
+ * unit objdiff report 0.00 -> 100.00% size=576 (objdiff_build.sh + unit_report.sh),
+ * the only row moved; landing_gate usa and eu --strict.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_UpdateCheatMenuInput)
+S136OS_SLOT(UpdateCheatMenuInput);
 #else
-/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 40.93% -> BIGDISP-SPLIT + STRUCTURAL,
- * first differing row @1: ROM `(none)` vs `sd s1,8(sp)`;
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 57.15% -> PACKED-SAVE, first differing row @2: ROM `sd s1,8(sp)` vs `sd ra,16(sp)`.
- * Save stride re-measured on the s136os arm (SN 1.36 -fopt-stack): this member's prologue - the
- * ROM's save set at its 8-byte stride, and its frame - is reproduced exactly (NOTE #9871), so
- * the save-slot wall named above is a cc1 2.9 property and was measured false as the reason
- * this member stays unmatched (FACT #9873). Residual: UNMEASURED. */
-extern s32 CountSkillPointsCompleted(void);
-extern u8 D_138180[];
-extern u8 g_menuScreenBlock[];
-extern s32 D_1ABA30;
+/* The pad state at D_138180 as this handler reads it: +0x1C4 holds the buttons
+ * pressed this frame. A typedef and a macro emit nothing. */
+typedef struct { char reserved[0x1C4]; int flags; } CallbackMenuState;
+#define g_cheatMenuPad (*(CallbackMenuState *)D_138180)
+/* One 4-byte row of the cheat table D_1ABD50: f0/f1 the name string id (read by
+ * DrawCheatMenu), `item` the g_cheatFlags index, `cost` the unlock gate (skill points
+ * needed; 0x5A = needs g_skillPointFlags; 100 = hidden). Upstream's names. */
+typedef struct { unsigned char f0; unsigned char f1; unsigned char item; unsigned char cost; } ShopEntry;
+
+extern s32 D_1ABA30;            /* cursor row, 0..11 */
+#ifndef TARGET_NATIVE
+/* The device (see the doc comment): RULING #8620, upstream's MACRO_ADDR. */
+extern ShopEntry D_1ABD50[] __attribute__((section(".sdata")));
+#define g_cheatMenuEntries D_1ABD50
+#else
 extern u8 D_1ABD50[];
-extern u8 g_cheatFlags[];
-extern u8 g_skillPointFlags;
+#define g_cheatMenuEntries ((ShopEntry *)D_1ABD50)
+#endif
 extern s16 g_equippedArmor;
-extern void LoadPlayerDisplayModel(s16 armor);
+extern s32 CountSkillPointsCompleted(void);
 extern s32 PlayGlobalSound(s32 id, s32 a, s32 b);
-s32 UpdateCheatMenuInput(void) {
-    s32 skillPts = CountSkillPointsCompleted();
-    s32 flags = *(s32 *)(D_138180 + 0x1C4);
-    s32 gate, cheatId, allow;
+extern void LoadPlayerDisplayModel(s32 variant);
 
-    if (flags & 0x10) {                 /* back */
-        s32 e0 = *(s32 *)(*(u8 **)(g_menuScreenBlock + 0x14) + 0xE0);
+static __inline__ ShopEntry *shop_entry(int index)
+{
+    return &g_cheatMenuEntries[index];
+}
+
+static __inline__ int shop_cost(int index)
+{
+    return shop_entry(index)->cost;
+}
+
+static __inline__ int shop_item(int index)
+{
+    return shop_entry(index)->item;
+}
+
+int UpdateCheatMenuInput(void)
+{
+    int result = 0;
+    int status;
+    unsigned char *slot;
+    int limit = CountSkillPointsCompleted();
+    int flags = g_cheatMenuPad.flags;
+
+    if (flags & 0x10) {
+        int value, rc;
         D_1ABA30 = 0;
-        if (e0 != 0) {
-            *(s32 *)(g_menuScreenBlock + 0x18) = e0;
-            return 0;
+        value = *(int *)(g_menuSelection.source + 0xE0);
+        if (value != 0)
+            g_menuSelection.value = value;
+        else if (g_menuSelection.fallback == 0) {
+            rc = -1;
+            goto finish;
         }
-        return (*(s32 *)(g_menuScreenBlock + 0x134) == 0) ? -1 : 0;
+        rc = 0;
+finish:
+        return rc;
     }
-
-    if (flags & 0x900) {                /* exit */
+    if (flags & 0x900) {
         D_1ABA30 = 0;
-        return 1;
-    }
-
-    if (flags & 0x1000) {               /* up: previous enabled entry */
-        PlayGlobalSound(3, 0, 0);
-        do {
-            D_1ABA30--;
-            if (D_1ABA30 < 0) {
-                D_1ABA30 = 0xB;
-            }
-        } while (D_1ABD50[D_1ABA30 * 4 + 3] == 0x64);
-    } else if (flags & 0x4000) {        /* down: next enabled entry */
-        PlayGlobalSound(3, 0, 0);
-        do {
-            D_1ABA30++;
-            if (D_1ABA30 >= 0xC) {
-                D_1ABA30 = 0;
-            }
-        } while (D_1ABD50[D_1ABA30 * 4 + 3] == 0x64);
-    }
-
-    /* confirm */
-    if (!(*(s32 *)(D_138180 + 0x1C4) & 0x40)) {
-        return 0;
-    }
-    gate = D_1ABD50[D_1ABA30 * 4 + 3];
-    if (gate == 0x5A) {
-        allow = (g_skillPointFlags != 0);
+        result = 1;
     } else {
-        allow = !(skillPts < gate);
+        if (flags & 0x1000) {
+            PlayGlobalSound(3, 0, 0);
+            do {
+                ShopEntry *table;
+                if (--D_1ABA30 < 0)
+                    D_1ABA30 = 11;
+                table = g_cheatMenuEntries;
+                if (table[D_1ABA30].cost != 100)
+                    break;
+            } while (1);
+        } else if (flags & 0x4000) {
+            int cur;
+            ShopEntry *table;
+            PlayGlobalSound(3, 0, 0);
+            cur = D_1ABA30;
+            table = g_cheatMenuEntries;
+            do {
+                if (++cur >= 12)
+                    cur = 0;
+            } while (table[cur].cost == 100);
+            D_1ABA30 = cur;
+        }
+        if (g_cheatMenuPad.flags & 0x40) {
+            slot = (unsigned char *)g_cheatMenuEntries;
+            status = ((ShopEntry *)slot)[D_1ABA30].cost;
+            if ((status != 0x5A && status <= limit)
+                || (shop_cost(D_1ABA30) == 0x5A && g_skillPointFlags != 0)) {
+                PlayGlobalSound(4, 0, 0);
+                slot = &g_cheatFlags[shop_entry(D_1ABA30)->item];
+                if (*slot)
+                    *slot = 0;
+                else
+                    *slot = 1;
+                {
+                    flags = shop_item(D_1ABA30);
+                    if (flags == 9 || flags == 10 || (unsigned char)flags == 2 || (unsigned char)flags == 11)
+                        LoadPlayerDisplayModel((s32)g_equippedArmor);
+                }
+            } else
+                PlayGlobalSound(5, 0, 0);
+        }
     }
-    if (!allow) {
-        PlayGlobalSound(5, 0, 0);       /* reject */
-        return 0;
-    }
-    PlayGlobalSound(4, 0, 0);           /* accept */
-
-    cheatId = D_1ABD50[D_1ABA30 * 4 + 2];
-    g_cheatFlags[cheatId] = (g_cheatFlags[cheatId] != 0) ? 0 : 1;
-
-    cheatId = D_1ABD50[D_1ABA30 * 4 + 2];
-    if (cheatId == 9 || cheatId == 10 || cheatId == 2 || cheatId == 0xB) {
-        LoadPlayerDisplayModel(g_equippedArmor);
-    }
-    return 0;
+    return result;
 }
 #endif
 

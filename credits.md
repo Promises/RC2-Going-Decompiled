@@ -646,7 +646,7 @@
     byte-exact on our ROM; its one inline `sync` is the hardware barrier
     RULING #12168 allows (task #2297).
 
-- **OpenRAC — `rac2-decomp`, commit `b2a35115`, Window X bodies (text/235FE8, text/1DFF80, text/1D54C0, text/250080, text/188858, text/191238, text/198FA0, text/1B4218, text/1FFBA0, cod/022FA8, cod/015180 and level program 24)** (GPL-3.0)
+- **OpenRAC — `rac2-decomp`, commit `b2a35115`, Window X bodies (text/235FE8, text/1DFF80, text/1D54C0, text/250080, text/188858, text/191238, text/198FA0, text/1B4218, text/1FFBA0, text/1CA080, cod/022FA8, cod/015180 and level program 24)** (GPL-3.0)
   <https://github.com/OpenRAC/rac2-decomp> at commit `b2a35115e0cf580a1fdab8dd1071b157799e590e`
   (the same history as `rac2-gc-decomp` above: `96927f87` is an ancestor)
 
@@ -658,7 +658,8 @@
   program off the disc) on the s136os arm, or for the five cod/015180 malloc
   bodies on the sn2952 arm (RULING #12157), or for cod/022FA8's func_00126470
   on the unit's plain sdk29 `-O2 -G0` arm. Contributors so far: bigbeno37,
-  bigmak94, Flavius, Louis-Philippe Le Sieur, ReaperOfVeriod and ThorpenCodes.
+  bigmak94, Flavius, Louis-Philippe Le Sieur, Lynder063, ReaperOfVeriod and
+  ThorpenCodes.
   Each doc comment carries the `Source:` line, which names every respelling.
 
   Used so far:
@@ -1037,6 +1038,25 @@
     char` as `s32`/`u8`. s136os arm as the unit is (task #2658, from audit
     NOTE #13181 row 11; task #2502 had withdrawn a rewritten spelling at 52
     words, FACT #13300).
+  - **`UpdateCheatMenuInput`** (`0x002D0510`, per-frame input for the Cheats
+    menu: cursor moves over the 12-row cheat table, and confirm toggles an
+    unlocked cheat's flag) in `going-decompiled/src/usa/text/1CA080.cpp`, from
+    `src/us2/game/002D0510-cc.c` (`func_US2_002D0510`, v2.00 address, author
+    commit `670da842`, bigbeno37; read at `34f0f0b8`, the file is not present
+    at `b2a35115` or `5776dcc3`). It is a rename-copy of their v1.01
+    `func_002CF5B0` (`src/game/002CF5B0-g32.c`), whose text `c703baf8`
+    (Lynder063) moved from the nonmatching draft
+    `nonmatching/game/func_002CF5B0.c`. Writers of the surviving lines (RULING
+    #13427 rev 3/4, #13541): Flavius (`0eb05a7c`, `0f3403f8`, `2f2ba9ac`),
+    bigbeno37 (`2000608f`) and Lynder063 (`1e559139`, `f14ea96a`, `c703baf8`).
+    ADAPTED: our symbol names per the ROM's relocations (`D_138180` and
+    `g_menuScreenBlock` through cast views, `D_1ABA30`, `D_1ABD50`,
+    `g_cheatFlags`, `g_skillPointFlags`, `g_equippedArmor`,
+    `CountSkillPointsCompleted`, `PlayGlobalSound`, `LoadPlayerDisplayModel`
+    with its `(s32)` prototype), their `MACRO_ADDR` on the cheat table as the
+    EE-only `section(".sdata")` extern device (RULING #8620), their `sda`
+    dropped. s136os arm as the unit is (task #2664, from audit NOTE #13550 /
+    FACT #13553).
   - **`func_00126470`** (`0x00126470`, libgraph's `sceGsSetDefStoreImage`;
     FACT #5541 names it BuildGsStoreImagePacket) in
     `going-decompiled/src/usa/cod/022FA8.c`, from `src/core/0012646C-store.c`
