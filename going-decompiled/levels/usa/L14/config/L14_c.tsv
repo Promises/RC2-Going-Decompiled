@@ -1,0 +1,39 @@
+# Functions of level program L14 built from C (task #2563, RULING #13291 row L14-A).
+# One row per function, compiled ALONE as its own TU by tools/levels/level_build.sh
+# and linked at its one place in place of its split asm (gen_ld.py cuts the
+# function's block out of the .text asm). Single placement only (row L7 is the
+# multi-placement design).
+#   function: the glabel in the split .text asm (its address is in its name)
+#   source:   path under going-decompiled/levels/usa/L14/
+#   arm:      tools/ee/ee_cc1.sh arm (sdk29 | s136 | sn2952); s136 adds -fopt-stack
+#   gflag:    -G0 | -G8, used by cc1 AND the assembler
+#   as:       optional (task #2552): as (plain GNU as) | asm_unit (tools/ee/asm_unit.sh,
+#             the boot's model of SN's assembler); a 4-column row is `as -`
+#   cc1flags: optional, with as: extra cc1 flags, comma-separated, or - for none
+# function	source	arm	gflag
+func_L14_0032A188	src/func_L14_0032A188.c	s136	-G0
+func_L14_00392440	src/func_L14_00392440.c	s136	-G0
+func_L14_00392FB0	src/func_L14_00392FB0.c	s136	-G0
+func_L14_003CAA18	src/func_L14_003CAA18.c	sdk29	-G0
+func_L14_003DF838	src/func_L14_003DF838.c	s136	-G0
+func_L14_003DF960	src/func_L14_003DF960.c	s136	-G0
+func_L14_003DFDC0	src/func_L14_003DFDC0.c	sdk29	-G0
+func_L14_003DFDD0	src/func_L14_003DFDD0.c	sdk29	-G0
+func_L14_003DFE68	src/func_L14_003DFE68.c	s136	-G0
+func_L14_003E0618	src/func_L14_003E0618.c	s136	-G8
+func_L14_003E0B68	src/func_L14_003E0B68.c	s136	-G0
+func_L14_003E0BB8	src/func_L14_003E0BB8.c	s136	-G8	asm_unit	-
+func_L14_003E0D10	src/func_L14_003E0D10.c	s136	-G8	asm_unit	-
+func_L14_003E3BA0	src/func_L14_003E3BA0.c	s136	-G8	asm_unit	-
+func_L14_003E5F58	src/func_L14_003E5F58.c	s136	-G8	asm_unit	-
+func_L14_0040B080	src/func_L14_0040B080.c	s136	-G8	asm_unit	-
+func_L14_00415288	src/func_L14_00415288.c	s136	-G0
+func_L14_004220D0	src/func_L14_004220D0.c	s136	-G0
+func_L14_00424560	src/func_L14_00424560.c	s136	-G0
+func_L14_00424800	src/func_L14_00424800.c	s136	-G8	asm_unit	-
+func_L14_00425380	src/func_L14_00425380.c	s136	-G0
+func_L14_004283B8	src/func_L14_004283B8.c	s136	-G0
+func_L14_00429CD8	src/func_L14_00429CD8.c	sdk29	-G8	as	-fno-gcse
+func_L14_0042E5F8	src/func_L14_0042E5F8.c	s136	-G0
+func_L14_004310F0	src/func_L14_004310F0.c	s136	-G8	asm_unit	-
+func_L14_004337B0	src/func_L14_004337B0.c	s136	-G0
