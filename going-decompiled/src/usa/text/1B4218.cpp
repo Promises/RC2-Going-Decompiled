@@ -711,7 +711,7 @@ s32 func_002B47D0(Moby *moby) {
  * 0x2B4818 and 0x2B4830) — the same cc1-small / assembler-absolute model as
  * g_nGameState above. It emits nothing. Removal probe: without it both sites
  * go %gp_rel and the splice refuses the block LENGTH (built 51 words vs
- * ROM 53; gatelogs/t2506-probe-P1-no-extern-usa.log). Upstream's `sda`
+ * ROM 53; re-measured by validator #2599). Upstream's `sda`
  * attribute on D_001A8CA0 is dropped: the sizing line above carries the whole
  * addressing form, so no section attribute is spelled on the extern.
  * g_pHeroMoby needs no new device: the unit's own ABSOLUTE_GLOBAL declaration
@@ -719,12 +719,13 @@ s32 func_002B47D0(Moby *moby) {
  * split the address itself, as the ROM has it at 0x2B4870. Probe: reading it
  * through a plain extern view instead is REFUSED (ADDRESSING) by the splice —
  * the view is declared only in the s136 TU, so the symbol's class differs
- * between the TUs (gatelogs/t2506-probe-P2-plain-hero-usa.log).
+ * between the TUs. A plain `extern Moby *g_pHeroMoby;` instead gives the
+ * splice LENGTH 52/53 here and 78/79 for ClassifyTargetProximity (#2599).
  *
  * Source: OpenRAC/rac2-decomp @5776dcc35045fb2320610edd1d2db4fa7660ef37
  * (GPL-3.0, adopted with the authors' permission per RULINGs #10405/#12108),
  * src/game/002B3868.c, func_002B38C8 (author commit e1ef4e67, ThorpenCodes;
- * the body text is unchanged through their head 71af8fdc today).
+ * the body text is unchanged through their head ed794219, read 2026-11-07).
  * ADAPTED: (1) our signature (Moby *, Moby *): the world positions are read as
  * &moby->facingTarget and the yaw as moby->moveSpeed (their char* offsets
  * 0x10/0xF8); (2) respellings by ROM-encoded address: func_00282E80 =
@@ -734,7 +735,16 @@ s32 func_002B47D0(Moby *moby) {
  * alias prototypes Dist3DVu0/WrapAngleAbsDiff (the same two addresses, whose
  * only user was the native shim this adoption replaces) renamed to the
  * canonical Vec3DistVu0/AngleAbsDiffPi, and the `.extern g_altGravityEnabled,
- * 16` line above added. Control flow and expressions are theirs.
+ * 16` line above added; (5) their `position`/`destination` locals and
+ * `(float *)` cast dropped for the member reads of (1), and their `sda`
+ * attribute on D_001A8CA0 dropped (see above). Control flow and expressions
+ * are theirs.
+ *
+ * FORWARD NOTE (validator #2599, FACT #13388): the file-scope `.extern
+ * g_altGravityEnabled, 16` forces the absolute form for EVERY cc1-emitted
+ * access in this unit, but the ROM reads the flag %gp_rel at 0x2B4BE0 and
+ * 0x2B4EC8 (AcquireMobyAutoTarget) and 0x2B7320 (CheckMobyOverWater). Both are
+ * still asm; promoting either to C needs a per-site device or a ruling.
  */
 #if !defined(TARGET_NATIVE) && !defined(S136OS_CalcMobyTargetThreatDist)
 S136OS_SLOT(CalcMobyTargetThreatDist);
