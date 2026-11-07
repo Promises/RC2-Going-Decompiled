@@ -314,7 +314,11 @@ The gate checks these rows, and any FAIL fails the gate:
   (`D_001395E3`, `D_L09_001B1578`; `level_elf.py`'s ADDR_NAME) may sit at an
   address that already has a DIFFERENT name. Below 0x1A7C80 that means a boot
   label, a boot operand name or a `symbol_addrs.txt` entry. At or above it,
-  a label or operand name of the level's own split. The name itself is the
+  a label or operand name of the level's own split, or a name the level's
+  boot-name map `symbol_addrs/LNN_boot_names.txt` gives (task #2646: an
+  address-named `D_L02_001B359C` where L02's map says `g_mobyTableBase` is the
+  A2 class of census NOTE #13409 and FAILs; a level without the map FAILs with
+  rc 2, no scope). The name itself is the
   same name only if that scope spells THAT address with it (task #2635): a
   level split's short `D_13A148` at a core address the boot calls `D_0013A148`
   FAILs. The FAIL line names the existing name to spell instead. Base+off names (no name at the exact
@@ -322,9 +326,12 @@ The gate checks these rows, and any FAIL fails the gate:
   `tools/levels/second_names_allow.tsv`: `ACCEPTED` second names, and
   `PENDING` members that were already on master when the check landed and are
   awaiting their respell. Never add a `PENDING` row: the respell row deletes it,
-  and an allowlist row that matches nothing FAILs as `STALE`. The per-level
-  `LNN_boot_names.txt` maps and the boot's view of overlay memory are out of
-  scope (census NOTE #13409, classes A2/A3, unruled).
+  and an allowlist row that matches nothing FAILs as `STALE`. The boot's view
+  of overlay memory is out of scope (census NOTE #13409, class A3). Not
+  checked, unruled (NOTE #13423 finding 2, task #2646 addendum): a name that IS
+  a level-split name at its address passes as SAME even when the boot-name
+  map gives that address a different name (split `D_L02_001AA850` vs map
+  `g_pLevelOrder`; split glabel `func_L08_002FAC20` vs map `DistXYVu0`).
 - `FRESH` and `BOOTC` (only with an `LNN_boot_c.tsv`): `boot_objects.sh`
   PASS for this tree; one `PLACED ok` row per table row, 0 `PLACED FAIL`, 0
   `PLACED-DIFFERS`, `bootcmp: N of N`, and the name map up to date. Every
@@ -353,7 +360,7 @@ there once per arm (4 arms, 6 for a level with C rows, 9 with boot rows too,
 plus arm 10's two builds wherever its fixture shape exists).
 It never edits the tracked tree.
 - The unseeded copy must PASS.
-- Arm 11 NAMES (task #2617) runs right after it. Seven fixture TUs, compiled
+- Arm 11 NAMES (task #2617) runs right after it. Nine fixture TUs, compiled
   in the scratch root by the C rows' route, go through `second_names.py`:
   - `D_001395E3` must FAIL naming `D_1395E3`;
   - `D_1395E3` must PASS as the same name;
@@ -366,7 +373,11 @@ It never edits the tracked tree.
   - the level-split-only short spellings `D_13A148` and `func_11A930` must FAIL
     naming `D_0013A148` / `func_0011A930` (task #2635, FACT #13438);
   - the boot's own spellings `D_1395B8`, `D_0013A148` and `func_0011A930` must
-    PASS as 3 same-name.
+    PASS as 3 same-name;
+  - checked as L02, `D_L02_001B359C` must FAIL naming `g_mobyTableBase`, the
+    name L02's boot-name map gives at exactly that address (class A2, task
+    #2646), while the base+off `D_L02_001B3BD0` must PASS free, and the L02
+    split checked without its boot-name map must FAIL with rc 2 (no scope).
 
   A name is SAME only if it is the scope's own name AT the address in it (the
   boot's for a core address, the level split's for level space). Being a name

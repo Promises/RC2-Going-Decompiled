@@ -10,6 +10,10 @@
 #             respell row. NEVER ADD a PENDING row: the respell row deletes its row
 #             in the same landing (RULING #7317, baselines only lowered); a row
 #             left behind FAILs the gate as STALE.
+#             Task #2646 (class A2, the level's boot-name map) landed the same way
+#             as #2617: its one member that cannot be respelled byte-neutrally
+#             entered as PENDING with the check, awaiting watcher-2's acceptance.
 #
 # level	function	name	status	existing	reason
 L09	func_L09_0040C5B8	D_001B1578	ACCEPTED	D_L09_001B1578	task #2580: accepted second name (the L09 lit dlabel D_L09_001B1578 at the same address)
+L14	func_L14_004310F0	D_001B251C	PENDING	g_mobyTableBase	task #2646 (class A2, NOTE #13409 listed it pending watcher-2): a LOAD-BEARING second symbol for 0x1B251C. Retail reads it once $gp-relative and once absolute in this function; the assembler picks the mode per symbol, so binding both reads to g_mobyTableBase gives .text 0x290, not 0x294 (cobj refuses). Awaiting watcher-2: ACCEPTED (the #2580 precedent) or a respell route

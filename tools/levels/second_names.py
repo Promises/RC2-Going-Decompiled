@@ -36,12 +36,24 @@ and FAIL naming the boot's spelling.
     boot-sa     going-decompiled/symbol_addrs/usa/symbol_addrs.txt
   level space (>= 0x1A7C80), the level's own split:
     lvl-label / lvl-opref   the same two, over <LNN dir>/asm/**/*.s
-  The boot's own view of overlay memory (boot names >= 0x1A7C80) and the
-  per-level boot name maps (symbol_addrs/LNN_boot_names.txt) are NOT in scope:
-  a boot-view name there need not hold for a level (0x1BA3C0 is named
-  differently by the boot split and by L02's map), and the A2/A3 classes of
-  NOTE #13409 are unruled. Base+offset names INSIDE a larger label have no name
-  at their exact address and pass (RULING #13291 section 2).
+    lvl-bootmap             <LNN dir>/symbol_addrs/LNN_boot_names.txt entries
+                            at or above 0x1A7C80: the names this level's own
+                            link gives boot objects (RULING #13219), valued per
+                            level (g_mobyTableBase is 0x1B359C in L02, 0x1B29DC
+                            in L08). Task #2646: an address-named extern sitting
+                            exactly on one of them (the A2 class of NOTE #13409,
+                            D_L02_001B359C = g_mobyTableBase) is a second
+                            spelling and FAILs naming the map's name. The file
+                            is required: a level without it cannot be checked.
+  The boot's own view of overlay memory (boot names >= 0x1A7C80) is NOT in
+  scope: a boot-view name there need not hold for a level (0x1BA3C0 is named
+  differently by the boot split and by L02's map; the A3 class of NOTE #13409).
+  Base+offset names INSIDE a larger label, with no name at their exact address
+  in the split or the map, pass (RULING #13291 section 2).
+  Not checked (unruled, NOTE #13423 finding 2 and the #2646 addendum): a name
+  that IS a level-split name at its address passes as SAME even when the map
+  gives the address a different name (split dlabel D_L02_001AA850 vs map
+  g_pLevelOrder; split glabel func_L08_002FAC20 vs map DistXYVu0).
 
 A name with a different name at its exact address is SECOND-NAME. It passes
 only on a row of the allowlist (tools/levels/second_names_allow.tsv) keyed by
@@ -204,18 +216,26 @@ def main(argv):
             boot.append((int(m.group(2), 16), m.group(1), "boot-sa", os.path.relpath(sap, root)))
     lvl = []
     nl = scan_tree(os.path.join(ldir, "asm"), ldir, "lvl", lvl)
+    bmp = os.path.join(ldir, "symbol_addrs", "%s_boot_names.txt" % lv)
+    if os.path.isfile(bmp):
+        for line in open(bmp, encoding="utf-8", errors="replace"):
+            m = SA.match(line)
+            if m and int(m.group(2), 16) >= CORE_TOP:
+                lvl.append((int(m.group(2), 16), m.group(1), "lvl-bootmap", os.path.relpath(bmp, ldir)))
+    nmap = sum(1 for e in lvl if e[2] == "lvl-bootmap")
     # an empty scope is a broken query, never a clean result
-    if nb == 0 or nl == 0 or not any(k == "boot-label" for _, _, k, _ in boot):
-        print("second_names: scope empty: %d boot .s, %d level .s under %s" % (nb, nl, ldir))
+    if nb == 0 or nl == 0 or nmap == 0 or not any(k == "boot-label" for _, _, k, _ in boot):
+        print("second_names: scope empty: %d boot .s, %d level .s under %s, %d boot-name map entries in %s"
+              % (nb, nl, ldir, nmap, bmp))
         print("#### second_names %s: FAIL (no scope)" % lv)
         return 2
     scope = [e for e in boot if e[0] < CORE_TOP] + [e for e in lvl if e[0] >= CORE_TOP]
     byaddr = {}
     for addr, n, k, w in scope:
         byaddr.setdefault(addr, {}).setdefault(n, set()).add("%s %s" % (k, w))
-    print("second_names %s: scope %d boot .s + symbol_addrs.txt (%d entries below 0x%X), %d level .s (%d entries at/above); %d C objects"
+    print("second_names %s: scope %d boot .s + symbol_addrs.txt (%d entries below 0x%X), %d level .s + boot-name map (%d entries at/above, %d of them map names); %d C objects"
           % (lv, nb, sum(1 for e in boot if e[0] < CORE_TOP), CORE_TOP, nl,
-             sum(1 for e in lvl if e[0] >= CORE_TOP), len(objs)))
+             sum(1 for e in lvl if e[0] >= CORE_TOP), nmap, len(objs)))
 
     cnt = {"same": 0, "free": 0, "ACCEPTED": 0, "PENDING": 0, "fail": 0, "stale": 0}
     hit = set()

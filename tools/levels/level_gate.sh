@@ -28,7 +28,10 @@
 #            ADDRESS-NAMED symbol (`D_001395E3`, `D_L09_001B1578`) whose exact
 #            address already has a DIFFERENT name - a boot label, boot operand
 #            name or symbol_addrs.txt entry below 0x1A7C80, or a label/operand
-#            name of the level's own split at/above it. The name is SAME only
+#            name of the level's own split, or a name its boot-name map
+#            symbol_addrs/LNN_boot_names.txt gives, at/above it (task #2646:
+#            D_L02_001B359C where L02's map says g_mobyTableBase FAILs; the map
+#            is required). The name is SAME only
 #            if that scope spells THAT address with it (task #2635: a level
 #            split's short D_13A148 where the boot says D_0013A148 FAILs). The
 #            FAIL names the existing name. Base+off names (no name at the exact address,
@@ -113,7 +116,7 @@
 # run: the same verdict computed with the `asm_unit` object compared with
 # ITSELF must FAIL. The asm_unit route needs tools/ee/{asm_unit.sh,
 # ps2eeas_dli.awk,ps2eeas_dli_sites.txt}, copied read-only into the scratch
-# root. Arm 11 NAMES (task #2617), run right after arm 1: seven fixture TUs of
+# root. Arm 11 NAMES (task #2617), run right after arm 1: nine fixture TUs of
 # our own, compiled by the C rows' route (sdk29 -O2 -G0, GNU as) in the scratch
 # root only, through second_names.py: `D_001395E3` (dlabel D_1395E3 exists) must
 # FAIL naming D_1395E3; `D_1395E3` must PASS same-name; L09 func_L09_0040C5B8's
@@ -123,7 +126,11 @@
 # dlabel: boot-opref only); the level-split-only short spellings `D_13A148` and
 # `func_11A930` must FAIL naming D_0013A148 / func_0011A930 (task #2635: SAME is
 # the scope's own name AT the address, FACT #13438); and the boot's own
-# spellings D_1395B8 / D_0013A148 / func_0011A930 must PASS 3 same-name.
+# spellings D_1395B8 / D_0013A148 / func_0011A930 must PASS 3 same-name; L02's
+# D_L02_001B359C must FAIL naming g_mobyTableBase, its boot-name map's name at
+# that exact address (task #2646, class A2), while the base+off D_L02_001B3BD0
+# (no map or split name at its address) must PASS free; and the level checked
+# without its boot-name map must FAIL with rc 2 (no scope), never PASS.
 # Then, for a level with C rows, the gate's own NAMES row on arm 1's objects: ok as committed; FAIL naming each existing name with the
 # level's allowlist rows removed (when it has any); FAIL STALE with a phantom
 # PENDING row added. The tracked tree is never edited. Scratch-run lines are indented with `  [unseeded]`/`  [seeded]`,
@@ -390,6 +397,8 @@ names_arms() {
   printf '/* selftest fixture: core spelling of an OPERAND-ONLY boot name (D_1395B8 has no dlabel; it lies inside dlabel D_139599), task #2635 */\nextern unsigned char D_001395B8;\nint selftest_names_opref(void) { return D_001395B8; }\n' > "$FX/opref.c"
   printf '/* selftest fixture: level-split-only SHORT spellings of core addresses the boot names dlabel D_0013A148 / glabel func_0011A930, task #2635 (FACT #13438 hole) */\nextern unsigned char D_13A148;\nextern void func_11A930(void);\nint selftest_names_short(void) { func_11A930(); return D_13A148; }\n' > "$FX/short.c"
   printf '/* selftest fixture: the boot'"'"'s own spellings of the same addresses (operand-only D_1395B8, dlabel D_0013A148, glabel func_0011A930) */\nextern unsigned char D_1395B8, D_0013A148;\nextern void func_0011A930(void);\nint selftest_names_bootown(void) { func_0011A930(); return D_1395B8 + D_0013A148; }\n' > "$FX/bootown.c"
+  printf '/* selftest fixture: an L02 address-named extern exactly on its boot-name map name g_mobyTableBase (class A2), task #2646 */\nextern char *D_L02_001B359C;\nint selftest_names_a2(void) { return *D_L02_001B359C; }\n' > "$FX/a2.c"
+  printf '/* selftest fixture: an L02 section-2 base+off name, no split or map name at 0x001B3BD0, task #2646 control */\nextern char D_L02_001B3BD0[];\nint selftest_names_a2ctl(void) { return D_L02_001B3BD0[0]; }\n' > "$FX/a2ctl.c"
   echo "-- arm 11 NAMES: fixtures $(cd "$FX" && ls *.c | tr '\n' ' ')compiled by the C rows' route (sdk29 -O2 -G0, GNU as)"
   docker --context "$CTX" run --rm --user="$(id -u):$(id -g)" -e HOME=/tmp -v "$S":/work -w /work ee-build sh -c '
 for f in names_fixture/*.c; do b=${f%.c}
@@ -397,12 +406,12 @@ for f in names_fixture/*.c; do b=${f%.c}
   sed -E -f tools/ee/move_fixup.sed "$b.s" > "$b.fx.s"
   mips-linux-gnu-as -march=r5900 -mabi=eabi -no-pad-sections -EL -G0 -o "$b.o" "$b.fx.s" || exit 1
 done' sh "$CPPD" 2>&1 | sed 's/^/  [names cc] /'
-  for o in dup respelled accepted baseoff opref short bootown; do
+  for o in dup respelled accepted baseoff opref short bootown a2 a2ctl; do
     [ -s "$FX/$o.o" ] || { echo "  FAIL  arm 11: fixture $o.o not built"; nok=0; }
   done
   # sn <level> <level dir> <fn=obj> [--complete]: one checker run, output indented
   sn() { python3 -I "$S/tools/levels/second_names.py" check --level "$1" --root "$ROOT" --level-dir "$2" --allow "$AL" "${@:3}"; }
-  local LD=$S/going-decompiled/levels/usa/$TAG L09D=$ROOT/going-decompiled/levels/usa/L09
+  local LD=$S/going-decompiled/levels/usa/$TAG L09D=$ROOT/going-decompiled/levels/usa/L09 L02D=$ROOT/going-decompiled/levels/usa/L02
   out=$(sn "$NN" "$LD" "selftest_names_dup=$FX/dup.o"); rc=$?
   printf '%s\n' "$out" | sed 's/^/  [names dup] /'
   want="SECOND-NAME FAIL $TAG selftest_names_dup: D_001395E3 = 0x001395E3 is already named D_1395E3:"
@@ -440,6 +449,20 @@ done' sh "$CPPD" 2>&1 | sed 's/^/  [names cc] /'
   printf '%s\n' "$out" | sed 's/^/  [names boot-own] /'
   if [ $rc = 0 ] && printf '%s\n' "$out" | /usr/bin/grep -q -a -E "^#### second_names $TAG: PASS \(1 objects; 3 same-name, 0 base\+off/free, 0 accepted, 0 pending, 0 FAIL"; then echo "  ok    arm 11k: the boot's own spellings D_1395B8 / D_0013A148 / func_0011A930 -> rc 0, 3 same-name"
   else echo "  FAIL  arm 11k: rc $rc for the boot-own fixture (want PASS, 3 same-name)"; nok=0; fi
+  out=$(sn 2 "$L02D" "selftest_names_a2=$FX/a2.o"); rc=$?
+  printf '%s\n' "$out" | sed 's/^/  [names a2] /'
+  want="SECOND-NAME FAIL L02 selftest_names_a2: D_L02_001B359C = 0x001B359C is already named g_mobyTableBase: g_mobyTableBase [lvl-bootmap symbol_addrs/L02_boot_names.txt]"
+  if [ $rc = 1 ] && printf '%s\n' "$out" | /usr/bin/grep -q -a -F -- "$want"; then echo "  ok    arm 11l: L02 D_L02_001B359C -> rc 1, FAIL naming g_mobyTableBase (boot-name map, class A2)"
+  else echo "  FAIL  arm 11l: rc $rc, no line '$want' (an A2 second name passes)"; nok=0; fi
+  out=$(sn 2 "$L02D" "selftest_names_a2ctl=$FX/a2ctl.o"); rc=$?
+  printf '%s\n' "$out" | sed 's/^/  [names a2 control] /'
+  if [ $rc = 0 ] && printf '%s\n' "$out" | /usr/bin/grep -q -a -E '^   free     L02 selftest_names_a2ctl: D_L02_001B3BD0 = 0x001B3BD0 '; then echo "  ok    arm 11m: L02 base+off D_L02_001B3BD0 -> rc 0, free"
+  else echo "  FAIL  arm 11m: rc $rc for the base+off control (want PASS, free)"; nok=0; fi
+  mkdir -p "$FX/nomap"; ln -s "$L02D/asm" "$FX/nomap/asm"
+  out=$(sn 2 "$FX/nomap" "selftest_names_a2ctl=$FX/a2ctl.o"); rc=$?
+  printf '%s\n' "$out" | sed 's/^/  [names no map] /'
+  if [ $rc = 2 ] && printf '%s\n' "$out" | /usr/bin/grep -q -a -F -- '#### second_names L02: FAIL (no scope)'; then echo "  ok    arm 11n: L02 split without its boot-name map -> rc 2, FAIL (no scope)"
+  else echo "  FAIL  arm 11n: rc $rc without the boot-name map (want rc 2, no scope: a missing map must not read as clean)"; nok=0; fi
   rm -rf "$FX"
 
   # the gate's own row on the level's real arm-1 objects
@@ -741,7 +764,7 @@ done' || echo "  FAIL  arm 8: could not realign the copied objects"
   fi
 
   rc=0; [ $ok = 1 ] || rc=1
-  if [ $ok = 1 ]; then echo "#### level_gate $TAG SELFTEST: PASS (unseeded PASS; seeded word FAIL on .text at 0x$addr; wrong anchor FAIL; no anchor FAIL; NAMES: fixture D_001395E3 FAIL naming D_1395E3, respelled/accepted/base+off/boot-own PASS, accepted name at another site FAIL, operand-only D_001395B8 FAIL naming D_1395B8, short D_13A148/func_11A930 FAIL naming D_0013A148/func_0011A930, and arms 11f-h on the real C rows where the level has them$summary)"; else echo "#### level_gate $TAG SELFTEST: FAIL"; fi
+  if [ $ok = 1 ]; then echo "#### level_gate $TAG SELFTEST: PASS (unseeded PASS; seeded word FAIL on .text at 0x$addr; wrong anchor FAIL; no anchor FAIL; NAMES: fixture D_001395E3 FAIL naming D_1395E3, respelled/accepted/base+off/boot-own PASS, accepted name at another site FAIL, operand-only D_001395B8 FAIL naming D_1395B8, short D_13A148/func_11A930 FAIL naming D_0013A148/func_0011A930, A2 D_L02_001B359C FAIL naming g_mobyTableBase with base+off D_L02_001B3BD0 PASS and no boot-name map rc 2, and arms 11f-h on the real C rows where the level has them$summary)"; else echo "#### level_gate $TAG SELFTEST: FAIL"; fi
   footer "$t0" "$rc"
   return $rc
 }
