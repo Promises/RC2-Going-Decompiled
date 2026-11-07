@@ -1944,7 +1944,7 @@
     `going-decompiled/levels/usa/L23/src/func_L23_004174C8.c`, from
     `src/levels/23_damosel_orbit/L23_0035CE90-g8.c`
     (`func_L23_00415FC8`, author commit `91e04732`, llesieur99), task #2567.
-    VERBATIM but for names (inert `sda` attributes dropped at -G8).
+    Adapted: names, and inert `sda` attributes dropped at -G8.
   - **`func_L23_00417590`** (`0x00417590`, level program 23) in
     `going-decompiled/levels/usa/L23/src/func_L23_00417590.c`, from
     `src/levels/23_damosel_orbit/L23_0035CE90.c`
@@ -1969,27 +1969,27 @@
     `going-decompiled/levels/usa/L23/src/func_L23_0041CDF8.c`, from
     `src/levels/23_damosel_orbit/L23_00416388-g8.c`
     (`func_L23_0041B8F8`, author commit `773eafc2`, llesieur99), task #2567.
-    VERBATIM but for names (inert `sda` attributes dropped at -G8).
+    Adapted: names, and inert `sda` attributes dropped at -G8.
   - **`func_L23_0041CE48`** (`0x0041CE48`, level program 23) in
     `going-decompiled/levels/usa/L23/src/func_L23_0041CE48.c`, from
     `src/levels/23_damosel_orbit/L23_00416388-g8.c`
     (`func_L23_0041B948`, author commit `773eafc2`, llesieur99), task #2567.
-    VERBATIM but for names (inert `sda` attributes dropped at -G8).
+    Adapted: names, and inert `sda` attributes dropped at -G8.
   - **`func_L23_0041CE60`** (`0x0041CE60`, level program 23) in
     `going-decompiled/levels/usa/L23/src/func_L23_0041CE60.c`, from
     `src/levels/23_damosel_orbit/L23_00416388-g8.c`
     (`func_L23_0041B960`, author commit `adcbd51e`, llesieur99), task #2567.
-    VERBATIM but for names (inert `sda` attributes dropped at -G8).
+    Adapted: names, and inert `sda` attributes dropped at -G8.
   - **`func_L23_0041D540`** (`0x0041D540`, level program 23) in
     `going-decompiled/levels/usa/L23/src/func_L23_0041D540.c`, from
     `src/levels/23_damosel_orbit/L23_00416388-g8.c`
     (`func_L23_0041C040`, author commit `adcbd51e`, llesieur99), task #2567.
-    VERBATIM but for names (inert `sda` attributes dropped at -G8).
+    Adapted: names, and inert `sda` attributes dropped at -G8.
   - **`func_L23_0041D5B0`** (`0x0041D5B0`, level program 23) in
     `going-decompiled/levels/usa/L23/src/func_L23_0041D5B0.c`, from
     `src/levels/23_damosel_orbit/L23_00416388-g8.c`
     (`func_L23_0041C0B0`, author commit `ee3fee45`, llesieur99), task #2567.
-    VERBATIM but for names (inert `sda` attributes dropped at -G8).
+    Adapted: names, and inert `sda` attributes dropped at -G8.
   - **`func_L23_0041DCD8`** (`0x0041DCD8`, level program 23) in
     `going-decompiled/levels/usa/L23/src/func_L23_0041DCD8.c`, from
     `src/levels/23_damosel_orbit/L23_00416388-g8.c`
