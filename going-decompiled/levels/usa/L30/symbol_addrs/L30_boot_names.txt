@@ -5,7 +5,7 @@
 // and the gated boot build's symbol table and sectioned objects. No disc or ROM bytes are read.
 // Source per name: core (boot value, below 0x1A7C80) | placed (its own place) | catalogue (a call the
 // committed boot<->place table predicts) | split-operand (the committed split's operand at that offset).
-// 2478 names, 1041 placed functions.
+// 2482 names, 1042 placed functions.
 AddFxDrawHookLate = 0x002EE768; // placed
 AddItemToInventoryOrder = 0x002FB360; // catalogue+placed
 AddScreenSpriteFx = 0x002E2250; // placed
@@ -407,6 +407,7 @@ D_1ADA78 = 0x001ADCF8; // split-operand
 D_1ADA98 = 0x001ADD18; // split-operand
 D_1ADAC0 = 0x001ADD40; // split-operand
 D_1ADAD8 = 0x001ADD58; // split-operand
+D_1ADAE8 = 0x001ADD68; // split-operand
 D_1ADAF0 = 0x001ADD70; // split-operand
 D_1ADAF8 = 0x001ADD78; // split-operand
 D_1ADB08 = 0x001ADD88; // split-operand
@@ -1820,7 +1821,7 @@ func_00337C58 = 0x004309C0; // split-operand
 func_00337D78 = 0x00430AE0; // catalogue+placed
 func_00337D98 = 0x00430B00; // split-operand
 func_00337DA0 = 0x00430B08; // placed
-func_00337DC8 = 0x00430B30; // catalogue
+func_00337DC8 = 0x00430B30; // catalogue+placed
 func_003380B8 = 0x00430E20; // catalogue+placed
 func_00338A80 = 0x004317E8; // catalogue+placed
 func_00338AB8 = 0x00431820; // catalogue+placed
@@ -2468,6 +2469,9 @@ jtbl_0026CD40_text = 0x002A8250; // split-operand
 jtbl_0026CDA0_text = 0x002A82B0; // split-operand
 jtbl_0026CE90_text = 0x002A83A0; // split-operand
 jtbl_0026CEB0_text = 0x002A83C0; // split-operand
+jtbl_0026DD70_text = 0x002A9280; // split-operand
+jtbl_0026DE20_text = 0x002A9330; // split-operand
+jtbl_0026DED0_text = 0x002A93E0; // split-operand
 memcmp = 0x00115340; // core
 memcpy = 0x001153D4; // core
 memset = 0x00115484; // core
@@ -3233,6 +3237,7 @@ func_L30_004309C8 = GuiPoolInit; // alias
 func_L30_00430A50 = GuiPoolAlloc; // alias
 func_L30_00430AE0 = func_00337D78; // alias
 func_L30_00430B08 = func_00337DA0; // alias
+func_L30_00430B30 = func_00337DC8; // alias
 func_L30_00430E20 = func_003380B8; // alias
 func_L30_004317E8 = func_00338A80; // alias
 func_L30_00431820 = func_00338AB8; // alias
