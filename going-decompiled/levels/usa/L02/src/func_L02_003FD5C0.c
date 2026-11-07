@@ -10,9 +10,10 @@ typedef short s16;
 typedef int s32;
 
 extern s32 func_L02_00401D98(char *, s32);
-/* A record inside L02's larger .bss label D_L02_001B3930, so address-named
- * (RULING #13291 §2). */
-extern char D_L02_001BA3C0[];
+/* L02's boot-name map name at 0x001BA3C0 (symbol_addrs/L02_boot_names.txt);
+ * the boot program's own split names that address differently (NOTE #13409,
+ * class A3), which does not hold for this level. */
+extern char g_cameraState[];
 
 /**
  * func_L02_003FD5C0 - make an object the actor's current one and start its
@@ -21,7 +22,7 @@ extern char D_L02_001BA3C0[];
  * @a0: the actor; its state block is at +0x68.
  * @a1: the object.
  *
- * The level record D_L02_001BA3C0 keeps a current object at +0x284: if it is
+ * The level record g_cameraState keeps a current object at +0x284: if it is
  * the actor's previous one (state +0xD0) it is dropped, and an empty slot takes
  * a1 with +0x288 cleared. The actor's +0xD0 becomes a1; class 0x9F8 starts
  * message 0xF and class 0xA44 message 0x15 (func_L02_00401D98).
@@ -37,15 +38,18 @@ extern char D_L02_001BA3C0[];
  *   - name func_L02_003FC020 -> func_L02_003FD5C0 (our split name at
  *     the v2.00 place);
  *   - func_L02_00400650 -> func_L02_00401D98 (v2.00 place);
- *   - D_L02_001BA3C0 unchanged (same address in v2.00, kept address-
- *     named, RULING #13291 §2);
+ *   - D_L02_001BA3C0 -> g_cameraState (task #2646): upstream's spelling
+ *     (the same address in v2.00) respelled to the name
+ *     symbol_addrs/L02_boot_names.txt gives at exactly that address; the
+ *     address-named spelling was a second name for the same address (A2
+ *     class, NOTE #13409);
  *   - u32/s16/s32 typedefs carried from the file's own;
  *   - the file's `#include` lines, other functions and their externs
  *     not carried (nothing here uses them).
  */
 void func_L02_003FD5C0(char *a0, char *a1) {
     char *a3 = *(char **)(a0 + 0x68);
-    char *g = D_L02_001BA3C0;
+    char *g = g_cameraState;
     s16 t;
     if (*(u32 *)(g + 0x284) == *(u32 *)(a3 + 0xD0))
         *(u32 *)(g + 0x284) = 0;

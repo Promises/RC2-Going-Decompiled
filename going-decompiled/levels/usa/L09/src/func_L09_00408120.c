@@ -8,18 +8,18 @@
 typedef unsigned char u8;
 typedef signed int s32;
 
-/* The level's entity table base, at 0x001B27DC inside our split label
-   D_L09_001B2000: an address-named extern (RULING #13291 §2), valued from its
-   address by level_elf. `sda` is upstream's own text, ignored by this cc1
+/* The level's entity table base, g_mobyTableBase: the name L09's boot-name
+   map (symbol_addrs/L09_boot_names.txt) gives 0x001B27DC (task #2646).
+   `sda` is upstream's own text, ignored by this cc1
    ("attribute directive ignored"): at -G8 the 4-byte pointer is
    $gp-relative by its size alone. */
-extern char *D_L09_001B27DC __attribute__((sda));
+extern char *g_mobyTableBase __attribute__((sda));
 
 /**
  * func_L09_00408120 - release the entity the object's state points at.
  *
  * Reads the entity index at state+0x5C; unless it is -1, sets byte +0xBC of
- * that 0x100-byte entity slot (from D_L09_001B27DC) to 1 and resets the
+ * that 0x100-byte entity slot (from g_mobyTableBase) to 1 and resets the
  * index to -1.
  *
  * @a0: the object; its state is at +0x68.
@@ -33,8 +33,12 @@ extern char *D_L09_001B27DC __attribute__((sda));
  * statements unchanged, the edits, each name to the target of the v2.00
  * disc's own relocation at this place (task #2561 relverify):
  *   - func_L09_00406C90 -> func_L09_00408120 (our split name at the v2.00 place);
- *   - D_L09_001B285C -> D_L09_001B27DC: an address-named extern inside
- *     D_L09_001B2000 (RULING #13291 §2);
+ *   - D_L09_001B285C -> g_mobyTableBase (L09's boot-map name at the v2.00
+ *     target 0x001B27DC);
+ *   - D_L09_001B27DC -> g_mobyTableBase (task #2646): the name
+ *     symbol_addrs/L09_boot_names.txt gives at exactly that address; the
+ *     address-named spelling was a second name for the same address (A2 class,
+ *     NOTE #13409).
  *   - built at -G8 (the L09_c.tsv gflag), opposite to upstream's -G0 for
  *     this file: it is what makes the 4-byte table base $gp-relative as in
  *     the ROM (NOTE #13281 code G);
@@ -47,6 +51,6 @@ void func_L09_00408120(char *a0) {
     if (v1 == -1) {
         return;
     }
-    *(u8 *)((char *)((v1 << 8) + (s32)D_L09_001B27DC) + 0xBC) = 1;
+    *(u8 *)((char *)((v1 << 8) + (s32)g_mobyTableBase) + 0xBC) = 1;
     *(s32 *)(a1 + 0x5C) = -1;
 }

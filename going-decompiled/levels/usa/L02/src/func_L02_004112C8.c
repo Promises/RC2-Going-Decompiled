@@ -23,8 +23,8 @@ extern u8 D_1A7BD3 __attribute__((section(".sdata")));
  * own, and not inside g_quickSelectMap; spelled as the boot and the L02 split
  * asm spell it (task #2601, FACT #13369; validator #2602). */
 extern u8 D_1395B8[];
-/* Inside the larger split label D_L02_001B3930: address-named. */
-extern u8 D_L02_001C0700[];
+/* L02's boot-name map name at 0x001C0700 (symbol_addrs/L02_boot_names.txt). */
+extern u8 g_cinematicQueue[];
 extern char g_heroPos[];
 extern int func_L02_00325C50(void *, int);
 extern s32 func_L02_002F8E70(u8 *, s32);
@@ -42,7 +42,7 @@ extern void func_L02_003157A0(u8 *);
  * calls func_L02_0031F998(@a0, 1, -1). Kind 1: when D_1A7BD3 and the byte
  * D_1395B8[4] are clear, func_L02_00325C50 accepts g_heroPos with the
  * record's index at +0xC, and func_L02_002F8E70 accepts message 0x2D on
- * D_L02_001C0700, it queues 3 and 0x2E too, commits them
+ * g_cinematicQueue, it queues 3 and 0x2E too, commits them
  * (func_L02_002F8FB8), sets D_1395B8[4] and calls func_L02_0031F998(@a0,
  * 2, -1). Kind 2: unless func_L02_00379338 answers yes, runs
  * func_L02_00326B28 and func_L02_003296D0 with 3 and calls
@@ -75,8 +75,11 @@ extern void func_L02_003157A0(u8 *);
  *     func_002AF0A8 -> func_L02_003296D0, func_0029F338 -> func_L02_003157A0:
  *     our split names at the v2.00 addresses the ROM's own relocations imply
  *     (relverify, task #2557);
- *   - D_L02_001C0700 keeps its upstream name, which already states its v2.00
- *     address (address-named, RULING #13291 §2);
+ *   - D_L02_001C0700 -> g_cinematicQueue (task #2646): upstream's spelling,
+ *     which states the v2.00 address, respelled to the name
+ *     symbol_addrs/L02_boot_names.txt gives at exactly that address; the
+ *     address-named spelling was a second name for the same address (A2
+ *     class, NOTE #13409);
  *   - `__attribute__((sda))` -> `__attribute__((section(".sdata")))` on the
  *     D_1A7BD3 declaration (RULING #8620; upstream's `sda` is a marker for
  *     its own patched compiler, which our cc1 ignores);
@@ -96,10 +99,10 @@ void func_L02_004112C8(u8 *a0) {
     case 1:
         if (D_1A7BD3 == 0 && D_1395B8[4] == 0 &&
             func_L02_00325C50(g_heroPos, *(s32 *)(state + 0xC)) != 0 &&
-            func_L02_002F8E70(D_L02_001C0700, 0x2D) != 0) {
-            func_L02_002F8E70(D_L02_001C0700, 3);
-            func_L02_002F8E70(D_L02_001C0700, 0x2E);
-            func_L02_002F8FB8(D_L02_001C0700);
+            func_L02_002F8E70(g_cinematicQueue, 0x2D) != 0) {
+            func_L02_002F8E70(g_cinematicQueue, 3);
+            func_L02_002F8E70(g_cinematicQueue, 0x2E);
+            func_L02_002F8FB8(g_cinematicQueue);
             D_1395B8[4] = 1;
             func_L02_0031F998(a0, 2, -1);
         }

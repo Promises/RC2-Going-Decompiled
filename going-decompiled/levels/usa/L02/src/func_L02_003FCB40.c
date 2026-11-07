@@ -11,16 +11,15 @@ typedef unsigned int u32;
 typedef short s16;
 typedef int s32;
 
-/* The entity table base (0x100-byte records), inside the larger split label
- * D_L02_001B2D80: address-named (RULING #13291 §2). ADDRESSING-MODEL DEVICE
+/* The entity table base (0x100-byte records): L02's boot-name map name at
+ * 0x001B359C (symbol_addrs/L02_boot_names.txt). ADDRESSING-MODEL DEVICE
  * (RULING #8620, EE arm only): `.sdata` on the extern declaration makes cc1
  * print the one-instruction `lw` macro, which GNU as expands absolute at
  * -G0, as retail has it. It moves no data and emits nothing. */
-extern char *D_L02_001B359C __attribute__((section(".sdata")));
+extern char *g_mobyTableBase __attribute__((section(".sdata")));
 
-/* Per-group list addresses, inside the larger split label D_L02_001F0000:
- * address-named. */
-extern u32 D_L02_001FC060[];
+/* Per-group list addresses: L02's boot-name map name at 0x001FC060. */
+extern u32 g_mobyGroupLists[];
 
 extern void func_L02_003D5D18(char *, s32);
 extern void func_L02_003DC878(char *, s32);
@@ -33,8 +32,8 @@ extern void func_L02_003DC878(char *, s32);
  * @a1: the entity kind wanted (half-word +0xAA): 0x9F8 or 0xA44 start one.
  * @a2: passed to the 0xA44 start function.
  *
- * Walks the group's id list in D_L02_001FC060 (15-bit ids into the
- * 0x100-byte records of D_L02_001B359C; an id with bit 15 set ends the walk
+ * Walks the group's id list in g_mobyGroupLists (15-bit ids into the
+ * 0x100-byte records of g_mobyTableBase; an id with bit 15 set ends the walk
  * after it is examined). The first non-null record that is not being freed
  * (+0x20 neither 0xFE nor 0xFD), is of kind @a1 and has state byte 1 gets
  * @a0 as its owner (+0xB8). Kind 0x9F8 is started by func_L02_003D5D18 (its
@@ -56,10 +55,13 @@ extern void func_L02_003DC878(char *, s32);
  *   - func_L02_003D47B0 -> func_L02_003D5D18 and func_L02_003DB310 ->
  *     func_L02_003DC878: our split names at the v2.00 addresses the ROM's
  *     own relocations imply (relverify, task #2557);
- *   - D_L02_001B359C and D_L02_001FC060 keep their upstream names, which
- *     already state their v2.00 addresses (address-named, RULING #13291 §2);
+ *   - D_L02_001B359C -> g_mobyTableBase, D_L02_001FC060 -> g_mobyGroupLists
+ *     (task #2646): upstream's spellings, which state the v2.00 addresses,
+ *     respelled to the names symbol_addrs/L02_boot_names.txt gives at
+ *     exactly those addresses; the address-named spelling was a second name
+ *     for the same address (A2 class, NOTE #13409);
  *   - `__attribute__((sda))` -> `__attribute__((section(".sdata")))` on the
- *     D_L02_001B359C declaration (RULING #8620; upstream's `sda` is a marker
+ *     g_mobyTableBase declaration (RULING #8620; upstream's `sda` is a marker
  *     for its own patched compiler, which our cc1 ignores);
  *   - `#include "include_asm.h"` dropped (nothing here used it); the file's
  *     own typedefs kept, every other declaration dropped, and the upstream
@@ -74,12 +76,12 @@ char *func_L02_003FCB40(char *a0, s32 a1, s32 a2) {
 
     if (index == 0xFF)
         return 0;
-    entry = D_L02_001FC060[index];
+    entry = g_mobyGroupLists[index];
     if (entry == 0)
         return 0;
     p = (u16 *)entry;
     do {
-        rec = D_L02_001B359C + ((*p & 0x7FFF) << 8);
+        rec = g_mobyTableBase + ((*p & 0x7FFF) << 8);
         if (rec != 0 && *(u8 *)(rec + 0x20) != 0xFE && *(u8 *)(rec + 0x20) != 0xFD
             && *(s16 *)(rec + 0xAA) == a1 && *(u8 *)(rec + 0x20) == 1) {
             *(char **)(rec + 0xB8) = a0;

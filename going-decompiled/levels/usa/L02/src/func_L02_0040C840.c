@@ -25,7 +25,7 @@ extern void func_L02_002F2D20(void *);
 extern void func_L02_002F3260(void *, void *, void *);
 extern void *func_L02_00322040(void *, int, int);
 extern int func_L02_0032CF98(void *, void *, int);
-extern char D_L02_001BA500[];
+extern char g_cameraPos[];
 extern void func_L02_0040D0C8(u8 *);
 extern void func_L02_00333AC0(void *, float, float, float, float);
 
@@ -41,7 +41,7 @@ extern void func_L02_00333AC0(void *, float, float, float, float);
  * func_L02_0031FA68(2) is nonzero, and flag 0x8000 at +0x34 when another
  * func_L02_0031FA68(2) returns 1. It then enters its next state
  * (func_L02_0040D0C8). While +0x31 is set and it is within 24 units of
- * D_L02_001BA500, it calls func_L02_00321DB0 and sets +0x6F to 0x16. Every
+ * g_cameraPos, it calls func_L02_00321DB0 and sets +0x6F to 0x16. Every
  * frame it stores joints 1 and 2 at +0x290/+0x2A0 and the point (0.25, 0, *)
  * through joint 3's matrix at +0x2B0. When +0x31 is set and the state is at
  * least 3, it handles hits. The check that zeroes a hit from classes
@@ -90,9 +90,10 @@ extern void func_L02_00333AC0(void *, float, float, float, float);
  *   - func_L02_0040B980 -> func_L02_0040D0C8 (its v2.00 split name);
  *   - func_002B60B0_1 -> func_L02_00333AC0 (the level's own copy at its L02
  *     place);
- *   - D_L02_001BA500 kept: an address-named extern inside our split label
- *     D_L02_001B3930 (RULING #13291 section 2), valued from its name by
- *     level_elf;
+ *   - D_L02_001BA500 -> g_cameraPos (task #2646): the name
+ *     symbol_addrs/L02_boot_names.txt gives at exactly that address; the
+ *     address-named spelling was a second name for the same address (A2
+ *     class, NOTE #13409);
  *   - built at -G8 against upstream's -G0 (the audit's code G, NOTE #13281; a
  *     tsv setting);
  *   - `#include "common.h"` dropped (the file defines the typedefs it uses
@@ -136,7 +137,7 @@ void func_L02_0040C840(u8 *a0) {
         func_L02_0040D0C8(a0);
     }
     if (a0[0x31] != 0) {
-        if (func_L02_002F2F18(a0 + 0x10, D_L02_001BA500) < 24.0f) {
+        if (func_L02_002F2F18(a0 + 0x10, g_cameraPos) < 24.0f) {
             func_L02_00321DB0(a0);
             a0[0x6F] = 0x16;
         }

@@ -14,7 +14,7 @@ extern void func_L20_00302FF0(void *, void *, void *);
 extern void func_L20_003032A8(void *dst, void *src, float x);
 extern void func_L20_00421D88(char *, char *, void *, float);
 extern int func_L20_00332230(char *, char *, int, int, float, float, float, int, int);
-extern char D_L20_001B9F40[] __attribute__((nosda));
+extern char g_cameraPos[] __attribute__((nosda));
 
 /**
  * func_L20_0044B030 - combine an object's position with a level point, call
@@ -24,7 +24,7 @@ extern char D_L20_001B9F40[] __attribute__((nosda));
  * flags, +0x98 a word that is cleared.
  * Return: none.
  *
- * Non-obvious: func_L20_00302FF0(&v, D_L20_001B9F40, pos) combines the level
+ * Non-obvious: func_L20_00302FF0(&v, g_cameraPos, pos) combines the level
  * point and the position into v, and func_L20_003032A8(&v, &v, 1.0) rewrites
  * v. func_L20_00421D88(arg0, pos, &v, z - 0.5) follows, using the position's
  * float at +0x18. func_L20_00332230 gets 0x10000, 0, 6.0, D_L20_001B239C, 2.0,
@@ -45,8 +45,12 @@ extern char D_L20_001B9F40[] __attribute__((nosda));
  *   - func_L20_00449AE8 -> func_L20_0044B030 (our split name at the v2.00
  *     place);
  *   - D_L20_001B23EC -> D_L20_001B239C (our label at that address);
- *   - D_L20_001B9FC0 -> D_L20_001B9F40 (address-named, inside D_L20_001B32B0
- *     (+0x6C90); RULING #13291 section 2);
+ *   - D_L20_001B9FC0 -> g_cameraPos (L20's boot-map name at the v2.00
+ *     target 0x001B9F40, inside the split label D_L20_001B32B0 at +0x6C90);
+ *   - D_L20_001B9F40 -> g_cameraPos (task #2646): the name
+ *     symbol_addrs/L20_boot_names.txt gives at exactly that address; the
+ *     address-named spelling was a second name for the same address (A2 class,
+ *     NOTE #13409).
  *   - func_00282CF0 -> func_L20_00302FF0 (the level's own copy at its L20
  *     place);
  *   - func_00282F20 -> func_L20_003032A8 (the level's own copy at its L20
@@ -67,7 +71,7 @@ extern char D_L20_001B9F40[] __attribute__((nosda));
 void func_L20_0044B030(char *arg0) {
     TI128 v;
 
-    func_L20_00302FF0(&v, D_L20_001B9F40, arg0 + 0x10);
+    func_L20_00302FF0(&v, g_cameraPos, arg0 + 0x10);
     func_L20_003032A8(&v, &v, 1.0f);
     func_L20_00421D88(arg0, arg0 + 0x10, &v, *(float *)(arg0 + 0x18) - 0.5f);
     func_L20_00332230(arg0, arg0 + 0x10, 0x10000, 0, 6.0f, D_L20_001B239C, 2.0f,

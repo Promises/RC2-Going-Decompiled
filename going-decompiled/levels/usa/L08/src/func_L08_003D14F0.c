@@ -6,12 +6,11 @@
  */
 
 /* The level's object-handle table: a pointer global holding the base of
- * 0x100-byte entries. Lives inside the split data label D_L08_001B2200
- * (+0x7DC): address-named extern valued from the name by level_elf (RULING
- * #13291 section 2). Upstream's `__attribute__((sda))` is kept verbatim; our
+ * 0x100-byte entries. L08's boot-name map name at 0x001B29DC
+ * (symbol_addrs/L08_boot_names.txt). Upstream's `__attribute__((sda))` is kept verbatim; our
  * stock cc1 warns `attribute directive ignored`, byte-inert here (masked
  * compare diff 0). */
-extern char *D_L08_001B29DC __attribute__((sda));
+extern char *g_mobyTableBase __attribute__((sda));
 
 /**
  * func_L08_003D14F0 - is a handle's entry class byte set? (second copy.)
@@ -32,16 +31,17 @@ extern char *D_L08_001B29DC __attribute__((sda));
  * #13082, #13291). BYTE-IDENTICAL: VERBATIM but for names; edits:
  *   - name func_L08_003D0098 -> func_L08_003D14F0 (our split name at the
  *     v2.00 place);
- *   - D_L08_001B29DC kept: upstream's name already states the v2.00 target
- *     address 0x001B29DC (inside the split data label D_L08_001B2200,
- *     +0x7DC); address-named extern valued from the name by level_elf
- *     (RULING #13291 section 2);
+ *   - D_L08_001B29DC -> g_mobyTableBase (task #2646): upstream's spelling,
+ *     which states the v2.00 target address 0x001B29DC, respelled to the
+ *     name symbol_addrs/L08_boot_names.txt gives at exactly that address;
+ *     the address-named spelling was a second name for the same address
+ *     (A2 class, NOTE #13409);
  *   - the file's `#include "common.h"` line, the TI128 typedef, the other
  *     functions and their externs not carried (nothing else here uses them).
  */
 int func_L08_003D14F0(int index) {
     if (index != -1) {
-        if (*(unsigned char *)(*(unsigned char **)(D_L08_001B29DC
+        if (*(unsigned char *)(*(unsigned char **)(g_mobyTableBase
                                                   + ((unsigned int)index << 8) + 0x68)
                               + 0x14) != 0)
             return 1;

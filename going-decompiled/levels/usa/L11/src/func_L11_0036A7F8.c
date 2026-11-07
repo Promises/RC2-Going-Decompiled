@@ -18,9 +18,8 @@ extern InitEntry12 D_L11_0021EAA0[];
  * its size alone; upstream's `sda` attribute is kept verbatim (cc1 ignores
  * it). */
 extern int * volatile D_L11_001AA810 __attribute__((sda));
-/* An element inside L11's .bss block D_L11_001B39B0, so address-named
- * (RULING #13291 §2). */
-extern struct { char pad[0x230]; int selected; } D_L11_001CAF20;
+/* L11's boot-name map name at 0x001CAF20 (task #2646). */
+extern struct { char pad[0x230]; int selected; } g_mapVertexData;
 
 /**
  * func_L11_0036A7F8 - build the level-ordered menu rows and select the
@@ -35,7 +34,7 @@ extern struct { char pad[0x230]; int selected; } D_L11_001CAF20;
  * that level's entry in D_L11_002A2C60. A row with id 0 ends the list. Then
  * clear obj+0x40, set bit 0x8000 in obj+0x30, and walk the zero-terminated
  * list D_L11_001AA810 points to; the first index whose entry equals
- * D_L11_001CAF20.selected is stored to obj+0x40.
+ * g_mapVertexData.selected is stored to obj+0x40.
  * Return: always 0.
  *
  * Source: OpenRAC rac2-decomp <https://github.com/OpenRAC/rac2-decomp> at
@@ -50,12 +49,16 @@ extern struct { char pad[0x230]; int selected; } D_L11_001CAF20;
  *   - D_00139948 -> g_anAvailableLevelOrder (the boot's name, same address);
  *   - D_L11_002A2B60 -> D_L11_002A2C60, D_L11_0029E610 -> D_L11_0029E6F0,
  *     D_L11_0021E9F0 -> D_L11_0021EAA0, D_L11_001AA7F0 -> D_L11_001AA810,
- *     D_L11_001CAEA0 -> D_L11_001CAF20: upstream names state v1.01
+ *     D_L11_001CAEA0 -> g_mapVertexData: upstream names state v1.01
  *     addresses, ours are the targets of the v2.00 ROM's own relocations
  *     (relverify, task #2553);
+ *   - D_L11_001CAF20 -> g_mapVertexData (task #2646): the name
+ *     symbol_addrs/L11_boot_names.txt gives at exactly that address; the
+ *     address-named spelling was a second name for the same address (A2 class,
+ *     NOTE #13409).
  *   - `#include "include_asm.h"` dropped (nothing used it); the upstream file
- *     comment folded into this one, and a comment added on the three
- *     address-named externs.
+ *     comment folded into this one, and comments added on three
+ *     externs.
  */
 int func_L11_0036A7F8(char *obj) {
     int i, entry;
@@ -71,7 +74,7 @@ int func_L11_0036A7F8(char *obj) {
     *(int *)(obj + 0x40) = 0;
     *(unsigned int *)(obj + 0x30) |= 0x8000;
     for (i = 0, entry = list[0]; entry; entry = D_L11_001AA810[++i]) {
-        if (D_L11_001CAF20.selected == entry) {
+        if (g_mapVertexData.selected == entry) {
             *(int *)(obj + 0x40) = i;
             break;
         }

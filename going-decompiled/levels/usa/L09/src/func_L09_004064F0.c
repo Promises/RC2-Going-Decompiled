@@ -11,16 +11,17 @@ typedef signed char s8;
 typedef signed short s16;
 typedef signed int s32;
 
-/* The level's entity table base, at 0x001B27DC inside our split label
-   D_L09_001B2000: an address-named extern (RULING #13291 §2), valued from its
-   address by level_elf. `sda` is upstream's own text, ignored by this cc1
+/* The level's entity table base, g_mobyTableBase: the name L09's boot-name
+   map (symbol_addrs/L09_boot_names.txt) gives 0x001B27DC (task #2646).
+   `sda` is upstream's own text, ignored by this cc1
    ("attribute directive ignored"): at -G8 the 4-byte pointer is
    $gp-relative by its size alone. */
-extern char *D_L09_001B27DC __attribute__((sda));
+extern char *g_mobyTableBase __attribute__((sda));
 
-/* The per-group tables of entity ids, at 0x001FB4E0 inside our split label
-   D_L09_001F0000 (an address-named extern, RULING #13291 §2). Absolute. */
-extern char *D_L09_001FB4E0[];
+/* The per-group tables of entity ids, g_mobyGroupLists: the name L09's
+   boot-name map (symbol_addrs/L09_boot_names.txt) gives 0x001FB4E0 (task
+   #2646). Absolute. */
+extern char *g_mobyGroupLists[];
 
 /**
  * func_L09_004064F0 - wake the 0xD90-class peers of the object's group.
@@ -42,10 +43,14 @@ extern char *D_L09_001FB4E0[];
  * statements unchanged, the edits, each name to the target of the v2.00
  * disc's own relocation at this place (task #2561 relverify):
  *   - func_L09_00405060 -> func_L09_004064F0 (our split name at the v2.00 place);
- *   - D_L09_001B285C -> D_L09_001B27DC: an address-named extern inside
- *     D_L09_001B2000 (RULING #13291 §2);
- *   - D_L09_001FFFB560 -> D_L09_001FB4E0: an address-named extern inside
- *     D_L09_001F0000 (RULING #13291 §2; upstream's name carries a stray `FF`);
+ *   - D_L09_001B285C -> g_mobyTableBase (L09's boot-map name at the v2.00
+ *     target 0x001B27DC);
+ *   - D_L09_001FFFB560 -> g_mobyGroupLists (L09's boot-map name at the v2.00
+ *     target 0x001FB4E0; upstream's name carries a stray `FF`);
+ *   - D_L09_001B27DC -> g_mobyTableBase, D_L09_001FB4E0 -> g_mobyGroupLists
+ *     (task #2646): the names symbol_addrs/L09_boot_names.txt gives at exactly
+ *     those addresses; the address-named spelling was a second name for the
+ *     same address (A2 class, NOTE #13409).
  *   - built at -G8 (the L09_c.tsv gflag), opposite to upstream's -G0 for
  *     this file: it is what makes the 4-byte table base $gp-relative as in
  *     the ROM (NOTE #13281 code G);
@@ -60,12 +65,12 @@ void func_L09_004064F0(char *a0) {
     if (*(u8 *)(a0 + 0x21) == 0xFF) {
         return;
     }
-    v = (s32)D_L09_001FB4E0[*(u8 *)(a0 + 0x21)];
+    v = (s32)g_mobyGroupLists[*(u8 *)(a0 + 0x21)];
     if (v == 0) {
         return;
     }
     p = (s16 *)v;
-    a2 = D_L09_001B27DC;
+    a2 = g_mobyTableBase;
     do {
         a1 = a2 + ((*(u16 *)p & 0x7FFF) << 8);
         if (*(s8 *)(a1 + 0x20) >= 0) {

@@ -34,16 +34,18 @@
  *     func_L02_003FB000 -> func_L02_003FC5A0,
  *     D_00189E20 -> g_soundBankHandlesBlk (the boot's name, same address),
  *     D_L02_001B1214 -> D_L02_001B11D4;
- *   - kept address-named (RULING #13291 §2; each target lies inside a larger
- *     split label, ours=D_L02_001B2D80+0x81C and D_L02_001F0000+0xC060):
- *     D_L02_001B359C and D_L02_001FC060 keep their spellings.
+ *   - D_L02_001B359C -> g_mobyTableBase, D_L02_001FC060 -> g_mobyGroupLists
+ *     (task #2646): upstream's spellings, which state the v2.00 addresses,
+ *     respelled to the names symbol_addrs/L02_boot_names.txt gives at
+ *     exactly those addresses; the address-named spelling was a second name
+ *     for the same address (A2 class, NOTE #13409).
  */
 typedef unsigned char u8;
 typedef unsigned short u16;
 typedef unsigned int u32;
 
-extern char *D_L02_001B359C __attribute__((sda));
-extern u32 D_L02_001FC060[];
+extern char *g_mobyTableBase __attribute__((sda));
+extern u32 g_mobyGroupLists[];
 extern u16 D_L02_001B11D4 __attribute__((sda));
 extern char g_soundBankHandlesBlk[];
 
@@ -62,11 +64,11 @@ void func_L02_003FC5A0(char *object)
     *(float *)(state + 0x64) = 0;
     if (index == 0xFF)
         return;
-    entry = D_L02_001FC060[index];
+    entry = g_mobyGroupLists[index];
     if (entry == 0)
         return;
     cursor = (short *)entry;
-    table = D_L02_001B359C;
+    table = g_mobyTableBase;
     do {
         short type;
         record = table + ((*(u16 *)cursor & 0x7FFF) << 8);

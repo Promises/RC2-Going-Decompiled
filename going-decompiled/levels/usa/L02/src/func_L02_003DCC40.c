@@ -16,14 +16,14 @@ extern void func_L02_00316610(char *, char *);
  * a table of 0x70-byte effect records. */
 extern char g_listenerPosHistory[];
 
-/* The entity table base (0x100-byte records), inside the larger split label
- * D_L02_001B2D80: address-named (RULING #13291 §2). ADDRESSING-MODEL DEVICE
+/* The entity table base (0x100-byte records): L02's boot-name map name at
+ * 0x001B359C (symbol_addrs/L02_boot_names.txt). ADDRESSING-MODEL DEVICE
  * (RULING #8620, EE arm only): `.sdata` on the extern declaration makes cc1
  * print the one-instruction `lw` macro, which GNU as expands absolute at
  * -G0, as retail has it. It moves no data and emits nothing. */
-extern char *D_L02_001B359C __attribute__((section(".sdata")));
+extern char *g_mobyTableBase __attribute__((section(".sdata")));
 
-/* An entity record (0x100 bytes, in the table at D_L02_001B359C). Both flag
+/* An entity record (0x100 bytes, in the table at g_mobyTableBase). Both flag
  * updates below go through this struct: a struct member store neither orders
  * the next load of the table's base after it nor makes the compiler reload
  * that base, which is how retail's loads are placed. */
@@ -33,7 +33,7 @@ typedef struct {
 } Entity003DB6D8;
 
 /* The record of the table that the actor's state names at +0x244. */
-#define CHILD003DB6D8 (D_L02_001B359C + *(int *)(*(char **)(arg0 + 0x68) + 0x244) * 0x100)
+#define CHILD003DB6D8 (g_mobyTableBase + *(int *)(*(char **)(arg0 + 0x68) + 0x244) * 0x100)
 
 /**
  * func_L02_003DCC40 - switch an actor off.
@@ -68,10 +68,13 @@ typedef struct {
  *     func_0029F338 -> func_L02_003157A0, func_0029F9F0 -> func_L02_00316610:
  *     our split names at the v2.00 addresses the ROM's own relocations imply
  *     (relverify, task #2557);
- *   - D_L02_001B359C keeps its upstream name, which already states its v2.00
- *     address (address-named, RULING #13291 §2);
+ *   - D_L02_001B359C -> g_mobyTableBase (task #2646): upstream's spelling,
+ *     which states the v2.00 address, respelled to the name
+ *     symbol_addrs/L02_boot_names.txt gives at exactly that address; the
+ *     address-named spelling was a second name for the same address (A2
+ *     class, NOTE #13409);
  *   - `__attribute__((sda))` -> `__attribute__((section(".sdata")))` on the
- *     D_L02_001B359C declaration (RULING #8620; upstream's `sda` is a marker
+ *     g_mobyTableBase declaration (RULING #8620; upstream's `sda` is a marker
  *     for its own patched compiler, which our cc1 ignores);
  *   - `#include "include_asm.h"` and `#include "common.h"` dropped (nothing
  *     here used them), every other declaration of the file dropped, the

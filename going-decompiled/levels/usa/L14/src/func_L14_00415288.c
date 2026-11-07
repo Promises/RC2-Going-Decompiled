@@ -5,9 +5,9 @@
  * cc1 (tools/ee/ee_cc1.sh s136, FACT #8810) at -O2 -G0 -fopt-stack.
  */
 
-/* A vector inside L14's larger .bss label D_L14_001B28B0, so address-named
- * (RULING #13291 §2). */
-extern char D_L14_001BF900[];
+/* A vector: L14's boot-name map name at 0x001BF900
+ * (symbol_addrs/L14_boot_names.txt). */
+extern char g_collHitNormal[];
 
 /* L14's copies of boot vector helpers, at their v2.00 places in this level. */
 extern void func_L14_002F6D00(void *out, void *in, float scale);
@@ -29,7 +29,7 @@ extern void func_L14_002F6AA8(void *out, void *in, float scale);
  * Builds two probe points, the axis scaled by 0.1 and by -3.0, each moved to
  * the actor's position (func_L14_002F6D00, func_L14_002F6A20). When
  * func_L14_002E61F8(a, b, 2, self, 0) reports a hit between them, the output
- * is the level vector D_L14_001BF900 (scaled by 1.0); otherwise it is the
+ * is the level vector g_collHitNormal (scaled by 1.0); otherwise it is the
  * axis scaled by -1.0. With p2 == 0 it is then scaled by -1.0
  * (func_L14_002F6AA8).
  * Return: nothing.
@@ -49,8 +49,11 @@ extern void func_L14_002F6AA8(void *out, void *in, float scale);
  *     func_L14_002F6A20, func_002761F8 -> func_L14_002E61F8,
  *     func_00282D30_6 -> func_L14_002F6AA8 (L14's copies, the targets
  *     of the v2.00 relocations);
- *   - D_L14_001BF980 -> D_L14_001BF900 (the v2.00 relocation target;
- *     inside D_L14_001B28B0, so address-named, RULING #13291 §2);
+ *   - D_L14_001BF980 -> g_collHitNormal, the name symbol_addrs/
+ *     L14_boot_names.txt gives at the v2.00 relocation target 0x001BF900;
+ *   - D_L14_001BF900 -> g_collHitNormal (task #2646): the address-named
+ *     spelling was a second name for the same address (A2 class, NOTE
+ *     #13409);
  *   - the audit's `long long`->`long` respelling (RULING #13197) is
  *     needed only to compile the upstream FILE whole on s136; no line
  *     carried into this TU contains `long long` or `long`, so it
@@ -69,7 +72,7 @@ void func_L14_00415288(char *self, char *p1, int p2)
     func_L14_002F6A20(b, b, self + 16);
 
     if (func_L14_002E61F8(a, b, 2, self, 0))
-        func_L14_002F6D00(p1, D_L14_001BF900, 1.0f);
+        func_L14_002F6D00(p1, g_collHitNormal, 1.0f);
     else
         func_L14_002F6D00(p1, self + 224, -1.0f);
 

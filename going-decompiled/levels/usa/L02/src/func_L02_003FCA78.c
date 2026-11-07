@@ -13,16 +13,16 @@ typedef unsigned int u32;
 typedef short s16;
 typedef int s32;
 
-/* The entity table base (0x100-byte records), inside the larger split label
- * D_L02_001B2D80: address-named (RULING #13291 §2). `sda` is upstream's
+/* The entity table base (0x100-byte records): L02's boot-name map name at
+ * 0x001B359C (symbol_addrs/L02_boot_names.txt). `sda` is upstream's
  * marker for its own patched compiler; our cc1 ignores it (with a warning).
  * At this row's -G8 the 4-byte pointer is $gp-relative by its size alone.
  * Kept verbatim. */
-extern char *D_L02_001B359C __attribute__((sda));
+extern char *g_mobyTableBase __attribute__((sda));
 
-/* Per-group list addresses, inside the larger split label D_L02_001F0000:
- * address-named. Unknown size, so never $gp-relative. */
-extern u32 D_L02_001FC060[];
+/* Per-group list addresses: L02's boot-name map name at 0x001FC060. Unknown
+ * size, so never $gp-relative. */
+extern u32 g_mobyGroupLists[];
 
 extern s32 func_L02_003FCC60(char *, char *);
 
@@ -34,8 +34,8 @@ extern s32 func_L02_003FCC60(char *, char *);
  * @a1: the entity kind wanted (half-word +0xAA).
  * @a2: not read.
  *
- * Walks the group's id list in D_L02_001FC060; each id, masked to 15 bits,
- * selects a 0x100-byte record of D_L02_001B359C, and an id with bit 15 set
+ * Walks the group's id list in g_mobyGroupLists; each id, masked to 15 bits,
+ * selects a 0x100-byte record of g_mobyTableBase, and an id with bit 15 set
  * ends the walk after it is examined. The first non-null record that is not
  * being freed (state byte +0x20 neither 0xFE nor 0xFD), is of kind @a1 and
  * has state byte 1 gets @a0 as its owner (+0xB8).
@@ -57,8 +57,11 @@ extern s32 func_L02_003FCC60(char *, char *);
  *     v2.00 place);
  *   - func_L02_003FB6C0 -> func_L02_003FCC60: our split name at the v2.00
  *     address the ROM's own relocation implies (relverify, task #2557);
- *   - D_L02_001B359C and D_L02_001FC060 keep their upstream names, which
- *     already state their v2.00 addresses (address-named, RULING #13291 §2);
+ *   - D_L02_001B359C -> g_mobyTableBase, D_L02_001FC060 -> g_mobyGroupLists
+ *     (task #2646): upstream's spellings, which state the v2.00 addresses,
+ *     respelled to the names symbol_addrs/L02_boot_names.txt gives at
+ *     exactly those addresses; the address-named spelling was a second name
+ *     for the same address (A2 class, NOTE #13409);
  *   - built at -G8 where upstream's file is -G0 (config/L02_c.tsv gflag; at
  *     -G0 this body differs from retail in 5 words);
  *   - `#include "include_asm.h"` dropped (nothing here used it); the file's
@@ -74,12 +77,12 @@ s32 func_L02_003FCA78(char *a0, s32 a1, char *a2) {
 
     if (index == 0xFF)
         return 0;
-    entry = D_L02_001FC060[index];
+    entry = g_mobyGroupLists[index];
     if (entry == 0)
         return 0;
     p = (u16 *)entry;
     do {
-        rec = D_L02_001B359C + ((*p & 0x7FFF) << 8);
+        rec = g_mobyTableBase + ((*p & 0x7FFF) << 8);
         if (rec != 0 && *(u8 *)(rec + 0x20) != 0xFE && *(u8 *)(rec + 0x20) != 0xFD
             && *(s16 *)(rec + 0xAA) == a1 && *(u8 *)(rec + 0x20) == 1) {
             *(char **)(rec + 0xB8) = a0;

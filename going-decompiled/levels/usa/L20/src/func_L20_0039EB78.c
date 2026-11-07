@@ -18,7 +18,7 @@ typedef float f32;
  * lui + lw/sw pair (absolute %hi/%lo, not $gp-relative at -G0), as retail
  * has it. Ablation (task #2565): with upstream's `sda` (ignored by this cc1)
  * the function differs from the disc in 6 of 51 words (masked compare). */
-extern int D_L20_001B2A48 __attribute__((section(".sdata")));
+extern int g_gameTime __attribute__((section(".sdata")));
 extern int func_L20_0039F2E0(char *, int);
 extern void func_L20_0039EC48(char *);
 extern void func_L20_0039EA48(char *);
@@ -30,7 +30,7 @@ extern float func_L20_00334370(char *, char *, float, float, float, float, int);
  *
  * Refreshes the helper (func_L20_0039F2E0(moby, 0)) and runs
  * func_L20_0039EC48. Every eighth frame, staggered by the moby's own address
- * (D_L20_001B2A48 & 7 == (moby >> 8) & 7), it also runs func_L20_0039EA48.
+ * (g_gameTime & 7 == (moby >> 8) & 7), it also runs func_L20_0039EA48.
  * Then it eases two angles of its state (+0x288, +0x28C) towards the change
  * of the moby's heading +0xF8 since last frame (func_L20_00304018,
  * func_L20_00334370 with rates 0.0097 and 0.58), stores the heading at state
@@ -52,10 +52,14 @@ extern float func_L20_00334370(char *, char *, float, float, float, float, int);
  *   - names respelled from upstream's v1.01-address names to the targets of
  *     the v2.00 disc's own relocations (relverify on the upstream object, task
  *     #2565): func_L20_0039D7B0 -> func_L20_0039EB78; D_L20_001B2AC8 ->
- *     D_L20_001B2A48; func_00283BE0 -> func_L20_00304018; func_002AAA00 ->
+ *     g_gameTime; func_00283BE0 -> func_L20_00304018; func_002AAA00 ->
  *     func_L20_00334370; func_L20_0039D680 -> func_L20_0039EA48;
  *     func_L20_0039D880 -> func_L20_0039EC48; func_L20_0039DF18 ->
  *     func_L20_0039F2E0
+ *   - D_L20_001B2A48 -> g_gameTime (task #2646): the name
+ *     symbol_addrs/L20_boot_names.txt gives at exactly that address; the
+ *     address-named spelling was a second name for the same address (A2 class,
+ *     NOTE #13409).
  *   - `__attribute__((sda))` written `__attribute__((section(".sdata")))` on
  *     the extern declarations (RULING #8620 addressing device, comment above
  *     them)
@@ -73,7 +77,7 @@ void func_L20_0039EB78(char *arg0) {
     s1 = *(char **)(s0 + 0x68);
     func_L20_0039F2E0(s0, 0);
     func_L20_0039EC48(s0);
-    if ((D_L20_001B2A48 & 7) == (((s32)s0 >> 8) & 7)) {
+    if ((g_gameTime & 7) == (((s32)s0 >> 8) & 7)) {
         func_L20_0039EA48(s0);
     }
     c = 0.009696274995803833f;

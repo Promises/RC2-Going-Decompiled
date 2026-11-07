@@ -10,18 +10,18 @@ extern void func_L02_003DC4F8(char *);
 extern void func_L02_003DC598(char *);
 extern void func_L02_003DC6C0(char *, int);
 
-/* The entity table base (0x100-byte records), inside the larger split label
- * D_L02_001B2D80: address-named (RULING #13291 §2). ADDRESSING-MODEL DEVICE
+/* The entity table base (0x100-byte records): L02's boot-name map name at
+ * 0x001B359C (symbol_addrs/L02_boot_names.txt). ADDRESSING-MODEL DEVICE
  * (RULING #8620, EE arm only): `.sdata` on the extern declaration makes cc1
  * print the one-instruction `lw` macro, which GNU as expands absolute at
  * -G0, as retail has it. It moves no data and emits nothing. */
-extern int D_L02_001B359C __attribute__((section(".sdata")));
+extern int g_mobyTableBase __attribute__((section(".sdata")));
 
 /**
  * func_L02_003DC2F0 - run the six set-up steps on the entity the actor's
  * state names.
  * @arg0: the actor; the int at its state block's (+0x68) +0x244 is the
- *        entity's index in the table at D_L02_001B359C.
+ *        entity's index in the table at g_mobyTableBase.
  *
  * Calls func_L02_003DC3C8 with 0 and 1, func_L02_003DC6C0 with 5 and 6, then
  * func_L02_003DC4F8 and func_L02_003DC598, each on that entity.
@@ -42,31 +42,34 @@ extern int D_L02_001B359C __attribute__((section(".sdata")));
  *     func_L02_003DC6C0, func_L02_003DAF90 -> func_L02_003DC4F8,
  *     func_L02_003DB030 -> func_L02_003DC598: our split names at the v2.00
  *     addresses the ROM's own relocations imply (relverify, task #2557);
- *   - D_L02_001B359C keeps its upstream name, which already states its v2.00
- *     address (address-named, RULING #13291 §2);
+ *   - D_L02_001B359C -> g_mobyTableBase (task #2646): upstream's spelling,
+ *     which states the v2.00 address, respelled to the name
+ *     symbol_addrs/L02_boot_names.txt gives at exactly that address; the
+ *     address-named spelling was a second name for the same address (A2
+ *     class, NOTE #13409);
  *   - `__attribute__((sda))` -> `__attribute__((section(".sdata")))` on the
- *     D_L02_001B359C declaration (RULING #8620; upstream's `sda` is a marker
+ *     g_mobyTableBase declaration (RULING #8620; upstream's `sda` is a marker
  *     for its own patched compiler, which our cc1 ignores);
  *   - `#include "include_asm.h"` dropped (nothing here used it) and every
  *     other declaration of the file dropped.
  */
 void func_L02_003DC2F0(char *arg0) {
     func_L02_003DC3C8(
-        (char *)(D_L02_001B359C +
+        (char *)(g_mobyTableBase +
                  (*(int *)(*(char **)(arg0 + 0x68) + 0x244) << 8)), 0);
     func_L02_003DC3C8(
-        (char *)(D_L02_001B359C +
+        (char *)(g_mobyTableBase +
                  (*(int *)(*(char **)(arg0 + 0x68) + 0x244) << 8)), 1);
     func_L02_003DC6C0(
-        (char *)(D_L02_001B359C +
+        (char *)(g_mobyTableBase +
                  (*(int *)(*(char **)(arg0 + 0x68) + 0x244) << 8)), 5);
     func_L02_003DC6C0(
-        (char *)(D_L02_001B359C +
+        (char *)(g_mobyTableBase +
                  (*(int *)(*(char **)(arg0 + 0x68) + 0x244) << 8)), 6);
     func_L02_003DC4F8(
-        (char *)(D_L02_001B359C +
+        (char *)(g_mobyTableBase +
                  (*(int *)(*(char **)(arg0 + 0x68) + 0x244) << 8)));
     func_L02_003DC598(
-        (char *)(D_L02_001B359C +
+        (char *)(g_mobyTableBase +
                  (*(int *)(*(char **)(arg0 + 0x68) + 0x244) << 8)));
 }

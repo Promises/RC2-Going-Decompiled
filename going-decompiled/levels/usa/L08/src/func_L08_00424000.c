@@ -25,12 +25,11 @@ typedef struct {
 } Ent;
 
 /* the level's object-handle table: a pointer global holding the base of
- * 0x100-byte entries. Lives inside the split data label D_L08_001B2200
- * (+0x7DC): address-named extern valued from the name by level_elf (RULING
- * #13291 section 2). Upstream's `__attribute__((sda))` is kept verbatim; our
+ * 0x100-byte entries. L08's boot-name map name at 0x001B29DC
+ * (symbol_addrs/L08_boot_names.txt). Upstream's `__attribute__((sda))` is kept verbatim; our
  * stock cc1 warns `attribute directive ignored`, byte-inert here (masked
  * compare diff 0). */
-extern Ent *D_L08_001B29DC __attribute__((sda));
+extern Ent *g_mobyTableBase __attribute__((sda));
 
 /**
  * func_L08_00424000 - are a handle's entry faces unset or gone? (third of
@@ -54,10 +53,11 @@ extern Ent *D_L08_001B29DC __attribute__((sda));
  * VERBATIM but for names; edits:
  *   - name func_L08_004229F8 -> func_L08_00424000 (our split name at the
  *     v2.00 place);
- *   - D_L08_001B29DC kept: upstream's name already states the v2.00 target
- *     address 0x001B29DC (inside the split data label D_L08_001B2200,
- *     +0x7DC); address-named extern valued from the name by level_elf
- *     (RULING #13291 section 2);
+ *   - D_L08_001B29DC -> g_mobyTableBase (task #2646): upstream's spelling,
+ *     which states the v2.00 target address 0x001B29DC, respelled to the
+ *     name symbol_addrs/L08_boot_names.txt gives at exactly that address;
+ *     the address-named spelling was a second name for the same address
+ *     (A2 class, NOTE #13409);
  *   - the file's `#include "include_asm.h"` line, the other functions and
  *     their externs not carried (nothing else here uses them); the u8/u16/
  *     s16/s32 typedefs and the Ent struct kept.
@@ -69,7 +69,7 @@ s32 func_L08_00424000(s32 a0)
     s32 r;
 
     if (a0 != -1) {
-        p = D_L08_001B29DC + a0;
+        p = g_mobyTableBase + a0;
         r = 0;
         if (p == 0 || p->f20 == 0xFE || p->f20 == 0xFD) r = 1;
         return r;

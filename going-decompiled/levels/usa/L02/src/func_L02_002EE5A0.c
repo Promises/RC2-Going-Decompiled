@@ -15,8 +15,10 @@ typedef struct {
     float pad[12];
 } L02_Record40;
 
-/* The four table words sit inside the larger split label D_L02_001B3930, so
- * they are address-named externs valued from their names (RULING #13291 §2).
+/* The first two table words are L02's boot-name map names at their exact
+ * addresses (symbol_addrs/L02_boot_names.txt); the other two sit inside the
+ * larger split label D_L02_001B3930, so they are address-named externs valued
+ * from their names (RULING #13291 §2).
  * ADDRESSING-MODEL DEVICE (RULING #8620, EE arm only; this TU has no other
  * arm): the .sdata section on these extern declarations makes cc1 print the
  * one-instruction `lw` macro, which GNU as expands absolute at -G0
@@ -24,8 +26,8 @@ typedef struct {
  * cc1 splits each load into two registers and interleaves them. It moves no
  * data and emits nothing.
  */
-extern L02_Record20 *D_L02_001B3C14 __attribute__((section(".sdata")));
-extern L02_Record20 *D_L02_001B3C18 __attribute__((section(".sdata")));
+extern L02_Record20 *g_vramSlotTableStart __attribute__((section(".sdata")));
+extern L02_Record20 *g_vramSlotTableEnd __attribute__((section(".sdata")));
 extern L02_Record40 *D_L02_001B3BD0 __attribute__((section(".sdata")));
 extern int D_L02_001B3BD4 __attribute__((section(".sdata")));
 
@@ -33,10 +35,11 @@ extern int D_L02_001B3BD4 __attribute__((section(".sdata")));
  * func_L02_002EE5A0 - shift every record of two tables by one period, toward
  * the side of the limit the flag selects.
  *
- * The first table runs from D_L02_001B3C14 to D_L02_001B3C18 (0x20-byte
- * records). A record whose z is below @limit takes @flag as its side, the
- * others take !@flag. On the selected side x is moved down by 2000 while it
- * is positive; on the other side it is moved up by 2000 while it is negative.
+ * The first table runs from g_vramSlotTableStart to g_vramSlotTableEnd
+ * (0x20-byte records). A record whose z is below @limit takes @flag as its
+ * side, the others take !@flag. On the selected side x is moved down by 2000
+ * while it is positive; on the other side it is moved up by 2000 while it is
+ * negative.
  * The second table, D_L02_001B3BD0 with D_L02_001B3BD4 entries (0x40-byte
  * records), does the same against @limit * 1024 with a period of 2048000.
  *
@@ -55,8 +58,14 @@ extern int D_L02_001B3BD4 __attribute__((section(".sdata")));
  * #13082, #13291). ADAPTED, the body's statements unchanged; edits:
  *   - name func_L02_002ED7B0 -> func_L02_002EE5A0 (our split name at the
  *     v2.00 place);
- *   - the four externs keep their upstream names, which already state their
- *     v2.00 addresses; they are address-named (RULING #13291 §2);
+ *   - D_L02_001B3C14 -> g_vramSlotTableStart, D_L02_001B3C18 ->
+ *     g_vramSlotTableEnd (task #2646): upstream's spellings, which state the
+ *     v2.00 addresses, respelled to the names symbol_addrs/L02_boot_names.txt
+ *     gives at exactly those addresses; the address-named spelling was a
+ *     second name for the same address (A2 class, NOTE #13409);
+ *   - D_L02_001B3BD0 and D_L02_001B3BD4 keep their upstream names, which
+ *     already state their v2.00 addresses; they are address-named (RULING
+ *     #13291 §2);
  *   - `__attribute__((sda))` -> `__attribute__((section(".sdata")))` on the
  *     four extern declarations (RULING #8620; upstream's `sda` is a marker
  *     for its own patched compiler, which our cc1 ignores);
@@ -68,7 +77,7 @@ void func_L02_002EE5A0(int flag, float limit) {
     L02_Record20 *p;
     int i;
 
-    for (p = D_L02_001B3C14; p != D_L02_001B3C18; p++) {
+    for (p = g_vramSlotTableStart; p != g_vramSlotTableEnd; p++) {
         int sel = p->z < limit ? flag : !flag;
 
         if (sel) {

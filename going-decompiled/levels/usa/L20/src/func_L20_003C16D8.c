@@ -11,7 +11,7 @@ typedef signed short s16;
 typedef signed int s32;
 typedef float f32;
 
-extern char *D_L20_001FBAA0[];
+extern char *g_mobyGroupLists[];
 /* RULING #8620 addressing device (level code has no native arm): upstream's
  * `__attribute__((sda))` is written `section(".sdata")` on these extern
  * DECLARATIONS. It moves no data and emits nothing: cc1 then prints the
@@ -19,15 +19,15 @@ extern char *D_L20_001FBAA0[];
  * lui + lw/sw pair (absolute %hi/%lo, not $gp-relative at -G0), as retail
  * has it. Ablation (task #2565): with upstream's `sda` (ignored by this cc1)
  * the function differs from the disc in 26 of 34 words (masked compare). */
-extern char *D_L20_001B2F1C __attribute__((section(".sdata")));
+extern char *g_mobyTableBase __attribute__((section(".sdata")));
 extern float D_L20_0023E5F0[];
 
 /**
  * func_L20_003C16D8 - lower every entity of a group by 20 units, saving their heights.
  *
- * Walks the group's id list D_L20_001FBAA0[index] (index = the state's first
+ * Walks the group's id list g_mobyGroupLists[index] (index = the state's first
  * word; ids masked with 0x7FFF index the 0x100-byte records at
- * D_L20_001B2F1C; the last id has its top bit set). For each entity it saves
+ * g_mobyTableBase; the last id has its top bit set). For each entity it saves
  * the height +0x18 to the next slot of D_L20_0023E5F0, sets flags 0x41 in
  * +0x34 and lowers +0x18 by 20.
  *
@@ -46,8 +46,12 @@ extern float D_L20_0023E5F0[];
  *   - names respelled from upstream's v1.01-address names to the targets of
  *     the v2.00 disc's own relocations (relverify on the upstream object, task
  *     #2565): func_L20_003C02D0 -> func_L20_003C16D8; D_L20_001B2F9C ->
- *     D_L20_001B2F1C; D_L20_001FBB20 -> D_L20_001FBAA0; D_L20_0023E670 ->
+ *     g_mobyTableBase; D_L20_001FBB20 -> g_mobyGroupLists; D_L20_0023E670 ->
  *     D_L20_0023E5F0
+ *   - D_L20_001B2F1C -> g_mobyTableBase, D_L20_001FBAA0 -> g_mobyGroupLists
+ *     (task #2646): the names symbol_addrs/L20_boot_names.txt gives at exactly
+ *     those addresses; the address-named spelling was a second name for the
+ *     same address (A2 class, NOTE #13409).
  *   - `__attribute__((sda))` written `__attribute__((section(".sdata")))` on
  *     the extern declarations (RULING #8620 addressing device, comment above
  *     them)
@@ -56,10 +60,10 @@ extern float D_L20_0023E5F0[];
  */
 void func_L20_003C16D8(char *arg0) {
     s32 index = *(s32 *)(*(char **)(arg0 + 0x68));
-    u16 *rec = (u16 *)D_L20_001FBAA0[index];
+    u16 *rec = (u16 *)g_mobyGroupLists[index];
 
     if (rec != 0) {
-        char *base = D_L20_001B2F1C;
+        char *base = g_mobyTableBase;
         f32 twenty = 20.0f;
         f32 *out = D_L20_0023E5F0;
 

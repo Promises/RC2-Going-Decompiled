@@ -8,7 +8,7 @@
 
 extern void func_L20_003083C8(void);
 extern void func_L20_00341528(int a, int b, int c, int d, int e);
-extern int D_L20_001FFDC0[];
+extern int g_menuScreenBlock[];
 /* RULING #8620 addressing device (level code has no native arm): upstream's
  * `__attribute__((sda))` is written `section(".sdata")` on these extern
  * DECLARATIONS. It moves no data and emits nothing: cc1 then prints the
@@ -22,16 +22,16 @@ extern int D_L20_00294F78;
 /**
  * func_L20_0036F938 - register this level's mission record and announce it.
  *
- * Calls func_L20_003083C8, then in the level's table D_L20_001FFDC0 stores
+ * Calls func_L20_003083C8, then in the level's table g_menuScreenBlock stores
  * the address of D_L20_00294F78 at word 0x40 and 0xB at word 0x41, sets
  * D_L20_001A8FDC to 1, and calls func_L20_00341528(3, 1, 0xB, 0, 0).
  *
  * No parameters.
  * Return: nothing.
  *
- * Non-obvious: D_L20_001FFDC0 lies inside the split's larger label
- * D_L20_001F0000; the address-named extern is valued from its name by
- * tools/levels/level_elf.py undef (RULING #13291 section 2).
+ * Non-obvious: g_menuScreenBlock (0x001FFDC0) lies inside the split's larger
+ * label D_L20_001F0000; L20's boot-name map (symbol_addrs/L20_boot_names.txt)
+ * gives the address that name (task #2646).
  *
  * Source: OpenRAC rac2-decomp <https://github.com/OpenRAC/rac2-decomp> at
  * fe6adf9baddcd31323c35adf102d078aa250852d, GPL-3.0 (root LICENSE; the file
@@ -43,8 +43,12 @@ extern int D_L20_00294F78;
  *   - names respelled from upstream's v1.01-address names to the targets of
  *     the v2.00 disc's own relocations (relverify on the upstream object, task
  *     #2565): func_L20_0036E720 -> func_L20_0036F938; D_L20_001FFE40 ->
- *     D_L20_001FFDC0; D_L20_00294F98 -> D_L20_00294F78; func_002B49E0 ->
+ *     g_menuScreenBlock; D_L20_00294F98 -> D_L20_00294F78; func_002B49E0 ->
  *     func_L20_00341528; func_L00_002F3478 -> func_L20_003083C8
+ *   - D_L20_001FFDC0 -> g_menuScreenBlock (task #2646): the name
+ *     symbol_addrs/L20_boot_names.txt gives at exactly that address; the
+ *     address-named spelling was a second name for the same address (A2 class,
+ *     NOTE #13409).
  *   - `__attribute__((sda))` written `__attribute__((section(".sdata")))` on
  *     the extern declarations (RULING #8620 addressing device, comment above
  *     them)
@@ -57,7 +61,7 @@ void func_L20_0036F938(void)
     int *other;
 
     func_L20_003083C8();
-    base = D_L20_001FFDC0;
+    base = g_menuScreenBlock;
     other = &D_L20_00294F78;
     *(int *)(base + 0x40) = (int)other;
     *(int *)(base + 0x41) = 0xB;

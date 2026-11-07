@@ -11,9 +11,9 @@ typedef unsigned int u32;
 typedef signed short s16;
 typedef signed int s32;
 
-/* The level's entity table base, at 0x001B27DC inside our split label
-   D_L09_001B2000: an address-named extern (RULING #13291 §2), valued from its
-   address by level_elf. ADDRESSING-MODEL DEVICE (RULING #8620): upstream's
+/* The level's entity table base, g_mobyTableBase: the name L09's boot-name
+   map (symbol_addrs/L09_boot_names.txt) gives 0x001B27DC (task #2646).
+   ADDRESSING-MODEL DEVICE (RULING #8620): upstream's
    `sda` (ignored by this cc1) is respelled `section(".sdata")` on this extern
    declaration. cc1 then prints the load as the one-instruction `lw` macro,
    which the assembler expands to an ADJACENT absolute lui/lw pair
@@ -21,11 +21,12 @@ typedef signed int s32;
    `sda` instead, cc1 splits %hi/%lo itself and the function keeps its length
    but is scheduled and allocated differently (ablation, task #2561: 16 changed
    lines in the disassembly diff). It moves no data and emits nothing. */
-extern char *D_L09_001B27DC __attribute__((section(".sdata")));
+extern char *g_mobyTableBase __attribute__((section(".sdata")));
 
-/* The per-group tables of entity ids, at 0x001FB4E0 inside our split label
-   D_L09_001F0000 (an address-named extern, RULING #13291 §2). Absolute. */
-extern char *D_L09_001FB4E0[];
+/* The per-group tables of entity ids, g_mobyGroupLists: the name L09's
+   boot-name map (symbol_addrs/L09_boot_names.txt) gives 0x001FB4E0 (task
+   #2646). Absolute. */
+extern char *g_mobyGroupLists[];
 
 /* The level's copy of a boot helper, and this row's C peer (upstream
    defined it above this function in the same file). */
@@ -39,7 +40,7 @@ extern void func_L09_00404510(char *a0);
  * Nothing happens for event 0. Otherwise runs func_L09_00404510 (the wake
  * pass). Only for events 4 and 5, a group byte (+0x21) other than 0xFF and a
  * group of at least two members (func_L09_00318B08(group, -1) >= 2): walks
- * the group's id list D_L09_001FB4E0[group] up to the first negative id, and
+ * the group's id list g_mobyGroupLists[group] up to the first negative id, and
  * the first 0xD57-class (+0xAA) entity whose state halfword +0x26A is clear
  * gets it set to 1, ending the walk.
  *
@@ -61,12 +62,16 @@ extern void func_L09_00404510(char *a0);
  *   - func_L09_00403080 -> func_L09_00404510 (this row's C, its own TU here,
  *     so it is declared extern with upstream's definition's prototype);
  *   - func_002A8508 -> func_L09_00318B08;
- *   - D_L09_001B285C -> D_L09_001B27DC: an address-named extern inside
- *     D_L09_001B2000 (RULING #13291 §2);
- *   - D_L09_001FFFB560 -> D_L09_001FB4E0: an address-named extern inside
- *     D_L09_001F0000 (RULING #13291 §2; upstream's name carries a stray `FF`);
+ *   - D_L09_001B285C -> g_mobyTableBase (L09's boot-map name at the v2.00
+ *     target 0x001B27DC);
+ *   - D_L09_001FFFB560 -> g_mobyGroupLists (L09's boot-map name at the v2.00
+ *     target 0x001FB4E0; upstream's name carries a stray `FF`);
+ *   - D_L09_001B27DC -> g_mobyTableBase, D_L09_001FB4E0 -> g_mobyGroupLists
+ *     (task #2646): the names symbol_addrs/L09_boot_names.txt gives at exactly
+ *     those addresses; the address-named spelling was a second name for the
+ *     same address (A2 class, NOTE #13409).
  *   - device: `__attribute__((sda))` -> `__attribute__((section(".sdata")))`
- *     on D_L09_001B27DC's extern declaration (RULING #8620; the audit's
+ *     on g_mobyTableBase's extern declaration (RULING #8620; the audit's
  *     `resp` variant, NOTE #13281);
  *   - `#include "common.h"` dropped: its u8/u16/u32/s16/s32 typedefs are
  *     written here and only the declarations this function uses are kept.
@@ -91,8 +96,8 @@ void func_L09_00404590(char *a0, s32 a1) {
     if (func_L09_00318B08(*(u8 *)(s1 + 0x21), -1) < 2) {
         return;
     }
-    base = D_L09_001B27DC;
-    p = (u16 *)D_L09_001FB4E0[*(u8 *)(s1 + 0x21)];
+    base = g_mobyTableBase;
+    p = (u16 *)g_mobyGroupLists[*(u8 *)(s1 + 0x21)];
     do {
         rec = base + ((*p & 0x7FFF) << 8);
         if (*(s16 *)(rec + 0xAA) == 0xD57) {

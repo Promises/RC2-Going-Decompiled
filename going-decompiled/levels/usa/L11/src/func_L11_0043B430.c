@@ -5,13 +5,13 @@
  * cc1 (tools/ee/ee_cc1.sh s136, FACT #8810) at -O2 -G0 -fopt-stack.
  */
 
-/* The base of the level's 256-byte object records, a word inside the .bss
- * block D_L11_001B2E00 (address-named, RULING #13291 §2). The section
+/* The base of the level's 256-byte object records, L11's boot-name map
+ * name at 0x001B361C (task #2646). The section
  * attribute is an ADDRESSING-MODEL DEVICE on this declaration (RULING #8620):
  * cc1 prints a one-instruction macro load instead of splitting %hi/%lo
  * itself, and GNU as expands it at -G0 into the lui/lw pair the ROM has. It
  * moves no data and emits nothing. */
-extern int D_L11_001B361C __attribute__((section(".sdata")));
+extern int g_mobyTableBase __attribute__((section(".sdata")));
 
 /* L11's copies of boot code, at their v2.00 places in this level. */
 extern void func_L11_0032DBF8(void *, int, int);
@@ -51,9 +51,13 @@ extern char g_listenerPosHistory[];
  *   - name func_L11_00439BF0 -> func_L11_0043B430 (our split name at the
  *     v2.00 place);
  *   - D_00188660 -> g_listenerPosHistory (the boot's name, same address);
- *   - D_L11_001B359C -> D_L11_001B361C, func_002A7750 -> func_L11_0032DBF8,
+ *   - D_L11_001B359C -> g_mobyTableBase, func_002A7750 -> func_L11_0032DBF8,
  *     func_373978 -> func_L11_00374B68, func_3739C0 -> func_L11_00374BB0: the
  *     targets of the v2.00 ROM's own relocations (relverify, task #2553);
+ *   - D_L11_001B361C -> g_mobyTableBase (task #2646): the name
+ *     symbol_addrs/L11_boot_names.txt gives at exactly that address; the
+ *     address-named spelling was a second name for the same address (A2 class,
+ *     NOTE #13409).
  *   - `__attribute__((sda))` -> `section(".sdata")` (RULING #8620);
  *   - `#include "common.h"` dropped (no typedef of it is used here); the
  *     macro REC_L11_359C kept verbatim; the upstream one-line comment folded
@@ -79,12 +83,12 @@ void func_L11_0043B430(char *obj)
         }
         *(int *)(state + 0x38C) = -1;
     }
-    records = (char *)D_L11_001B361C;
+    records = (char *)g_mobyTableBase;
     *(unsigned short *)(REC_L11_359C(obj, records) + 0x34) |= 0x2;
     *(unsigned short *)(REC_L11_359C(obj, records) + 0x34) |= 0x4;
     *(unsigned short *)(REC_L11_359C(obj, records) + 0x34) |= 0x40;
     *(unsigned short *)(REC_L11_359C(obj, records) + 0x34) &= 0xEFFF;
     *(unsigned short *)(REC_L11_359C(obj, records) + 0x34) |= 0x1;
     *(unsigned char *)(REC_L11_359C(obj, records) + 0x31) = 0;
-    *(int *)(REC_L11_359C(obj, (char *)D_L11_001B361C) + 0x98) = 0;
+    *(int *)(REC_L11_359C(obj, (char *)g_mobyTableBase) + 0x98) = 0;
 }

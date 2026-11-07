@@ -11,7 +11,7 @@
 extern void func_L14_00323250(void *self, int state, int mode);
 extern int func_L14_0036ADA0(int a, int b, void *self);
 extern float func_L14_002F7028(float);
-extern int D_L14_001B251C __attribute__((sda));
+extern int g_mobyTableBase __attribute__((sda));
 extern int func_L14_0032CEA8(char *self);
 extern void func_L14_00333698(int table, int mode);
 extern int func_L14_00333648(char *self);
@@ -29,7 +29,7 @@ extern int func_L14_002F7C08(int a, int b, float c);
  *
  * Non-obvious: Stage 0 waits for func_L14_0032CEA8; then, when the state's
  * index is not -1, it calls func_L14_00333698 on that 0x100-byte moby record of
- * the table D_L14_001B251C, and sets stage 1. Stage 1 plays a sound when
+ * the table g_mobyTableBase, and sets stage 1. Stage 1 plays a sound when
  * func_L14_00333648 says so and uses the pair 0x80468CDC / 0x801E78AA instead
  * of the pair 0x808C8C8C / 0x80282828. The phase advances by 0.10762865
  * (func_L14_002F7A68 adds and wraps), the pair is blended (func_L14_002F7C08)
@@ -47,8 +47,11 @@ extern int func_L14_002F7C08(int a, int b, float c);
  * (relverify by name on this object, task #2581):
  *   - func_L14_00409B20 -> func_L14_0040B080 (our split name at the v2.00
  *     place);
- *   - D_L14_001B259C -> D_L14_001B251C (address-named, inside
- *     D_L14_001B1D00+0x81C; RULING #13291 section 2);
+ *   - D_L14_001B259C -> g_mobyTableBase, the name symbol_addrs/
+ *     L14_boot_names.txt gives at the v2.00 relocation target 0x001B251C;
+ *   - D_L14_001B251C -> g_mobyTableBase (task #2646): the address-named
+ *     spelling was a second name for the same address (A2 class, NOTE
+ *     #13409);
  *   - func_00283198 -> func_L14_002F7028 (the level's own copy at its L14
  *     place);
  *   - func_00283B98 -> func_L14_002F7A68 (the level's own copy at its L14
@@ -87,7 +90,7 @@ void func_L14_0040B080(char *self)
         if (func_L14_0032CEA8(self) != 0) {
             idx = *(int *)(v + 0);
             if (idx != -1) {
-                func_L14_00333698(D_L14_001B251C + (idx << 8), 1);
+                func_L14_00333698(g_mobyTableBase + (idx << 8), 1);
             }
             func_L14_00323250(self, 1, -1);
         }

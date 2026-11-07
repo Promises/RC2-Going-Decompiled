@@ -37,7 +37,7 @@ extern void func_L11_003011E0(void *, void *, void *);
 extern void func_L11_00301328(void *, void *, void *);
 extern unsigned long func_L11_002F8F30(int);
 extern void func_L11_002FD670(void *, void *, int);
-extern char D_L11_001BA940[];
+extern char g_cameraPos[];
 extern int D_L11_001B11DC __attribute__((section(".sdata")));
 extern int D_L11_001B11E4 __attribute__((section(".sdata")));
 extern float D_L11_001B11F0[] __attribute__((section(".sdata")));
@@ -53,7 +53,7 @@ extern float D_L11_001B11F4[] __attribute__((section(".sdata")));
  * Return: none.
  *
  * Non-obvious: Each end's offset toward the level's anchor point
- * D_L11_001BA940 is crossed with the span (func_L11_00301328) and scaled by
+ * g_cameraPos is crossed with the span (func_L11_00301328) and scaled by
  * 0.1. The four corners are each end plus and minus its offset. The quad takes
  * texture 7 (func_L11_002F8F30), the colour D_L11_001B11E4 at every corner,
  * and its UVs from the level's table at D_L11_001B11F0. It is submitted with
@@ -75,8 +75,8 @@ extern float D_L11_001B11F4[] __attribute__((section(".sdata")));
  *   - D_L11_001B1204 -> D_L11_001B11E4 (our label at that address);
  *   - D_L11_001B1210 -> D_L11_001B11F0 (our label at that address);
  *   - D_L11_001B1214 -> D_L11_001B11F4 (our label at that address);
- *   - D_L11_001BA8C0 -> D_L11_001BA940 (address-named, inside D_L11_001B39B0;
- *     RULING #13291 section 2);
+ *   - D_L11_001BA8C0 -> g_cameraPos (L11's boot-map name at
+ *     the v2.00 target 0x001BA940);
  *   - func_0027C878 -> func_L11_002F8F30 (the level's own copy at its L11
  *     place);
  *   - func_00280B90 -> func_L11_002FD670 (the level's own copy at its L11
@@ -89,6 +89,10 @@ extern float D_L11_001B11F4[] __attribute__((section(".sdata")));
  *     place);
  *   - func_00282F20 -> func_L11_003014F8 (the level's own copy at its L11
  *     place);
+ *   - D_L11_001BA940 -> g_cameraPos (task #2646): the name
+ *     symbol_addrs/L11_boot_names.txt gives at exactly that address; the
+ *     address-named spelling was a second name for the same address (A2 class,
+ *     NOTE #13409).
  *   - `__attribute__((sda))` -> `__attribute__((section(".sdata")))` on 4
  *     extern declaration(s) (RULING #8620: upstream's patched cc1 reads sda,
  *     ours does not);
@@ -105,8 +109,8 @@ void func_L11_00436338(char *obj, void *q)
     f.saved = *(TI128 *)q;
     st = *(char **)(obj + 0x68);
     func_L11_00301210(f.c, st, st + 0x10);
-    func_L11_00301210(f.a, st, D_L11_001BA940);
-    func_L11_00301210(f.b, st + 0x10, D_L11_001BA940);
+    func_L11_00301210(f.a, st, g_cameraPos);
+    func_L11_00301210(f.b, st + 0x10, g_cameraPos);
     func_L11_00301328(f.a, f.a, f.c);
     func_L11_003014F8(f.a, f.a, 0.1f);
     func_L11_00301328(f.b, f.b, f.c);

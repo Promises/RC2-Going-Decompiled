@@ -5,21 +5,21 @@
  * cc1, -fopt-stack) at -O2 -G8.
  */
 
-/* Per-group lists of 16-bit entity ids; a negative id ends a list. Inside
- * the larger split label D_L02_001F0000: address-named (RULING #13291 §2). */
-extern unsigned short *D_L02_001FC060[];
+/* Per-group lists of 16-bit entity ids; a negative id ends a list. L02's
+ * boot-name map name at 0x001FC060. */
+extern unsigned short *g_mobyGroupLists[];
 
-/* The entity table base (0x100-byte records). Inside the larger split label
- * D_L02_001B2D80: address-named. A 4-byte object, so $gp-relative at -G8 by
+/* The entity table base (0x100-byte records). L02's boot-name map name at
+ * 0x001B359C. A 4-byte object, so $gp-relative at -G8 by
  * its size alone. */
-extern unsigned char *D_L02_001B359C;
+extern unsigned char *g_mobyTableBase;
 
 /**
  * func_L02_003D2E30 - does the object's group hold an armed 0x9CA entity?
  * @a0: the object; its byte +0x21 is the group index (0xFF = none).
  *
- * Walks the group's id list in D_L02_001FC060. Each id, masked to 15 bits,
- * selects a 0x100-byte record of the table at D_L02_001B359C. An id with
+ * Walks the group's id list in g_mobyGroupLists. Each id, masked to 15 bits,
+ * selects a 0x100-byte record of the table at g_mobyTableBase. An id with
  * bit 15 set is examined and then ends the walk.
  *
  * Return: 1 for the first record that is non-null, not being freed (state
@@ -37,8 +37,11 @@ extern unsigned char *D_L02_001B359C;
  * respellings:
  *   - name func_L02_003D18D8 -> func_L02_003D2E30 (our split name at the
  *     v2.00 place);
- *   - D_L02_001FC060 and D_L02_001B359C keep their upstream names, which
- *     already state their v2.00 addresses (address-named, RULING #13291 §2);
+ *   - D_L02_001FC060 -> g_mobyGroupLists, D_L02_001B359C -> g_mobyTableBase
+ *     (task #2646): upstream's spellings, which state the v2.00 addresses,
+ *     respelled to the names symbol_addrs/L02_boot_names.txt gives at
+ *     exactly those addresses; the address-named spelling was a second name
+ *     for the same address (A2 class, NOTE #13409);
  *   - `#include "include_asm.h"` dropped (nothing here used it), every other
  *     declaration of the file dropped and the upstream comment folded into
  *     this one.
@@ -50,12 +53,12 @@ int func_L02_003D2E30(unsigned char *a0) {
 
     if (a0[0x21] == 0xFF)
         return 0;
-    q = D_L02_001FC060[a0[0x21]];
+    q = g_mobyGroupLists[a0[0x21]];
     if (q == 0)
         return 0;
     p = q;
     do {
-        e = D_L02_001B359C + ((*p & 0x7FFF) << 8);
+        e = g_mobyTableBase + ((*p & 0x7FFF) << 8);
         if (e != 0 && e[0x20] != 0xFE && e[0x20] != 0xFD && *(short *)(e + 0xAA) == 0x9CA &&
             e[0x95] == 6 && *(short *)(*(unsigned char **)(e + 0x68) + 0x2F6) == 1)
             return 1;

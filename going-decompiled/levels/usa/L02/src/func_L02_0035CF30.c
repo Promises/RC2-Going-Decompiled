@@ -18,8 +18,8 @@ extern InitEntry12 D_L02_0021E660[];
  * own patched compiler; our cc1 ignores it (with a warning). At -G8 the
  * 4-byte pointer is $gp-relative by its size alone. Kept verbatim. */
 extern int * volatile D_L02_001AA850 __attribute__((sda));
-/* Inside the larger split label D_L02_001B3930: address-named (RULING #13291 §2). */
-extern struct { char pad[0x230]; int selected; } D_L02_001CAAE0;
+/* L02's boot-name map name at 0x001CAAE0 (symbol_addrs/L02_boot_names.txt). */
+extern struct { char pad[0x230]; int selected; } g_mapVertexData;
 
 /**
  * func_L02_0035CF30 - build the level-ordered menu rows and select the
@@ -33,7 +33,7 @@ extern struct { char pad[0x230]; int selected; } D_L02_001CAAE0;
  * of that level's entry in D_L02_0028DAA0. A row with id 0 ends the list.
  * Then clears @obj+0x40, sets bit 0x8000 in @obj+0x30 and walks the
  * zero-terminated list D_L02_001AA850 points to; the first index whose entry
- * equals D_L02_001CAAE0.selected is stored to @obj+0x40.
+ * equals g_mapVertexData.selected is stored to @obj+0x40.
  *
  * Return: always 0.
  *
@@ -64,8 +64,11 @@ extern struct { char pad[0x230]; int selected; } D_L02_001CAAE0;
  *     D_L02_001AA830 -> D_L02_001AA850: our split labels at the v2.00
  *     addresses the ROM's own relocations imply (relverify, task #2557);
  *   - D_L02_0021E630 -> D_L02_0021E660 (address-named, inside
- *     D_L02_0020FFF0); D_L02_001CAAE0 keeps its name, which already states
- *     its v2.00 address (address-named, inside D_L02_001B3930);
+ *     D_L02_0020FFF0);
+ *   - D_L02_001CAAE0 -> g_mapVertexData (task #2646): the name
+ *     symbol_addrs/L02_boot_names.txt gives at exactly that address; the
+ *     address-named spelling was a second name for the same address (A2
+ *     class, NOTE #13409);
  *   - `#include "include_asm.h"` dropped (nothing used it) and the upstream
  *     file comment folded into this one.
  */
@@ -83,7 +86,7 @@ int func_L02_0035CF30(char *obj) {
     *(int *)(obj + 0x40) = 0;
     *(unsigned int *)(obj + 0x30) |= 0x8000;
     for (i = 0, entry = list[0]; entry; entry = D_L02_001AA850[++i]) {
-        if (D_L02_001CAAE0.selected == entry) {
+        if (g_mapVertexData.selected == entry) {
             *(int *)(obj + 0x40) = i;
             break;
         }

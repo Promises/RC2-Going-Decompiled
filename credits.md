@@ -1329,7 +1329,7 @@
   - **`func_L11_0036A7F8`** (`0x0036A7F8`, level program 11) in
     `going-decompiled/levels/usa/L11/src/func_L11_0036A7F8.c`, from
     `src/levels/11_joba/L11_00369700-init-g8.c` (`func_L11_00369700`, author commit `a96d3126`, Louis-Philippe Le Sieur),
-    task #2553. VERBATIM but for names: our name at the v2.00 place; the boot's `g_anAvailableLevelOrder`; five level data names renamed to the v2.00 ROM's relocation targets, three of them address-named inside larger labels (RULING #13291 §2); `include_asm.h` dropped.
+    task #2553. VERBATIM but for names: our name at the v2.00 place; the boot's `g_anAvailableLevelOrder`; five level data names renamed to the v2.00 ROM's relocation targets: `D_L11_0021EAA0` address-named inside a larger label (RULING #13291 §2), `g_mapVertexData` the level's boot-name map name there (was the address-named `D_L11_001CAF20`, task #2646), the other three our split labels; `include_asm.h` dropped.
   - **`func_L11_003F4310`** (`0x003F4310`, level program 11) in
     `going-decompiled/levels/usa/L11/src/func_L11_003F4310.c`, from
     `src/levels/11_joba/L11_003D6270.c` (`func_L11_003F2E00`, author commit `ee3fee45`, llesieur99),
@@ -1337,31 +1337,31 @@
   - **`func_L11_00414290`** (`0x00414290`, level program 11) in
     `going-decompiled/levels/usa/L11/src/func_L11_00414290.c`, from
     `src/levels/11_joba/L11_00412B20-g8.c` (`func_L11_00412B20`, author commit `c7d9e30a`, bigbeno37),
-    task #2553. ADAPTED: our name at the v2.00 place; `sda`/`NOT_SDA` as `section(".sdata")`/`section(".data")` (RULING #8620); the boot's `g_heroPos`; four callees as L11's copies; two data names renamed to the v2.00 ROM's relocation targets, address-named (RULING #13291 §2); `common.h` dropped.
+    task #2553. ADAPTED: our name at the v2.00 place; `sda`/`NOT_SDA` as `section(".sdata")`/`section(".data")` (RULING #8620); the boot's `g_heroPos`; four callees as L11's copies; two data names renamed to the v2.00 ROM's relocation targets: `D_001A7B08` address-named (RULING #13291 §2), and `g_gameTime`, the level's boot-name map name there (was the address-named `D_L11_001B3148`, task #2646); `common.h` dropped.
   - **`func_L11_00427310`** (`0x00427310`, level program 11) in
     `going-decompiled/levels/usa/L11/src/func_L11_00427310.c`, from
     `src/levels/11_joba/L11_00420C88.c` (`func_L11_00425AF8`, author commit `ba383701`, bigbeno37),
-    task #2553. ADAPTED: our name at the v2.00 place; `sda` as `section(".sdata")` (RULING #8620); two data names renamed to the v2.00 ROM's relocation targets, address-named (RULING #13291 §2); `include_asm.h` dropped.
+    task #2553. ADAPTED: our name at the v2.00 place; `sda` as `section(".sdata")` (RULING #8620); two data names renamed to the level's boot-name map names at the v2.00 ROM's relocation targets, `g_mobyTableBase`/`g_mobyGroupLists` (were the address-named `D_L11_001B361C`/`D_L11_001FC4A0`, task #2646); `include_asm.h` dropped.
   - **`func_L11_0042BCF8`** (`0x0042BCF8`, level program 11) in
     `going-decompiled/levels/usa/L11/src/func_L11_0042BCF8.c`, from
     `src/levels/11_joba/L11_00425F10.c` (`func_L11_0042A4C8`, author commit `ba383701`, bigbeno37),
-    task #2553. ADAPTED: our name at the v2.00 place; `sda` as `section(".sdata")` (RULING #8620); two data names renamed to the v2.00 ROM's relocation targets, address-named (RULING #13291 §2); `common.h` dropped.
+    task #2553. ADAPTED: our name at the v2.00 place; `sda` as `section(".sdata")` (RULING #8620); two data names renamed to the level's boot-name map names at the v2.00 ROM's relocation targets, `g_mobyTableBase`/`g_mobyGroupLists` (were the address-named `D_L11_001B361C`/`D_L11_001FC4A0`, task #2646); `common.h` dropped.
   - **`func_L11_00439600`** (`0x00439600`, level program 11) in
     `going-decompiled/levels/usa/L11/src/func_L11_00439600.c`, from
     `src/levels/11_joba/L11_00432628.c` (`func_L11_00437DC0`, author commit `fa8d6672`, llesieur99),
-    task #2553. ADAPTED: our name at the v2.00 place; `sda` as `section(".sdata")` (RULING #8620); the record base renamed to the v2.00 target, address-named (RULING #13291 §2); one callee as L11's copy; `common.h` dropped.
+    task #2553. ADAPTED: our name at the v2.00 place; `sda` as `section(".sdata")` (RULING #8620); the record base renamed to the level's boot-name map name at the v2.00 target, `g_mobyTableBase` (was the address-named `D_L11_001B361C`, task #2646); one callee as L11's copy; `common.h` dropped.
   - **`func_L11_004396A8`** (`0x004396A8`, level program 11) in
     `going-decompiled/levels/usa/L11/src/func_L11_004396A8.c`, from
     `src/levels/11_joba/L11_00432628.c` (`func_L11_00437E68`, author commit `6b943916`, Louis-Philippe Le Sieur),
-    task #2553. ADAPTED: our name at the v2.00 place; `sda` as `section(".sdata")` (RULING #8620); the record base renamed to the v2.00 target, address-named (RULING #13291 §2); one callee as L11's copy; `common.h` dropped.
+    task #2553. ADAPTED: our name at the v2.00 place; `sda` as `section(".sdata")` (RULING #8620); the record base renamed to the level's boot-name map name at the v2.00 target, `g_mobyTableBase` (was the address-named `D_L11_001B361C`, task #2646); one callee as L11's copy; `common.h` dropped.
   - **`func_L11_0043B430`** (`0x0043B430`, level program 11) in
     `going-decompiled/levels/usa/L11/src/func_L11_0043B430.c`, from
     `src/levels/11_joba/L11_00432628.c` (`func_L11_00439BF0`, author commit `431ac503`, llesieur99),
-    task #2553. ADAPTED: our name at the v2.00 place; `sda` as `section(".sdata")` (RULING #8620); the boot's `g_listenerPosHistory`; the record base renamed to the v2.00 target, address-named (RULING #13291 §2); three callees as L11's copies; `common.h` dropped.
+    task #2553. ADAPTED: our name at the v2.00 place; `sda` as `section(".sdata")` (RULING #8620); the boot's `g_listenerPosHistory`; the record base renamed to the level's boot-name map name at the v2.00 target, `g_mobyTableBase` (was the address-named `D_L11_001B361C`, task #2646); three callees as L11's copies; `common.h` dropped.
   - **`func_L11_00442A18`** (`0x00442A18`, level program 11) in
     `going-decompiled/levels/usa/L11/src/func_L11_00442A18.c`, from
     `src/levels/11_joba/L11_0043E1A0.c` (`func_L11_004411C8`, author commit `f6353318`, DrLegitamate),
-    task #2553. ADAPTED: our name at the v2.00 place; `sda` as `section(".sdata")` (RULING #8620); their asm-label view `D_L11_001B359C_base` written as the one direct declaration `D_L11_001B361C` (no asm label); two data names renamed to the v2.00 targets, address-named (RULING #13291 §2); nine handlers renamed to their v2.00 places; `common.h` dropped.
+    task #2553. ADAPTED: our name at the v2.00 place; `sda` as `section(".sdata")` (RULING #8620); their asm-label view `D_L11_001B359C_base` written as the one direct declaration `g_mobyTableBase` (was `D_L11_001B361C`, task #2646) (no asm label); two data names renamed to the level's boot-name map names at the v2.00 targets, `g_mobyTableBase`/`g_mobyGroupLists` (were the address-named `D_L11_001B361C`/`D_L11_001FC4A0`, task #2646); nine handlers renamed to their v2.00 places; `common.h` dropped.
   - **`func_L11_00443038`** (`0x00443038`, level program 11) in
     `going-decompiled/levels/usa/L11/src/func_L11_00443038.c`, from
     `src/levels/11_joba/L11_0043E1A0.c` (`func_L11_004417E8`, author commit `264cb2be`, llesieur99),
@@ -1469,7 +1469,7 @@
   - **`func_L02_003FD5C0`** (`0x003FD5C0`, level program 02) in
     `going-decompiled/levels/usa/L02/src/func_L02_003FD5C0.c`, from
     `src/levels/02_maktar_nebula/L02_003F5430.c` (`func_L02_003FC020`, author commit `773eafc2`, llesieur99),
-    task #2559. VERBATIM but for names: our name at the v2.00 place; one callee at its v2.00 place; `D_L02_001BA3C0` kept, address-named (RULING #13291 §2).
+    task #2559. VERBATIM but for names: our name at the v2.00 place; one callee at its v2.00 place; `g_cameraState` (was `D_L02_001BA3C0`, task #2646), the level's boot-name map name there.
   - **`func_L02_003FD658`** (`0x003FD658`, level program 02) in
     `going-decompiled/levels/usa/L02/src/func_L02_003FD658.c`, from
     `src/levels/02_maktar_nebula/L02_003F5430.c` (`func_L02_003FC0B8`, author commit `adcbd51e`, llesieur99),
@@ -1506,7 +1506,7 @@
     (`func_L11_00440160`, v1.01 address, author commit `264cb2be`, llesieur99). VERBATIM but for names: our name, `D_L11_004465F8` as our label `func_L11_00448020` (type kept), three boot-copy callees by their L11 places, `include_asm.h`/`common.h` dropped, typedefs written in the TU. Task #2555.
   - **`func_L11_004420B8`** (level program 11, Joba, at `0x004420B8`) in
     `going-decompiled/levels/usa/L11/src/func_L11_004420B8.c`, from `src/levels/11_joba/L11_0043E1A0.c`
-    (`func_L11_00440868`, v1.01 address, author commit `96f56db3`, bigbeno37). VERBATIM but for names: our name, `D_L11_001FC420`/`D_L11_001B359C` as the address-named `D_L11_001FC4A0`/`D_L11_001B361C` (upstream's own `section(".sdata")` kept), two level callees by their v2.00 places, `include_asm.h`/`common.h` dropped, typedefs written in the TU. Task #2555.
+    (`func_L11_00440868`, v1.01 address, author commit `96f56db3`, bigbeno37). VERBATIM but for names: our name, `D_L11_001FC420`/`D_L11_001B359C` as `g_mobyGroupLists` (was `D_L11_001FC4A0`, task #2646)/`g_mobyTableBase` (was `D_L11_001B361C`, task #2646) (upstream's own `section(".sdata")` kept), two level callees by their v2.00 places, `include_asm.h`/`common.h` dropped, typedefs written in the TU. Task #2555.
   - **`func_L11_004424D0`** (level program 11, Joba, at `0x004424D0`) in
     `going-decompiled/levels/usa/L11/src/func_L11_004424D0.c`, from `src/levels/11_joba/L11_0043E1A0.c`
     (`func_L11_00440C80`, v1.01 address, author commit `431ac503`, llesieur99). VERBATIM but for names: our name, `include_asm.h`/`common.h` dropped, typedefs written in the TU. Task #2555.
@@ -1518,7 +1518,7 @@
     (`func_L11_00441090`, v1.01 address, author commit `ee3fee45`, llesieur99). VERBATIM but for names: our name, two callees by their L11 places, `include_asm.h`/`common.h` dropped, typedefs written in the TU. Task #2555.
   - **`func_L11_00442FF8`** (level program 11, Joba, at `0x00442FF8`) in
     `going-decompiled/levels/usa/L11/src/func_L11_00442FF8.c`, from `src/levels/11_joba/L11_0043E1A0.c`
-    (`func_L11_004417A8`, v1.01 address, author commit `264cb2be`, llesieur99). VERBATIM but for names: our name, `D_L11_001BA780` as the address-named `D_L11_001BA800`, `include_asm.h`/`common.h` dropped, typedefs written in the TU. Task #2555.
+    (`func_L11_004417A8`, v1.01 address, author commit `264cb2be`, llesieur99). VERBATIM but for names: our name, `D_L11_001BA780` as `g_cameraState` (was `D_L11_001BA800`, task #2646), `include_asm.h`/`common.h` dropped, typedefs written in the TU. Task #2555.
   - **`func_L11_00443058`** (level program 11, Joba, at `0x00443058`) in
     `going-decompiled/levels/usa/L11/src/func_L11_00443058.c`, from `src/levels/11_joba/L11_0043E1A0.c`
     (`func_L11_00441808`, v1.01 address, author commit `7fccf735`, Flavius; upstream's root commit, which squashed the earlier RAC2 history). VERBATIM but for names: our name, `D_L11_001FF580` as the address-named `D_L11_001FF600`, `func_002A8AF0` as `func_L11_0032F328`, `include_asm.h`/`common.h` dropped, typedefs written in the TU. Task #2555.
@@ -1539,16 +1539,16 @@
     (`func_L11_004461C0`, v1.01 address, author commit `6b943916`, Louis-Philippe Le Sieur). VERBATIM but for names: our name, `func_L00_003206B8` as L11's own copy `func_L11_00333F00`, `include_asm.h`/`common.h` dropped, typedef written in the TU. Task #2555.
   - **`func_L11_00441A88`** (level program 11, Joba, at `0x00441A88`) in
     `going-decompiled/levels/usa/L11/src/func_L11_00441A88.c`, from `src/levels/11_joba/L11_00440238-g8.c`
-    (`func_L11_00440238`, v1.01 address, author commit `68795b5b`, Gianni). VERBATIM but for names: our name, `D_L11_001B359C`/`D_L11_001FC420` as the address-named `D_L11_001B361C`/`D_L11_001FC4A0`, `D_00189E20` as the boot's `g_soundBankHandlesBlk` (upstream's `sda`/`nosda` text kept, ignored by cc1), `include_asm.h` dropped. Task #2555.
+    (`func_L11_00440238`, v1.01 address, author commit `68795b5b`, Gianni). VERBATIM but for names: our name, `D_L11_001B359C`/`D_L11_001FC420` as `g_mobyTableBase` (was `D_L11_001B361C`, task #2646)/`g_mobyGroupLists` (was `D_L11_001FC4A0`, task #2646), `D_00189E20` as the boot's `g_soundBankHandlesBlk` (upstream's `sda`/`nosda` text kept, ignored by cc1), `include_asm.h` dropped. Task #2555.
   - **`func_L11_00441FE0`** (level program 11, Joba, at `0x00441FE0`) in
     `going-decompiled/levels/usa/L11/src/func_L11_00441FE0.c`, from `src/levels/11_joba/L11_00440238-g8.c`
-    (`func_L11_00440790`, v1.01 address, author commit `68795b5b`, Gianni). VERBATIM but for names: our name, the two address-named bank externs as above, two level callees by their v2.00 places (one is our C `func_L11_004424E0`), `include_asm.h` dropped. Task #2555.
+    (`func_L11_00440790`, v1.01 address, author commit `68795b5b`, Gianni). VERBATIM but for names: our name, the two bank externs as above, two level callees by their v2.00 places (one is our C `func_L11_004424E0`), `include_asm.h` dropped. Task #2555.
   - **`func_L11_00447A48`** (level program 11, Joba, at `0x00447A48`) in
     `going-decompiled/levels/usa/L11/src/func_L11_00447A48.c`, from `src/levels/11_joba/L11_00446020-g8.c`
     (`func_L11_00446020`, v1.01 address, author commit `3cd8af2d`, bigbeno37). VERBATIM but for names: our name, `D_00189E20` as `g_soundBankHandlesBlk`, `D_L11_001B1870` as our label `D_L11_001B18C8`, two callees by their v2.00 places (one is our C `func_L11_00447750`), `common.h` dropped. Task #2555.
   - **`func_L11_0044A750`** (level program 11, Joba, at `0x0044A750`) in
     `going-decompiled/levels/usa/L11/src/func_L11_0044A750.c`, from `src/levels/11_joba/L11_004465F8-g8.c`
-    (`func_L11_00448D28`, v1.01 address, author commit `352d5dad`, Louis-Philippe Le Sieur). VERBATIM but for names: our name, the two address-named bank externs `D_L11_001FC4A0`/`D_L11_001B361C`, `common.h` dropped, typedefs written in the TU. Task #2555.
+    (`func_L11_00448D28`, v1.01 address, author commit `352d5dad`, Louis-Philippe Le Sieur). VERBATIM but for names: our name, the two bank externs `g_mobyGroupLists` (was `D_L11_001FC4A0`, task #2646)/`g_mobyTableBase` (was `D_L11_001B361C`, task #2646), `common.h` dropped, typedefs written in the TU. Task #2555.
   - **`func_L11_0044A270`** (level program 11, Joba, at `0x0044A270`) in
     `going-decompiled/levels/usa/L11/src/func_L11_0044A270.c`, from `src/levels/11_joba/L11_004465F8.c`
     (`func_L11_00448848`, v1.01 address, author commit `fa8d6672`, llesieur99). ADAPTED: our name, four boot-copy callees by their L11 places, the `(long)` pointer cast written `(s64)` with `typedef long s64` (RULING #13197; the same type), `common.h`/`include_asm.h` dropped, typedefs written in the TU. Task #2555.
@@ -1666,7 +1666,7 @@
   - **`func_L14_0040B080`** (`0x0040B080`, level program 14) in
     `going-decompiled/levels/usa/L14/src/func_L14_0040B080.c`, from
     `src/levels/14_aranos_prison/L14_003F4F98-g8.c` (`func_L14_00409B20`, author commit `daf0e4a1`, Flavius),
-    task #2581. VERBATIM but for names: our name at the v2.00 place; eight callees as L14's copies; `D_L14_001B259C` as the v2.00 relocation target `D_L14_001B251C`, address-named (RULING #13291 §2); `sda` kept as written; a repeated declaration carried once; the file's include, other functions and their externs not carried; asm_unit route, s136 -G8.
+    task #2581. VERBATIM but for names: our name at the v2.00 place; eight callees as L14's copies; `D_L14_001B259C` as the v2.00 relocation target `g_mobyTableBase` (was `D_L14_001B251C`, task #2646), the level's boot-name map name there; `sda` kept as written; a repeated declaration carried once; the file's include, other functions and their externs not carried; asm_unit route, s136 -G8.
   - **`func_L14_00414DA8`** (`0x00414DA8`, level program 14) in
     `going-decompiled/levels/usa/L14/src/func_L14_00414DA8.c`, from
     `src/levels/14_aranos_prison/L14_003F4F98.c` (`func_L14_004137F8`, author commit `7fccf735`, Flavius),
@@ -1674,11 +1674,11 @@
   - **`func_L14_00415288`** (`0x00415288`, level program 14) in
     `going-decompiled/levels/usa/L14/src/func_L14_00415288.c`, from
     `src/levels/14_aranos_prison/L14_003F4F98.c` (`func_L14_00413CD8`, author commit `7fccf735`, Flavius; upstream's root commit, which squashed the earlier RAC2 history),
-    task #2563. VERBATIM but for names: our name at the v2.00 place; four callees as L14's copies; `D_L14_001BF980` as the v2.00 relocation target `D_L14_001BF900`, address-named (RULING #13291 §2); the audit's `long long`->`long` respelling touches no line carried.
+    task #2563. VERBATIM but for names: our name at the v2.00 place; four callees as L14's copies; `D_L14_001BF980` as the v2.00 relocation target `g_collHitNormal` (was `D_L14_001BF900`, task #2646), the level's boot-name map name there; the audit's `long long`->`long` respelling touches no line carried.
   - **`func_L14_004220D0`** (`0x004220D0`, level program 14) in
     `going-decompiled/levels/usa/L14/src/func_L14_004220D0.c`, from
     `src/levels/14_aranos_prison/L14_003F4F98.c` (`func_L14_00420B10`, author commit `4912fc03`, bigbeno37),
-    task #2563. ADAPTED: our name at the v2.00 place; two callees as L14's copies; `D_L14_001B259C` as the v2.00 relocation target `D_L14_001B251C`, address-named (RULING #13291 §2), its `sda` attribute written `section(".sdata")` (RULING #8620); the audit's `long long`->`long` respelling touches no line carried.
+    task #2563. ADAPTED: our name at the v2.00 place; two callees as L14's copies; `D_L14_001B259C` as the v2.00 relocation target `g_mobyTableBase` (was `D_L14_001B251C`, task #2646), the level's boot-name map name there, its `sda` attribute written `section(".sdata")` (RULING #8620); the audit's `long long`->`long` respelling touches no line carried.
   - **`func_L14_00424560`** (`0x00424560`, level program 14) in
     `going-decompiled/levels/usa/L14/src/func_L14_00424560.c`, from
     `src/levels/14_aranos_prison/L14_003F4F98.c` (`func_L14_00422FA0`, author commit `91e04732`, llesieur99),
@@ -1706,7 +1706,7 @@
   - **`func_L14_00429CD8`** (`0x00429CD8`, level program 14) in
     `going-decompiled/levels/usa/L14/src/func_L14_00429CD8.c`, from
     `src/levels/14_aranos_prison/L14_003F4F98.c` (`func_L14_004286F8`, author commit `4541c4ce`, ReaperOfVeriod),
-    task #2581. ADAPTED: built at -G8 where upstream builds the file at -G0 (at -G0 .text is 0x84, not 0x7C) and with the row's cc1flags `-fno-gcse` (without it 0x80); our name at the v2.00 place; `D_L14_001B259C_1` and `D_L14_001FB060` as the v2.00 relocation targets `D_L14_001B251C` and `D_L14_001FAFE0`, address-named (RULING #13291 §2); `sda` kept as written; the file's include, other functions and their externs not carried; sdk29, plain as.
+    task #2581. ADAPTED: built at -G8 where upstream builds the file at -G0 (at -G0 .text is 0x84, not 0x7C) and with the row's cc1flags `-fno-gcse` (without it 0x80); our name at the v2.00 place; `D_L14_001B259C_1` and `D_L14_001FB060` as the v2.00 relocation targets `g_mobyTableBase` (was `D_L14_001B251C`, task #2646) and `g_mobyGroupLists` (was `D_L14_001FAFE0`, task #2646), the level's boot-name map name there; `sda` kept as written; the file's include, other functions and their externs not carried; sdk29, plain as.
   - **`func_L14_0042E5F8`** (`0x0042E5F8`, level program 14) in
     `going-decompiled/levels/usa/L14/src/func_L14_0042E5F8.c`, from
     `src/levels/14_aranos_prison/L14_003F4F98.c` (`func_L14_0042D018`, author commit `431ac503`, llesieur99),
@@ -1714,7 +1714,7 @@
   - **`func_L14_004310F0`** (`0x004310F0`, level program 14) in
     `going-decompiled/levels/usa/L14/src/func_L14_004310F0.c`, from
     `src/levels/14_aranos_prison/L14_0042FB10-effect-g8.c` (`func_L14_0042FB10`, author commit `4912fc03`, bigbeno37),
-    task #2581. ADAPTED: its two `sda` attributes written `section(".sdata")` (RULING #8620; with `sda`, 12 bytes differ); `NOT_SDA` written out as its `section(".data")` expansion; our name at the v2.00 place; ten callees as L14's copies; the boot's `g_listenerPosHistory` and `g_soundBankHandlesBlk`; `D_001395E3` respelled `D_1395E3`, the boot's existing dlabel at that address (task #2621), address-named; `D_L14_001B259C` / `D_L14_001B259C_1` as `D_L14_001B251C` / `D_001B251C`, two address-named spellings of the one v2.00 target (RULING #13291 §2; C cannot give one name the two types upstream declares); the file's include not carried; asm_unit route, s136 -G8.
+    task #2581. ADAPTED: its two `sda` attributes written `section(".sdata")` (RULING #8620; with `sda`, 12 bytes differ); `NOT_SDA` written out as its `section(".data")` expansion; our name at the v2.00 place; ten callees as L14's copies; the boot's `g_listenerPosHistory` and `g_soundBankHandlesBlk`; `D_001395E3` respelled `D_1395E3`, the boot's existing dlabel at that address (task #2621), address-named; `D_L14_001B259C` / `D_L14_001B259C_1` as `g_mobyTableBase` (was `D_L14_001B251C`, task #2646) / `D_001B251C`, the one v2.00 target (`g_mobyTableBase` in the level's boot-name map) declared under two symbols because retail reads it once $gp-relative and once absolute, and the assembler picks the mode per symbol (the second is an allowlisted A2 second name, task #2646); the file's include not carried; asm_unit route, s136 -G8.
   - **`func_L14_00431E78`** (`0x00431E78`, level program 14) in
     `going-decompiled/levels/usa/L14/src/func_L14_00431E78.c`, from
     `src/levels/14_aranos_prison/L14_003F4F98.c` (`func_L14_00430898`, author commit `91e04732`, llesieur99),
@@ -1731,21 +1731,21 @@
     `going-decompiled/levels/usa/L14/src/func_L14_004337B0.c`, from
     `src/levels/14_aranos_prison/L14_003F4F98.c` (`func_L14_004321D0`, author commit `312b7eea`, Louis-Philippe Le Sieur),
     task #2563. VERBATIM but for names: our name at the v2.00 place; the boot's `g_listenerPosHistory`; eight callees as L14's copies / v2.00 places, one of them through upstream's asm label; the audit's `long long`->`long` respelling touches no line carried.
-  - **`func_L02_002EE5A0`** (level program 02, Maktar Nebula: shifts the records of two tables by one period toward the side of a limit) from `src/levels/02_maktar_nebula/L02_002ED7B0.c` (`func_L02_002ED7B0`, v1.01 address, author commit `6e138d9a`, bigmak94). ADAPTED: `sda` -> `section(".sdata")` on four extern declarations (RULING #8620); the four address-named externs keep their upstream names (RULING #13291 §2); includes and unused declarations dropped. Task #2557.
+  - **`func_L02_002EE5A0`** (level program 02, Maktar Nebula: shifts the records of two tables by one period toward the side of a limit) from `src/levels/02_maktar_nebula/L02_002ED7B0.c` (`func_L02_002ED7B0`, v1.01 address, author commit `6e138d9a`, bigmak94). ADAPTED: `sda` -> `section(".sdata")` on four extern declarations (RULING #8620); `D_L02_001B3C14`/`D_L02_001B3C18` respelled to the level's boot-name map names `g_vramSlotTableStart`/`g_vramSlotTableEnd` (task #2646); the other two address-named externs keep their upstream names (RULING #13291 §2); includes and unused declarations dropped. Task #2557.
   - **`func_L02_0035CF30`** (level program 02, Maktar Nebula: builds the level-ordered menu rows and selects the current owner's entry; level 24's func_L24_0034D598 is the same function) from `src/levels/02_maktar_nebula/L02_0035BD60-init-g8.c` (`func_L02_0035BD60`, v1.01 address, author commit `a96d3126`, Louis-Philippe Le Sieur; a rename-copy of bigbeno37's `func_L00_00354DF8` in `src/levels/00_aranos_tutorial/L00_002FC7A8-g8.c` (author commit `6001495a`), token-identical but for symbol names and the struct field `callback` -> `payload`, RULING #13427 rev 4, task #2645; two of its lines, `D_L02_0021E630[i].kind = 3;` and `D_L02_0021E630[i].id = 0;`, were first written by bigmak94 in the since-deleted draft `nonmatching/levels/func_L02_0035BD60.c` (author commit `96f1ea70`, 2026-10-20, before `6001495a`), RULING #13541, validator #2650). VERBATIM but for names: the boot's `g_anAvailableLevelOrder`; three level symbols to our split labels and `D_L02_0021E630` to the address-named `D_L02_0021E660`; `volatile` and `sda` kept; includes and unused declarations dropped. Task #2557.
   - **`func_L02_003CC348`** (level program 02, Maktar Nebula: runs an actor's move query and passes its result on) from `src/levels/02_maktar_nebula/L02_002ED7B0.c` (`func_L02_003CADF0`, v1.01 address, author commit `91e04732`, llesieur99). VERBATIM but for names: two callees to our split names; includes and unused declarations dropped. Task #2557.
-  - **`func_L02_003CEB08`** (level program 02, Maktar Nebula: finds the first entity of a group whose state byte is 0x17) from `src/levels/02_maktar_nebula/L02_002ED7B0.c` (`func_L02_003CD5B0`, v1.01 address, author commit `ac1ee013`, bigmak94). ADAPTED: `sda` -> `section(".sdata")` on two extern declarations (RULING #8620); three address-named externs keep their upstream names; includes and unused declarations dropped. Task #2557.
+  - **`func_L02_003CEB08`** (level program 02, Maktar Nebula: finds the first entity of a group whose state byte is 0x17) from `src/levels/02_maktar_nebula/L02_002ED7B0.c` (`func_L02_003CD5B0`, v1.01 address, author commit `ac1ee013`, bigmak94). ADAPTED: `sda` -> `section(".sdata")` on two extern declarations (RULING #8620); three externs respelled from upstream's address-named `D_L02_001FC060`/`D_L02_001B359C`/`D_L02_001B35B8` to the level's boot-name map names `g_mobyGroupLists`/`g_mobyTableBase`/`g_mobyGroupCount` (task #2646); includes and unused declarations dropped. Task #2557.
   - **`func_L02_003D2988`** (level program 02, Maktar Nebula: updates an actor and the sub-object its state holds) from `src/levels/02_maktar_nebula/L02_002ED7B0.c` (`func_L02_003D1430`, v1.01 address, author commit `91e04732`, llesieur99). VERBATIM but for names: four callees to our split names; includes and unused declarations dropped. Task #2557.
   - **`func_L02_003D2A50`** (level program 02, Maktar Nebula: picks an actor's mode by whether its state holds a sub-object) from `src/levels/02_maktar_nebula/L02_002ED7B0.c` (`func_L02_003D14F8`, v1.01 address, author commit `91e04732`, llesieur99). VERBATIM but for names: two callees to our split names; includes and unused declarations dropped. Task #2557.
   - **`func_L02_003D2DD8`** (level program 02, Maktar Nebula: predicate: is the actor in an engaged state while holding a sub-object) from `src/levels/02_maktar_nebula/L02_002ED7B0.c` (`func_L02_003D1880`, v1.01 address, author commit `91e04732, last changed 863719df`, llesieur99; Louis-Philippe Le Sieur). VERBATIM but for names: none besides the function name (no relocations); includes and unused declarations dropped. Task #2557.
-  - **`func_L02_003D2E30`** (level program 02, Maktar Nebula: answers whether the object's group holds an armed 0x9CA entity) from `src/levels/02_maktar_nebula/L02_002ED7B0-g8.c` (`func_L02_003D18D8`, v1.01 address, author commit `ac1ee013`, bigmak94). VERBATIM but for names: two address-named externs keep their upstream names; includes and unused declarations dropped. Task #2557.
+  - **`func_L02_003D2E30`** (level program 02, Maktar Nebula: answers whether the object's group holds an armed 0x9CA entity) from `src/levels/02_maktar_nebula/L02_002ED7B0-g8.c` (`func_L02_003D18D8`, v1.01 address, author commit `ac1ee013`, bigmak94). VERBATIM but for names: both externs respelled from upstream's address-named `D_L02_001B359C`/`D_L02_001FC060` to the level's boot-name map names `g_mobyTableBase`/`g_mobyGroupLists` (task #2646); includes and unused declarations dropped. Task #2557.
   - **`func_L02_003D37A0`** (level program 02, Maktar Nebula: brings an actor into its armed state and re-registers its sub-object) from `src/levels/02_maktar_nebula/L02_002ED7B0.c` (`func_L02_003D2248`, v1.01 address, author commit `431ac503`, llesieur99). VERBATIM but for names: six callees to our split names; includes and unused declarations dropped. Task #2557.
-  - **`func_L02_003DC2F0`** (level program 02, Maktar Nebula: runs six set-up steps on the entity the actor's state names) from `src/levels/02_maktar_nebula/L02_003D26B0.c` (`func_L02_003DAD88`, v1.01 address, author commit `431ac503`, llesieur99). ADAPTED: four callees to our split names; `sda` -> `section(".sdata")` on the `D_L02_001B359C` extern declaration (RULING #8620), which keeps its address name; includes and unused declarations dropped. Task #2557.
-  - **`func_L02_003DCC40`** (level program 02, Maktar Nebula: switches an actor off) from `src/levels/02_maktar_nebula/L02_003DB310.c` (`func_L02_003DB6D8`, v1.01 address, author commit `0a1d634f`, bigmak94). ADAPTED: the boot's `g_listenerPosHistory` for `D_00188660`; six callees to our split names; `sda` -> `section(".sdata")` on the `D_L02_001B359C` extern declaration (RULING #8620), which keeps its address name; the trailing `#undef` dropped; includes and unused declarations dropped. Task #2557.
+  - **`func_L02_003DC2F0`** (level program 02, Maktar Nebula: runs six set-up steps on the entity the actor's state names) from `src/levels/02_maktar_nebula/L02_003D26B0.c` (`func_L02_003DAD88`, v1.01 address, author commit `431ac503`, llesieur99). ADAPTED: four callees to our split names; `sda` -> `section(".sdata")` on the `g_mobyTableBase` (was `D_L02_001B359C`, task #2646) extern declaration (RULING #8620), which keeps its address name; includes and unused declarations dropped. Task #2557.
+  - **`func_L02_003DCC40`** (level program 02, Maktar Nebula: switches an actor off) from `src/levels/02_maktar_nebula/L02_003DB310.c` (`func_L02_003DB6D8`, v1.01 address, author commit `0a1d634f`, bigmak94). ADAPTED: the boot's `g_listenerPosHistory` for `D_00188660`; six callees to our split names; `sda` -> `section(".sdata")` on the `g_mobyTableBase` (was `D_L02_001B359C`, task #2646) extern declaration (RULING #8620), which keeps its address name; the trailing `#undef` dropped; includes and unused declarations dropped. Task #2557.
   - **`func_L02_003F69A0`** (level program 02, Maktar Nebula: rebuilds an actor's bit mask of answering records) from `src/levels/02_maktar_nebula/L02_003F5430.c` (`func_L02_003F5430`, v1.01 address, author commit `adcbd51e`, llesieur99). ADAPTED: one callee to our split name; `sda` -> `section(".sdata")` on the `D_L02_001B3AF8` extern declaration (RULING #8620), which keeps its address name; includes and unused declarations dropped. Task #2557.
-  - **`func_L02_003FCA78`** (level program 02, Maktar Nebula: claims the first idle entity of a kind in the actor's group) from `src/levels/02_maktar_nebula/L02_003F5430.c` (`func_L02_003FB4D8`, v1.01 address, author commit `9e5c365f`, bigmak94). ADAPTED: one callee to our split name; built at -G8 where upstream's file is -G0 (an `L02_c.tsv` gflag); two address-named externs keep their upstream names; `sda` kept (our cc1 ignores it); includes and unused declarations dropped. Task #2557.
-  - **`func_L02_003FCB40`** (level program 02, Maktar Nebula: claims and starts the first idle entity of a kind in the actor's group) from `src/levels/02_maktar_nebula/L02_003F5430.c` (`func_L02_003FB5A0`, v1.01 address, author commit `7a7816b9`, bigmak94). ADAPTED: two callees to our split names; `sda` -> `section(".sdata")` on the `D_L02_001B359C` extern declaration (RULING #8620); two address-named externs keep their upstream names; includes and unused declarations dropped. Task #2557.
-  - **`func_L02_003FD130`** (level program 02, Maktar Nebula: runs the per-kind handler of every entity in the actor's group) from `src/levels/02_maktar_nebula/L02_003F5430.c` (`func_L02_003FBB90`, v1.01 address, author commit `455cde53`, Flavius). ADAPTED: six callees to our split names; `sda` -> `section(".sdata")` on the `D_L02_001B359C` extern declaration (RULING #8620); two address-named externs keep their upstream names; includes and unused declarations dropped. Task #2557.
+  - **`func_L02_003FCA78`** (level program 02, Maktar Nebula: claims the first idle entity of a kind in the actor's group) from `src/levels/02_maktar_nebula/L02_003F5430.c` (`func_L02_003FB4D8`, v1.01 address, author commit `9e5c365f`, bigmak94). ADAPTED: one callee to our split name; built at -G8 where upstream's file is -G0 (an `L02_c.tsv` gflag); both externs respelled from upstream's address-named `D_L02_001B359C`/`D_L02_001FC060` to the level's boot-name map names `g_mobyTableBase`/`g_mobyGroupLists` (task #2646); `sda` kept (our cc1 ignores it); includes and unused declarations dropped. Task #2557.
+  - **`func_L02_003FCB40`** (level program 02, Maktar Nebula: claims and starts the first idle entity of a kind in the actor's group) from `src/levels/02_maktar_nebula/L02_003F5430.c` (`func_L02_003FB5A0`, v1.01 address, author commit `7a7816b9`, bigmak94). ADAPTED: two callees to our split names; `sda` -> `section(".sdata")` on the `g_mobyTableBase` (was `D_L02_001B359C`, task #2646) extern declaration (RULING #8620); both externs respelled from upstream's address-named `D_L02_001B359C`/`D_L02_001FC060` to the level's boot-name map names `g_mobyTableBase`/`g_mobyGroupLists` (task #2646); includes and unused declarations dropped. Task #2557.
+  - **`func_L02_003FD130`** (level program 02, Maktar Nebula: runs the per-kind handler of every entity in the actor's group) from `src/levels/02_maktar_nebula/L02_003F5430.c` (`func_L02_003FBB90`, v1.01 address, author commit `455cde53`, Flavius). ADAPTED: six callees to our split names; `sda` -> `section(".sdata")` on the `g_mobyTableBase` (was `D_L02_001B359C`, task #2646) extern declaration (RULING #8620); both externs respelled from upstream's address-named `D_L02_001B359C`/`D_L02_001FC060` to the level's boot-name map names `g_mobyTableBase`/`g_mobyGroupLists` (task #2646); includes and unused declarations dropped. Task #2557.
   - **`func_L02_003FD638`** (level program 02, Maktar Nebula: returns the address of the vector in the actor's 128-byte record) from `src/levels/02_maktar_nebula/L02_003F5430.c` (`func_L02_003FC098`, v1.01 address, author commit `adcbd51e`, llesieur99). ADAPTED: `sda` -> `section(".sdata")` on the `D_L02_001B368C` extern declaration (RULING #8620), which keeps its address name; includes and unused declarations dropped. Task #2557.
   - **`func_L02_003FE020`** (level program 02, Maktar Nebula: starts the actor) from `src/levels/02_maktar_nebula/L02_003F5430.c` (`func_L02_003FCA80`, v1.01 address, author commit `24d977dd`, bigmak94). ADAPTED: the boot's `g_heroPos` for `D_00189EA0`; thirteen callees to our split names; `sda` -> `section(".sdata")` on three extern declarations (RULING #8620); the address-named externs keep their upstream names, except `D_001395B8`, respelled `D_1395B8` (the boot's and the L02 split asm's existing name for that address, task #2601); includes and unused declarations dropped. Task #2557.
   - **`func_L02_00402258`** (level program 02, Maktar Nebula: runs the per-kind handler of every object in a list) from `src/levels/02_maktar_nebula/L02_003F5430.c` (`func_L02_00400B10`, v1.01 address, author commit `6eae4d38`, bigmak94). ADAPTED: nine callees to our split names; `sda` -> `section(".sdata")` on the `D_L02_001B35A8` extern declaration (RULING #8620), which keeps its address name; includes and unused declarations dropped. Task #2557.
@@ -2363,7 +2363,7 @@
     `going-decompiled/levels/usa/L23/src/func_L23_004275F0.c`, from
     `src/levels/23_damosel_orbit/L23_0041E418.c`
     (`func_L23_004260F0`, author commit `ac1d508f`, bigmak94), task
-    #2568. VERBATIM but for names: our name, 1 data name and 8 callees renamed to the v2.00 disc's own targets, `D_L23_001BA5C0` address-named inside a larger label (RULING #13291 §2).
+    #2568. VERBATIM but for names: our name, 1 data name and 8 callees renamed to the v2.00 disc's own targets, `g_cameraPos` (was `D_L23_001BA5C0`, task #2646), the level's boot-name map name there.
   - **`func_L23_00428CB8`** (`0x00428CB8`, level program 23) in
     `going-decompiled/levels/usa/L23/src/func_L23_00428CB8.c`, from
     `src/levels/23_damosel_orbit/L23_0041E418.c`
@@ -2451,8 +2451,7 @@
     `src/levels/02_maktar_nebula/L02_0040A4A8.c` (`func_L02_0040B0F8`, v1.01
     address, author commit `11c21414`, bigmak94), task #2579. ADAPTED: our
     name at the v2.00 place; one callee to its v2.00 split name and fourteen
-    to L02's copies of boot code; `D_L02_001BA500` kept as an address-named
-    extern (RULING #13291 section 2); built at -G8 against upstream's -G0;
+    to L02's copies of boot code; `g_cameraPos` (was `D_L02_001BA500`, task #2646), the level's boot-name map name there; built at -G8 against upstream's -G0;
     `common.h` and unused declarations dropped; assembled through
     `tools/ee/asm_unit.sh`.
   - **`func_L02_00446A48`** (`0x00446A48`, level program 02, Maktar Nebula:
@@ -2492,8 +2491,7 @@
     `src/levels/02_maktar_nebula/L02_003D4308-g8.c` (`func_L02_003D4308`,
     v1.01 address, author commit `13442ffb`, bigbeno37), task #2579.
     BYTE-IDENTICAL, verbatim but for names: our name at the v2.00 place; one
-    level data name to our label; `D_L02_001FF6B8` and `D_L02_001BA500` kept
-    as address-named externs (RULING #13291 section 2); three callees to
+    level data name to our label; `D_L02_001FF6B8` kept as an address-named extern (RULING #13291 section 2); `g_cameraPos` (was `D_L02_001BA500`, task #2646), the level's boot-name map name there; three callees to
     their v2.00 split names and seven to L02's copies of boot code;
     upstream's inert `sda` kept; `common.h` dropped; assembled through
     `tools/ee/asm_unit.sh`.
@@ -2584,7 +2582,7 @@
     `going-decompiled/levels/usa/L11/src/func_L11_004335F0.c`, from
     `src/levels/11_joba/L11_00425F10-g8.c`
     (`func_L11_00431DB0`, author commit `ee3fee45`, llesieur99), task #2554.
-    Verbatim but for names: our name at the v2.00 place; both table symbols as address-named externs at their disc-implied targets, RULING #13291 §2.
+    Verbatim but for names: our name at the v2.00 place; both table symbols as the level's boot-name map names at their disc-implied targets, `g_mobyTableBase`/`g_mobyGroupLists` (were the address-named `D_L11_001B361C`/`D_L11_001FC4A0`, task #2646).
   - **`func_L11_00433670`** (`0x00433670`, level program 11) in
     `going-decompiled/levels/usa/L11/src/func_L11_00433670.c`, from
     `src/levels/11_joba/L11_00425F10.c`
@@ -2897,7 +2895,7 @@
   - **`func_L09_003FFED8`** (`0x003FFED8`, level program 9) in
     `going-decompiled/levels/usa/L09/src/func_L09_003FFED8.c`, from
     `src/levels/09_dobbo/L09_003FEA48-g8.c` (`func_L09_003FEA48`, author commit `09484b1f`, Louis-Philippe Le Sieur),
-    task #2562. VERBATIM but for names: our name at the v2.00 place; the boot's g_playerProgress; the record table as the address-named extern D_L09_001B27DC (D_001B2354+0x488, a base+off target: RULING #13291 section 2); three callees at their v2.00 places.
+    task #2562. VERBATIM but for names: our name at the v2.00 place; the boot's g_playerProgress; the record table as `g_mobyTableBase` (was `D_L09_001B27DC`, task #2646), the level's boot-name map name there; three callees at their v2.00 places.
   - **`func_L09_00404668`** (`0x00404668`, level program 9) in
     `going-decompiled/levels/usa/L09/src/func_L09_00404668.c`, from
     `src/levels/09_dobbo/L09_003FEA48-g8.c` (`func_L09_004031D8`, author commit `431ac503`, llesieur99),
@@ -2941,7 +2939,7 @@
   - **`func_L09_004096E0`** (`0x004096E0`, level program 9) in
     `going-decompiled/levels/usa/L09/src/func_L09_004096E0.c`, from
     `src/levels/09_dobbo/L09_003FEA48.c` (`func_L09_00408250`, author commit `264cb2be`, llesieur99),
-    task #2562. VERBATIM but for names: our name at the v2.00 place; the group id-list table as the address-named extern D_L09_001FB4E0 (g_pTextTableLoadBuf+0x8C08, a base+off target: RULING #13291 section 2); one callee at its v2.00 place.
+    task #2562. VERBATIM but for names: our name at the v2.00 place; the group id-list table as `g_mobyGroupLists` (was `D_L09_001FB4E0`, task #2646), the level's boot-name map name there; one callee at its v2.00 place.
   - **`func_L09_0040A6B8`** (`0x0040A6B8`, level program 9) in
     `going-decompiled/levels/usa/L09/src/func_L09_0040A6B8.c`, from
     `src/levels/09_dobbo/L09_003FEA48.c` (`func_L09_004091C8`, author commit `913f6380`, bigbeno37),
@@ -2949,7 +2947,7 @@
   - **`func_L09_0040C4F8`** (`0x0040C4F8`, level program 9) in
     `going-decompiled/levels/usa/L09/src/func_L09_0040C4F8.c`, from
     `src/levels/09_dobbo/L09_003FEA48.c` (`func_L09_0040B008`, author commit `431ac503`, llesieur99),
-    task #2562. VERBATIM but for names: our name at the v2.00 place; the scale datum as the address-named extern D_L09_001B9BB0 (g_uiTextureCache+0x4F0, a base+off target: RULING #13291 section 2); three callees as L09's copies.
+    task #2562. VERBATIM but for names: our name at the v2.00 place; the scale datum as `g_cameraMatrix` (was `D_L09_001B9BB0`, task #2646), the level's boot-name map name there; three callees as L09's copies.
   - **`func_L09_00423260`** (`0x00423260`, level program 9) in
     `going-decompiled/levels/usa/L09/src/func_L09_00423260.c`, from
     `src/levels/09_dobbo/L09_003FEA48.c` (`func_L09_00421D60`, author commit `27b929ce`, Lynder063),
@@ -2978,12 +2976,12 @@
     `going-decompiled/levels/usa/L08/src/func_L08_003CE178.c`, from
     `src/levels/08_tabora/L08_002D90C8-g8.c`
     (`func_L08_003CCD28`, author commit `886754b0`, Louis-Philippe Le Sieur), task #2627.
-    Verbatim but for names: our name at the v2.00 place; `D_L08_001B29DC` kept address-named inside the split label `D_L08_001B2200` (RULING #13291 §2), upstream's `sda` attribute kept verbatim, our stock cc1 ignores it, byte-inert; `common.h` dropped.
+    Verbatim but for names: our name at the v2.00 place; `g_mobyTableBase` (was `D_L08_001B29DC`, task #2646), the level's boot-name map name there, upstream's `sda` attribute kept verbatim, our stock cc1 ignores it, byte-inert; `common.h` dropped.
   - **`func_L08_003CE1A8`** (`0x003CE1A8`, level program 08) in
     `going-decompiled/levels/usa/L08/src/func_L08_003CE1A8.c`, from
     `src/levels/08_tabora/L08_002D90C8-g8.c`
     (`func_L08_003CCD58`, author commit `b31a91e7`, MantraAU), task #2627.
-    Verbatim but for names: our name at the v2.00 place; `D_L08_001B29DC` kept address-named inside `D_L08_001B2200` (RULING #13291 §2), upstream's `sda` attribute kept verbatim, byte-inert; `common.h` dropped.
+    Verbatim but for names: our name at the v2.00 place; `g_mobyTableBase` (was `D_L08_001B29DC`, task #2646), the level's boot-name map name there, upstream's `sda` attribute kept verbatim, byte-inert; `common.h` dropped.
   - **`func_L08_003D1440`** (`0x003D1440`, level program 08) in
     `going-decompiled/levels/usa/L08/src/func_L08_003D1440.c`, from
     `src/levels/08_tabora/L08_002D90C8.c`
@@ -3003,37 +3001,37 @@
     `going-decompiled/levels/usa/L08/src/func_L08_003D14F0.c`, from
     `src/levels/08_tabora/L08_002D90C8-g8.c`
     (`func_L08_003D0098`, author commit `886754b0`, Louis-Philippe Le Sieur), task #2627.
-    Verbatim but for names: our name at the v2.00 place; `D_L08_001B29DC` kept address-named inside `D_L08_001B2200` (RULING #13291 §2), upstream's `sda` attribute kept verbatim, byte-inert; `common.h` dropped.
+    Verbatim but for names: our name at the v2.00 place; `g_mobyTableBase` (was `D_L08_001B29DC`, task #2646), the level's boot-name map name there, upstream's `sda` attribute kept verbatim, byte-inert; `common.h` dropped.
   - **`func_L08_003D9D70`** (`0x003D9D70`, level program 08) in
     `going-decompiled/levels/usa/L08/src/func_L08_003D9D70.c`, from
     `src/levels/08_tabora/L08_003D8348-g8.c`
     (`func_L08_003D8918`, author commit `91e04732`, llesieur99), task #2627.
-    Verbatim but for names: our name at the v2.00 place; `D_L08_001B29DC` kept address-named inside `D_L08_001B2200` (RULING #13291 §2), upstream's `sda` attribute kept verbatim, byte-inert; `include_asm.h` dropped.
+    Verbatim but for names: our name at the v2.00 place; `g_mobyTableBase` (was `D_L08_001B29DC`, task #2646), the level's boot-name map name there, upstream's `sda` attribute kept verbatim, byte-inert; `include_asm.h` dropped.
   - **`func_L08_003D9DA0`** (`0x003D9DA0`, level program 08) in
     `going-decompiled/levels/usa/L08/src/func_L08_003D9DA0.c`, from
     `src/levels/08_tabora/L08_003D8348-g8.c`
     (`func_L08_003D8948`, author commit `91e04732`, llesieur99), task #2627.
-    Verbatim but for names: our name at the v2.00 place; `D_L08_001B29DC` kept address-named inside `D_L08_001B2200` (RULING #13291 §2), upstream's `sda` attribute kept verbatim, byte-inert; `include_asm.h` dropped.
+    Verbatim but for names: our name at the v2.00 place; `g_mobyTableBase` (was `D_L08_001B29DC`, task #2646), the level's boot-name map name there, upstream's `sda` attribute kept verbatim, byte-inert; `include_asm.h` dropped.
   - **`func_L08_003D9DE8`** (`0x003D9DE8`, level program 08) in
     `going-decompiled/levels/usa/L08/src/func_L08_003D9DE8.c`, from
     `src/levels/08_tabora/L08_003D8348-g8.c`
     (`func_L08_003D8990`, author commit `91e04732`, llesieur99), task #2627.
-    Verbatim but for names: our name at the v2.00 place; `D_L08_001B29DC` kept address-named inside `D_L08_001B2200` (RULING #13291 §2), upstream's `sda` attribute kept verbatim, byte-inert; `include_asm.h` dropped.
+    Verbatim but for names: our name at the v2.00 place; `g_mobyTableBase` (was `D_L08_001B29DC`, task #2646), the level's boot-name map name there, upstream's `sda` attribute kept verbatim, byte-inert; `include_asm.h` dropped.
   - **`func_L08_003D9E30`** (`0x003D9E30`, level program 08) in
     `going-decompiled/levels/usa/L08/src/func_L08_003D9E30.c`, from
     `src/levels/08_tabora/L08_003D8348-g8.c`
     (`func_L08_003D89D8`, author commit `91e04732`, llesieur99), task #2627.
-    Verbatim but for names: our name at the v2.00 place; `D_L08_001B29DC` kept address-named inside `D_L08_001B2200` (RULING #13291 §2), upstream's `sda` attribute kept verbatim, byte-inert; `include_asm.h` dropped.
+    Verbatim but for names: our name at the v2.00 place; `g_mobyTableBase` (was `D_L08_001B29DC`, task #2646), the level's boot-name map name there, upstream's `sda` attribute kept verbatim, byte-inert; `include_asm.h` dropped.
   - **`func_L08_00423FD0`** (`0x00423FD0`, level program 08) in
     `going-decompiled/levels/usa/L08/src/func_L08_00423FD0.c`, from
     `src/levels/08_tabora/L08_003D8348-g8.c`
     (`func_L08_004229C8`, author commit `91e04732`, llesieur99), task #2627.
-    Verbatim but for names: our name at the v2.00 place; `D_L08_001B29DC` kept address-named inside `D_L08_001B2200` (RULING #13291 §2), upstream's `sda` attribute kept verbatim, byte-inert; `include_asm.h` dropped.
+    Verbatim but for names: our name at the v2.00 place; `g_mobyTableBase` (was `D_L08_001B29DC`, task #2646), the level's boot-name map name there, upstream's `sda` attribute kept verbatim, byte-inert; `include_asm.h` dropped.
   - **`func_L08_00424000`** (`0x00424000`, level program 08) in
     `going-decompiled/levels/usa/L08/src/func_L08_00424000.c`, from
     `src/levels/08_tabora/L08_003D8348-g8.c`
     (`func_L08_004229F8`, author commit `91e04732`, llesieur99), task #2627.
-    Verbatim but for names: our name at the v2.00 place; `D_L08_001B29DC` kept address-named inside `D_L08_001B2200` (RULING #13291 §2), upstream's `sda` attribute kept verbatim, byte-inert; `include_asm.h` dropped.
+    Verbatim but for names: our name at the v2.00 place; `g_mobyTableBase` (was `D_L08_001B29DC`, task #2646), the level's boot-name map name there, upstream's `sda` attribute kept verbatim, byte-inert; `include_asm.h` dropped.
   - **`func_L01_003A79B0`** (`0x003A79B0`, level program 01) in
     `going-decompiled/levels/usa/L01/src/func_L01_003A79B0.c`, from
     `src/levels/01_oozla/L01_003835D8-g8.c` (`func_L01_003A65B0`, author commit `91e04732`, llesieur99),
@@ -3041,7 +3039,7 @@
   - **`func_L01_003B6698`** (`0x003B6698`, level program 01) in
     `going-decompiled/levels/usa/L01/src/func_L01_003B6698.c`, from
     `src/levels/01_oozla/L01_003835D8-g8.c` (`func_L01_003B5290`, author commit `91e04732`, llesieur99),
-    task #2626. VERBATIM but for names: our name at the v2.00 place; both tables kept address-named as D_L01_001B255C (D_001B2354+0x208) and D_L01_001FB020 (g_pTextTableLoadBuf+0x8748) (RULING #13291 section 2); the file's other declarations dropped.
+    task #2626. VERBATIM but for names: our name at the v2.00 place; both tables as `g_mobyTableBase` (was `D_L01_001B255C`, task #2646) and `g_mobyGroupLists` (was `D_L01_001FB020`, task #2646), the level's boot-name map names there; the file's other declarations dropped.
   - **`func_L01_003BC3B8`** (`0x003BC3B8`, level program 01) in
     `going-decompiled/levels/usa/L01/src/func_L01_003BC3B8.c`, from
     `src/levels/01_oozla/L01_003835D8-g8.c` (`func_L01_003BAFB0`, author commit `ee3fee45`, llesieur99),
@@ -3152,34 +3150,34 @@
     `going-decompiled/levels/usa/L09/src/func_L09_003FFE08.c`, from
     `src/levels/09_dobbo/L09_002F8BA0-g8.c`
     (`func_L09_003FE978`, author commit `132e23b5`, bigmak94), task #2561.
-    Adapted: our name at the v2.00 place, `D_L09_001B285C_1`/`D_L09_001B2878`/`D_L09_001FB560` as the address-named `D_L09_001B27DC`/`D_L09_001B27F8`/`D_L09_001FB4E0`, `sda` respelled `section(".sdata")` on both data externs (RULING #8620), `common.h` dropped.
+    Adapted: our name at the v2.00 place, `D_L09_001B285C_1`/`D_L09_001B2878`/`D_L09_001FB560` as `g_mobyTableBase` (was `D_L09_001B27DC`, task #2646)/`g_mobyGroupCount` (was `D_L09_001B27F8`, task #2646)/`g_mobyGroupLists` (was `D_L09_001FB4E0`, task #2646), `sda` respelled `section(".sdata")` on both data externs (RULING #8620), `common.h` dropped.
   - **`func_L09_00404510`** (`0x00404510`, level program 09) in
     `going-decompiled/levels/usa/L09/src/func_L09_00404510.c`, from
     `src/levels/09_dobbo/L09_003FEA48.c`
     (`func_L09_00403080`, author commit `264cb2be`, llesieur99), task #2561.
-    Adapted: our name at the v2.00 place, `D_L09_001B285C`/`D_L09_001FFFB560` as the address-named `D_L09_001B27DC`/`D_L09_001FB4E0` (upstream's `sda` text kept, ignored by cc1), built at -G8 against upstream's -G0, `common.h` dropped, typedefs written in the TU.
+    Adapted: our name at the v2.00 place, `D_L09_001B285C`/`D_L09_001FFFB560` as `g_mobyTableBase` (was `D_L09_001B27DC`, task #2646)/`g_mobyGroupLists` (was `D_L09_001FB4E0`, task #2646) (upstream's `sda` text kept, ignored by cc1), built at -G8 against upstream's -G0, `common.h` dropped, typedefs written in the TU.
   - **`func_L09_00404590`** (`0x00404590`, level program 09) in
     `going-decompiled/levels/usa/L09/src/func_L09_00404590.c`, from
     `src/levels/09_dobbo/L09_003FEA48.c`
     (`func_L09_00403100`, author commit `bcc9f7db`, bigbeno37), task #2561.
-    Adapted: our name at the v2.00 place, `D_L09_001B285C`/`D_L09_001FFFB560` as the address-named `D_L09_001B27DC`/`D_L09_001FB4E0`, `sda` respelled `section(".sdata")` (RULING #8620), callees `func_002A8508` and `func_L09_00403080` as `func_L09_00318B08` and our C `func_L09_00404510` (declared extern), `common.h` dropped, typedefs written in the TU.
+    Adapted: our name at the v2.00 place, `D_L09_001B285C`/`D_L09_001FFFB560` as `g_mobyTableBase` (was `D_L09_001B27DC`, task #2646)/`g_mobyGroupLists` (was `D_L09_001FB4E0`, task #2646), `sda` respelled `section(".sdata")` (RULING #8620), callees `func_002A8508` and `func_L09_00403080` as `func_L09_00318B08` and our C `func_L09_00404510` (declared extern), `common.h` dropped, typedefs written in the TU.
   - **`func_L09_004064F0`** (`0x004064F0`, level program 09) in
     `going-decompiled/levels/usa/L09/src/func_L09_004064F0.c`, from
     `src/levels/09_dobbo/L09_003FEA48.c`
     (`func_L09_00405060`, author commit `264cb2be`, llesieur99), task #2561.
-    Adapted: our name at the v2.00 place, `D_L09_001B285C`/`D_L09_001FFFB560` as the address-named `D_L09_001B27DC`/`D_L09_001FB4E0` (upstream's `sda` text kept, ignored by cc1), built at -G8 against upstream's -G0, `common.h` dropped, typedefs written in the TU.
+    Adapted: our name at the v2.00 place, `D_L09_001B285C`/`D_L09_001FFFB560` as `g_mobyTableBase` (was `D_L09_001B27DC`, task #2646)/`g_mobyGroupLists` (was `D_L09_001FB4E0`, task #2646) (upstream's `sda` text kept, ignored by cc1), built at -G8 against upstream's -G0, `common.h` dropped, typedefs written in the TU.
   - **`func_L09_00408030`** (`0x00408030`, level program 09) in
     `going-decompiled/levels/usa/L09/src/func_L09_00408030.c`, from
     `src/levels/09_dobbo/L09_003FEA48.c`
     (`func_L09_00406BA0`, author commit `264cb2be`, llesieur99), task #2561.
-    Adapted: our name at the v2.00 place, `D_L09_001B285C` as the address-named `D_L09_001B27DC`, `sda` respelled `section(".sdata")` (RULING #8620), `common.h` dropped, typedefs written in the TU.
+    Adapted: our name at the v2.00 place, `D_L09_001B285C` as `g_mobyTableBase` (was `D_L09_001B27DC`, task #2646), `sda` respelled `section(".sdata")` (RULING #8620), `common.h` dropped, typedefs written in the TU.
   - **`func_L09_00408120`** (`0x00408120`, level program 09) in
     `going-decompiled/levels/usa/L09/src/func_L09_00408120.c`, from
     `src/levels/09_dobbo/L09_003FEA48.c`
     (`func_L09_00406C90`, author commit `264cb2be`, llesieur99), task #2561.
-    Adapted: our name at the v2.00 place, `D_L09_001B285C` as the address-named `D_L09_001B27DC` (upstream's `sda` text kept, ignored by cc1), built at -G8 against upstream's -G0, `common.h` dropped, typedefs written in the TU.
+    Adapted: our name at the v2.00 place, `D_L09_001B285C` as `g_mobyTableBase` (was `D_L09_001B27DC`, task #2646) (upstream's `sda` text kept, ignored by cc1), built at -G8 against upstream's -G0, `common.h` dropped, typedefs written in the TU.
   - **`func_L09_00409680`** (`0x00409680`, level program 09) in
     `going-decompiled/levels/usa/L09/src/func_L09_00409680.c`, from
     `src/levels/09_dobbo/L09_003FEA48.c`
     (`func_L09_004081F0`, author commit `96fa46bb`, Louis-Philippe Le Sieur (validator #2585: at `264cb2be` it was still INCLUDE_ASM)), task #2561.
-    Adapted: our name at the v2.00 place, `D_L09_001B285C` as the address-named `D_L09_001B27DC`, `sda` respelled `section(".sdata")` (RULING #8620), `func_L09_00408138` as `func_L09_004095C8`, `common.h` dropped, typedefs written in the TU.
+    Adapted: our name at the v2.00 place, `D_L09_001B285C` as `g_mobyTableBase` (was `D_L09_001B27DC`, task #2646), `sda` respelled `section(".sdata")` (RULING #8620), `func_L09_00408138` as `func_L09_004095C8`, `common.h` dropped, typedefs written in the TU.

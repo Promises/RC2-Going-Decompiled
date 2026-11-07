@@ -14,12 +14,20 @@
  * declarations instead, same length, level .text 12 differing bytes, first at
  * 0x00431308.
  *
- * D_L14_001B251C and D_001B251C are the same address, 0x001B251C, inside the
- * bss label D_L14_001B1D00 (RULING #13291 section 2). Upstream declares it
- * twice, as a pointer and, as D_L14_001B259C_1, as an array of pointers (its
- * comment: "the second read of the same pointer uses absolute addressing"). C
- * cannot give one name two types, so the second takes the other spelling
- * level_elf.py ADDR_NAME values from its address (the LNN_ prefix is optional).
+ * 0x001B251C is g_mobyTableBase, the name L14's boot-name map
+ * (symbol_addrs/L14_boot_names.txt) gives at exactly that address. Upstream
+ * declares it twice, as a pointer and, as D_L14_001B259C_1, as an array of
+ * pointers (its comment: "the second read of the same pointer uses absolute
+ * addressing"). The first read is g_mobyTableBase. The second keeps the
+ * address-named D_001B251C, a second name for the same address that is
+ * LOAD-BEARING: the assembler chooses $gp-relative or absolute addressing per
+ * SYMBOL (from its `.extern` size), and retail reads this address both ways
+ * in one function, so it needs two symbols. Measured (task #2646): binding
+ * the array to g_mobyTableBase by asm label (RULING #13168's typed view)
+ * leaves cc1 one `.extern g_mobyTableBase, 4`, the second read turns
+ * $gp-relative, and .text is 0x290 bytes, not the place's 0x294 (cobj
+ * refuses). It is the allowlisted site L14 func_L14_004310F0 D_001B251C in
+ * tools/levels/second_names_allow.tsv (class A2, awaiting watcher-2).
  */
 extern float func_L14_002F7A68(float, float);
 extern float func_L14_002F7028(float);
@@ -40,7 +48,7 @@ typedef struct {
 } PrisonHero;
 extern PrisonHero g_soundBankHandlesBlk;
 extern unsigned char g_listenerPosHistory[];
-extern unsigned char *D_L14_001B251C __attribute__((section(".sdata")));
+extern unsigned char *g_mobyTableBase __attribute__((section(".sdata")));
 extern unsigned char *D_001B251C[] __attribute__((section(".sdata")));
 /* 0x1395E3: the boot's own dlabel D_1395E3, its own label in the boot split
  * (asm/usa/data/cod/033B00.data.s:7605, also the operand at
@@ -65,7 +73,7 @@ extern unsigned char D_1395E3 __attribute__((section(".data")));
  * the hero, PrisonHero) has this object as owner, is active and is within 0.5
  * (func_L14_002F6C18): sets stage 2, releases its entry, plays two sounds, sets
  * the byte D_1395E3 (the boot's label at 0x1395E3), calls func_L14_00333698 on
- * the two moby records of D_L14_001B251C named by state +0x00 and +0x04 when
+ * the two moby records of g_mobyTableBase named by state +0x00 and +0x04 when
  * +0x00 is not -1, and calls func_L14_0031AC78(state +0x10). Its colour word is
  * 0x80000000 | the glow in byte 0 (stage 1), or in bytes 1 and 2 (stage 2).
  *
@@ -85,10 +93,13 @@ extern unsigned char D_1395E3 __attribute__((section(".data")));
  *   - D_00189E20 -> g_soundBankHandlesBlk (the boot's name at that address);
  *   - D_001395E3 -> D_1395E3: the same address, respelled to the boot's
  *     existing dlabel there (task #2621, census NOTE #13409, FACT #13403);
- *   - D_L14_001B259C -> D_L14_001B251C (address-named, inside
- *     D_L14_001B1D00+0x81C; RULING #13291 section 2);
- *   - D_L14_001B259C_1 -> D_001B251C (address-named, inside
- *     D_L14_001B1D00+0x81C; RULING #13291 section 2);
+ *   - D_L14_001B259C -> g_mobyTableBase, the name symbol_addrs/
+ *     L14_boot_names.txt gives at the v2.00 relocation target 0x001B251C;
+ *   - D_L14_001B259C_1 -> D_001B251C (address-named, the same v2.00
+ *     target; kept as a second symbol for the absolute read, see above);
+ *   - D_L14_001B251C -> g_mobyTableBase (task #2646): the address-named
+ *     spelling was a second name for the same address (A2 class, NOTE
+ *     #13409);
  *   - func_00282E80 -> func_L14_002F6C18 (the level's own copy at its L14
  *     place);
  *   - func_00283198 -> func_L14_002F7028 (the level's own copy at its L14
@@ -158,7 +169,7 @@ void func_L14_004310F0(unsigned char *object)
             func_L14_0036ADA0(2, 0, object);
             D_1395E3 = 1;
             if (*(int *)state != -1) {
-                func_L14_00333698(D_L14_001B251C + (*(int *)state << 8), 1);
+                func_L14_00333698(g_mobyTableBase + (*(int *)state << 8), 1);
                 {
                     int child = *(int *)(state + 4);
                     unsigned char *base = D_001B251C[0];

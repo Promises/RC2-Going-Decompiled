@@ -12,16 +12,16 @@ typedef signed short s16;
 typedef unsigned int u32;
 typedef float f32;
 
-/* Id lists, one per group; an element inside L11's larger .bss label
- * D_L11_001F0000, so address-named (RULING #13291 §2). */
-extern void *D_L11_001FC4A0[];
-/* The base of the level's 256-byte object records, a word inside the .bss
- * block D_L11_001B2E00 (address-named, RULING #13291 §2). The section
+/* Id lists, one per group: L11's boot-name map name at 0x001FC4A0
+ * (task #2646). */
+extern void *g_mobyGroupLists[];
+/* The base of the level's 256-byte object records, L11's boot-name map
+ * name at 0x001B361C (task #2646). The section
  * attribute is an ADDRESSING-MODEL DEVICE on this declaration (RULING #8620):
  * cc1 prints a one-instruction macro load instead of splitting %hi/%lo
  * itself, and GNU as expands it at -G0 into the lui/lw pair the ROM has. It
  * moves no data and emits nothing. */
-extern u8 *D_L11_001B361C[] __attribute__((section(".sdata")));
+extern u8 *g_mobyTableBase[] __attribute__((section(".sdata")));
 
 /**
  * func_L11_0042BCF8 - bump the hit counters of the group's 0xCF6/0xCF5
@@ -46,9 +46,13 @@ extern u8 *D_L11_001B361C[] __attribute__((section(".sdata")));
  * #13291). ADAPTED, the body's statements unchanged; edits:
  *   - name func_L11_0042A4C8 -> func_L11_0042BCF8 (our split name at the
  *     v2.00 place);
- *   - D_L11_001FC420 -> D_L11_001FC4A0 and D_L11_001B359C -> D_L11_001B361C:
+ *   - D_L11_001FC420 -> g_mobyGroupLists and D_L11_001B359C -> g_mobyTableBase:
  *     upstream names state v1.01 addresses, ours are the targets of the
  *     v2.00 ROM's own relocations (relverify, task #2553);
+ *   - D_L11_001B361C -> g_mobyTableBase, D_L11_001FC4A0 -> g_mobyGroupLists
+ *     (task #2646): the names symbol_addrs/L11_boot_names.txt gives at exactly
+ *     those addresses; the address-named spelling was a second name for the
+ *     same address (A2 class, NOTE #13409).
  *   - `__attribute__((sda))` -> `section(".sdata")` (RULING #8620);
  *   - `#include "common.h"` dropped; its typedefs written out (the ones
  *     used); the file's other functions and their externs not carried.
@@ -62,11 +66,11 @@ void func_L11_0042BCF8(u8 *arg0) {
 
     if (arg0[0x21] == 0xFF)
         return;
-    list = D_L11_001FC4A0[arg0[0x21]];
+    list = g_mobyGroupLists[arg0[0x21]];
     arg0 = *(u8 **)(arg0 + 0x68);
     if (list == 0)
         return;
-    base = D_L11_001B361C[0];
+    base = g_mobyTableBase[0];
     p = list;
     do {
         rec = base + ((*p & 0x7FFF) << 8);

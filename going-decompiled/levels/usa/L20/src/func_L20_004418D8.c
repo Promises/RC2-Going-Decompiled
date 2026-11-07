@@ -6,7 +6,7 @@
  * by plain GNU as (the row's `as` column).
  */
 
-extern char *D_L20_001FBAA0[];
+extern char *g_mobyGroupLists[];
 /* RULING #8620 addressing device (level code has no native arm): upstream's
  * `__attribute__((sda))` is written `section(".sdata")` on these extern
  * DECLARATIONS. It moves no data and emits nothing: cc1 then prints the
@@ -14,23 +14,23 @@ extern char *D_L20_001FBAA0[];
  * lui + lw/sw pair (absolute %hi/%lo, not $gp-relative at -G0), as retail
  * has it. Ablation (task #2565): with upstream's `sda` (ignored by this cc1)
  * the function differs from the disc in 16 of 49 words (masked compare). */
-extern int D_L20_001B2F38 __attribute__((section(".sdata")));
-extern unsigned int D_L20_001B2F1C __attribute__((section(".sdata")));
+extern int g_mobyGroupCount __attribute__((section(".sdata")));
+extern unsigned int g_mobyTableBase __attribute__((section(".sdata")));
 
 /**
  * func_L20_004418D8 - count the live entities of a group.
  *
  * Counts the entities of the group whose state byte +0x20 is neither 6 nor
- * negative. D_L20_001FBAA0 holds a list of 16-bit ids per group; the low 15
- * bits of an id index the 0x100-byte records at D_L20_001B2F1C, and the last
+ * negative. g_mobyGroupLists holds a list of 16-bit ids per group; the low 15
+ * bits of an id index the 0x100-byte records at g_mobyTableBase, and the last
  * id of a list has its top bit set. A group of 0xFF (low byte) or above the
- * bound D_L20_001B2F38, or one with no list, counts 0.
+ * bound g_mobyGroupCount, or one with no list, counts 0.
  *
  * @group: the group index.
  * Return: the count.
  *
  * Non-obvious: the guards on the group and its list come before the walk and
- * again after each record. D_L20_001B2F38 does not change in the loop, so cc1
+ * again after each record. g_mobyGroupCount does not change in the loop, so cc1
  * hoists its repeated test into a register known to be zero, which the loop
  * still tests (retail's `daddu $t0,$zero,$zero` and `bnez $t0`); upstream's
  * note.
@@ -45,32 +45,37 @@ extern unsigned int D_L20_001B2F1C __attribute__((section(".sdata")));
  *   - names respelled from upstream's v1.01-address names to the targets of
  *     the v2.00 disc's own relocations (relverify on the upstream object, task
  *     #2565): func_L20_00440398 -> func_L20_004418D8; D_L20_001B2F9C ->
- *     D_L20_001B2F1C; D_L20_001B2FB8 -> D_L20_001B2F38; D_L20_001FBB20 ->
- *     D_L20_001FBAA0
+ *     g_mobyTableBase; D_L20_001B2FB8 -> g_mobyGroupCount; D_L20_001FBB20 ->
+ *     g_mobyGroupLists
+ *   - D_L20_001B2F1C -> g_mobyTableBase, D_L20_001B2F38 -> g_mobyGroupCount,
+ *     D_L20_001FBAA0 -> g_mobyGroupLists (task #2646): the names
+ *     symbol_addrs/L20_boot_names.txt gives at exactly those addresses; the
+ *     address-named spelling was a second name for the same address (A2 class,
+ *     NOTE #13409).
  *   - `__attribute__((sda))` written `__attribute__((section(".sdata")))` on
  *     the extern declarations (RULING #8620 addressing device, comment above
  *     them)
  *   - `#include "common.h"` dropped; the common.h typedefs it uses written in
  *     the TU; only the declarations it uses kept
  *   - upstream's comment folded into this one
- *   - the duplicate declaration of D_L20_001B2F1C (upstream declares it twice)
+ *   - the duplicate declaration of g_mobyTableBase (upstream declares it twice)
  *     written once
  */
 int func_L20_004418D8(int group) {
-    unsigned short *rec = (unsigned short *)D_L20_001FBAA0[group];
+    unsigned short *rec = (unsigned short *)g_mobyGroupLists[group];
     int count = 0;
 
     if ((group & 0xFF) == 0xFF) {
         goto end;
     }
-    if (D_L20_001B2F38 < group) {
+    if (g_mobyGroupCount < group) {
         goto end;
     }
     if (rec == 0) {
         goto end;
     }
     for (;;) {
-        char *object = (char *)D_L20_001B2F1C + ((*rec & 0x7FFF) << 8);
+        char *object = (char *)g_mobyTableBase + ((*rec & 0x7FFF) << 8);
 
         if (object == 0) {
             goto end;
@@ -82,7 +87,7 @@ int func_L20_004418D8(int group) {
         if ((group & 0xFF) == 0xFF) {
             goto end;
         }
-        if (D_L20_001B2F38 < group) {
+        if (g_mobyGroupCount < group) {
             goto end;
         }
         if (rec == 0) {
@@ -91,7 +96,7 @@ int func_L20_004418D8(int group) {
         if (*(short *)(rec - 1) >= 0) {
             continue;
         }
-        if (rec == (unsigned short *)D_L20_001FBAA0[group]) {
+        if (rec == (unsigned short *)g_mobyGroupLists[group]) {
             continue;
         }
         break;

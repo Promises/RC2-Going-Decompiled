@@ -25,11 +25,10 @@ extern u16 D_0018D048 __attribute__((section(".data")));
 /* The next three carry `section(".sdata")`, an ADDRESSING-MODEL DEVICE on the
  * declaration only (RULING #8620): cc1 prints a one-instruction macro load
  * for each, and GNU as at -G8 expands it $gp-relative for the 4-byte
- * D_L11_001B3148 and as an absolute lui/lw pair for the two arrays, as the
+ * g_gameTime and as an absolute lui/lw pair for the two arrays, as the
  * ROM has them. It moves no data and emits nothing.
- * D_L11_001B3148 is a word inside L11's .bss block D_L11_001B2E00
- * (address-named, RULING #13291 §2). */
-extern s32 D_L11_001B3148 __attribute__((section(".sdata")));
+ * g_gameTime is L11's boot-name map name at 0x001B3148 (task #2646). */
+extern s32 g_gameTime __attribute__((section(".sdata")));
 extern u8 g_heroPos[];
 /* Flag bytes. The v2.00 ROM's relocations put byte 0 at 0x001A7B08, 8 bytes
  * past the boot's g_inventoryOwned (0x001A7B00). Upstream calls this
@@ -72,9 +71,13 @@ extern s32 D_L11_001A9010[] __attribute__((section(".sdata")));
  *     func_002ACBC8 -> func_L11_00333E28, func_00282948 -> func_L11_00300E50,
  *     func_00288E18 -> func_L11_003076B8 (L11's copies of that code);
  *   - data: D_00189EA0 -> g_heroPos (the boot's name, same address);
- *     D_L11_001B30C8 -> D_L11_001B3148 and D_001A7B00 -> D_001A7B08 (upstream
+ *     D_L11_001B30C8 -> g_gameTime and D_001A7B00 -> D_001A7B08 (upstream
  *     names state v1.01 addresses; ours are the v2.00 ROM's targets);
  *     D_0018CD60, D_00194158, D_0018D048 and D_L11_001A9010 unchanged;
+ *   - D_L11_001B3148 -> g_gameTime (task #2646): the name
+ *     symbol_addrs/L11_boot_names.txt gives at exactly that address; the
+ *     address-named spelling was a second name for the same address (A2 class,
+ *     NOTE #13409).
  *   - `__attribute__((sda))` -> `section(".sdata")` (RULING #8620) on three
  *     externs, and the NOT_SDA macro written out as `section(".data")`;
  *   - `#include "common.h"` dropped; its u8/u16/s32 typedefs written out;
@@ -96,7 +99,7 @@ void func_L11_00414290(u8 *object) {
     if (D_001A7B08[0]) {
         func_L11_00308A80(0x9FF, 0x56, 3, *(s32 *)(state + 0x4), -1);
     }
-    if (D_L11_001A9010[0] != 0 && D_L11_001B3148 >= 3) {
+    if (D_L11_001A9010[0] != 0 && g_gameTime >= 3) {
         D_0018CD60 = 0xFFFF;
     }
     if (func_L11_00333E28(g_heroPos, *(s32 *)(state + 0x0)) != 0) {

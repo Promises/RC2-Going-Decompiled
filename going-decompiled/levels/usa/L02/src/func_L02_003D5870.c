@@ -10,7 +10,7 @@
 
 extern int D_L02_001B01A0 __attribute__((sda));
 extern int D_L02_001FF6B8[];
-extern float D_L02_001BA500[4];
+extern float g_cameraPos[4];
 extern int func_L02_002F3F40(float);
 extern float func_L02_002F2F18(void *, void *);
 extern void func_L02_00321DB0(char *);
@@ -32,7 +32,7 @@ extern int func_L02_003309B0(char *, int, int, int, float, float);
  * Non-obvious: in state 0 it sets D_L02_001B01A0 to 1, fills the block's
  * movement and timing parameters, and enters its next state
  * (func_L02_003D5E68). While +0x31 is set and it is within 60 units of
- * D_L02_001BA500, it calls func_L02_00321DB0 and sets +0x6F to 0x38. While
+ * g_cameraPos, it calls func_L02_00321DB0 and sets +0x6F to 0x38. While
  * +0x330 is 0 it reads a hit (func_L02_00322040). The hit's damage at +0x2C is
  * zeroed in states below 5, or in state 10 with +0x324 below 5. It is scaled by
  * 0.3 from classes 0xC89/0xBFE. Then damage * 32 is added to
@@ -76,9 +76,13 @@ extern int func_L02_003309B0(char *, int, int, int, float, float);
  *   - upstream's `__attribute__((sda))` on D_L02_001B01A0 kept as its text
  *     (this cc1 ignores it with a warning; the member closes with it as
  *     written);
- *   - D_L02_001FF6B8 and D_L02_001BA500 kept: address-named externs inside our
- *     split labels D_L02_001F0000 and D_L02_001B3930 (RULING #13291 section
- *     2), valued from their names by level_elf;
+ *   - D_L02_001FF6B8 kept: an address-named extern inside our split label
+ *     D_L02_001F0000 (RULING #13291 section 2), valued from its name by
+ *     level_elf;
+ *   - D_L02_001BA500 -> g_cameraPos (task #2646): the name
+ *     symbol_addrs/L02_boot_names.txt gives at exactly that address; the
+ *     address-named spelling was a second name for the same address (A2
+ *     class, NOTE #13409);
  *   - `#include "common.h"` dropped (this body uses nothing from it); upstream
  *     file-scope declarations it does not use are not carried; the rest keep
  *     upstream's order and text.
@@ -115,7 +119,7 @@ void func_L02_003D5870(char *self) {
         func_L02_003D5E68(self);
     }
     if (*(unsigned char *)(self + 0x31)) {
-        if (func_L02_002F2F18(self + 0x10, D_L02_001BA500) < 60.0f) {
+        if (func_L02_002F2F18(self + 0x10, g_cameraPos) < 60.0f) {
             func_L02_00321DB0(self);
             *(unsigned char *)(self + 0x6F) = 0x38;
         }

@@ -11,16 +11,16 @@ typedef unsigned short u16;
 typedef signed short s16;
 typedef float f32;
 
-/* Id lists, one per group; an element inside L11's larger .bss label
- * D_L11_001F0000, so address-named (RULING #13291 §2). */
-extern s16 *D_L11_001FC4A0[];
-/* The base of the level's 256-byte object records, a word inside the .bss
- * block D_L11_001B2E00 (address-named, RULING #13291 §2). The section
+/* Id lists, one per group: L11's boot-name map name at 0x001FC4A0
+ * (task #2646). */
+extern s16 *g_mobyGroupLists[];
+/* The base of the level's 256-byte object records, L11's boot-name map
+ * name at 0x001B361C (task #2646). The section
  * attribute is an ADDRESSING-MODEL DEVICE on this declaration (RULING #8620):
  * cc1 prints a one-instruction macro load instead of splitting %hi/%lo
  * itself, and GNU as expands it at -G0 into the lui/lw pair the ROM has. It
  * moves no data and emits nothing. */
-extern int D_L11_001B361C __attribute__((section(".sdata")));
+extern int g_mobyTableBase __attribute__((section(".sdata")));
 
 /**
  * func_L11_00427310 - bump the hit counters of the group's 0xCF5/0xCF6
@@ -29,8 +29,8 @@ extern int D_L11_001B361C __attribute__((section(".sdata")));
  * @object: the actor. Byte +0x21 names its group (0xFF = none); its state
  *          block is at +0x68.
  *
- * It walks the group's id list in D_L11_001FC4A0. Each halfword's low 15 bits
- * index a 256-byte record from D_L11_001B361C, and the list ends after the
+ * It walks the group's id list in g_mobyGroupLists. Each halfword's low 15 bits
+ * index a 256-byte record from g_mobyTableBase, and the list ends after the
  * first id with its sign bit set. For a live record (byte +0x20 >= 0) of type
  * 0xCF5 or 0xCF6, it sets the record state's +0x266 halfword to 1 and adds 1
  * to the word at +0x560. A 0xCF5 also gets 1 added at +0x584 when the actor
@@ -46,9 +46,13 @@ extern int D_L11_001B361C __attribute__((section(".sdata")));
  * #13291). ADAPTED, the body's statements unchanged; edits:
  *   - name func_L11_00425AF8 -> func_L11_00427310 (our split name at the
  *     v2.00 place);
- *   - D_L11_001FC420 -> D_L11_001FC4A0 and D_L11_001B359C -> D_L11_001B361C:
+ *   - D_L11_001FC420 -> g_mobyGroupLists and D_L11_001B359C -> g_mobyTableBase:
  *     upstream names state v1.01 addresses, ours are the targets of the
  *     v2.00 ROM's own relocations (relverify, task #2553);
+ *   - D_L11_001B361C -> g_mobyTableBase, D_L11_001FC4A0 -> g_mobyGroupLists
+ *     (task #2646): the names symbol_addrs/L11_boot_names.txt gives at exactly
+ *     those addresses; the address-named spelling was a second name for the
+ *     same address (A2 class, NOTE #13409).
  *   - `__attribute__((sda))` -> `section(".sdata")` (RULING #8620);
  *   - `#include "include_asm.h"` dropped (nothing here used it); the file's
  *     typedefs kept except s32 (unused by this function); the file's other
@@ -65,12 +69,12 @@ void func_L11_00427310(char *object)
     if (((u8 *)object)[0x21] == 0xFF) {
         return;
     }
-    list = D_L11_001FC4A0[((u8 *)object)[0x21]];
+    list = g_mobyGroupLists[((u8 *)object)[0x21]];
     object = *(char **)(object + 0x68);
     if (list == 0) {
         return;
     }
-    base = (char *)D_L11_001B361C;
+    base = (char *)g_mobyTableBase;
     p = list;
     do {
         o = base + ((*(u16 *)p & 0x7FFF) << 8);

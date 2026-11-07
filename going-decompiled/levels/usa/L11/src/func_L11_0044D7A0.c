@@ -34,7 +34,7 @@ extern void func_L11_00301D20(char *, char *);
 extern void func_L11_00338628(char *, char *, s32);
 extern s32 func_L11_00447BE8(s32, char *);
 extern void func_L11_0032DBF8(char *, s32, s32);
-extern char D_L11_001BA940[];
+extern char g_cameraPos[];
 extern char D_L11_001A8F20[] __attribute__((section(".sdata")));
 extern s32 D_L11_001A8FF4;
 extern void func_L11_0044DF28(char *);
@@ -64,8 +64,8 @@ extern void func_L11_0044DCA0(char *);
  *   - func_L11_0044BD68 -> func_L11_0044D7A0 (our split name at the v2.00
  *     place);
  *   - D_001A8FF4 -> D_L11_001A8FF4 (our label at that address);
- *   - D_L11_001BA8C0 -> D_L11_001BA940 (address-named, inside D_L11_001B39B0;
- *     RULING #13291 section 2);
+ *   - D_L11_001BA8C0 -> g_cameraPos (L11's boot-map name at
+ *     the v2.00 target 0x001BA940);
  *   - func_00282E48 -> func_L11_003013B8 (the level's own copy at its L11
  *     place);
  *   - func_00283698 -> func_L11_00301D20 (the level's own copy at its L11
@@ -97,6 +97,10 @@ extern void func_L11_0044DCA0(char *);
  *   - func_L11_004461C0 -> func_L11_00447BE8 (its v2.00 split name);
  *   - func_L11_0044C268 -> func_L11_0044DCA0 (its v2.00 split name);
  *   - func_L11_0044C4F0 -> func_L11_0044DF28 (its v2.00 split name);
+ *   - D_L11_001BA940 -> g_cameraPos (task #2646): the name
+ *     symbol_addrs/L11_boot_names.txt gives at exactly that address; the
+ *     address-named spelling was a second name for the same address (A2 class,
+ *     NOTE #13409).
  *   - `__attribute__((sda))` -> `__attribute__((section(".sdata")))` on 1
  *     extern declaration(s) (RULING #8620: upstream's patched cc1 reads sda,
  *     ours does not);
@@ -144,7 +148,7 @@ void func_L11_0044D7A0(char *object)
     }
     if (*(short *)(state + 0x4D2) == 0 && *(u8 *)(object + 0x20) != 11 && !D_L11_001A8FF4) {
         *(u16 *)(object + 0x34) |= 0x400;
-        if (*(u8 *)(object + 0x31) && func_L11_003013B8(object + 0x10, D_L11_001BA940) < 24.0f) {
+        if (*(u8 *)(object + 0x31) && func_L11_003013B8(object + 0x10, g_cameraPos) < 24.0f) {
             func_L11_0032FF88(object);
             *(u8 *)(object + 0x6F) = 22;
         }

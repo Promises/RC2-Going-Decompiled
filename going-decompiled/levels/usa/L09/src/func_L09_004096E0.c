@@ -10,10 +10,9 @@ typedef unsigned short u16;
 typedef int s32;
 
 /* The level's table of group id lists: upstream's D_L09_001FFFB560, whose
- * v2.00 target 0x001FB4E0 lies 0x8C08 inside the larger boot label
- * g_pTextTableLoadBuf, so it stays an address-named extern (RULING #13291
- * section 2; the level ELF values it from its name). */
-extern char *D_L09_001FB4E0[];
+ * v2.00 target 0x001FB4E0 L09's boot-name map (symbol_addrs/
+ * L09_boot_names.txt) names g_mobyGroupLists (task #2646). */
+extern char *g_mobyGroupLists[];
 
 extern void func_L09_00409680(char *a0, s32 a1, char *a2, s32 a3);
 
@@ -21,7 +20,7 @@ extern void func_L09_00409680(char *a0, s32 a1, char *a2, s32 a3);
  * func_L09_004096E0 - hand the record's colour key to every entry the index
  * list names, negating the three offsets when the caller asks for it.
  *
- * Walks the zero-sign-terminated s16 id list at D_L09_001FB4E0[@a2] and calls
+ * Walks the zero-sign-terminated s16 id list at g_mobyGroupLists[@a2] and calls
  * func_L09_00409680(@a0, id & 0x7FFF, @a1, @a3) for every entry, stopping
  * after an entry whose sign bit is set (the list's terminator).
  *
@@ -43,8 +42,12 @@ extern void func_L09_00409680(char *a0, s32 a1, char *a2, s32 a3);
  * (BYTE-IDENTICAL), each name to the target of the v2.00 disc's own
  * relocation at this place (task #2562 relverify by name):
  *   - func_L09_00408250 -> func_L09_004096E0 (our split name);
- *   - D_L09_001FFFB560 -> D_L09_001FB4E0 (address-named extern,
- *     g_pTextTableLoadBuf+0x8C08: RULING #13291 section 2);
+ *   - D_L09_001FFFB560 -> g_mobyGroupLists (L09's boot-map name at the v2.00
+ *     target 0x001FB4E0);
+ *   - D_L09_001FB4E0 -> g_mobyGroupLists (task #2646): the name
+ *     symbol_addrs/L09_boot_names.txt gives at exactly that address; the
+ *     address-named spelling was a second name for the same address (A2 class,
+ *     NOTE #13409).
  *   - func_L09_004081F0 -> func_L09_00409680 (our split name at the v2.00
  *     place);
  *   - `#include "common.h"` dropped: the typedefs this function uses are
@@ -52,7 +55,7 @@ extern void func_L09_00409680(char *a0, s32 a1, char *a2, s32 a3);
  */
 void func_L09_004096E0(char *a0, char *a1, s32 a2, s32 a3) {
     s16 *p;
-    p = (s16 *)D_L09_001FB4E0[a2];
+    p = (s16 *)g_mobyGroupLists[a2];
     if (p == 0) {
         return;
     }

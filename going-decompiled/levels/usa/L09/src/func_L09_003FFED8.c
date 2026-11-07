@@ -16,10 +16,9 @@ extern s32 g_playerProgress __attribute__((sda));
 /* The resident release word, at the same address in both builds. */
 extern s32 D_L09_001A9040 __attribute__((sda));
 /* The level's record table: upstream's D_L09_001B285C, whose v2.00 target
- * 0x001B27DC lies 0x488 inside the larger split data label D_001B2354, so it
- * stays an address-named extern (RULING #13291 section 2; the level ELF
- * values it from its name). */
-extern char *D_L09_001B27DC __attribute__((sda));
+ * 0x001B27DC L09's boot-name map (symbol_addrs/L09_boot_names.txt) names
+ * g_mobyTableBase (task #2646). */
+extern char *g_mobyTableBase __attribute__((sda));
 
 extern s32 func_L09_00324590(char *a0, char *a1, s32 a2);
 extern char *func_L09_003280E0(char *a0);
@@ -32,7 +31,7 @@ extern void func_L09_003275B8(char *a0, s32 a1, s32 a2, s32 a3, f32 f12, f32 f13
  *
  * When func_L09_00324590(@a0, state+0x160, 0) reports the drop point and
  * g_playerProgress is 9, the state's s16 index at +0x1D0 is used once into
- * the record table D_L09_001B27DC (records are 0x100 bytes): if
+ * the record table g_mobyTableBase (records are 0x100 bytes): if
  * func_L09_003280E0(record) returns 0 the release word D_L09_001A9040 is
  * cleared, and the index is reset to -1 either way. Then func_L09_003FFE08
  * runs the rebuild, and every path ends in
@@ -56,8 +55,12 @@ extern void func_L09_003275B8(char *a0, s32 a1, s32 a2, s32 a3, f32 f12, f32 f13
  *   - func_L09_003FEA48 -> func_L09_003FFED8 (our split name);
  *   - D_L09_001A79F0 -> g_playerProgress (the boot's name at 0x001A79F8);
  *   - D_L09_001A9040 -> D_L09_001A9040 (same address in both builds);
- *   - D_L09_001B285C -> D_L09_001B27DC (address-named extern,
- *     D_001B2354+0x488: RULING #13291 section 2);
+ *   - D_L09_001B285C -> g_mobyTableBase (L09's boot-map name at the v2.00
+ *     target 0x001B27DC);
+ *   - D_L09_001B27DC -> g_mobyTableBase (task #2646): the name
+ *     symbol_addrs/L09_boot_names.txt gives at exactly that address; the
+ *     address-named spelling was a second name for the same address (A2 class,
+ *     NOTE #13409).
  *   - func_323340 -> func_L09_00324590, func_326368 -> func_L09_003275B8,
  *     func_L09_00326E90 -> func_L09_003280E0,
  *     func_L09_003FE978 -> func_L09_003FFE08 (L09's own functions at the
@@ -73,7 +76,7 @@ void func_L09_003FFED8(char *a0) {
         if (g_playerProgress == 9) {
             idx = *(s16 *)(s0 + 0x1D0);
             if (idx != -1) {
-                if (func_L09_003280E0(D_L09_001B27DC + (idx << 8)) == 0) {
+                if (func_L09_003280E0(g_mobyTableBase + (idx << 8)) == 0) {
                     D_L09_001A9040 = 0;
                 }
                 *(s16 *)(s0 + 0x1D0) = -1;

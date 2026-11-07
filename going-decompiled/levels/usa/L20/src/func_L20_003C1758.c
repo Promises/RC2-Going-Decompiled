@@ -11,7 +11,7 @@ typedef signed short s16;
 typedef signed int s32;
 typedef float f32;
 
-extern char *D_L20_001FBAA0[];
+extern char *g_mobyGroupLists[];
 /* RULING #8620 addressing device (level code has no native arm): upstream's
  * `__attribute__((sda))` is written `section(".sdata")` on these extern
  * DECLARATIONS. It moves no data and emits nothing: cc1 then prints the
@@ -19,7 +19,7 @@ extern char *D_L20_001FBAA0[];
  * lui + lw/sw pair (absolute %hi/%lo, not $gp-relative at -G0), as retail
  * has it. Ablation (task #2565): with upstream's `sda` (ignored by this cc1)
  * the function differs from the disc in 6 of 54 words (masked compare). */
-extern char *D_L20_001B2F1C __attribute__((section(".sdata")));
+extern char *g_mobyTableBase __attribute__((section(".sdata")));
 extern float D_L20_0023E5F0[];
 extern float func_L20_00304118(int);
 extern float func_L20_00330BB8(float, float, float, float, float);
@@ -48,9 +48,13 @@ extern float func_L20_00330BB8(float, float, float, float, float);
  *   - names respelled from upstream's v1.01-address names to the targets of
  *     the v2.00 disc's own relocations (relverify on the upstream object, task
  *     #2565): func_L20_003C0350 -> func_L20_003C1758; D_L20_001B2F9C ->
- *     D_L20_001B2F1C; D_L20_001FBB20 -> D_L20_001FBAA0; D_L20_0023E670 ->
+ *     g_mobyTableBase; D_L20_001FBB20 -> g_mobyGroupLists; D_L20_0023E670 ->
  *     D_L20_0023E5F0; func_00283CE0 -> func_L20_00304118; func_002A7AA8 ->
  *     func_L20_00330BB8
+ *   - D_L20_001B2F1C -> g_mobyTableBase, D_L20_001FBAA0 -> g_mobyGroupLists
+ *     (task #2646): the names symbol_addrs/L20_boot_names.txt gives at exactly
+ *     those addresses; the address-named spelling was a second name for the
+ *     same address (A2 class, NOTE #13409).
  *   - `__attribute__((sda))` written `__attribute__((section(".sdata")))` on
  *     the extern declarations (RULING #8620 addressing device, comment above
  *     them)
@@ -59,7 +63,7 @@ extern float func_L20_00330BB8(float, float, float, float, float);
  */
 void func_L20_003C1758(char *arg0) {
     char *s1 = *(char **)(arg0 + 0x68);
-    u16 *s0 = (u16 *)D_L20_001FBAA0[*(s32 *)s1];
+    u16 *s0 = (u16 *)g_mobyGroupLists[*(s32 *)s1];
     f32 *out;
     char *base;
     f32 scale;
@@ -72,7 +76,7 @@ void func_L20_003C1758(char *arg0) {
         scale = func_L20_00330BB8(-1.0f, 0.0f, 1.0f, 0.0f, 1.0f - v);
     }
     out = D_L20_0023E5F0;
-    base = D_L20_001B2F1C;
+    base = g_mobyTableBase;
     do {
         f32 v = *out;
         u16 w = *s0;

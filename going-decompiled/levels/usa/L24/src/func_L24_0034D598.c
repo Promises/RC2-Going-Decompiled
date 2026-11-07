@@ -26,7 +26,7 @@ extern int *D_L24_001AA790;
 extern struct {
     char pad[0x230];
     int selected;
-} D_L24_001C8C20;
+} g_mapVertexData;
 
 /**
  * func_L24_0034D598 - build the level-ordered menu rows and select the
@@ -38,7 +38,7 @@ extern struct {
  * from that level's entry in D_L24_0028AE20. A row with id 0 ends the list.
  * Then clear obj+0x40, set bit 0x8000 in obj+0x30, and walk the
  * zero-terminated list that D_L24_001AA790 points to. The first index whose
- * entry equals D_L24_001C8C20.selected is stored to obj+0x40.
+ * entry equals g_mapVertexData.selected is stored to obj+0x40.
  *
  * @obj: the menu object; only +0x30 (flags) and +0x40 (selected row) are touched.
  * Return: always 0.
@@ -65,9 +65,13 @@ extern struct {
  *     place; the level's .data holds a `.word` to it);
  *   - D_00139948 -> g_anAvailableLevelOrder (the boot's name, same address);
  *   - D_L24_0021C7F0 -> D_L24_0021C7A0, D_L24_002868E0 -> D_L24_002868C0,
- *     D_L24_001AA770 -> D_L24_001AA790, D_L24_001C8CA0 -> D_L24_001C8C20:
+ *     D_L24_001AA770 -> D_L24_001AA790, D_L24_001C8CA0 -> g_mapVertexData:
  *     upstream names state v1.01 addresses, ours are the targets of the v2.00
- *     ROM's own relocations (task #2495 per-function compare);
+ *     ROM's own relocations (task #2495 per-function compare), g_mapVertexData
+ *     being the name symbol_addrs/L24_boot_names.txt gives at its target;
+ *   - D_L24_001C8C20 -> g_mapVertexData (task #2646): the address-named
+ *     spelling was a second name for the same address (A2 class, NOTE
+ *     #13409);
  *   - type: `int * volatile` -> `int *` on D_L24_001AA790 (qualifier dropped,
  *     measured inert), and its `__attribute__((sda))` dropped (inert at -G8);
  *   - `#include "include_asm.h"` dropped (nothing in the file used it);
@@ -88,7 +92,7 @@ int func_L24_0034D598(char *obj) {
     *(int *)(obj + 0x40) = 0;
     *(unsigned int *)(obj + 0x30) |= 0x8000;
     for (i = 0, entry = list[0]; entry; entry = D_L24_001AA790[++i]) {
-        if (D_L24_001C8C20.selected == entry) {
+        if (g_mapVertexData.selected == entry) {
             *(int *)(obj + 0x40) = i;
             break;
         }

@@ -10,9 +10,9 @@ typedef unsigned short u16;
 typedef signed short s16;
 typedef signed int s32;
 
-/* Id lists, one per class; an element inside L11's larger .bss label
- * D_L11_001F0000, so address-named (RULING #13291 §2). */
-extern u8 *D_L11_001FC4A0[];
+/* Id lists, one per class: L11's boot-name map name at 0x001FC4A0
+ * (task #2646). */
+extern u8 *g_mobyGroupLists[];
 
 /* The handlers, at their v2.00 places in L11. */
 extern void func_L11_0044B2A0(u8 *);
@@ -25,14 +25,14 @@ extern void func_L11_0043B430(u8 *);
 extern void func_L11_0043C368(u8 *);
 extern void func_L11_003F45A8(u8 *);
 
-/* The base of the level's 256-byte object records, a word inside the .bss
- * block D_L11_001B2E00 (address-named, RULING #13291 §2), read through an
+/* The base of the level's 256-byte object records, L11's boot-name map
+ * name at 0x001B361C (task #2646), read through an
  * incomplete array. The section attribute is an ADDRESSING-MODEL DEVICE on
  * this declaration (RULING #8620): cc1 prints a one-instruction macro load,
  * which GNU as expands at -G0 into the absolute lui/lw pair; cc1 does not
  * hoist it out of the loop, as the ROM has it. It moves no data and emits
  * nothing. */
-extern u8 *D_L11_001B361C[] __attribute__((section(".sdata")));
+extern u8 *g_mobyTableBase[] __attribute__((section(".sdata")));
 
 /**
  * func_L11_00442A18 - hand every entry of the actor's class list to its
@@ -40,8 +40,8 @@ extern u8 *D_L11_001B361C[] __attribute__((section(".sdata")));
  *
  * @obj: the actor; the word at state+0xC0 names its class list (0xFF = none).
  *
- * It walks the class's id list in D_L11_001FC4A0. Each halfword's low 15 bits
- * index a 256-byte record from D_L11_001B361C, and the list ends after the
+ * It walks the class's id list in g_mobyGroupLists. Each halfword's low 15 bits
+ * index a 256-byte record from g_mobyTableBase, and the list ends after the
  * first id with its sign bit set. The record's type halfword at +0xAA picks
  * the handler: 0xD98, 0xDCF, 0xDF4, 0xDF7, 0xDF9, 0xD37, 0xD4A, 0xD4B and
  * 0xB3A each have one; any other type is skipped.
@@ -56,7 +56,7 @@ extern u8 *D_L11_001B361C[] __attribute__((section(".sdata")));
  * #13291). ADAPTED, the body's statements unchanged; edits:
  *   - name func_L11_004411C8 -> func_L11_00442A18 (our split name at the
  *     v2.00 place);
- *   - D_L11_001FC420 -> D_L11_001FC4A0, and the nine handlers
+ *   - D_L11_001FC420 -> g_mobyGroupLists, and the nine handlers
  *     func_L11_00449878/0044C4F0/00452DF8/00454DD8/00456540/00436A78/
  *     00439BF0/0043AB28/003F3098 -> func_L11_0044B2A0/0044DF28/00454850/
  *     00456830/00457F98/004382B8/0043B430/0043C368/003F45A8: upstream names
@@ -66,9 +66,13 @@ extern u8 *D_L11_001B361C[] __attribute__((section(".sdata")));
  *     `extern u8 *D_L11_001B359C_base[] __asm__("D_L11_001B359C")
  *     __attribute__((sda))`, because its file also declares
  *     D_L11_001B359C as a scalar. This one-function TU has only the one
- *     declaration, so it is written directly as D_L11_001B361C (the v2.00
+ *     declaration, so it is written directly as g_mobyTableBase (the v2.00
  *     target) with the same type: no asm label (no device). The use in the
- *     body is respelled D_L11_001B359C_base[0] -> D_L11_001B361C[0];
+ *     body is respelled D_L11_001B359C_base[0] -> g_mobyTableBase[0];
+ *   - D_L11_001B361C -> g_mobyTableBase, D_L11_001FC4A0 -> g_mobyGroupLists
+ *     (task #2646): the names symbol_addrs/L11_boot_names.txt gives at exactly
+ *     those addresses; the address-named spelling was a second name for the
+ *     same address (A2 class, NOTE #13409).
  *   - `__attribute__((sda))` -> `section(".sdata")` (RULING #8620);
  *   - `#include "include_asm.h"` and `#include "common.h"` dropped; the
  *     typedefs used written out; the upstream comments folded into this one;
@@ -83,12 +87,12 @@ void func_L11_00442A18(u8 *obj)
 
     if (index == 0xFF)
         return;
-    list = D_L11_001FC4A0[index];
+    list = g_mobyGroupLists[index];
     if (list == 0)
         return;
     p = (u16 *)list;
     do {
-        entry = D_L11_001B361C[0] + ((*p & 0x7FFF) << 8);
+        entry = g_mobyTableBase[0] + ((*p & 0x7FFF) << 8);
         switch (*(s16 *)(entry + 0xAA)) {
         case 0xD98:
             func_L11_0044B2A0(entry);

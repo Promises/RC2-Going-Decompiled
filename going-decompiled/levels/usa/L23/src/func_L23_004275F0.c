@@ -20,13 +20,13 @@ extern float func_L23_002F9FA0(float);
 extern float func_L23_002F94D0(float);
 extern void func_L23_002F8F38(float *, float *, float);
 extern void func_L23_002F8EC8(float *, float *, float *);
-extern float D_L23_001BA5C0[];
+extern float g_cameraPos[];
 
 /**
  * func_L23_004275F0 - build a randomly turned point between two vectors.
  *
  * Copies the two 128-bit source vectors, builds the vectors between them and
- * from the first to D_L23_001BA5C0 (func_L23_002F8EF8), combines them
+ * from the first to g_cameraPos (func_L23_002F8EF8), combines them
  * (func_L23_002F8FF8) and normalises the result to length 1
  * (func_L23_002F91A8). An angle in degrees, ((+0x96 << state +0xE) +
  * func_L23_00325658(-x, x)) % 360 - 180 with x the state halfword +0xC, is
@@ -41,9 +41,8 @@ extern float D_L23_001BA5C0[];
  * Return: nothing.
  *
  * Non-obvious: the vectors are copied as 128-bit TI-mode values (upstream's
- * TI16 typedef, carried). D_L23_001BA5C0 lies inside the split's larger label
- * D_L23_001B2AB0 (+0x7B10); the address-named extern is valued from its name
- * by tools/levels/level_elf.py (RULING #13291 section 2).
+ * TI16 typedef, carried). g_cameraPos is L23's boot-name map name at
+ * 0x001BA5C0 (symbol_addrs/L23_boot_names.txt).
  *
  * Source: OpenRAC rac2-decomp <https://github.com/OpenRAC/rac2-decomp> at
  * fe6adf9baddcd31323c35adf102d078aa250852d, GPL-3.0 (root LICENSE; the file
@@ -55,11 +54,15 @@ extern float D_L23_001BA5C0[];
  *   - names respelled from upstream's v1.01-address names to the targets of
  *     the v2.00 disc's own relocations (relverify on the upstream object, task
  *     #2568): func_L23_004260F0 -> func_L23_004275F0; D_L23_001BA640 ->
- *     D_L23_001BA5C0; func_00282CC0 -> func_L23_002F8EC8; func_00282CF0 ->
- *     func_L23_002F8EF8; func_00282D30 -> func_L23_002F8F38; func_00282DD8 ->
- *     func_L23_002F8FF8; func_00282F20 -> func_L23_002F91A8; func_00283198 ->
- *     func_L23_002F94D0; func_00283C28 -> func_L23_002F9FA0; func_002A7820 ->
- *     func_L23_00325658
+ *     g_cameraPos (L23's boot-map name at the target 0x001BA5C0);
+ *     func_00282CC0 -> func_L23_002F8EC8; func_00282CF0 -> func_L23_002F8EF8;
+ *     func_00282D30 -> func_L23_002F8F38; func_00282DD8 -> func_L23_002F8FF8;
+ *     func_00282F20 -> func_L23_002F91A8; func_00283198 -> func_L23_002F94D0;
+ *     func_00283C28 -> func_L23_002F9FA0; func_002A7820 -> func_L23_00325658
+ *   - D_L23_001BA5C0 -> g_cameraPos (task #2646): the name
+ *     symbol_addrs/L23_boot_names.txt gives at exactly that address; the
+ *     address-named spelling was a second name for the same address (A2
+ *     class, NOTE #13409)
  *   - `#include "include_asm.h"` and `#include "common.h"` dropped; the
  *     typedefs it uses written in the TU (the file's own where it has them,
  *     else common.h's); only the file-level declarations it uses kept, without
@@ -84,7 +87,7 @@ void func_L23_004275F0(u8 *obj, float *dst, TI16 *src1, TI16 *src2, float scale)
     loc[0] = vb;
     o68 = *(u8 **)(obj + 0x68);
     func_L23_002F8EF8((float *)&loc[2], (float *)&loc[0], (float *)&loc[1]);
-    func_L23_002F8EF8((float *)&loc[3], (float *)&loc[0], D_L23_001BA5C0);
+    func_L23_002F8EF8((float *)&loc[3], (float *)&loc[0], g_cameraPos);
     func_L23_002F8FF8((float *)&loc[4], (float *)&loc[3], (float *)&loc[2]);
     func_L23_002F91A8((float *)&loc[4], (float *)&loc[4], 1.0f);
     x = *(s16 *)(o68 + 0xC);

@@ -21,7 +21,7 @@ extern void func_L11_003F3458(u8 *arg0);
 extern void func_L11_003F3F40(u8 *arg0);
 extern void func_L11_003F4138(u8 *arg0);
 extern s32 func_L11_003F4310(u8 *arg0);
-extern u8 D_L11_001BA940[];
+extern u8 g_cameraPos[];
 
 /**
  * func_L11_003F3178 - per-frame dispatcher of a Joba object: set it up on its
@@ -33,7 +33,7 @@ extern u8 D_L11_001BA940[];
  * Non-obvious: Stage 0 calls the setup func_L11_003F3228 through upstream's
  * unprototyped declaration, with no argument, as upstream writes it. Later
  * stages return early when func_L11_003F4310 reports the object handled.
- * Otherwise, if it is visible and within 48.0 of the point D_L11_001BA940
+ * Otherwise, if it is visible and within 48.0 of the point g_cameraPos
  * (func_L11_003013B8 is the level's distance copy), func_L11_0032FF88 runs and
  * +0x6F becomes 0x2D. Then the four updates func_L11_003F32C0,
  * func_L11_003F3458, func_L11_003F3F40 and func_L11_003F4138 run in that
@@ -52,8 +52,8 @@ extern u8 D_L11_001BA940[];
  * relocation at this place (relverify by name on this object, task #2578):
  *   - func_L11_003F1C68 -> func_L11_003F3178 (our split name at the v2.00
  *     place);
- *   - D_L11_001BA8C0 -> D_L11_001BA940 (address-named, inside D_L11_001B39B0;
- *     RULING #13291 section 2);
+ *   - D_L11_001BA8C0 -> g_cameraPos (L11's boot-map name at
+ *     the v2.00 target 0x001BA940);
  *   - func_00282E48 -> func_L11_003013B8 (the level's own copy at its L11
  *     place);
  *   - func_002A93B0 -> func_L11_0032FF88 (the level's own copy at its L11
@@ -64,6 +64,10 @@ extern u8 D_L11_001BA940[];
  *   - func_L11_003F2A30 -> func_L11_003F3F40 (its v2.00 split name);
  *   - func_L11_003F2C28 -> func_L11_003F4138 (its v2.00 split name);
  *   - func_L11_003F2E00 -> func_L11_003F4310 (its v2.00 split name);
+ *   - D_L11_001BA940 -> g_cameraPos (task #2646): the name
+ *     symbol_addrs/L11_boot_names.txt gives at exactly that address; the
+ *     address-named spelling was a second name for the same address (A2 class,
+ *     NOTE #13409).
  *   - `#include "common.h"` dropped: the typedefs this body uses are written
  *     here; upstream file-scope declarations it does not use are not carried,
  *     the rest keep upstream's order and text.
@@ -76,7 +80,7 @@ void func_L11_003F3178(u8 *arg0) {
         if (func_L11_003F4310(s0) != 0)
             return;
         if (*(u8 *)(s0 + 0x31) != 0
-            && func_L11_003013B8(s0 + 0x10, D_L11_001BA940) < 48.0f) {
+            && func_L11_003013B8(s0 + 0x10, g_cameraPos) < 48.0f) {
             func_L11_0032FF88(s0);
             *(u8 *)(s0 + 0x6F) = 0x2D;
         }

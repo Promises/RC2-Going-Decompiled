@@ -11,7 +11,7 @@
  */
 
 extern float func_L11_003013B8(void *, void *);
-extern char D_L11_001BA940[];
+extern char g_cameraPos[];
 extern int func_L11_00302400(float);
 extern void func_L11_00340930(char *, float, float, float, float);
 extern void func_L11_0032D918(void *, int, int, int);
@@ -24,7 +24,7 @@ extern void func_L11_0033A1D8(char *, char *, int);
 extern int func_L11_0033DAC8(char *, int, int, int, float, float);
 extern float func_L11_003013B8(void *, void *);
 extern void func_L11_0032FF88(char *);
-extern char D_L11_001BA940[];
+extern char g_cameraPos[];
 
 /**
  * func_L11_0043BC38 - per-frame update of a Joba object: set it up on its
@@ -40,7 +40,7 @@ extern char D_L11_001BA940[];
  * func_L11_0043C368. From stage 4 it runs func_L11_0033A1D8. From stage 3 it
  * runs func_L11_0043C368 again while its state byte +0x2E is 2. +0x2D8 is
  * refreshed by func_L11_0033DAC8. A visible object within 48.0 of
- * D_L11_001BA940 runs func_L11_0032FF88 and sets +0x6F to 45, as
+ * g_cameraPos runs func_L11_0032FF88 and sets +0x6F to 45, as
  * func_L11_003F3178 does.
  *
  * Source: OpenRAC rac2-decomp <https://github.com/OpenRAC/rac2-decomp> at
@@ -56,8 +56,8 @@ extern char D_L11_001BA940[];
  * this place (relverify by name on this object, task #2578):
  *   - func_L11_0043A3F8 -> func_L11_0043BC38 (our split name at the v2.00
  *     place);
- *   - D_L11_001BA8C0 -> D_L11_001BA940 (address-named, inside D_L11_001B39B0;
- *     RULING #13291 section 2);
+ *   - D_L11_001BA8C0 -> g_cameraPos (L11's boot-map name at
+ *     the v2.00 target 0x001BA940);
  *   - func_00282E48 -> func_L11_003013B8 (the level's own copy at its L11
  *     place);
  *   - func_00283CF0 -> func_L11_00302400 (the level's own copy at its L11
@@ -75,6 +75,10 @@ extern char D_L11_001BA940[];
  *   - func_002B60B0 -> func_L11_00340930 (the level's own copy at its L11
  *     place);
  *   - func_L11_0043AB28 -> func_L11_0043C368 (its v2.00 split name);
+ *   - D_L11_001BA940 -> g_cameraPos (task #2646): the name
+ *     symbol_addrs/L11_boot_names.txt gives at exactly that address; the
+ *     address-named spelling was a second name for the same address (A2 class,
+ *     NOTE #13409).
  *   - `#include "common.h"` dropped: the typedefs this body uses are written
  *     here; upstream file-scope declarations it does not use are not carried,
  *     the rest keep upstream's order and text.
@@ -117,7 +121,7 @@ void func_L11_0043BC38(char *object) {
     *(int *)(state + 0x2D8) = func_L11_0033DAC8(object, *(int *)(state + 0x2E8),
                                          0, 0, 255.0f, 255.0f);
     if (*(unsigned char *)(object + 0x31) != 0) {
-        if (func_L11_003013B8(object + 0x10, D_L11_001BA940) < 48.0f) {
+        if (func_L11_003013B8(object + 0x10, g_cameraPos) < 48.0f) {
             func_L11_0032FF88(object);
             *(unsigned char *)(object + 0x6F) = 45;
         }

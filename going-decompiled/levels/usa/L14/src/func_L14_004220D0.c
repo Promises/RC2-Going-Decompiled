@@ -5,13 +5,13 @@
  * cc1 (tools/ee/ee_cc1.sh s136, FACT #8810) at -O2 -G0 -fopt-stack.
  */
 
-/* The entity base pointer, a word inside L14's larger label D_L14_001B1D00,
- * so address-named (RULING #13291 §2). Upstream marks it `sda`; here it is
+/* The entity base pointer: L14's boot-name map name at 0x001B251C
+ * (symbol_addrs/L14_boot_names.txt). Upstream marks it `sda`; here it is
  * the ADDRESSING-MODEL DEVICE of RULING #8620: a section(".sdata") attribute
  * on the extern DECLARATION (no data moved, nothing emitted) that only changes
  * how cc1 addresses it. Ablation (upstream file, s136, `long long`->`long`):
  * without it 6 of 85 words differ from the ROM, with it 0. */
-extern unsigned char *D_L14_001B251C __attribute__((section(".sdata")));
+extern unsigned char *g_mobyTableBase __attribute__((section(".sdata")));
 /* L14's copies of a level-03 and a level-02 helper, at their v2.00 places. */
 extern void func_L14_00421EF0(void *);
 extern int func_L14_00333388(void *, void *, int, int *);
@@ -32,7 +32,7 @@ typedef struct {
  * func_L14_004220D0 - mark or clear the link between two nodes of an entity's
  * graph.
  *
- * @index:  the entity, a 256-byte record of D_L14_001B251C's table.
+ * @index:  the entity, a 256-byte record of g_mobyTableBase's table.
  * @first:  the first node's key.
  * @second: the second node's key.
  * @clear:  non-zero clears the link's bit 7, zero sets it.
@@ -54,8 +54,11 @@ typedef struct {
  * #13291). ADAPTED; edits:
  *   - name func_L14_00420B10 -> func_L14_004220D0 (our split name at
  *     the v2.00 place);
- *   - D_L14_001B259C -> D_L14_001B251C (the v2.00 relocation target;
- *     inside D_L14_001B1D00, so address-named, RULING #13291 §2);
+ *   - D_L14_001B259C -> g_mobyTableBase, the name symbol_addrs/
+ *     L14_boot_names.txt gives at the v2.00 relocation target 0x001B251C;
+ *   - D_L14_001B251C -> g_mobyTableBase (task #2646): the address-named
+ *     spelling was a second name for the same address (A2 class, NOTE
+ *     #13409);
  *   - its `__attribute__((sda))` written
  *     `__attribute__((section(".sdata")))` (RULING #8620
  *     addressing-model device on an extern declaration);
@@ -69,7 +72,7 @@ typedef struct {
  *     not carried (nothing here uses them).
  */
 void func_L14_004220D0(int index, void *first, void *second, int clear) {
-    unsigned char *self = D_L14_001B251C + index * 256;
+    unsigned char *self = g_mobyTableBase + index * 256;
     PrisonGraphState *state = *(PrisonGraphState **)(self + 0x68);
     int id0, id1;
     int i;

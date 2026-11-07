@@ -18,7 +18,7 @@ typedef unsigned int u32;
 typedef unsigned char u8;
 typedef unsigned short u16;
 typedef short s16;
-extern u8 *D_L11_001FC4A0[];
+extern u8 *g_mobyGroupLists[];
 typedef struct {
     s16 half[6];
     u8 pad0[8];
@@ -31,8 +31,8 @@ typedef struct {
     JobaClassRecordView *records;
 } JobaClassTableView;
 extern u32 D_L11_001B14D8 __attribute__((section(".sdata")));
-extern s32 D_L11_001B3638 __attribute__((section(".sdata")));
-extern u8 *D_L11_001B361C[3] __attribute__((section(".sdata")));
+extern s32 g_mobyGroupCount __attribute__((section(".sdata")));
+extern u8 *g_mobyTableBase[3] __attribute__((section(".sdata")));
 extern char g_heroPos[];
 extern s32 func_L11_004443B0(u8 *);
 extern s32 func_L11_00418968(u8 *);
@@ -50,8 +50,8 @@ extern float func_L11_003013F0(void *, void *);
  * Non-obvious: An empty slot is taken as it is. A filled one is replaced only
  * when func_L11_00418968 refuses its entity and the slot index is still below
  * the class record's limit (byte +0x16) - 1; the index then advances. The slot
- * gets the first entity of the group's id list (D_L11_001FC4A0, entries
- * 256-byte records of D_L11_001B361C) that both func_L11_004443B0 and
+ * gets the first entity of the group's id list (g_mobyGroupLists, entries
+ * 256-byte records of g_mobyTableBase) that both func_L11_004443B0 and
  * func_L11_00418968 accept. If it is still empty after that walk, it takes the
  * first entity that func_L11_00418968 accepts and that lies more than 30.0
  * from g_heroPos (func_L11_003013F0). Upstream: the table address is formed at
@@ -70,17 +70,22 @@ extern float func_L11_003013F0(void *, void *);
  *     place);
  *   - D_00189EA0 -> g_heroPos (the boot's name, same address);
  *   - D_L11_001B14F8 -> D_L11_001B14D8 (our label at that address);
- *   - D_L11_001B359C_abs -> D_L11_001B361C (address-named, inside
- *     D_L11_001B2E00; RULING #13291 section 2);
- *   - D_L11_001B35B8 -> D_L11_001B3638 (address-named, inside D_L11_001B2E00;
- *     RULING #13291 section 2);
- *   - D_L11_001FC420 -> D_L11_001FC4A0 (address-named, inside D_L11_001F0000;
- *     RULING #13291 section 2);
+ *   - D_L11_001B359C_abs -> g_mobyTableBase (L11's boot-map name at
+ *     0x001B361C);
+ *   - D_L11_001B35B8 -> g_mobyGroupCount (L11's boot-map name at
+ *     0x001B3638);
+ *   - D_L11_001FC420 -> g_mobyGroupLists (L11's boot-map name at
+ *     0x001FC4A0);
  *   - func_00282E80 -> func_L11_003013F0 (the level's own copy at its L11
  *     place);
  *   - func_L02_003D77B8 -> func_L11_00418968 (the level's own copy at its L11
  *     place);
  *   - func_L11_00442B60 -> func_L11_004443B0 (its v2.00 split name);
+ *   - D_L11_001B361C -> g_mobyTableBase, D_L11_001B3638 -> g_mobyGroupCount,
+ *     D_L11_001FC4A0 -> g_mobyGroupLists (task #2646): the names
+ *     symbol_addrs/L11_boot_names.txt gives at exactly those addresses; the
+ *     address-named spelling was a second name for the same address (A2 class,
+ *     NOTE #13409).
  *   - `__attribute__((sda))` -> `__attribute__((section(".sdata")))` on 3
  *     extern declaration(s) (RULING #8620: upstream's patched cc1 reads sda,
  *     ours does not);
@@ -110,13 +115,13 @@ void func_L11_00442668(u8 *obj) {
     if (ok) {
         if (GROUP(0xC4) == 0xFF)
             return;
-        q = (u16 *)D_L11_001FC4A0[GROUP(0xC4)];
+        q = (u16 *)g_mobyGroupLists[GROUP(0xC4)];
         if (q == 0)
             return;
-        for (p = q; (GROUP(0xC4) & 0xFF) != 0xFF && GROUP(0xC4) <= D_L11_001B3638 && p != 0 &&
-                    ((p != 0 && (s16)p[-1] >= 0) || p == (u16 *)D_L11_001FC4A0[GROUP(0xC4)]);
+        for (p = q; (GROUP(0xC4) & 0xFF) != 0xFF && GROUP(0xC4) <= g_mobyGroupCount && p != 0 &&
+                    ((p != 0 && (s16)p[-1] >= 0) || p == (u16 *)g_mobyGroupLists[GROUP(0xC4)]);
              p++) {
-            e = D_L11_001B361C[0] + ((*p & 0x7FFF) << 8);
+            e = g_mobyTableBase[0] + ((*p & 0x7FFF) << 8);
             if (e == 0)
                 break;
             if (func_L11_004443B0(e)) {
@@ -129,11 +134,11 @@ void func_L11_00442668(u8 *obj) {
         }
         slots = (u8 **)(state + 0x120);
         if (*(u8 **)((u8 *)slots + (GROUP(0x18C) << 2)) == 0) {
-            for (p = (u16 *)D_L11_001FC4A0[GROUP(0xC4)];
-                 (GROUP(0xC4) & 0xFF) != 0xFF && GROUP(0xC4) <= D_L11_001B3638 && p != 0 &&
-                 ((p != 0 && (s16)p[-1] >= 0) || p == (u16 *)D_L11_001FC4A0[GROUP(0xC4)]);
+            for (p = (u16 *)g_mobyGroupLists[GROUP(0xC4)];
+                 (GROUP(0xC4) & 0xFF) != 0xFF && GROUP(0xC4) <= g_mobyGroupCount && p != 0 &&
+                 ((p != 0 && (s16)p[-1] >= 0) || p == (u16 *)g_mobyGroupLists[GROUP(0xC4)]);
                  p++) {
-                e = D_L11_001B361C[0] + ((*p & 0x7FFF) << 8);
+                e = g_mobyTableBase[0] + ((*p & 0x7FFF) << 8);
                 if (e == 0)
                     break;
                 if (func_L11_00418968(e)) {

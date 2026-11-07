@@ -13,7 +13,7 @@ extern SourceEntry12 D_L20_00296920[];
 extern char D_L20_002923C0[];
 extern InitEntry12 D_L20_0021E0A0[];
 extern int * volatile D_L20_001AA810 __attribute__((sda));
-extern struct { char pad[0x230]; int selected; } D_L20_001CA520;
+extern struct { char pad[0x230]; int selected; } g_mapVertexData;
 
 /**
  * func_L20_0036BFB0 - build the level-ordered menu rows and select the current owner's entry.
@@ -24,7 +24,7 @@ extern struct { char pad[0x230]; int selected; } D_L20_001CA520;
  * entry in D_L20_00296920. A row with id 0 ends the list. Then clear
  * obj+0x40, set bit 0x8000 in obj+0x30, and walk the zero-terminated list
  * that D_L20_001AA810 points to; the first index whose entry equals
- * D_L20_001CA520.selected is stored to obj+0x40.
+ * g_mapVertexData.selected is stored to obj+0x40.
  *
  * @obj: the menu object; only +0x30 (flags) and +0x40 (selected row) are
  * touched.
@@ -46,8 +46,12 @@ extern struct { char pad[0x230]; int selected; } D_L20_001CA520;
  *     the v2.00 disc's own relocations (relverify on the upstream object, task
  *     #2565): func_L20_0036AE68 -> func_L20_0036BFB0; D_00139948 ->
  *     g_anAvailableLevelOrder; D_L20_001AA7F0 -> D_L20_001AA810;
- *     D_L20_001CA5A0 -> D_L20_001CA520; D_L20_0021E0F0 -> D_L20_0021E0A0;
+ *     D_L20_001CA5A0 -> g_mapVertexData; D_L20_0021E0F0 -> D_L20_0021E0A0;
  *     D_L20_002923E0 -> D_L20_002923C0
+ *   - D_L20_001CA520 -> g_mapVertexData (task #2646): the name
+ *     symbol_addrs/L20_boot_names.txt gives at exactly that address; the
+ *     address-named spelling was a second name for the same address (A2 class,
+ *     NOTE #13409).
  *   - `#include "common.h"` dropped; the common.h typedefs it uses written in
  *     the TU; only the declarations it uses kept
  *   - upstream's file comment folded into this one (it calls this the level-20
@@ -68,7 +72,7 @@ int func_L20_0036BFB0(char *obj) {
     *(int *)(obj + 0x40) = 0;
     *(unsigned int *)(obj + 0x30) |= 0x8000;
     for (i = 0, entry = list[0]; entry; entry = D_L20_001AA810[++i]) {
-        if (D_L20_001CA520.selected == entry) {
+        if (g_mapVertexData.selected == entry) {
             *(int *)(obj + 0x40) = i;
             break;
         }

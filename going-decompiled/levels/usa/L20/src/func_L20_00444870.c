@@ -13,7 +13,7 @@
  * lui + lw/sw pair (absolute %hi/%lo, not $gp-relative at -G0), as retail
  * has it. Ablation (task #2565): with upstream's `sda` (ignored by this cc1)
  * the function differs from the disc in 11 of 34 words (masked compare). */
-extern unsigned int D_L20_001B2F1C __attribute__((section(".sdata")));
+extern unsigned int g_mobyTableBase __attribute__((section(".sdata")));
 extern int func_L20_0044B010(char *);
 extern void func_L20_0039D1B8(char *, char *, int, int);
 
@@ -21,7 +21,7 @@ extern void func_L20_0039D1B8(char *, char *, int, int);
  * func_L20_00444870 - bind a moby's group entity to it and orient it.
  *
  * p = the entity record of id state +0x238 (0x100-byte records at
- * D_L20_001B2F1C). When func_L20_0044B010(p) accepts it, calls
+ * g_mobyTableBase). When func_L20_0044B010(p) accepts it, calls
  * func_L20_0044AF30(p, moby, other) and func_L20_0039D1B8(p, p + 0x10, 0x168,
  * 0).
  *
@@ -41,18 +41,22 @@ extern void func_L20_0039D1B8(char *, char *, int, int);
  *   - names respelled from upstream's v1.01-address names to the targets of
  *     the v2.00 disc's own relocations (relverify on the upstream object, task
  *     #2565): func_L20_00443328 -> func_L20_00444870; D_L20_001B2F9C ->
- *     D_L20_001B2F1C; func_0039BDF0 -> func_L20_0039D1B8; func_L20_004499E8 ->
+ *     g_mobyTableBase; func_0039BDF0 -> func_L20_0039D1B8; func_L20_004499E8 ->
  *     func_L20_0044AF30; func_L20_00449AC8 -> func_L20_0044B010
+ *   - D_L20_001B2F1C -> g_mobyTableBase (task #2646): the name
+ *     symbol_addrs/L20_boot_names.txt gives at exactly that address; the
+ *     address-named spelling was a second name for the same address (A2 class,
+ *     NOTE #13409).
  *   - `__attribute__((sda))` written `__attribute__((section(".sdata")))` on
  *     the extern declarations (RULING #8620 addressing device, comment above
  *     them)
  *   - `#include "common.h"` dropped; the common.h typedefs it uses written in
  *     the TU; only the declarations it uses kept
- *   - the duplicate declaration of D_L20_001B2F1C written once
+ *   - the duplicate declaration of g_mobyTableBase written once
  */
 char *func_L20_00444870(char *arg0, char *arg1) {
     char *state = *(char **)(arg0 + 0x68);
-    unsigned int p = D_L20_001B2F1C + (*(int *)(state + 0x238) << 8);
+    unsigned int p = g_mobyTableBase + (*(int *)(state + 0x238) << 8);
 
     if (func_L20_0044B010((char *)p) != 0) {
         func_L20_0044AF30((char *)p, arg0, arg1);

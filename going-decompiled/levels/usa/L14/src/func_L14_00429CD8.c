@@ -11,19 +11,19 @@
  * off, plain as).
  */
 
-extern unsigned char *D_L14_001FAFE0[];
-extern unsigned char *D_L14_001B251C __attribute__((sda));
+extern unsigned char *g_mobyGroupLists[];
+extern unsigned char *g_mobyTableBase __attribute__((sda));
 
 /**
  * func_L14_00429CD8 - flag every class 0x112B moby in an object's id list.
  *
- * @a0: the object; byte +0x21 indexes the list table D_L14_001FAFE0 (0xFF =
+ * @a0: the object; byte +0x21 indexes the list table g_mobyGroupLists (0xFF =
  *      none).
  * Return: nothing.
  *
  * Non-obvious: Upstream's comment: "Walks the 0x7FFF-masked id list at
  * table[index] and flags class 0x112B entries." Each id selects a 0x100-byte
- * moby record of D_L14_001B251C; a live record (byte +0x20 >= 0) of class
+ * moby record of g_mobyTableBase; a live record (byte +0x20 >= 0) of class
  * 0x112B (+0xAA) gets 1 in the halfword at +0x316 of its state block (+0x68).
  * The list ends at the first id with its top bit set, which is still processed.
  *
@@ -42,10 +42,12 @@ extern unsigned char *D_L14_001B251C __attribute__((sda));
  * (relverify by name on this object, task #2581):
  *   - func_L14_004286F8 -> func_L14_00429CD8 (our split name at the v2.00
  *     place);
- *   - D_L14_001B259C_1 -> D_L14_001B251C (address-named, inside
- *     D_L14_001B1D00+0x81C; RULING #13291 section 2);
- *   - D_L14_001FB060 -> D_L14_001FAFE0 (address-named, inside
- *     D_L14_001F0000+0xAFE0; RULING #13291 section 2);
+ *   - D_L14_001B259C_1 -> g_mobyTableBase and D_L14_001FB060 ->
+ *     g_mobyGroupLists, the names symbol_addrs/L14_boot_names.txt gives at
+ *     the v2.00 relocation targets 0x001B251C and 0x001FAFE0;
+ *   - D_L14_001B251C -> g_mobyTableBase, D_L14_001FAFE0 -> g_mobyGroupLists
+ *     (task #2646): the address-named spelling was a second name for the
+ *     same address (A2 class, NOTE #13409);
  *   - `__attribute__((sda))` kept as upstream's text: this cc1 ignores it (a
  *     warning) and the member closes with it as written;
  *   - `#include "common.h"` dropped (the body uses none of its typedefs);
@@ -61,11 +63,11 @@ void func_L14_00429CD8(unsigned char *a0)
 
     if (a0[0x21] == 0xFF)
         return;
-    p = D_L14_001FAFE0[a0[0x21]];
+    p = g_mobyGroupLists[a0[0x21]];
     if (p == 0)
         return;
     q = (unsigned short *)p;
-    base = D_L14_001B251C;
+    base = g_mobyTableBase;
     for (;;) {
         e = (char *)(base + ((*q & 0x7FFF) << 8));
         if ((signed char)e[0x20] >= 0) {

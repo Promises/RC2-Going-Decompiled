@@ -12,13 +12,12 @@ typedef unsigned short u16;
 typedef short s16;
 typedef float f32;
 
-/* The level's 256-byte record bank and its id lists. Both addresses lie inside
-   larger split data labels (D_L11_001B2E00, D_L11_001F0000), so they are
-   address-named externs (RULING #13291 §2): the level ELF values them from
-   their names. The `sda` attribute is upstream's own text; this cc1 ignores
+/* The level's 256-byte record bank and its id lists. Both are the
+   names L11's boot-name map gives at those addresses (0x001B361C,
+   0x001FC4A0; task #2646). The `sda` attribute is upstream's own text; this cc1 ignores
    it, and at -G8 the 4-byte pointer is $gp-relative by its size alone. */
-extern u8 *D_L11_001B361C __attribute__((sda));
-extern u8 *D_L11_001FC4A0[];
+extern u8 *g_mobyTableBase __attribute__((sda));
+extern u8 *g_mobyGroupLists[];
 
 /* The two class handlers: the level function at 0x004421C0 and our C
    func_L11_004424E0 (src/func_L11_004424E0.c). */
@@ -30,8 +29,8 @@ extern s32 func_L11_004424E0(u8 *obj, u8 *record);
  * hand it to the group handler.
  *
  * Same walk as func_L11_004420B8: the state's group word (+0xC0) names an id
- * list in D_L11_001FC4A0, whose halfwords index 256-byte records of the bank
- * at D_L11_001B361C until one has its sign bit set. The first live record
+ * list in g_mobyGroupLists, whose halfwords index 256-byte records of the bank
+ * at g_mobyTableBase until one has its sign bit set. The first live record
  * (+0x20 neither 0xFE nor 0xFD) of class @id (+0xAA) in state 1 gets @obj as
  * its owner (+0xB8) and goes to func_L11_004421C0 when @flag is non-zero, else
  * to func_L11_004424E0.
@@ -50,9 +49,13 @@ extern s32 func_L11_004424E0(u8 *obj, u8 *record);
  * (no device); the respellings, each to the target of the v2.00 disc's own
  * relocation at this place (task #2555 relverify):
  *   - func_L11_00440790 -> func_L11_00441FE0 (our split name at the v2.00 place);
- *   - D_L11_001B359C -> D_L11_001B361C (address-named, inside D_L11_001B2E00);
- *   - D_L11_001FC420 -> D_L11_001FC4A0 (address-named, inside D_L11_001F0000);
+ *   - D_L11_001B359C -> g_mobyTableBase (L11's boot-map name at 0x001B361C);
+ *   - D_L11_001FC420 -> g_mobyGroupLists (L11's boot-map name at 0x001FC4A0);
  *   - func_L11_00440970 -> func_L11_004421C0, func_L11_00440C90 -> func_L11_004424E0;
+ *   - D_L11_001B361C -> g_mobyTableBase, D_L11_001FC4A0 -> g_mobyGroupLists
+ *     (task #2646): the names symbol_addrs/L11_boot_names.txt gives at exactly
+ *     those addresses; the address-named spelling was a second name for the
+ *     same address (A2 class, NOTE #13409).
  *   - `#include "include_asm.h"` dropped (nothing used it); the file's own
  *     typedefs are kept, and its `nosda` D_00189E20 declaration (used only by
  *     the file's other function) is omitted.
@@ -68,12 +71,12 @@ s32 func_L11_00441FE0(u8 *obj, s32 id, s32 flag) {
     if (index == 0xFF) {
         return 0;
     }
-    list = D_L11_001FC4A0[index];
+    list = g_mobyGroupLists[index];
     if (list == 0) {
         return 0;
     }
     cursor = (u16 *)list;
-    base = D_L11_001B361C;
+    base = g_mobyTableBase;
     do {
         record = base + ((*cursor & 0x7FFF) << 8);
 

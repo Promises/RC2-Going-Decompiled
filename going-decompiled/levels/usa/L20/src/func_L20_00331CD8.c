@@ -6,8 +6,8 @@
  * by plain GNU as (the row's `as` column).
  */
 
-extern unsigned char D_L20_001DB9E0[];
-extern void *D_L20_001DB080[];
+extern unsigned char g_mobyClassSlotRemap[];
+extern void *g_mobyClassHeaders[];
 extern void func_L20_00326640(void *);
 extern void func_L20_00328D10(void *);
 
@@ -15,9 +15,9 @@ extern void func_L20_00328D10(void *);
  * func_L20_00331CD8 - set a moby's class and load its class record.
  *
  * Stores the class id (as a short) at +0xAA, looks up the class's slot byte
- * in D_L20_001DB9E0 (stored at +0x22) and the class record pointer in
- * D_L20_001DB080[slot] (stored at +0x24), then runs func_L20_00326640 on the
- * moby. From the record it copies byte +0xE to +0x62, the float +0x24 to
+ * in g_mobyClassSlotRemap (stored at +0x22) and the class record pointer in
+ * g_mobyClassHeaders[slot] (stored at +0x24), then runs func_L20_00326640 on
+ * the moby. From the record it copies byte +0xE to +0x62, the float +0x24 to
  * +0x2C and the word +0x10 to +0x98, and sets +0x61 to 0xFF. A non-zero
  * record word +0x40 sets flag 0x10 in +0x34 and is copied to +0x78; a
  * non-zero record byte +0xF sets +0x6F to 0x18, flag 0x400 in +0x34 and
@@ -41,8 +41,13 @@ extern void func_L20_00328D10(void *);
  *   - names respelled from upstream's v1.01-address names to the targets of
  *     the v2.00 disc's own relocations (relverify on the upstream object, task
  *     #2565): func_L20_00330A68 -> func_L20_00331CD8; D_L20_001DB100 ->
- *     D_L20_001DB080; D_L20_001DBA60 -> D_L20_001DB9E0; func_0029F390 ->
- *     func_L20_00326640; func_002A0F48 -> func_L20_00328D10
+ *     g_mobyClassHeaders; D_L20_001DBA60 -> g_mobyClassSlotRemap;
+ *     func_0029F390 -> func_L20_00326640; func_002A0F48 -> func_L20_00328D10
+ *   - D_L20_001DB080 -> g_mobyClassHeaders, D_L20_001DB9E0 ->
+ *     g_mobyClassSlotRemap (task #2646): the names
+ *     symbol_addrs/L20_boot_names.txt gives at exactly those addresses; the
+ *     address-named spelling was a second name for the same address (A2 class,
+ *     NOTE #13409).
  *   - `#include "common.h"` dropped; the common.h typedefs it uses written in
  *     the TU; only the declarations it uses kept
  */
@@ -54,8 +59,8 @@ void func_L20_00331CD8(void *arg0, int arg1)
     int q;
 
     *(short *)(arg0 + 0xAA) = (short)arg1;
-    *(unsigned char *)(arg0 + 0x22) = D_L20_001DB9E0[(short)arg1];
-    *(void **)(arg0 + 0x24) = D_L20_001DB080[*(unsigned char *)(arg0 + 0x22)];
+    *(unsigned char *)(arg0 + 0x22) = g_mobyClassSlotRemap[(short)arg1];
+    *(void **)(arg0 + 0x24) = g_mobyClassHeaders[*(unsigned char *)(arg0 + 0x22)];
     func_L20_00326640(arg0);
     p = *(unsigned char **)(arg0 + 0x24);
     *(unsigned char *)(arg0 + 0x62) = p[0xE];

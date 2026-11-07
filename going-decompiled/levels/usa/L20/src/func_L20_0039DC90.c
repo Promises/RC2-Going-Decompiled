@@ -19,13 +19,13 @@ extern char *func_L20_0034B100(char *p, float fa, float fb, float fc, float fd, 
                             unsigned int color, int flag);
 extern void func_L20_0034ED90(float *out, float *dir, int a, int b, unsigned int color, int id,
                            float fa, float fb, float fc, float fd, float fe);
-extern char D_L20_001B9F40[];
+extern char g_cameraPos[];
 extern char g_heroFacingDir[];
 
 /**
  * func_L20_0039DC90 - spawn the 20-particle burst of a Yeedil effect at a point.
  *
- * Takes the heading from D_L20_001B9F40 to the point (func_L20_00303680 of
+ * Takes the heading from g_cameraPos to the point (func_L20_00303680 of
  * their difference). Twenty times: a smoke particle with a random push along
  * g_heroFacingDir, size, speed and lifetime (func_L20_0034B100; its fields
  * +3, +9, +10 and the +0x20 block set when it is created), then a spark
@@ -48,13 +48,17 @@ extern char g_heroFacingDir[];
  *   - names respelled from upstream's v1.01-address names to the targets of
  *     the v2.00 disc's own relocations (relverify on the upstream object, task
  *     #2565): func_L20_0039C8C8 -> func_L20_0039DC90; D_0018A0E0 ->
- *     g_heroFacingDir; D_L20_001B9FC0 -> D_L20_001B9F40; func_00282CF0 ->
+ *     g_heroFacingDir; D_L20_001B9FC0 -> g_cameraPos; func_00282CF0 ->
  *     func_L20_00302FF0; func_00282D30 -> func_L20_00303030; func_00283248 ->
  *     func_L20_00303680; func_00283B98 -> func_L20_00303FD0; func_00283CE0 ->
  *     func_L20_00304118; func_00283CF0 -> func_L20_00304128; func_002A7878 ->
  *     func_L20_00330988; func_002A78D8 -> func_L20_003309E8; func_002AF000 ->
  *     func_L20_00339838; func_002BDCE8 -> func_L20_0034B100; func_002C16C0 ->
  *     func_L20_0034ED90
+ *   - D_L20_001B9F40 -> g_cameraPos (task #2646): the name
+ *     symbol_addrs/L20_boot_names.txt gives at exactly that address; the
+ *     address-named spelling was a second name for the same address (A2 class,
+ *     NOTE #13409).
  *   - `#include "common.h"` dropped; the common.h typedefs it uses written in
  *     the TU; only the declarations it uses kept
  */
@@ -73,7 +77,7 @@ void func_L20_0039DC90(float *p)
     char *r;
     char *q;
 
-    func_L20_00302FF0((char *)v, D_L20_001B9F40, (char *)p);
+    func_L20_00302FF0((char *)v, g_cameraPos, (char *)p);
     ang = func_L20_00303680(v[0], v[1]);
 
     for (i = 19; i >= 0; i--) {

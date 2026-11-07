@@ -11,7 +11,7 @@
  */
 
 extern int D_L11_001A8FF4 __attribute__((sda));
-extern char D_L11_001BA940[];
+extern char g_cameraPos[];
 extern int func_L11_00302400(float);
 extern float func_L11_0032DD60(float,float);
 extern int func_L11_0032DCC8(int);
@@ -58,8 +58,8 @@ extern void func_L11_0032FF88(char *);
  * object, task #2578):
  *   - func_L11_00436350 -> func_L11_00437B90 (our split name at the v2.00
  *     place);
- *   - D_L11_001BA8C0 -> D_L11_001BA940 (address-named, inside D_L11_001B39B0;
- *     RULING #13291 section 2);
+ *   - D_L11_001BA8C0 -> g_cameraPos (L11's boot-map name at
+ *     the v2.00 target 0x001BA940);
  *   - func_00282CC0 -> func_L11_003011E0 (the level's own copy at its L11
  *     place);
  *   - func_00282CF0 -> func_L11_00301210 (the level's own copy at its L11
@@ -96,6 +96,10 @@ extern void func_L11_0032FF88(char *);
  *   - func_L11_00436A78 -> func_L11_004382B8 (its v2.00 split name);
  *   - func_L11_004417E8 -> func_L11_00443038 (its v2.00 split name);
  *   - func_L11_004461C0 -> func_L11_00447BE8 (its v2.00 split name);
+ *   - D_L11_001BA940 -> g_cameraPos (task #2646): the name
+ *     symbol_addrs/L11_boot_names.txt gives at exactly that address; the
+ *     address-named spelling was a second name for the same address (A2 class,
+ *     NOTE #13409).
  *   - `__attribute__((sda))` kept as upstream's text: this cc1 ignores it (a
  *     warning), and the member closes with it as written;
  *   - `#include "common.h"` dropped: the typedefs this body uses are written
@@ -174,7 +178,7 @@ void func_L11_00437B90(char *p) {
     }
     if(!F(s,short,0x286) && F(p,unsigned char,0x20)!=11 && !D_L11_001A8FF4) {
         F(p,unsigned short,0x34)|=0x400;
-        if(F(p,unsigned char,0x31) && func_L11_003013B8(p+0x10,D_L11_001BA940)<24.0f) {
+        if(F(p,unsigned char,0x31) && func_L11_003013B8(p+0x10,g_cameraPos)<24.0f) {
             func_L11_0032FF88(p);
             F(p,unsigned char,0x6F)=22;
         }

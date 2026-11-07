@@ -9,9 +9,9 @@ typedef unsigned char u8;
 typedef signed short s16;
 typedef signed int s32;
 
-/* The level's entity table base, at 0x001B27DC inside our split label
-   D_L09_001B2000: an address-named extern (RULING #13291 §2), valued from its
-   address by level_elf. ADDRESSING-MODEL DEVICE (RULING #8620): upstream's
+/* The level's entity table base, g_mobyTableBase: the name L09's boot-name
+   map (symbol_addrs/L09_boot_names.txt) gives 0x001B27DC (task #2646).
+   ADDRESSING-MODEL DEVICE (RULING #8620): upstream's
    `sda` (ignored by this cc1) is respelled `section(".sdata")` on this extern
    declaration. cc1 then prints the load as the one-instruction `lw` macro,
    which the assembler expands to an ADJACENT absolute lui/lw pair
@@ -19,14 +19,14 @@ typedef signed int s32;
    `sda` instead, cc1 splits %hi/%lo itself and the function keeps its length
    but is scheduled and allocated differently (ablation, task #2561: 24 changed
    lines in the disassembly diff). It moves no data and emits nothing. */
-extern char *D_L09_001B27DC __attribute__((section(".sdata")));
+extern char *g_mobyTableBase __attribute__((section(".sdata")));
 
 /**
  * func_L09_00408030 - set the colour key of one entity of class 0x102 or
  * 0xDE0.
  *
  * Index -1 does nothing. Otherwise takes the 0x100-byte entity slot @a0 from
- * D_L09_001B27DC; a slot whose state byte (+0x20) is 0xFE or 0xFD is left
+ * g_mobyTableBase; a slot whose state byte (+0x20) is 0xFE or 0xFD is left
  * alone, and one of class (+0xAA) 0x102 or 0xDE0 gets byte +0x95 set to @a1.
  *
  * @a0: the entity index, or -1.
@@ -41,10 +41,14 @@ extern char *D_L09_001B27DC __attribute__((section(".sdata")));
  * statements unchanged, the edits, each name to the target of the v2.00
  * disc's own relocation at this place (task #2561 relverify):
  *   - func_L09_00406BA0 -> func_L09_00408030 (our split name at the v2.00 place);
- *   - D_L09_001B285C -> D_L09_001B27DC: an address-named extern inside
- *     D_L09_001B2000 (RULING #13291 §2);
+ *   - D_L09_001B285C -> g_mobyTableBase (L09's boot-map name at the v2.00
+ *     target 0x001B27DC);
+ *   - D_L09_001B27DC -> g_mobyTableBase (task #2646): the name
+ *     symbol_addrs/L09_boot_names.txt gives at exactly that address; the
+ *     address-named spelling was a second name for the same address (A2 class,
+ *     NOTE #13409).
  *   - device: `__attribute__((sda))` -> `__attribute__((section(".sdata")))`
- *     on D_L09_001B27DC's extern declaration (RULING #8620; the audit's
+ *     on g_mobyTableBase's extern declaration (RULING #8620; the audit's
  *     `resp` variant, NOTE #13281);
  *   - `#include "common.h"` dropped: its u8/s16/s32 typedefs are written here
  *     and only the declarations this function uses are kept.
@@ -54,7 +58,7 @@ void func_L09_00408030(s32 a0, u8 a1) {
     if (a0 == -1) {
         return;
     }
-    v1 = D_L09_001B27DC;
+    v1 = g_mobyTableBase;
     v1 += a0 << 8;
     if (v1 == 0) {
         return;
