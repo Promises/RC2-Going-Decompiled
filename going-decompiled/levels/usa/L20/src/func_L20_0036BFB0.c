@@ -39,7 +39,11 @@ extern struct { char pad[0x230]; int selected; } g_mapVertexData;
  * fe6adf9baddcd31323c35adf102d078aa250852d, GPL-3.0 (root LICENSE; the file
  * carries no notice of its own and no Lombyte mention), file
  * src/levels/20_yeedil/L20_0036AE68-g8.c, function func_L20_0036AE68 (v1.01
- * address), author commit 7c3ea917 (Fromnowhere). Adopted with the authors'
+ * address), author commit 7c3ea917 (Fromnowhere), a rename-copy of
+ * bigbeno37's func_L00_00354DF8 in
+ * src/levels/00_aranos_tutorial/L00_002FC7A8-g8.c (author commit 6001495a):
+ * the body is token-identical to it but for symbol names (RULING #13427
+ * rev 4, task #2651). Adopted with the authors'
  * permission (RULINGs #10405, #12108, #13082, #13291). VERBATIM but for
  * names; the statements are upstream's. Edits:
  *   - names respelled from upstream's v1.01-address names to the targets of

@@ -1328,7 +1328,7 @@
     task #2553. VERBATIM but for names: our name at the v2.00 place; callees func_00282CF0 and func_L02_00333480 as L11's copies func_L11_00301210 and func_L11_003415E8.
   - **`func_L11_0036A7F8`** (`0x0036A7F8`, level program 11) in
     `going-decompiled/levels/usa/L11/src/func_L11_0036A7F8.c`, from
-    `src/levels/11_joba/L11_00369700-init-g8.c` (`func_L11_00369700`, author commit `a96d3126`, Louis-Philippe Le Sieur),
+    `src/levels/11_joba/L11_00369700-init-g8.c` (`func_L11_00369700`, author commit `a96d3126`, Louis-Philippe Le Sieur; a rename-copy of bigbeno37's `func_L00_00354DF8` in `src/levels/00_aranos_tutorial/L00_002FC7A8-g8.c` (author commit `6001495a`), token-identical but for symbol names and the struct field `callback` -> `payload`, RULING #13427 rev 4, task #2651),
     task #2553. VERBATIM but for names: our name at the v2.00 place; the boot's `g_anAvailableLevelOrder`; five level data names renamed to the v2.00 ROM's relocation targets: `D_L11_0021EAA0` address-named inside a larger label (RULING #13291 §2), `g_mapVertexData` the level's boot-name map name there (was the address-named `D_L11_001CAF20`, task #2646), the other three our split labels; `include_asm.h` dropped.
   - **`func_L11_003F4310`** (`0x003F4310`, level program 11) in
     `going-decompiled/levels/usa/L11/src/func_L11_003F4310.c`, from
@@ -2636,7 +2636,11 @@
   - **`func_L20_0036BFB0`** (`0x0036BFB0`, level program 20) in
     `going-decompiled/levels/usa/L20/src/func_L20_0036BFB0.c`, from
     `src/levels/20_yeedil/L20_0036AE68-g8.c`
-    (`func_L20_0036AE68`, author commit `7c3ea917`, Fromnowhere), task
+    (`func_L20_0036AE68`, author commit `7c3ea917`, Fromnowhere; a
+    rename-copy of bigbeno37's `func_L00_00354DF8` in
+    `src/levels/00_aranos_tutorial/L00_002FC7A8-g8.c` (author commit
+    `6001495a`), token-identical but for symbol names, RULING #13427 rev 4,
+    task #2651), task
     #2565. VERBATIM but for names: our name, the boot's `g_anAvailableLevelOrder` and 4 data names renamed to the v2.00 disc's own targets.
   - **`func_L20_0036F938`** (`0x0036F938`, level program 20) in
     `going-decompiled/levels/usa/L20/src/func_L20_0036F938.c`, from
