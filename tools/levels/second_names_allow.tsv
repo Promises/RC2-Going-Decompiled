@@ -13,9 +13,7 @@
 #
 # level	function	name	status	existing	reason
 L09	func_L09_0040C5B8	D_001B1578	ACCEPTED	D_L09_001B1578	task #2580: accepted second name (the L09 lit dlabel D_L09_001B1578 at the same address)
-L02	func_L02_003D5C20	D_0018C2BC	PENDING	D_18C2BC	census #13409 A1O (boot operand name D_18C2BC); awaiting respell
 L02	func_L02_003FE020	D_001395B8	PENDING	D_1395B8	census #13409 A1L (boot operand name D_1395B8, L02_boot_names core entry); awaiting respell (#2601)
 L02	func_L02_004112C8	D_001395B8	PENDING	D_1395B8	census #13409 A1L; awaiting respell (#2601)
-L02	func_L02_004112C8	D_001A7BD3	PENDING	D_1A7BD3	census #13409 A1L (boot dlabel D_1A7BD3, core.lit/0A7400.data.s); awaiting respell
 L11	func_L11_00444CE8	D_00138180	PENDING	D_138180	census #13409 A1O (boot operand name D_138180); awaiting respell
 L24	func_L24_0037AE10	D_00138324	PENDING	D_138324	census #13409 A1L (boot operand name D_138324, L24_boot_names core entry); awaiting respell

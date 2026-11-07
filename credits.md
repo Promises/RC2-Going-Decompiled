@@ -1645,7 +1645,7 @@
   - **`func_L02_003FD638`** (level program 02, Maktar Nebula: returns the address of the vector in the actor's 128-byte record) from `src/levels/02_maktar_nebula/L02_003F5430.c` (`func_L02_003FC098`, v1.01 address, author commit `adcbd51e`, llesieur99). ADAPTED: `sda` -> `section(".sdata")` on the `D_L02_001B368C` extern declaration (RULING #8620), which keeps its address name; includes and unused declarations dropped. Task #2557.
   - **`func_L02_003FE020`** (level program 02, Maktar Nebula: starts the actor) from `src/levels/02_maktar_nebula/L02_003F5430.c` (`func_L02_003FCA80`, v1.01 address, author commit `24d977dd`, bigmak94). ADAPTED: the boot's `g_heroPos` for `D_00189EA0`; thirteen callees to our split names; `sda` -> `section(".sdata")` on three extern declarations (RULING #8620); the address-named externs keep their upstream names; includes and unused declarations dropped. Task #2557.
   - **`func_L02_00402258`** (level program 02, Maktar Nebula: runs the per-kind handler of every object in a list) from `src/levels/02_maktar_nebula/L02_003F5430.c` (`func_L02_00400B10`, v1.01 address, author commit `6eae4d38`, bigmak94). ADAPTED: nine callees to our split names; `sda` -> `section(".sdata")` on the `D_L02_001B35A8` extern declaration (RULING #8620), which keeps its address name; includes and unused declarations dropped. Task #2557.
-  - **`func_L02_004112C8`** (level program 02, Maktar Nebula: steps an actor by its kind byte) from `src/us2/levels/02_maktar_nebula/L02_004112C8.c` (`func_US2_L02_004112C8`, v2.00 address, author commit `50c79a7f`, Flavius). ADAPTED: the boot's `g_heroPos` for `D_00189EA0`; `D_001A7BCB` to `D_001A7BD3` (the address the ROM's relocations imply) and `D_L02_001395B8` to `D_001395B8` (a core address), both address-named; eight callees to our split names; `sda` -> `section(".sdata")` on the `D_001A7BD3` extern declaration (RULING #8620); includes and unused declarations dropped. Task #2557.
+  - **`func_L02_004112C8`** (level program 02, Maktar Nebula: steps an actor by its kind byte) from `src/us2/levels/02_maktar_nebula/L02_004112C8.c` (`func_US2_L02_004112C8`, v2.00 address, author commit `50c79a7f`, Flavius). ADAPTED: the boot's `g_heroPos` for `D_00189EA0`; `D_001A7BCB` to `D_1A7BD3` (the address the ROM's relocations imply; the boot's existing spelling, its own dlabel, task #2621) and `D_L02_001395B8` to `D_001395B8` (a core address), both address-named; eight callees to our split names; `sda` -> `section(".sdata")` on the `D_1A7BD3` extern declaration (RULING #8620); includes and unused declarations dropped. Task #2557.
   - **`func_L02_00425010`** (level program 02, Maktar Nebula: throws twenty sparks from an actor) from `src/levels/02_maktar_nebula/L02_0040A4A8.c` (`func_L02_00423838`, v1.01 address, author commit `11c21414`, bigmak94). ADAPTED: two colour-pair symbols and eight callees to our split names; `sda` -> `section(".sdata")` on the two colour-pair extern declarations (RULING #8620); includes and unused declarations dropped. Task #2557.
   - **`func_L11_003983E0`** (`0x003983E0`, level program 11) in
     `going-decompiled/levels/usa/L11/src/func_L11_003983E0.c`, from
@@ -2101,8 +2101,9 @@
     `going-decompiled/levels/usa/L02/src/func_L02_003D5C20.c`, from
     `src/levels/02_maktar_nebula/L02_003D26B0.c`
     (`func_L02_003D46B8`, author commit `e80a585a`, Flavius), task #2558.
-    VERBATIM but for names; `D_0018C2BC` stays an address-named extern
-    (RULING #13291 §2).
+    VERBATIM but for names; `D_0018C2BC` respelled `D_18C2BC`, the boot
+    asm's existing operand name for that address (task #2621); it stays an
+    address-named extern (RULING #13291 §2).
   - **`func_L02_003D5E68`** (`0x003D5E68`, level program 02) in
     `going-decompiled/levels/usa/L02/src/func_L02_003D5E68.c`, from
     `src/levels/02_maktar_nebula/L02_003D26B0.c`

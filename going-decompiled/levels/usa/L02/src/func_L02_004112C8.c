@@ -8,12 +8,16 @@
 typedef unsigned char u8;
 typedef signed int s32;
 extern void func_L02_0031F998();
-/* Inside the boot's g_abLevelAvailableFlags (core, below 0x1A7C80), at +0x3:
- * address-named (RULING #13291 §2). ADDRESSING-MODEL DEVICE (RULING #8620,
+/* The boot's own D_1A7BD3 (core, below 0x1A7C80): a dlabel of its own in the
+ * boot split, asm/usa/data/core.lit/0A7400.data.s:1150 (also the operand of
+ * func_002CDEB0 and func_002CDF48). Not a claim of containment: symbol_addrs
+ * puts g_abLevelAvailableFlags at 0x1A7BD0, but the split has the separate
+ * dlabels D_1A7BD1 and D_1A7BD2 in between. Address-named (RULING #13291 §2).
+ * ADDRESSING-MODEL DEVICE (RULING #8620,
  * EE arm only): `.sdata` on the extern declaration makes cc1 print the
  * one-instruction `lbu` macro, which GNU as expands absolute at -G0, as
  * retail has it. It moves no data and emits nothing. */
-extern u8 D_001A7BD3 __attribute__((section(".sdata")));
+extern u8 D_1A7BD3 __attribute__((section(".sdata")));
 /* The boot's own D_1395B8 (core; its own label in the boot split, not inside
  * g_quickSelectMap): address-named, a second spelling of D_1395B8. */
 extern u8 D_001395B8[];
@@ -33,7 +37,7 @@ extern void func_L02_003157A0(u8 *);
  * @a0: the actor; +0x20 is its kind, +0x68 its record.
  *
  * Kind 0: hands the actor to func_L02_003157A0 when it holds no record, else
- * calls func_L02_0031F998(@a0, 1, -1). Kind 1: when D_001A7BD3 and the byte
+ * calls func_L02_0031F998(@a0, 1, -1). Kind 1: when D_1A7BD3 and the byte
  * D_001395B8[4] are clear, func_L02_00325C50 accepts g_heroPos with the
  * record's index at +0xC, and func_L02_002F8E70 accepts message 0x2D on
  * D_L02_001C0700, it queues 3 and 0x2E too, commits them
@@ -53,9 +57,11 @@ extern void func_L02_003157A0(u8 *);
  *   - name func_US2_L02_004112C8 -> func_L02_004112C8 (our split name at the
  *     same v2.00 place);
  *   - D_00189EA0 -> g_heroPos (the boot's name, same address);
- *   - D_001A7BCB -> D_001A7BD3: the address the ROM's own relocations imply
+ *   - D_001A7BCB -> D_1A7BD3: the address the ROM's own relocations imply
  *     is 0x1A7BD3, 8 bytes past upstream's name (relverify, task #2557);
- *     address-named, inside g_abLevelAvailableFlags;
+ *     address-named, the boot's existing spelling of that address (its own
+ *     dlabel, core.lit/0A7400.data.s:1150). Provenance of the respelling:
+ *     D_001A7BD3 -> D_1A7BD3 (task #2621, census NOTE #13409);
  *   - D_L02_001395B8 -> D_001395B8: the same address, a core one (below
  *     0x1A7C80), spelled without the level prefix; address-named, the boot's
  *     own D_1395B8 (not inside g_quickSelectMap, validator #2598);
@@ -68,7 +74,7 @@ extern void func_L02_003157A0(u8 *);
  *   - D_L02_001C0700 keeps its upstream name, which already states its v2.00
  *     address (address-named, RULING #13291 §2);
  *   - `__attribute__((sda))` -> `__attribute__((section(".sdata")))` on the
- *     D_001A7BD3 declaration (RULING #8620; upstream's `sda` is a marker for
+ *     D_1A7BD3 declaration (RULING #8620; upstream's `sda` is a marker for
  *     its own patched compiler, which our cc1 ignores);
  *   - `#include "include_asm.h"` dropped (nothing here used it) and the
  *     upstream comment folded into this one.
@@ -84,7 +90,7 @@ void func_L02_004112C8(u8 *a0) {
             func_L02_0031F998(a0, 1, -1);
         break;
     case 1:
-        if (D_001A7BD3 == 0 && D_001395B8[4] == 0 &&
+        if (D_1A7BD3 == 0 && D_001395B8[4] == 0 &&
             func_L02_00325C50(g_heroPos, *(s32 *)(state + 0xC)) != 0 &&
             func_L02_002F8E70(D_L02_001C0700, 0x2D) != 0) {
             func_L02_002F8E70(D_L02_001C0700, 3);
