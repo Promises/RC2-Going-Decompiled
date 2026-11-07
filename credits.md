@@ -2520,3 +2520,108 @@
     `src/levels/11_joba/L11_00432628.c`
     (`func_L11_00438CD8`, author commit `fa8d6672`, llesieur99), task #2554.
     Verbatim but for names: our name at the v2.00 place; no other symbol appears.
+  - **`func_L20_002DC618`** (`0x002DC618`, level program 20) in
+    `going-decompiled/levels/usa/L20/src/func_L20_002DC618.c`, from
+    `src/levels/20_yeedil/L20_002D6488.c`
+    (`func_L20_002DC390`, author commit `ee3fee45`, llesieur99), task
+    #2565. VERBATIM but for names: our name, the boot's `g_bPlayerMode` and 1 callee renamed to the v2.00 disc's own targets.
+  - **`func_L20_00331CD8`** (`0x00331CD8`, level program 20) in
+    `going-decompiled/levels/usa/L20/src/func_L20_00331CD8.c`, from
+    `src/levels/20_yeedil/L20_002DEBE0.c`
+    (`func_L20_00330A68`, author commit `71f1dc28`, ReaperOfVeriod), task
+    #2565. VERBATIM but for names: our name, 2 data names and 2 callees renamed to the v2.00 disc's own targets.
+  - **`func_L20_0036BFB0`** (`0x0036BFB0`, level program 20) in
+    `going-decompiled/levels/usa/L20/src/func_L20_0036BFB0.c`, from
+    `src/levels/20_yeedil/L20_0036AE68-g8.c`
+    (`func_L20_0036AE68`, author commit `7c3ea917`, Fromnowhere), task
+    #2565. VERBATIM but for names: our name, the boot's `g_anAvailableLevelOrder` and 4 data names renamed to the v2.00 disc's own targets.
+  - **`func_L20_0036F938`** (`0x0036F938`, level program 20) in
+    `going-decompiled/levels/usa/L20/src/func_L20_0036F938.c`, from
+    `src/levels/20_yeedil/L20_002DEBE0.c`
+    (`func_L20_0036E720`, author commit `71f1dc28`, ReaperOfVeriod), task
+    #2565. ADAPTED: our name, 2 data names and 2 callees renamed to the v2.00 disc's own targets; their `sda` as `section(".sdata")` (RULING #8620).
+  - **`func_L20_0039BE60`** (`0x0039BE60`, level program 20) in
+    `going-decompiled/levels/usa/L20/src/func_L20_0039BE60.c`, from
+    `src/levels/20_yeedil/L20_002DEBE0.c`
+    (`func_L20_0039AA98`, author commit `5acf9869`, Flavius), task
+    #2565. ADAPTED: our name, 1 data name and 7 callees renamed to the v2.00 disc's own targets; their `sda` as `section(".sdata")` (RULING #8620).
+  - **`func_L20_0039DC90`** (`0x0039DC90`, level program 20) in
+    `going-decompiled/levels/usa/L20/src/func_L20_0039DC90.c`, from
+    `src/levels/20_yeedil/L20_0039C8C8.c`
+    (`func_L20_0039C8C8`, author commit `8821a1ae`, Flavius), task
+    #2565. VERBATIM but for names: our name, the boot's `g_heroFacingDir`, 1 data name and 11 callees renamed to the v2.00 disc's own targets.
+  - **`func_L20_0039EB78`** (`0x0039EB78`, level program 20) in
+    `going-decompiled/levels/usa/L20/src/func_L20_0039EB78.c`, from
+    `src/levels/20_yeedil/L20_0039C448.c`
+    (`func_L20_0039D7B0`, author commit `7f907424`, ReaperOfVeriod), task
+    #2565. ADAPTED: our name, 1 data name and 5 callees renamed to the v2.00 disc's own targets; their `sda` as `section(".sdata")` (RULING #8620).
+  - **`func_L20_0039EF18`** (`0x0039EF18`, level program 20) in
+    `going-decompiled/levels/usa/L20/src/func_L20_0039EF18.c`, from
+    `src/levels/20_yeedil/L20_0039C448.c`
+    (`func_L20_0039DB50`, author commit `fa8d6672`, llesieur99), task
+    #2565. VERBATIM but for names: our name and 1 callee renamed to the v2.00 disc's own targets.
+  - **`func_L20_0039F250`** (`0x0039F250`, level program 20) in
+    `going-decompiled/levels/usa/L20/src/func_L20_0039F250.c`, from
+    `src/levels/20_yeedil/L20_0039C448.c`
+    (`func_L20_0039DE88`, author commit `431ac503`, llesieur99), task
+    #2565. VERBATIM but for names: our name and 2 callees renamed to the v2.00 disc's own targets.
+  - **`func_L20_0039F2E0`** (`0x0039F2E0`, level program 20) in
+    `going-decompiled/levels/usa/L20/src/func_L20_0039F2E0.c`, from
+    `src/levels/20_yeedil/L20_0039C448.c`
+    (`func_L20_0039DF18`, author commit `9826f942`, ReaperOfVeriod), task
+    #2565. VERBATIM but for names: our name and 9 callees renamed to the v2.00 disc's own targets.
+  - **`func_L20_0039F5B0`** (`0x0039F5B0`, level program 20) in
+    `going-decompiled/levels/usa/L20/src/func_L20_0039F5B0.c`, from
+    `src/levels/20_yeedil/L20_0039C448.c`
+    (`func_L20_0039E1E8`, author commit `1da2d1f3`, Fromnowhere), task
+    #2565. VERBATIM but for names: our name, the boot's `g_soundBankHandlesBlk`, 1 data name and 9 callees renamed to the v2.00 disc's own targets.
+  - **`func_L20_003A05F8`** (`0x003A05F8`, level program 20) in
+    `going-decompiled/levels/usa/L20/src/func_L20_003A05F8.c`, from
+    `src/levels/20_yeedil/L20_0039C448.c`
+    (`func_L20_0039F230`, author commit `fa8d6672`, llesieur99), task
+    #2565. VERBATIM but for names: our name and 3 callees renamed to the v2.00 disc's own targets.
+  - **`func_L20_003C12C0`** (`0x003C12C0`, level program 20) in
+    `going-decompiled/levels/usa/L20/src/func_L20_003C12C0.c`, from
+    `src/levels/20_yeedil/L20_0039C448-g8.c`
+    (`func_L20_003BFEB8`, author commit `8422a726`, Fromnowhere), task
+    #2565. VERBATIM but for names: our name, the boot's `g_soundBankHandlesBlk`, `g_playerProgress`, 3 data names and 4 callees renamed to the v2.00 disc's own targets.
+  - **`func_L20_003C16D8`** (`0x003C16D8`, level program 20) in
+    `going-decompiled/levels/usa/L20/src/func_L20_003C16D8.c`, from
+    `src/levels/20_yeedil/L20_0039C448.c`
+    (`func_L20_003C02D0`, author commit `7f907424`, ReaperOfVeriod), task
+    #2565. ADAPTED: our name and 3 data names renamed to the v2.00 disc's own targets; their `sda` as `section(".sdata")` (RULING #8620).
+  - **`func_L20_003C1758`** (`0x003C1758`, level program 20) in
+    `going-decompiled/levels/usa/L20/src/func_L20_003C1758.c`, from
+    `src/levels/20_yeedil/L20_0039C448.c`
+    (`func_L20_003C0350`, author commit `7f907424`, ReaperOfVeriod), task
+    #2565. ADAPTED: our name, 3 data names and 2 callees renamed to the v2.00 disc's own targets; their `sda` as `section(".sdata")` (RULING #8620).
+  - **`func_L20_00436710`** (`0x00436710`, level program 20) in
+    `going-decompiled/levels/usa/L20/src/func_L20_00436710.c`, from
+    `src/levels/20_yeedil/L20_0039C448.c`
+    (`func_L20_00435178`, author commit `7f907424`, ReaperOfVeriod), task
+    #2565. VERBATIM but for names: our name, 1 data name and 2 callees renamed to the v2.00 disc's own targets.
+  - **`func_L20_00440AA8`** (`0x00440AA8`, level program 20) in
+    `going-decompiled/levels/usa/L20/src/func_L20_00440AA8.c`, from
+    `src/levels/20_yeedil/L20_0043ECB0-g8.c`
+    (`func_L20_0043F510`, author commit `adcbd51e`, llesieur99), task
+    #2565. VERBATIM but for names: our name, 1 data name and 2 callees renamed to the v2.00 disc's own targets.
+  - **`func_L20_004418D8`** (`0x004418D8`, level program 20) in
+    `going-decompiled/levels/usa/L20/src/func_L20_004418D8.c`, from
+    `src/levels/20_yeedil/L20_0043ECB0.c`
+    (`func_L20_00440398`, author commit `1da2d1f3`, Fromnowhere), task
+    #2565. ADAPTED: our name and 3 data names renamed to the v2.00 disc's own targets; their `sda` as `section(".sdata")` (RULING #8620).
+  - **`func_L20_004443B0`** (`0x004443B0`, level program 20) in
+    `going-decompiled/levels/usa/L20/src/func_L20_004443B0.c`, from
+    `src/levels/20_yeedil/L20_00442E68-g8.c`
+    (`func_L20_00442E68`, author commit `7b31e91f`, Fromnowhere), task
+    #2565. ADAPTED: our name, 3 data names and 1 callee renamed to the v2.00 disc's own targets; their `sda` as `section(".sdata")` (RULING #8620).
+  - **`func_L20_00444870`** (`0x00444870`, level program 20) in
+    `going-decompiled/levels/usa/L20/src/func_L20_00444870.c`, from
+    `src/levels/20_yeedil/L20_0043ECB0.c`
+    (`func_L20_00443328`, author commit `765097bb`, ReaperOfVeriod), task
+    #2565. ADAPTED: our name, 1 data name and 3 callees renamed to the v2.00 disc's own targets; their `sda` as `section(".sdata")` (RULING #8620).
+  - **`func_L20_00448B88`** (`0x00448B88`, level program 20) in
+    `going-decompiled/levels/usa/L20/src/func_L20_00448B88.c`, from
+    `src/levels/20_yeedil/L20_00447640-g8.c`
+    (`func_L20_00447640`, author commit `8422a726`, Fromnowhere), task
+    #2565. ADAPTED: our name, 3 data names and 2 callees renamed to the v2.00 disc's own targets; their `sda` as `section(".sdata")` (RULING #8620).
