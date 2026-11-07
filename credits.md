@@ -2405,3 +2405,118 @@
     names and twelve to L02's copies of boot and L00 code; upstream's inert
     `sda` kept; `common.h` dropped (its `u8` typedef copied); assembled
     through `tools/ee/asm_unit.sh`.
+  - **`func_L11_003F3228`** (`0x003F3228`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_003F3228.c`, from
+    `src/levels/11_joba/L11_003D6270.c`
+    (`func_L11_003F1D18`, author commit `91e04732`, llesieur99), task #2554.
+    Verbatim but for names: our name at the v2.00 place; the callees respelled to the v2.00 level split names at their disc-implied targets.
+  - **`func_L11_003F32C0`** (`0x003F32C0`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_003F32C0.c`, from
+    `src/levels/11_joba/L11_003D6270-g8.c`
+    (`func_L11_003F1DB0`, author commit `bcafb24e`, Gianni), task #2554.
+    Verbatim but for names: our name at the v2.00 place; the callees respelled to the v2.00 level split names at their disc-implied targets; `D_L11_001FFA78` as the address-named extern `D_L11_001FFAF8`, RULING #13291 §2.
+  - **`func_L11_003F4228`** (`0x003F4228`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_003F4228.c`, from
+    `src/levels/11_joba/L11_003D6270.c`
+    (`func_L11_003F2D18`, author commit `91e04732`, llesieur99), task #2554.
+    Verbatim but for names: our name at the v2.00 place; the callee respelled to the v2.00 level split name at its disc-implied target.
+  - **`func_L11_003F4248`** (`0x003F4248`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_003F4248.c`, from
+    `src/levels/11_joba/L11_003D6270-g8.c`
+    (`func_L11_003F2D38`, author commit `91e04732`, llesieur99), task #2554.
+    Verbatim but for names: our name at the v2.00 place; the callees and the two .lit thresholds respelled to the v2.00 level split names at their disc-implied targets.
+  - **`func_L11_003F42D8`** (`0x003F42D8`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_003F42D8.c`, from
+    `src/levels/11_joba/L11_003D6270.c`
+    (`func_L11_003F2DC8`, author commit `91e04732`, llesieur99), task #2554.
+    Verbatim but for names: our name at the v2.00 place; the callee respelled to the v2.00 level split name at its disc-implied target.
+  - **`func_L11_003F4410`** (`0x003F4410`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_003F4410.c`, from
+    `src/levels/11_joba/L11_003D6270.c`
+    (`func_L11_003F2F00`, author commit `91e04732`, llesieur99), task #2554.
+    Verbatim but for names: our name at the v2.00 place; no other symbol appears.
+  - **`func_L11_003F45A8`** (`0x003F45A8`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_003F45A8.c`, from
+    `src/levels/11_joba/L11_003D6270.c`
+    (`func_L11_003F3098`, author commit `91e04732`, llesieur99), task #2554.
+    Verbatim but for names: our name at the v2.00 place; the callees respelled to the v2.00 level split names at their disc-implied targets.
+  - **`func_L11_003F5570`** (`0x003F5570`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_003F5570.c`, from
+    `src/levels/11_joba/L11_003F4060-g8.c`
+    (`func_L11_003F4060`, author commit `b4b0fe9b`, bigbeno37), task #2554.
+    Verbatim but for names: our name at the v2.00 place; the callees respelled to the v2.00 level split names and the .lit length to the v2.00 split dlabel at their disc-implied targets.
+  - **`func_L11_00422438`** (`0x00422438`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_00422438.c`, from
+    `src/levels/11_joba/L11_003D6270.c`
+    (`func_L11_00420C38`, author commit `91e04732`, llesieur99), task #2554.
+    Verbatim but for names: our name at the v2.00 place; the callee respelled to the v2.00 level split name at its disc-implied target.
+  - **`func_L11_00427268`** (`0x00427268`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_00427268.c`, from
+    `src/levels/11_joba/L11_00420C88.c`
+    (`func_L11_00425A50`, author commit `ee3fee45`, llesieur99), task #2554.
+    Verbatim but for names: our name at the v2.00 place; the callees respelled to the v2.00 level split names at their disc-implied targets.
+  - **`func_L11_004276D8`** (`0x004276D8`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_004276D8.c`, from
+    `src/levels/11_joba/L11_00420C88.c`
+    (`func_L11_00425EC0`, author commit `ee3fee45`, llesieur99), task #2554.
+    Verbatim but for names: our name at the v2.00 place; the callee respelled to the v2.00 level split name at its disc-implied target.
+  - **`func_L11_0042BC50`** (`0x0042BC50`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_0042BC50.c`, from
+    `src/levels/11_joba/L11_00425F10.c`
+    (`func_L11_0042A420`, author commit `ee3fee45`, llesieur99), task #2554.
+    Verbatim but for names: our name at the v2.00 place; the callees respelled to the v2.00 level split names at their disc-implied targets.
+  - **`func_L11_004307C0`** (`0x004307C0`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_004307C0.c`, from
+    `src/levels/11_joba/L11_00425F10.c`
+    (`func_L11_0042EF90`, author commit `ee3fee45`, llesieur99), task #2554.
+    Verbatim but for names: our name at the v2.00 place; the callee respelled to the v2.00 level split name at its disc-implied target.
+  - **`func_L11_00433590`** (`0x00433590`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_00433590.c`, from
+    `src/levels/11_joba/L11_00425F10.c`
+    (`func_L11_00431D50`, author commit `ee3fee45`, llesieur99), task #2554.
+    Verbatim but for names: our name at the v2.00 place; the callees respelled to the v2.00 level split names at their disc-implied targets.
+  - **`func_L11_004335F0`** (`0x004335F0`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_004335F0.c`, from
+    `src/levels/11_joba/L11_00425F10-g8.c`
+    (`func_L11_00431DB0`, author commit `ee3fee45`, llesieur99), task #2554.
+    Verbatim but for names: our name at the v2.00 place; both table symbols as address-named externs at their disc-implied targets, RULING #13291 §2.
+  - **`func_L11_00433670`** (`0x00433670`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_00433670.c`, from
+    `src/levels/11_joba/L11_00425F10.c`
+    (`func_L11_00431E30`, author commit `ee3fee45`, llesieur99), task #2554.
+    Verbatim but for names: our name at the v2.00 place; the callees respelled to the v2.00 level split names at their disc-implied targets.
+  - **`func_L11_004362E8`** (`0x004362E8`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_004362E8.c`, from
+    `src/levels/11_joba/L11_00432628.c`
+    (`func_L11_00434AA8`, author commit `431ac503`, llesieur99), task #2554.
+    Verbatim but for names: our name at the v2.00 place; the callees respelled to the v2.00 level split names at their disc-implied targets.
+  - **`func_L11_00437FA8`** (`0x00437FA8`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_00437FA8.c`, from
+    `src/levels/11_joba/L11_00432628.c`
+    (`func_L11_00436768`, author commit `b4b0fe9b`, bigbeno37; the text is Gianni's nonmatching draft from `77639a79`, moved verbatim), task #2554.
+    Verbatim but for names: our name at the v2.00 place; the callees respelled to the v2.00 level split names at their disc-implied targets.
+  - **`func_L11_00438090`** (`0x00438090`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_00438090.c`, from
+    `src/levels/11_joba/L11_00432628.c`
+    (`func_L11_00436850`, author commit `5964c620`, Flavius), task #2554.
+    Verbatim but for names: our name at the v2.00 place; the callees respelled to the v2.00 level split names at their disc-implied targets; their `func_002B3BA8_6850` second-prototype spelling is the plain `func_L11_0033DAC8` with their prototype.
+  - **`func_L11_00438150`** (`0x00438150`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_00438150.c`, from
+    `src/levels/11_joba/L11_00432628.c`
+    (`func_L11_00436910`, author commit `5acf9869`, Flavius), task #2554.
+    Verbatim but for names: our name at the v2.00 place; the callees respelled to the v2.00 level split names at their disc-implied targets.
+  - **`func_L11_004382B8`** (`0x004382B8`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_004382B8.c`, from
+    `src/levels/11_joba/L11_00432628.c`
+    (`func_L11_00436A78`, author commit `431ac503`, llesieur99), task #2554.
+    Verbatim but for names: our name at the v2.00 place; the callees respelled to the v2.00 level split names at their disc-implied targets.
+  - **`func_L11_00439B60`** (`0x00439B60`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_00439B60.c`, from
+    `src/levels/11_joba/L11_00432628.c`
+    (`func_L11_00438320`, author commit `431ac503`, llesieur99; body changed in `6b943916`, Louis-Philippe Le Sieur, the same account), task #2554.
+    Verbatim but for names: our name at the v2.00 place; the callees respelled to the v2.00 level split names at their disc-implied targets.
+  - **`func_L11_0043A518`** (`0x0043A518`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_0043A518.c`, from
+    `src/levels/11_joba/L11_00432628.c`
+    (`func_L11_00438CD8`, author commit `fa8d6672`, llesieur99), task #2554.
+    Verbatim but for names: our name at the v2.00 place; no other symbol appears.
