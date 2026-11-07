@@ -2449,8 +2449,9 @@ s32 func_00337D98(void) {
  * The ROM takes the table base with one `addiu $2, $gp, %gp_rel(D_1ADAD8)`,
  * i.e. its compiler held the table as -G8 small data. A 16-byte declaration is
  * not small to cc1, which then splits the address into %hi/%lo; declaring it
- * 8 bytes on the EE arm reproduces the ROM (task #948). D_1ADAD8 is referenced
- * nowhere else in this unit.
+ * 8 bytes on the EE arm reproduces the ROM (task #948). func_00337DC8 below
+ * also reads D_1ADAD8 through this declaration (task #2550): the 8-byte size
+ * only sets the small-data addressing; both functions index all 4 entries.
  */
 #ifndef TARGET_NATIVE
 extern s32 D_1ADAD8[2];
