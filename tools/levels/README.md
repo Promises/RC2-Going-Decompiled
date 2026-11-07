@@ -309,6 +309,20 @@ The gate checks these rows, and any FAIL fails the gate:
 - `BUILD`: `level_build.sh` reports PASS, and its log, ELF and blobs were all
   written by this run.
 - `C` (only with an `LNN_c.tsv`): one `C-PLACED ok` build row per table row.
+- `NAMES` (only with an `LNN_c.tsv`, task #2617): `second_names.py` reads every
+  C row's object (fresh from this run). No undefined address-named symbol
+  (`D_001395E3`, `D_L09_001B1578`; `level_elf.py`'s ADDR_NAME) may sit at an
+  address that already has a DIFFERENT name. Below 0x1A7C80 that means a boot
+  label, a boot operand name or a `symbol_addrs.txt` entry. At or above it,
+  a label or operand name of the level's own split. The FAIL line names the
+  existing name to spell instead. Base+off names (no name at the exact
+  address, RULING #13291 §2) pass. So do the per-site rows of
+  `tools/levels/second_names_allow.tsv`: `ACCEPTED` second names, and
+  `PENDING` members that were already on master when the check landed and are
+  awaiting their respell. Never add a `PENDING` row: the respell row deletes it,
+  and an allowlist row that matches nothing FAILs as `STALE`. The per-level
+  `LNN_boot_names.txt` maps and the boot's view of overlay memory are out of
+  scope (census NOTE #13409, classes A2/A3, unruled).
 - `FRESH` and `BOOTC` (only with an `LNN_boot_c.tsv`): `boot_objects.sh`
   PASS for this tree; one `PLACED ok` row per table row, 0 `PLACED FAIL`, 0
   `PLACED-DIFFERS`, `bootcmp: N of N`, and the name map up to date. Every
@@ -337,6 +351,18 @@ there once per arm (4 arms, 6 for a level with C rows, 9 with boot rows too,
 plus arm 10's two builds wherever its fixture shape exists).
 It never edits the tracked tree.
 - The unseeded copy must PASS.
+- Arm 11 NAMES (task #2617) runs right after it. Four fixture TUs, compiled in
+  the scratch root by the C rows' route, go through `second_names.py`:
+  - `D_001395E3` must FAIL naming `D_1395E3`;
+  - `D_1395E3` must PASS as the same name;
+  - L09 `func_L09_0040C5B8`'s allowlisted `D_001B1578` must PASS, and the same
+    object filed under another function must FAIL naming `D_L09_001B1578`;
+  - the base+off `D_0018CD60` must PASS.
+
+  For a level with C rows, the gate's own NAMES row then runs on arm 1's
+  objects. It must be ok as committed. It must FAIL, naming each existing name,
+  with the level's allowlist rows removed. It must FAIL as STALE with a
+  phantom row added.
 - The seeded copy, where the entry instruction becomes `.word <value XOR 1>`,
   must FAIL on `.text` only, with the first difference at the entry address.
 - With the asm restored and the level's table sha1 changed in its last digit,

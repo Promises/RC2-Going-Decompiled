@@ -23,6 +23,19 @@
 #   C        only with config/LNN_c.tsv (task #2495): one `C-PLACED ok` build
 #            row per table row (the map puts the C object's .text at the
 #            function's address and size; its glabel is in no assembled asm).
+#   NAMES    only with config/LNN_c.tsv (task #2617): tools/levels/second_names.py
+#            on every C row's object (fresh from THIS run): no undefined
+#            ADDRESS-NAMED symbol (`D_001395E3`, `D_L09_001B1578`) whose exact
+#            address already has a DIFFERENT name - a boot label, boot operand
+#            name or symbol_addrs.txt entry below 0x1A7C80, or a label/operand
+#            name of the level's own split at/above it. The FAIL names the
+#            existing name. Base+off names (no name at the exact address,
+#            RULING #13291 section 2) pass; so do the per-site rows of
+#            tools/levels/second_names_allow.tsv (ACCEPTED; PENDING = on master
+#            when the check landed, awaiting respell, never added to). An
+#            allowlist row of the level that matches nothing FAILs as STALE.
+#            Boot scope is read from the real tree; with the TREE check, its
+#            asm/usa and symbol_addrs.txt must be committed.
 #   FRESH    only with config/LNN_boot_c.tsv (task #2516, RULING #13219): runs
 #            tools/levels/boot_objects.sh first, which requires the boot
 #            build's built-tree record (tools/ee/.gate_landing/usa/built_tree.txt)
@@ -98,7 +111,16 @@
 # run: the same verdict computed with the `asm_unit` object compared with
 # ITSELF must FAIL. The asm_unit route needs tools/ee/{asm_unit.sh,
 # ps2eeas_dli.awk,ps2eeas_dli_sites.txt}, copied read-only into the scratch
-# root. The tracked tree is never edited. Scratch-run lines are indented with `  [unseeded]`/`  [seeded]`,
+# root. Arm 11 NAMES (task #2617), run right after arm 1: four fixture TUs of
+# our own, compiled by the C rows' route (sdk29 -O2 -G0, GNU as) in the scratch
+# root only, through second_names.py: `D_001395E3` (dlabel D_1395E3 exists) must
+# FAIL naming D_1395E3; `D_1395E3` must PASS same-name; L09 func_L09_0040C5B8's
+# allowlisted `D_001B1578` must PASS accepted, and the same object as another
+# function must FAIL naming D_L09_001B1578 (per site); base+off `D_0018CD60`
+# must PASS free. Then, for a level with C rows, the gate's own NAMES row on
+# arm 1's objects: ok as committed; FAIL naming each existing name with the
+# level's allowlist rows removed (when it has any); FAIL STALE with a phantom
+# PENDING row added. The tracked tree is never edited. Scratch-run lines are indented with `  [unseeded]`/`  [seeded]`,
 # so no scratch verdict can be mistaken for a real one. Last line:
 # `#### level_gate LNN SELFTEST: PASS|FAIL`.
 #
@@ -125,6 +147,36 @@ a=sys.argv[2]
 if a=="sections":
     for s in m["sections"]: print(s["file"], s["sha1"])
 else: print(m[a])' "$1" "$2"; }
+
+# names_row <root> <NN> <check_tree> <LNN_c.tsv> <build dir> <stamp>  (task #2617)
+# NAMES: no C row links an address-named extern whose exact address already has
+# a different name (tools/levels/second_names.py; allowlist
+# tools/levels/second_names_allow.tsv). Scope: the boot's asm/symbol_addrs of the
+# REAL tree $ROOT (read-only, also in a selftest), the level split under <root>.
+# Called from gate_core: uses its pass/fail (and so its `ok`).
+names_row() {
+  local R=$1 NN=$2 CT=$3 ctsv=$4 B=$5 st=$6 fn args="" stale="" nlog rc v bd
+  while read -r fn; do
+    args="$args $fn=$B/obj/c/$fn.o"
+    [ -f "$B/obj/c/$fn.o" ] && [ "$B/obj/c/$fn.o" -nt "$st" ] || stale="$stale $fn"
+  done <<EOF
+$(awk -F'\t' '!/^#/ && (NF==4 || NF==6) {print $1}' "$ctsv")
+EOF
+  if [ "$CT" = 1 ]; then
+    bd=$(git -C "$ROOT" status --porcelain -- going-decompiled/asm/usa going-decompiled/symbol_addrs/usa/symbol_addrs.txt)
+    [ -z "$bd" ] && pass "NAMES: boot scope clean (going-decompiled/asm/usa, symbol_addrs/usa/symbol_addrs.txt)" \
+      || fail "NAMES: uncommitted boot scope files: $(printf '%s' "$bd" | head -5 | tr '\n' ';')"
+  fi
+  nlog=$B/second_names.log; rc=0
+  # shellcheck disable=SC2086
+  python3 -I "$R/tools/levels/second_names.py" check --level "$NN" --root "$ROOT" --level-dir "$R/going-decompiled/levels/usa/L$NN" \
+    --allow "$R/tools/levels/second_names_allow.tsv" --complete $args > "$nlog" 2>&1 || rc=$?
+  v=$(grep_a "^#### second_names L$NN: " "$nlog")
+  [ -z "$stale" ] && [ $rc = 0 ] && case "$v" in "#### second_names L$NN: PASS"*) true;; *) false;; esac \
+    && pass "NAMES: ${v#\#\#\#\# }" \
+    || fail "NAMES: rc $rc, '${v:-no verdict}'${stale:+, C objects missing or older than this run:$stale} (log $nlog)"
+  { /usr/bin/grep -a -E '^(SECOND-NAME |   (accepted|pending) |second_names: )' "$nlog" || true; } | sed 's/^/        /'
+}
 
 # gate_core <root> <NN> <check_tree 0|1> [<expect tsv>]
 # Runs every row against the tree at <root>; prints rows and the verdict line;
@@ -206,6 +258,7 @@ EOF
       || fail "C: $ncp of $nrow ${TAG}_c.tsv functions placed from C, $ncf placement FAIL rows"
     grep_a '^C-PLACED ' "$LOG" | sed 's/^/        /'
     grep_a '^level progress ' "$LOG" | sed 's/^/        /'
+    names_row "$R" "$NN" "$CT" "$ctsv" "$BUILD" "$stamp"
   else
     echo "  --    C: no config/${TAG}_c.tsv; the level is built from asm only"
   fi
@@ -314,6 +367,93 @@ print(hashlib.sha1(b[t[0][4]:t[0][4]+t[0][5]]).hexdigest() if t else "")' "$1"; 
 
 footer() { echo "level_gate: wall $(secs "$1" "$(now)") s (host $(uname -n), docker context $CTX -> $(docker context inspect "$CTX" --format '{{.Endpoints.docker.Host}}' 2>/dev/null), rc $2)"; }
 
+# names_arms <scratch root> <NN> <scratch build dir>  (selftest arm 11, task #2617)
+# Fixture TUs of our own (scratch only), compiled by the C rows' route (ee_cc1.sh
+# sdk29 -O2 -G0, move_fixup.sed, GNU as), checked by second_names.py; then the
+# level's real arm-1 objects through the gate's own NAMES row (names_row), as
+# committed, with this level's allowlist rows removed, and with a phantom row.
+names_arms() {
+  local S=$1 NN=$2 SB=$3 TAG=L$2 FX=$1/names_fixture nok=1 o rc out want
+  local AL=$S/tools/levels/second_names_allow.tsv CTSV=$S/going-decompiled/levels/usa/L$2/config/L$2_c.tsv
+  local CPPD="-D__GNUC__=2 -D__GNUC_MINOR__=9 -D__mips__ -D__mips=3 -D__R5900 -D__LANGUAGE_C -D_LANGUAGE_C -D__EE__"
+  rm -rf "$FX"; mkdir -p "$FX"
+  printf '/* selftest fixture: core address-named spelling of dlabel D_1395E3 (the FACT #13403 case) */\nextern unsigned char D_001395E3;\nint selftest_names_dup(void) { return D_001395E3; }\n' > "$FX/dup.c"
+  printf '/* selftest fixture: the same datum by the boot'"'"'s own name */\nextern unsigned char D_1395E3;\nint selftest_names_respelled(void) { return D_1395E3; }\n' > "$FX/respelled.c"
+  printf '/* selftest fixture: the #2580 accepted second name, as func_L09_0040C5B8 spells it */\nextern int D_001B1578[];\nint func_L09_0040C5B8(void) { return D_001B1578[1]; }\n' > "$FX/accepted.c"
+  printf '/* selftest fixture: a section-2 base+off name (g_health+0xA74, census NOTE #13409 class B) */\nextern unsigned char D_0018CD60[];\nint selftest_names_baseoff(void) { return D_0018CD60[0]; }\n' > "$FX/baseoff.c"
+  echo "-- arm 11 NAMES: fixtures $(cd "$FX" && ls *.c | tr '\n' ' ')compiled by the C rows' route (sdk29 -O2 -G0, GNU as)"
+  docker --context "$CTX" run --rm --user="$(id -u):$(id -g)" -e HOME=/tmp -v "$S":/work -w /work ee-build sh -c '
+for f in names_fixture/*.c; do b=${f%.c}
+  sh tools/ee/ee_cc1.sh sdk29 "$f" "$b.i" "$b.s" "$1" "-O2 -G0" > "$b.cc.log" 2>&1 || { cat "$b.cc.log"; exit 1; }
+  sed -E -f tools/ee/move_fixup.sed "$b.s" > "$b.fx.s"
+  mips-linux-gnu-as -march=r5900 -mabi=eabi -no-pad-sections -EL -G0 -o "$b.o" "$b.fx.s" || exit 1
+done' sh "$CPPD" 2>&1 | sed 's/^/  [names cc] /'
+  for o in dup respelled accepted baseoff; do
+    [ -s "$FX/$o.o" ] || { echo "  FAIL  arm 11: fixture $o.o not built"; nok=0; }
+  done
+  # sn <level> <level dir> <fn=obj> [--complete]: one checker run, output indented
+  sn() { python3 -I "$S/tools/levels/second_names.py" check --level "$1" --root "$ROOT" --level-dir "$2" --allow "$AL" "${@:3}"; }
+  local LD=$S/going-decompiled/levels/usa/$TAG L09D=$ROOT/going-decompiled/levels/usa/L09
+  out=$(sn "$NN" "$LD" "selftest_names_dup=$FX/dup.o"); rc=$?
+  printf '%s\n' "$out" | sed 's/^/  [names dup] /'
+  want="SECOND-NAME FAIL $TAG selftest_names_dup: D_001395E3 = 0x001395E3 is already named D_1395E3:"
+  if [ $rc = 1 ] && printf '%s\n' "$out" | /usr/bin/grep -q -a -F -- "$want"; then echo "  ok    arm 11a: D_001395E3 -> rc 1, FAIL naming D_1395E3"
+  else echo "  FAIL  arm 11a: rc $rc, no line '$want' (the check cannot fail)"; nok=0; fi
+  out=$(sn "$NN" "$LD" "selftest_names_respelled=$FX/respelled.o"); rc=$?
+  printf '%s\n' "$out" | sed 's/^/  [names respelled] /'
+  if [ $rc = 0 ] && printf '%s\n' "$out" | /usr/bin/grep -q -a -E "^#### second_names $TAG: PASS \(1 objects; 1 same-name, 0 base\+off/free, 0 accepted, 0 pending, 0 FAIL"; then echo "  ok    arm 11b: the same datum spelled D_1395E3 -> rc 0, same-name"
+  else echo "  FAIL  arm 11b: rc $rc for the respelled fixture (want PASS, 1 same-name)"; nok=0; fi
+  out=$(sn 9 "$L09D" "func_L09_0040C5B8=$FX/accepted.o"); rc=$?
+  printf '%s\n' "$out" | sed 's/^/  [names accepted] /'
+  if [ $rc = 0 ] && printf '%s\n' "$out" | /usr/bin/grep -q -a -E '^   accepted L09 func_L09_0040C5B8: D_001B1578 = 0x001B1578 is also D_L09_001B1578 '; then echo "  ok    arm 11c: allowlisted L09 func_L09_0040C5B8 D_001B1578 -> rc 0, accepted"
+  else echo "  FAIL  arm 11c: rc $rc for the allowlisted site (want PASS, accepted)"; nok=0; fi
+  out=$(sn 9 "$L09D" "selftest_names_other=$FX/accepted.o"); rc=$?
+  printf '%s\n' "$out" | sed 's/^/  [names other site] /'
+  want="SECOND-NAME FAIL L09 selftest_names_other: D_001B1578 = 0x001B1578 is already named D_L09_001B1578:"
+  if [ $rc = 1 ] && printf '%s\n' "$out" | /usr/bin/grep -q -a -F -- "$want"; then echo "  ok    arm 11d: the same object as another function -> rc 1, FAIL naming D_L09_001B1578 (the allowlist is per site)"
+  else echo "  FAIL  arm 11d: rc $rc, no line '$want'"; nok=0; fi
+  out=$(sn "$NN" "$LD" "selftest_names_baseoff=$FX/baseoff.o"); rc=$?
+  printf '%s\n' "$out" | sed 's/^/  [names base+off] /'
+  if [ $rc = 0 ] && printf '%s\n' "$out" | /usr/bin/grep -q -a -E "^   free     $TAG selftest_names_baseoff: D_0018CD60 = 0x0018CD60 "; then echo "  ok    arm 11e: base+off D_0018CD60 -> rc 0, free"
+  else echo "  FAIL  arm 11e: rc $rc for the base+off fixture (want PASS, free)"; nok=0; fi
+  rm -rf "$FX"
+
+  # the gate's own row on the level's real arm-1 objects
+  if [ ! -f "$CTSV" ]; then
+    echo "  --    arm 11f-h: no config/${TAG}_c.tsv; no real C objects for the NAMES row"
+  else
+    # row <tag>: names_row in a subshell with gate_core's pass/fail; prints ROWOK=0|1
+    row() { ( ok=1; pass() { echo "  ok    $1"; }; fail() { echo "  FAIL  $1"; ok=0; }
+              names_row "$S" "$NN" 0 "$CTSV" "$SB" "$SB/.level_gate_stamp"; echo "ROWOK=$ok" ) | sed "s/^/  [names $1] /"; }
+    cp "$AL" "$AL.orig"
+    out=$(row committed)
+    printf '%s\n' "$out"
+    case "$out" in *"ROWOK=1"*) echo "  ok    arm 11f: NAMES row on arm 1's objects, committed allowlist -> ok";; *) echo "  FAIL  arm 11f: NAMES row FAILs on the committed tree"; nok=0;; esac
+    local mine exist e miss=""
+    mine=$(awk -F'\t' -v l="$TAG" '!/^#/ && $1==l' "$AL.orig")
+    if [ -z "$mine" ]; then
+      echo "  --    arm 11g: no $TAG rows in second_names_allow.tsv to remove"
+    else
+      awk -F'\t' -v l="$TAG" '/^#/ || $1!=l' "$AL.orig" > "$AL"
+      out=$(row "no $TAG rows")
+      printf '%s\n' "$out"
+      exist=$(printf '%s\n' "$mine" | cut -f5 | sort -u)
+      for e in $exist; do printf '%s\n' "$out" | /usr/bin/grep -q -a -E "SECOND-NAME FAIL $TAG .* is already named $e: " || miss="$miss $e"; done
+      if [ -z "$miss" ] && printf '%s\n' "$out" | /usr/bin/grep -q -a 'ROWOK=0'; then echo "  ok    arm 11g: $TAG's allowlist rows removed -> NAMES FAIL naming each existing name: $(printf '%s' "$exist" | tr '\n' ' ')"
+      else echo "  FAIL  arm 11g: rows removed but no FAIL naming:${miss:- (row did not fail)}"; nok=0; fi
+    fi
+    local f1; f1=$(awk -F'\t' '!/^#/ && (NF==4 || NF==6) {print $1; exit}' "$CTSV")
+    { cat "$AL.orig"; printf '%s\t%s\tD_001395E3\tPENDING\tD_1395E3\tselftest phantom row\n' "$TAG" "$f1"; } > "$AL"
+    out=$(row phantom)
+    printf '%s\n' "$out"
+    if printf '%s\n' "$out" | /usr/bin/grep -q -a -E "SECOND-NAME STALE $TAG: allowlist line [0-9]+ \(PENDING $f1 D_001395E3 D_1395E3\)" && printf '%s\n' "$out" | /usr/bin/grep -q -a 'ROWOK=0'; then
+      echo "  ok    arm 11h: phantom PENDING row for $f1 -> NAMES FAIL, STALE"
+    else echo "  FAIL  arm 11h: phantom allowlist row did not FAIL as STALE"; nok=0; fi
+    mv "$AL.orig" "$AL"
+  fi
+  [ $nok = 1 ]
+}
+
 selftest() {
   local NN TAG S rc t0 ok=1 seedline file word addr ent out
   NN=$(printf '%02d' "$((10#$1))"); TAG=L$NN; t0=$(now)
@@ -346,6 +486,10 @@ selftest() {
   if [ $rc = 0 ]; then echo "  ok    arm 1: unseeded scratch gate rc 0 PASS"; else echo "  FAIL  arm 1: unseeded scratch gate rc $rc (a seeded FAIL would prove nothing)"; ok=0; fi
   local SB=$S/going-decompiled/build/usa_levels/$TAG text1
   text1=$([ -f "$SB/blobs/text.bin" ] && sha1 "$SB/blobs/text.bin")
+
+  # arm 11 (task #2617): the NAMES check (second_names.py), right after arm 1 so
+  # arm 1's C objects are still the ones on disk
+  names_arms "$S" "$NN" "$SB" || ok=0
 
   # seed: the program's entry instruction -> .word (value XOR 1)
   ent=$(man "$E/manifest.json" entry); addr=$(printf '%08X' "$ent")
@@ -572,7 +716,7 @@ done' || echo "  FAIL  arm 8: could not realign the copied objects"
   fi
 
   rc=0; [ $ok = 1 ] || rc=1
-  if [ $ok = 1 ]; then echo "#### level_gate $TAG SELFTEST: PASS (unseeded PASS; seeded word FAIL on .text at 0x$addr; wrong anchor FAIL; no anchor FAIL$summary)"; else echo "#### level_gate $TAG SELFTEST: FAIL"; fi
+  if [ $ok = 1 ]; then echo "#### level_gate $TAG SELFTEST: PASS (unseeded PASS; seeded word FAIL on .text at 0x$addr; wrong anchor FAIL; no anchor FAIL; NAMES: fixture D_001395E3 FAIL naming D_1395E3, respelled/accepted/base+off PASS, accepted name at another site FAIL, and arms 11f-h on the real C rows where the level has them$summary)"; else echo "#### level_gate $TAG SELFTEST: FAIL"; fi
   footer "$t0" "$rc"
   return $rc
 }

@@ -1,0 +1,24 @@
+# Second-name allowlist for tools/levels/second_names.py (level_gate row NAMES, task #2617).
+# One row per SITE: level, function (the C row's name), the address-named extern
+# it links against, status, the existing name(s) at exactly that address (comma
+# separated, sorted; must equal what the check finds, so the row dies with its
+# cause), and why. Small and per site, the RULING #8549 precedent.
+#
+#   ACCEPTED  an accepted second name. Add only on watcher-2's acceptance, citing it.
+#   PENDING   on master when the check landed (census NOTE #13409 / FACT #13410 at
+#             7b55bf87d, re-measured by level_gate at c77da6896), awaiting its
+#             respell row. NEVER ADD a PENDING row: the respell row deletes its row
+#             in the same landing (RULING #7317, baselines only lowered); a row
+#             left behind FAILs the gate as STALE.
+#
+# level	function	name	status	existing	reason
+L09	func_L09_0040C5B8	D_001B1578	ACCEPTED	D_L09_001B1578	task #2580: accepted second name (the L09 lit dlabel D_L09_001B1578 at the same address)
+L02	func_L02_003D5C20	D_0018C2BC	PENDING	D_18C2BC	census #13409 A1O (boot operand name D_18C2BC); awaiting respell
+L02	func_L02_003FE020	D_001395B8	PENDING	D_1395B8	census #13409 A1L (boot operand name D_1395B8, L02_boot_names core entry); awaiting respell (#2601)
+L02	func_L02_004112C8	D_001395B8	PENDING	D_1395B8	census #13409 A1L; awaiting respell (#2601)
+L02	func_L02_004112C8	D_001A7BD3	PENDING	D_1A7BD3	census #13409 A1L (boot dlabel D_1A7BD3, core.lit/0A7400.data.s); awaiting respell
+L11	func_L11_00443E18	D_001395B8	PENDING	D_1395B8	census #13409 A1O; awaiting respell (#2603)
+L11	func_L11_00444CE8	D_001395B8	PENDING	D_1395B8	census #13409 A1O; awaiting respell (#2603)
+L11	func_L11_00444CE8	D_00138180	PENDING	D_138180	census #13409 A1O (boot operand name D_138180); awaiting respell
+L23	func_L23_0041EEB0	D_001395B8	PENDING	D_1395B8	census #13409 A1O; awaiting respell (#2606)
+L24	func_L24_0037AE10	D_00138324	PENDING	D_138324	census #13409 A1L (boot operand name D_138324, L24_boot_names core entry); awaiting respell
