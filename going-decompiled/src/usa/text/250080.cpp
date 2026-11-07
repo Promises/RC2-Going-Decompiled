@@ -1126,7 +1126,10 @@ s32 OnFmvGifDmaInterrupt(s32 channel) {
  *   - R5900_SHORT_LOOP_PAD1, the ROM's short-loop pad nop at 0x00350F48
  *     (RULING #8435 scheduling device). Without it: SHORTER, 19/20. To give
  *     the pad a place between the progressive-scan load and its branch, the
- *     loop is written with the test in its body (below).
+ *     loop is written with the test in its body (below). Upstream's
+ *     `while (A && B) {}` form with the pad: SHORTER, 19/20. Behaviour is
+ *     identical (validator #2570). A GNU statement-expression keeping
+ *     upstream's form also reaches 20/20; the plain-C rewrite is kept.
  * Supersedes the old #else (sdk29 84.05% / engine96 76.10%, task #513; s136
  * screen 4/20, task #1382).
  *
