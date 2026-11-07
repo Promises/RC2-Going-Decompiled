@@ -788,3 +788,4 @@ usa text/1B4218 CalcMobyTargetThreatDist
 usa text/235FE8 func_00337DC8 S136EXTRA=-fno-strict-aliasing
 usa text/1B4218 CheckMobyOverWater
 usa text/1FFBA0 func_00300B88
+usa text/1D54C0 FreeMenuWorkBuffer

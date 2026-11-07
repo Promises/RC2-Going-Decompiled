@@ -5901,54 +5901,114 @@ s32 AllocMenuWorkBuffer(s32 wantLarge) {
 }
 #endif
 
-/* Release the map cache slot whose id == `id`: if it is in-use (flag bit 1),
- * cancel any pending stream tied to it (bit 4 + the global file-load gate) and
- * clear its in-use bit. Returns 0. Slots are the interleaved id/flags pairs at
- * D_001B1E90+0x40/+0x44 (stride 8).
- *
- * NOT byte-exact (task #2502 member verdict): the OpenRAC adoption in this
- * file between commits fb4c03c34 and a41abc444 assembled 52 words against the
- * ROM's 53 (s136os_splice LENGTH refusal, gate run 3 at a41abc444) — the
- * ROM's loop shape is two folded member cursors against the hoisted
- * D_001B1E90+0x68 end bound plus a separate byte-offset counter that re-forms
- * the flags base for the entry store, and six cc1 spellings measured produced
- * one folded cursor with displacement reads instead. Reverted to the
- * INCLUDE_ASM arm; the attempt is recorded here and in the task report. */
+/* One slot of the 5-entry menu work-buffer pool (FACT #9967: the 0x28-byte
+ * table at 0x1B1ED0 = D_001B1E90 + 0x40): the buffer address and its flags
+ * (bit 0 size class, bit 1 in use, bit 2 stream pending). */
+typedef struct MenuWorkSlot {
+    s32 key;
+    s32 flags;
+} MenuWorkSlot;
+
+/* g_menuWorkSlotsAbs: ADDRESSING-MODEL DEVICE (FACT #8036 assembler alias, the
+ * nonzero-offset form of RULING #9574 under RULING #8620; EE arm only, emits
+ * nothing). An assembler equate for the pool at D_001B1E90 + 0x40, which no
+ * symbol of ours names on its own (upstream's v1.01 D_001B1F50). It gives cc1
+ * a symbol DISTINCT from D_001B1E90 that it believes is small data, so
+ * FreeMenuWorkBuffer's loop reduces into the ROM's two cursors
+ * (`lui $5,%hi(D_001B1E90 + 0x40)` / `lui $6,%hi(D_001B1E90 + 0x44)` at
+ * 0x2DF440 / 0x2DF434), the in-loop flags base (`lui $17,%hi(D_001B1E90 +
+ * 0x44)` at 0x2DF478) and the end bound (`lui $7,%hi(D_001B1E90 + 0x68)` at
+ * 0x2DF45C), each the one-insn `la` macro. `.extern ,16` makes gas expand
+ * each to that absolute lui/addiu pair; the relocations name D_001B1E90 with
+ * the offset in the immediate. Spelled instead as the plain offset view
+ * `(MenuWorkSlot *)(D_001B1E90 + 0x40)` (the native arm below), cc1 folds
+ * every access into one cursor off the shared base: 42 words against the
+ * ROM's 53 (s136os_splice LENGTH refusal, task #2658). At file scope, outside
+ * the s136os guard, so both translation units see it (RULING #9073's splice
+ * condition). Natively the pool is read through D_001B1E90 by adjacency
+ * (RULING #13282 item 2 extent view, as GetMenuWorkBufferSize does). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", FreeMenuWorkBuffer);
+__asm__(".extern g_menuWorkSlotsAbs, 16\n\tg_menuWorkSlotsAbs = D_001B1E90 + 0x40");
+extern MenuWorkSlot g_menuWorkSlotsAbs[] __attribute__((section(".sdata")));
+#else
+#define g_menuWorkSlotsAbs ((MenuWorkSlot *)(D_001B1E90 + 0x40))
+#endif
+
+/* Release the menu work buffer `key` back to the 5-slot pool. The first slot
+ * whose buffer is `key` and that is in use (flag bit 1) is released: if it
+ * also has a stream pending (bit 2), that bit is cleared and, when the
+ * file-load latch byte at g_menuScreenBlock + 0xDB is set, the load is
+ * stopped (StopFileLoad) and the latch cleared; then the in-use bit is
+ * cleared. A slot whose buffer matches but is not in use is skipped and the
+ * search goes on. Counterpart of AllocMenuWorkBuffer.
+ *
+ * key: the buffer address AllocMenuWorkBuffer returned (0 matches an empty
+ * slot, which is never in use).
+ * Returns 0 always; callers store the result back over their buffer field,
+ * so the release also clears it.
+ *
+ * Non-obvious: the pending bit is written back (flags ^ 4) BEFORE the latch
+ * byte is tested, and the in-use clear re-reads the flags word after the
+ * call. The ROM walks the ids and flags with two pointers against the end
+ * bound D_001B1E90 + 0x68 and re-forms the flag address for the final
+ * store as the flags base plus a byte counter; that loop shape needs the
+ * g_menuWorkSlotsAbs device above. The latch byte is g_menuScreenBlock +
+ * 0xDB, the address the file-scope D_001F289B names; it is reached, as in
+ * the ROM, through the bare g_menuScreenBlock base (RULING #13282 item 2
+ * extent view).
+ *
+ * MATCHED on the s136os arm (SN 2.95.3 v1.36 cc1plus -fopt-stack, the unit's
+ * -G8, S136EXTRA ""), task #2658. Task #2502 had withdrawn a rewritten
+ * spelling of this body at 52 words (FACT #13300); upstream's own text with
+ * the distinct slot symbol closes.
+ *
+ * Source: OpenRAC/rac2-decomp @34f0f0b84a04caee1a785e2192aefb067ef597ca
+ * (GPL-3.0, adopted with the authors' permission per RULINGs #10405 and
+ * #12108; the file is identical at 5776dcc35045fb2320610edd1d2db4fa7660ef37,
+ * the audit's snapshot), src/game/002DDEC8.c, func_002DE618 (v1.01 address).
+ * Author commit 5ae008de (bigbeno37, 2026-10-29), which wrote the body and
+ * deleted the near-miss draft nonmatching/game/func_002DE618.c; four
+ * non-trivial lines of that draft as rewritten by cadelass in 9546b418
+ * (2026-10-28) survive verbatim (the signature line, `int i;`, the `for`
+ * header and the func_002B7AD0 call; RULINGs #13427 rev 2 and #13541; the
+ * draft carries `SPDX-License-Identifier: MIT` and no other notice). The
+ * ChunkSlot type and its D_001B1F50_slots declaration are bigbeno37's, from
+ * b073e803. ADAPTED, every edit: (1) their D_001B1F50_slots (an asm-label
+ * alias of their `sda` D_001B1F50) as the EE-only g_menuWorkSlotsAbs
+ * equate above, declared section(".sdata") (RULING #8620) for their `sda`;
+ * (2) func_002B7AD0 = StopFileLoad and D_001F2840 = g_menuScreenBlock, by
+ * the ROM's relocations (jal 0x2B89F0; HI16/LO16 0x1F27C0); (3) their
+ * ChunkSlot renamed MenuWorkSlot, `int`/`unsigned char` spelled `s32`/`u8`,
+ * the function named FreeMenuWorkBuffer. Statements, their order and
+ * control flow are theirs. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_FreeMenuWorkBuffer)
+S136OS_SLOT(FreeMenuWorkBuffer);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern void StopFileLoad(void);
 /* (end of this body's declarations) */
-/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
- * objdiff): sdk29 63.85% / engine96 63.68%; better arm sdk29; 38 differing
- * rows on it, class STRUCTURAL; first differing insn: ROM `lui t0,0x0  [HI16
- * 0x001F27C0]` vs `lui v0,0x0  [HI16 D_001B1E90]`. Not iterated in t495. */
-    /* TODO(match): functional equivalent - not byte-exact. */
-s32 FreeMenuWorkBuffer(s32 id) {
-    extern u8 D_001F289B;
-    s32 *ids   = (s32 *)(D_001B1E90 + 0x40);
-    u32 *flags = (u32 *)(D_001B1E90 + 0x44);
-    s32 i = 0;
-    do {
-        if (ids[i * 2] == id) {
-            u32 f = flags[i * 2];
-            if (f & 2) {
-                if (f & 4) {
-                    s32 wasPending = (D_001F289B != 0);
-                    flags[i * 2] = f ^ 4;
-                    if (wasPending) {
+s32 FreeMenuWorkBuffer(s32 key)
+{
+    s32 i;
+    u8 *state;
+
+    for (i = 0; i < 5; i++) {
+        if (g_menuWorkSlotsAbs[i].key == key) {
+            if ((g_menuWorkSlotsAbs[i].flags & 2) != 0) {
+                if ((g_menuWorkSlotsAbs[i].flags & 4) != 0) {
+                    state = (u8 *)g_menuScreenBlock;
+                    g_menuWorkSlotsAbs[i].flags ^= 4;
+                    if (state[0xDB] != 0) {
                         StopFileLoad();
-                        D_001F289B = 0;
+                        state[0xDB] = 0;
                     }
                 }
-                flags[i * 2] &= ~2u;
+                g_menuWorkSlotsAbs[i].flags &= ~2;
                 return 0;
             }
         }
-        i++;
-    } while (i < 5);
+    }
     return 0;
 }
 #endif
