@@ -51,6 +51,9 @@
 #   2. tools/levels/gen_ld.py --check: the committed LNN.ld must be current;
 #   3. nm -u over the objects -> level_elf.py undef: core names come from LNN.ld,
 #      address-named ones are valued from their name, anything else fails;
+#      with placements OFF (no LNN_boot_c.tsv rows) the level's boot-name map
+#      entries that some object references as undefined are still linked, and
+#      only those (task #2646: level C names A2 objects by the map's name);
 #   4. GNU ld -T LNN.ld -T undefined_syms.ld -> <build>/LNN.elf (+ .map, ld.log);
 #   5. level_elf.py check: 7 section blobs out of the ELF's one PT_LOAD -> cmp
 #      against extracted/usa_levels/NN_*/, entry, repacked archive-form sha1;
@@ -258,6 +261,23 @@ python3 -I tools/levels/gen_ld.py "$YAML" --check || { echo "#### level_build $T
 OBJS=$(find "$BUILD/obj" -name '*.o' | sort)
 mips-linux-gnu-nm -u $OBJS | awk 'NF==2 && $1=="U"{print $2}' | sort -u > "$BUILD/nm_u.txt"
 mips-linux-gnu-nm -g --defined-only $OBJS | awk 'NF==3{print $3}' | sort -u > "$BUILD/nm_def.txt"
+if [ -z "$BOOTLD" ] && [ -f "$BNAMES" ]; then
+  # placements OFF (no config/LNN_boot_c.tsv rows), task #2646: level C names
+  # level-space objects by the level's boot-name map (g_mobyTableBase, not the
+  # address-named second spelling D_L02_001B359C; class A2). Link ONLY the map's
+  # level-space entries (core names come from LNN.ld) that some level object
+  # references and none defines, never an ADDR_NAME (level_elf.py values those
+  # from their names): nothing is placed and no other map name enters the link.
+  # Unsanctioned by RULING #13219 until watcher-2 accepts it: dropping it means
+  # reverting the A2 respell.
+  sed 's|//.*$||' "$BNAMES" | awk 'FILENAME==ARGV[1]{u[$1]=1; next} FILENAME==ARGV[2]{d[$1]=1; next}
+    $2=="=" && ($1 in u) && !($1 in d) && $1 !~ /^(func|D|jtbl|B|RO|T|FLT|DBL|STR|PSTR)_(L[0-9][0-9]_)?[0-9A-F]+$/ { v=$3; sub(/;.*/, "", v); if (length(v) == 10 && v >= "0x001A7C80") print }' "$BUILD/nm_u.txt" "$BUILD/nm_def.txt" - > "$BUILD/boot_names.ld"
+  NREF=$(wc -l < "$BUILD/boot_names.ld" | tr -d ' ')
+  if [ "$NREF" -gt 0 ]; then
+    BOOTLD="$BUILD/boot_names.ld"
+    echo "   placements off: $NREF boot-name map entries referenced by level objects linked from $BNAMES: $(awk '{print $1}' "$BOOTLD" | tr '\n' ' ')"
+  fi
+fi
 python3 -I tools/levels/level_elf.py undef "$LD" "$BUILD/nm_u.txt" "$BUILD/nm_def.txt" "$BUILD/undefined_syms.ld" $BOOTLD \
   || { echo "#### level_build $TAG: FAIL (unresolved symbols)"; exit 1; }
 if [ -n "$BOOTLD" ]; then
