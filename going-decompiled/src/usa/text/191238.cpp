@@ -1981,9 +1981,10 @@ typedef struct {
  *    (0x1A7A52/51/53/4A). They are read as nonzero offsets of one `.sdata`
  *    view, so each is a 2-word macro that cc1 keeps out of the cascade's delay
  *    slots (the ROM's `lui; lbu; beqz; nop`, 0x292974..). As offset-0 views of
- *    the four labels: 31/172 words. As section(".data") or plain unsized
- *    views, cc1 splits %hi/%lo and fills the slots with the next `lui`: 169
- *    words.
+ *    the four labels: 18/172 words. As section(".data") or plain unsized
+ *    views, cc1 splits %hi/%lo and fills the slots with the next `lui`: 167
+ *    words. (Validator #2548's figures; the 31 and 169 first recorded here did
+ *    not reproduce, and the spelling that gave them was not kept.)
  * Their D_001A72A0 table is g_playerTexDescriptorsSdata (declared with
  * LoadHeldItemDisplayModel). */
 #ifndef TARGET_NATIVE
@@ -1999,10 +2000,10 @@ extern u8  g_cheatFlagsSdata[] __asm__("g_cheatFlags") __attribute__((section(".
 #define PACK_FLAG_6 (g_cheatFlagsSdata[0x9])
 #define PACK_FLAG_7 (g_cheatFlagsSdata[0xB])
 #define PACK_FLAG_8 (g_cheatFlagsSdata[0x2])
-/* SCHEDULING DEVICE (RULING #13208, EE only): an empty asm whose operands only
- * add a dependence edge. It reads the descriptor just stored ("m") and stands
- * as a write of the count ("+m"), so cc1 keeps the loop test's count load
- * after the store, as the ROM does (0x292B50 `sd`, then 0x292B5C `lui; lw`).
+/* SCHEDULING DEVICE (RULINGs #13208 and #13379, EE only): an empty asm whose
+ * operands only add a dependence edge. It reads the descriptor just stored
+ * ("m") and stands as a write of the count ("+m"), so cc1 keeps the loop
+ * test's count load after the store, as the ROM does (0x292B50 `sd`, then 0x292B5C `lui; lw`).
  * Upstream gets that order from its fixed-address count, which may alias the
  * store. With symbols, cc1 proves they differ and hoists the load above the
  * `sd`. It emits no instruction and has no memory clobber. Without it: 9/172
@@ -2069,8 +2070,12 @@ extern u8    g_cheatFlags[];
  * views above instead of `*(T *)0x001A....` (EE) and over the real objects
  * (native); (3) `unsigned long long` written u64 and `ULL` written `UL` (the
  * same type on EE; NOTE #13181's x64 arm); (4) the
- * PLAYER_TEX_COUNT_AFTER_STORE fence after the descriptor store; (5) the name is
- * LoadPlayerDisplayTextures. The rest of the body is theirs.
+ * PLAYER_TEX_COUNT_AFTER_STORE fence after the descriptor store; (5) the
+ * unit's callee prototypes, not theirs: their func_002FC3C0(unsigned long) is
+ * WaitFrameDmaFence(s32), func_001265B0's GsLoadImage * argument is void *,
+ * and their `unsigned long long` D_001A72A0 table is read through the s64[]
+ * view g_playerTexDescriptorsSdata (all byte-neutral, validator #2548); (6)
+ * the name is LoadPlayerDisplayTextures. The rest of the body is theirs.
  */
 #define PLAYER_DISC_TOC (*(DiscToc *)g_discToc)
 #if defined(TARGET_NATIVE) || defined(S136OS_LoadPlayerDisplayTextures)
@@ -2237,7 +2242,8 @@ extern void FixupMobyClassHeader(void *hdr, s32 arg2, s32 reloc, s32 classId);
  * measured byte-identical to asm-label views),
  * D_001BAF30 = g_shipModelBufferWords, D_001C4DC0 = g_modelTexRegs (declared
  * s64[] as at the unit's other use), D_001A91E0 = g_shipRemapWord (their
- * v1.01 addresses are 0x80 higher for the last three), func_002FC3C0 =
+ * v1.01 addresses are 0x80 higher for D_001BAF30 and D_001C4DC0; D_001A91E0
+ * is the ROM's own relocation target, unshifted), func_002FC3C0 =
  * WaitFrameDmaFence, func_002B7C80 = StartFileLoadPumpingVoice and
  * func_002934F8 = FixupMobyClassHeader; (2) their (s32, s32, s32) and
  * (s32, s32, void *, s32) prototypes are the unit's, so `h` is passed as
@@ -2337,8 +2343,10 @@ extern s32 g_frameArenaBase;
  * = StartFileLoadPumpingVoice, func_00126288 = SetupGsImageUpload,
  * func_001265B0 = KickGifImageUpload, func_001244B8 = WaitGsPathsIdleU16 and
  * func_00282A18 = Log2Floor; (2) every `long` written s64 (RULING #13197); (3) `sda` written
- * section(".sdata"); (4) the name is LoadShipDisplayTexture. The rest of the
- * body is theirs.
+ * section(".sdata"); (4) the unit's callee prototypes, not theirs: their
+ * func_002FC3C0(unsigned long) is WaitFrameDmaFence(s32) and func_001265B0's
+ * GsLoadImage * argument is void * (byte-neutral, validator #2548); (5) the
+ * name is LoadShipDisplayTexture. The rest of the body is theirs.
  */
 #if !defined(TARGET_NATIVE) && !defined(S136OS_LoadShipDisplayTexture)
 S136OS_SLOT(LoadShipDisplayTexture);

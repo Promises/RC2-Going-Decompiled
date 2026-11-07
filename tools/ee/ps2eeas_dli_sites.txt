@@ -204,7 +204,8 @@ usa      DrawRotatedSprite2d  0x0027ED78  $6,0x53535353106       3406a6a6 000634
 # func_002954F0 and QueueGsTextureUpload each build a GS TEX0 word whose CLD
 # field sets bit 63. GNU as gives `ori 0x8000; dsll32 16` for that value; the
 # ROM has Ps2EeAs's `addiu -1; dsll32 31` (func_0026FC88's form). The site is
-# followed by an `or` in four of them and by `lw` in LoadHeldItemDisplayModel.
+# followed by an `or` in three of them, by `lw` in LoadHeldItemDisplayModel and
+# by `lui` in func_002954F0.
 # LoadShipDisplayModel's site is the fixed GS register word 0x40000400004000,
 # followed by an `sd`. GNU as gives 4 words (`lui 0x40; ori 4; dsll32; ori
 # 0x4000`, NOTE #9664) and the ROM has Ps2EeAs's 5, so without the row the
