@@ -2584,7 +2584,7 @@
     `going-decompiled/levels/usa/L20/src/func_L20_003C12C0.c`, from
     `src/levels/20_yeedil/L20_0039C448-g8.c`
     (`func_L20_003BFEB8`, author commit `8422a726`, Fromnowhere), task
-    #2565. VERBATIM but for names: our name, the boot's `g_soundBankHandlesBlk`, `g_playerProgress`, 3 data names and 4 callees renamed to the v2.00 disc's own targets.
+    #2565. VERBATIM but for names: our name, the boot's `g_soundBankHandlesBlk`, `g_playerProgress`, 4 data names (one the boot's own `D_19B2E8`) and 4 callees renamed to the v2.00 disc's own targets.
   - **`func_L20_003C16D8`** (`0x003C16D8`, level program 20) in
     `going-decompiled/levels/usa/L20/src/func_L20_003C16D8.c`, from
     `src/levels/20_yeedil/L20_0039C448.c`
