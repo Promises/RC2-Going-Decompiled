@@ -496,6 +496,7 @@ func_L26_0032CCD0	DriveMobyAlongWaypoints	1B4218	256
 func_L26_0032CDD8	SetMobyWaypointPath	1B4218	116
 func_L26_0032CEC0	AccumMobyMotionProfile	1B4218	88
 func_L26_0032DAE8	CheckMobyPathBlocked	1B4218	168
+func_L26_0032DB90	CheckMobyOverWater	1B4218	188
 func_L26_0032DD88	BindMobyClassUpdateFunc	1B4218	148
 func_L26_0032DFD8	LoadGlobalSoundBank	1B4218	88
 func_L26_0032E030	KickLevelBankDiscLoad	1B4218	152

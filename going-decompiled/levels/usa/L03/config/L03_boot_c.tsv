@@ -486,6 +486,7 @@ func_L03_0032F288	ResolveMobyEdgeConstraint	1B4218	176
 func_L03_0032F550	SetMobyMotionParams	1B4218	100
 func_L03_0032F5D0	AccumMobyMotionProfile	1B4218	88
 func_L03_0032F648	CheckMobyPathBlocked	1B4218	168
+func_L03_0032F6F0	CheckMobyOverWater	1B4218	188
 func_L03_0032F8E8	BindMobyClassUpdateFunc	1B4218	148
 func_L03_0032FB38	LoadGlobalSoundBank	1B4218	88
 func_L03_0032FB90	KickLevelBankDiscLoad	1B4218	152

@@ -5,7 +5,7 @@
 // and the gated boot build's symbol table and sectioned objects. No disc or ROM bytes are read.
 // Source per name: core (boot value, below 0x1A7C80) | placed (its own place) | catalogue (a call the
 // committed boot<->place table predicts) | split-operand (the committed split's operand at that offset).
-// 2529 names, 1071 placed functions.
+// 2530 names, 1072 placed functions.
 AccumMobyMotionProfile = 0x0032A498; // catalogue+placed
 AddFxDrawHookLate = 0x002E39E0; // placed
 AddItemToInventoryOrder = 0x002F0A60; // catalogue+placed
@@ -57,6 +57,7 @@ CdStopRead = 0x00133640; // core
 ChainSecondaryVoice = 0x0032B300; // catalogue+placed
 CheckMobyGroundMover = 0x00329D08; // split-operand
 CheckMobyIsLevelObjectSlot = 0x00327C08; // placed
+CheckMobyOverWater = 0x0032A680; // placed
 CheckMobyPathBlocked = 0x0032A5D8; // placed
 CheckTargetInRangeBand = 0x00327530; // placed
 ClearSavePromptPending = 0x002F1460; // split-operand
@@ -1656,7 +1657,7 @@ func_002B0DC8 = 0x00322798; // catalogue+placed
 func_002B0E40 = 0x00322810; // catalogue+placed
 func_002B0F40 = 0x00322960; // catalogue+placed
 func_002B0FE0 = 0x00322A00; // placed
-func_002B11C8 = 0x00322BE8; // placed
+func_002B11C8 = 0x00322BE8; // catalogue+placed
 func_002B1270 = 0x00322C90; // placed
 func_002B1348 = 0x00322D68; // placed
 func_002B1710 = 0x00323540; // catalogue+placed
@@ -3026,6 +3027,7 @@ func_L09_0032A2D0 = DriveMobyAlongWaypoints; // alias
 func_L09_0032A420 = SetMobyWaypointPath; // alias
 func_L09_0032A498 = AccumMobyMotionProfile; // alias
 func_L09_0032A5D8 = CheckMobyPathBlocked; // alias
+func_L09_0032A680 = CheckMobyOverWater; // alias
 func_L09_0032A878 = BindMobyClassUpdateFunc; // alias
 func_L09_0032AAC8 = LoadGlobalSoundBank; // alias
 func_L09_0032AB20 = KickLevelBankDiscLoad; // alias

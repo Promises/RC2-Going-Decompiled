@@ -481,6 +481,7 @@ func_L23_00333BC8	CheckMobyIsLevelObjectSlot	1B4218	36
 func_L23_00334618	IsGameStatePending	1B4218	20
 func_L23_00334838	GetGameStateStackTop	1B4218	44
 func_L23_00334E58	SetMobyMotionParams	1B4218	100
+func_L23_00335BB0	CheckMobyOverWater	1B4218	188
 func_L23_00335DA8	BindMobyClassUpdateFunc	1B4218	148
 func_L23_00335FF8	LoadGlobalSoundBank	1B4218	88
 func_L23_00336050	KickLevelBankDiscLoad	1B4218	152
