@@ -1814,3 +1814,79 @@
     name at the v2.00 place; four data labels and thirteen callees renamed
     to their L09 targets (`sda` text kept, ignored by cc1); `common.h`
     dropped; assembled through `tools/ee/asm_unit.sh`.
+  - **`func_L20_00441690`** (`0x00441690`, level program 20) in
+    `going-decompiled/levels/usa/L20/src/func_L20_00441690.c`, from
+    `src/levels/20_yeedil/L20_0043ECB0-g8.c`
+    (`func_L20_00440150`, author commit `ee3fee45`, llesieur99), task #2566. Verbatim but for names: our name, 1 level data name, 1 callee renamed to the v2.00 disc's own relocation targets; upstream's per-file `-mno-split-addresses` not passed (measured inert); `include_asm.h` dropped; plain `as`.
+  - **`func_L20_004419A0`** (`0x004419A0`, level program 20) in
+    `going-decompiled/levels/usa/L20/src/func_L20_004419A0.c`, from
+    `src/levels/20_yeedil/L20_0043ECB0.c`
+    (`func_L20_00440460`, author commit `db93b56d`, llesieur99), task #2566. Verbatim but for names: our name, 1 callee renamed to the v2.00 disc's own relocation targets; `common.h` dropped; plain `as`.
+  - **`func_L20_004419F8`** (`0x004419F8`, level program 20) in
+    `going-decompiled/levels/usa/L20/src/func_L20_004419F8.c`, from
+    `src/levels/20_yeedil/L20_0043ECB0.c`
+    (`func_L20_004404B8`, author commit `ee3fee45`, llesieur99), task #2566. Verbatim but for names: our name, 5 callees renamed to the v2.00 disc's own relocation targets; `common.h` dropped; plain `as`.
+  - **`func_L20_00441AB0`** (`0x00441AB0`, level program 20) in
+    `going-decompiled/levels/usa/L20/src/func_L20_00441AB0.c`, from
+    `src/levels/20_yeedil/L20_0043ECB0.c`
+    (`func_L20_00440570`, author commit `db93b56d`, llesieur99), task #2566. Verbatim but for names: our name, 1 callee renamed to the v2.00 disc's own relocation targets; `common.h` dropped; plain `as`.
+  - **`func_L20_00443D10`** (`0x00443D10`, level program 20) in
+    `going-decompiled/levels/usa/L20/src/func_L20_00443D10.c`, from
+    `src/levels/20_yeedil/L20_0043ECB0.c`
+    (`func_L20_004427C8`, author commit `adcbd51e`, llesieur99), task #2566. Verbatim but for names: our name, 4 callees renamed to the v2.00 disc's own relocation targets; `common.h` dropped; plain `as`.
+  - **`func_L20_00444158`** (`0x00444158`, level program 20) in
+    `going-decompiled/levels/usa/L20/src/func_L20_00444158.c`, from
+    `src/levels/20_yeedil/L20_0043ECB0.c`
+    (`func_L20_00442C10`, author commit `adcbd51e`, llesieur99), task #2566. Verbatim but for names: our name, 4 callees renamed to the v2.00 disc's own relocation targets; `common.h` dropped; plain `as`.
+  - **`func_L20_00444478`** (`0x00444478`, level program 20) in
+    `going-decompiled/levels/usa/L20/src/func_L20_00444478.c`, from
+    `src/levels/20_yeedil/L20_0043ECB0.c`
+    (`func_L20_00442F30`, author commit `db93b56d`, llesieur99), task #2566. Verbatim but for names: our name, 3 callees renamed to the v2.00 disc's own relocation targets; `common.h` dropped; plain `as`.
+  - **`func_L20_00444A50`** (`0x00444A50`, level program 20) in
+    `going-decompiled/levels/usa/L20/src/func_L20_00444A50.c`, from
+    `src/levels/20_yeedil/L20_0043ECB0.c`
+    (`func_L20_00443508`, author commit `765097bb`, ReaperOfVeriod), task #2566. Verbatim but for names: our name, 4 callees renamed to the v2.00 disc's own relocation targets; `common.h` dropped; plain `as`.
+  - **`func_L20_00444E50`** (`0x00444E50`, level program 20) in
+    `going-decompiled/levels/usa/L20/src/func_L20_00444E50.c`, from
+    `src/levels/20_yeedil/L20_0043ECB0.c`
+    (`func_L20_00443908`, author commit `3b12a35b`, Louis-Philippe Le Sieur), task #2566. Verbatim but for names: our name, 7 callees renamed to the v2.00 disc's own relocation targets; `common.h` dropped; plain `as`.
+  - **`func_L20_004450A8`** (`0x004450A8`, level program 20) in
+    `going-decompiled/levels/usa/L20/src/func_L20_004450A8.c`, from
+    `src/levels/20_yeedil/L20_00443B60-helpers.c`
+    (`func_L20_00443B60`, author commit `bf60a47f`, Louis-Philippe Le Sieur), task #2566. Verbatim but for names: our name, 6 callees renamed to the v2.00 disc's own relocation targets; `common.h` dropped; plain `as`.
+  - **`func_L20_00445238`** (`0x00445238`, level program 20) in
+    `going-decompiled/levels/usa/L20/src/func_L20_00445238.c`, from
+    `src/levels/20_yeedil/L20_0043ECB0.c`
+    (`func_L20_00443CF0`, author commit `c17a465e`, Fromnowhere), task #2566. Verbatim but for names: our name, 2 callees renamed to the v2.00 disc's own relocation targets; `common.h` dropped; plain `as`.
+  - **`func_L20_004452A0`** (`0x004452A0`, level program 20) in
+    `going-decompiled/levels/usa/L20/src/func_L20_004452A0.c`, from
+    `src/levels/20_yeedil/L20_0043ECB0.c`
+    (`func_L20_00443D58`, author commit `c17a465e`, Fromnowhere), task #2566. Verbatim but for names: our name, 3 callees renamed to the v2.00 disc's own relocation targets; `common.h` dropped; plain `as`.
+  - **`func_L20_004461B0`** (`0x004461B0`, level program 20) in
+    `going-decompiled/levels/usa/L20/src/func_L20_004461B0.c`, from
+    `src/levels/20_yeedil/L20_0043ECB0.c`
+    (`func_L20_00444C68`, author commit `db93b56d`, llesieur99), task #2566. Adapted, no device: our name, 3 callees renamed to the v2.00 disc's own relocation targets; one extern prototype added for `func_L20_00441AB0`, defined earlier in the upstream file; `common.h` dropped; plain `as`.
+  - **`func_L20_00448E50`** (`0x00448E50`, level program 20) in
+    `going-decompiled/levels/usa/L20/src/func_L20_00448E50.c`, from
+    `src/levels/20_yeedil/L20_0043ECB0.c`
+    (`func_L20_00447908`, author commit `db93b56d`, llesieur99), task #2566. Verbatim but for names: our name, 1 callee renamed to the v2.00 disc's own relocation targets; `common.h` dropped; plain `as`.
+  - **`func_L20_0044AFC0`** (`0x0044AFC0`, level program 20) in
+    `going-decompiled/levels/usa/L20/src/func_L20_0044AFC0.c`, from
+    `src/levels/20_yeedil/L20_00449178.c`
+    (`func_L20_00449A78`, author commit `ee3fee45`, llesieur99), task #2566. Verbatim but for names: our name, 1 callee renamed to the v2.00 disc's own relocation targets; `include_asm.h` dropped; plain `as`.
+  - **`func_L20_0044B020`** (`0x0044B020`, level program 20) in
+    `going-decompiled/levels/usa/L20/src/func_L20_0044B020.c`, from
+    `src/levels/20_yeedil/L20_00449178.c`
+    (`func_L20_00449AD8`, author commit `ee3fee45`, llesieur99), task #2566. Verbatim but for names: our name (no relocations); `include_asm.h` dropped; plain `as`.
+  - **`func_L20_0044B030`** (`0x0044B030`, level program 20) in
+    `going-decompiled/levels/usa/L20/src/func_L20_0044B030.c`, from
+    `src/levels/20_yeedil/L20_00449178-g8.c`
+    (`func_L20_00449AE8`, author commit `e0711884`, ReaperOfVeriod), task #2566. Verbatim but for names: our name, 2 level data names, 5 callees renamed to the v2.00 disc's own relocation targets; `include_asm.h` dropped; plain `as`.
+  - **`func_L20_0044B650`** (`0x0044B650`, level program 20) in
+    `going-decompiled/levels/usa/L20/src/func_L20_0044B650.c`, from
+    `src/levels/20_yeedil/L20_00449178.c`
+    (`func_L20_0044A108`, author commit `ee3fee45`, llesieur99), task #2566. Verbatim but for names: our name, 3 callees renamed to the v2.00 disc's own relocation targets; `include_asm.h` dropped; plain `as`.
+  - **`func_L20_0044C0B0`** (`0x0044C0B0`, level program 20) in
+    `going-decompiled/levels/usa/L20/src/func_L20_0044C0B0.c`, from
+    `src/levels/20_yeedil/L20_00449178.c`
+    (`func_L20_0044AB68`, author commit `3b12a35b`, Louis-Philippe Le Sieur), task #2566. Verbatim but for names: our name, 4 callees renamed to the v2.00 disc's own relocation targets; `include_asm.h` dropped; plain `as`.
