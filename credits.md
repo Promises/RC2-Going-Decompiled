@@ -1562,7 +1562,7 @@
   - **`func_L14_003606E8`** (`0x003606E8`, level program 14) in
     `going-decompiled/levels/usa/L14/src/func_L14_003606E8.c`, from
     `src/levels/14_aranos_prison/L14_0035F510-g8.c` (`func_L14_0035F510`, author commit `7c3ea917`, Fromnowhere, copying bigbeno37's text from `6001495a` (func_L00_00354DF8; RULING #13427 rev 4)),
-    task #2564. VERBATIM but for names: our name at the v2.00 place; the boot's `g_anAvailableLevelOrder`; two level data names as our labels `D_L14_001AA790`/`D_L14_0028D1B0`; two level data names as address-named externs `D_L14_0021D5E0`/`D_L14_001C9A60`, the v2.00 targets inside larger split labels (RULING #13291 §2); `D_L14_00291720` kept (the v2.00 label there has the same name); s136 -G8, plain as.
+    task #2564. VERBATIM but for names: our name at the v2.00 place; the boot's `g_anAvailableLevelOrder`; two level data names as our labels `D_L14_001AA790`/`D_L14_0028D1B0`; one level data name as the address-named extern `D_L14_0021D5E0`, the v2.00 target inside a larger split label (RULING #13291 §2); `D_L14_001C9AE0` as `g_mapVertexData`, the level's boot-name map name at that v2.00 address (task #2646); `D_L14_00291720` kept (the v2.00 label there has the same name); s136 -G8, plain as.
   - **`func_L14_00392440`** (`0x00392440`, level program 14) in
     `going-decompiled/levels/usa/L14/src/func_L14_00392440.c`, from
     `src/levels/14_aranos_prison/L14_00304190.c` (`func_L14_00390FE8`, author commit `adcbd51e`, llesieur99),

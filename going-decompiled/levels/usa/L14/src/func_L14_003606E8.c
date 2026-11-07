@@ -15,7 +15,8 @@ extern char D_L14_0028D1B0[];
 extern InitEntry12 D_L14_0021D5E0[];
 /* Reloaded at each search step in retail. */
 extern int * volatile D_L14_001AA790 __attribute__((sda));
-extern struct { char pad[0x230]; int selected; } D_L14_001C9A60;
+/* L14's boot-name map name at 0x001C9A60 (symbol_addrs/L14_boot_names.txt). */
+extern struct { char pad[0x230]; int selected; } g_mapVertexData;
 
 /**
  * func_L14_003606E8 - fill the object's init-entry list from the level-order
@@ -30,7 +31,7 @@ extern struct { char pad[0x230]; int selected; } D_L14_001C9A60;
  * id/value read from the source table at that id; entry i then gets the
  * terminator. The list pointer is re-read through D_L14_001AA790 each step of
  * the second loop (the volatile), which searches the selected slot of the
- * scratch record D_L14_001C9A60 and stores its index at obj +0x40; the flags
+ * scratch record g_mapVertexData and stores its index at obj +0x40; the flags
  * word gains 0x8000 either way.
  *
  * Source: OpenRAC rac2-decomp <https://github.com/OpenRAC/rac2-decomp> at
@@ -52,13 +53,18 @@ extern struct { char pad[0x230]; int selected; } D_L14_001C9A60;
  *   - D_L14_0028D1D0 -> D_L14_0028D1B0 (our label at that address);
  *   - D_L14_00291720 kept (the v2.00 label at that address has the same
  *     name);
- *   - D_L14_0021D630 -> D_L14_0021D5E0 and D_L14_001C9AE0 -> D_L14_001C9A60:
- *     address-named externs (RULING #13291 section 2, the L6 route) - the
- *     v2.00 targets lie inside larger split data labels (relverify:
- *     D_L14_0020FFF0+0xD5F0 and D_L14_001B28B0+0x171B0), and no label of
- *     either name exists at the exact address (grep of the boot splits,
- *     going-decompiled/symbol_addrs/usa/symbol_addrs.txt and the level's own
- *     split labels, with firing controls);
+ *   - D_L14_0021D630 -> D_L14_0021D5E0: an address-named extern (RULING
+ *     #13291 section 2, the L6 route) - the v2.00 target lies inside a
+ *     larger split data label (relverify: D_L14_0020FFF0+0xD5F0), and no
+ *     label of that name exists at the exact address (grep of the boot
+ *     splits, going-decompiled/symbol_addrs/usa/symbol_addrs.txt and the
+ *     level's own split labels, with firing controls);
+ *   - D_L14_001C9AE0 -> g_mapVertexData (task #2646, applied when this
+ *     row met #2646's NAMES check at landing): the name
+ *     symbol_addrs/L14_boot_names.txt gives at exactly 0x001C9A60 (inside
+ *     D_L14_001B28B0+0x171B0 by relverify); the address-named spelling
+ *     D_L14_001C9A60 was a second name for that address (A2 class, NOTE
+ *     #13409);
  *   - `#include "include_asm.h"` dropped (defines nothing the body uses);
  *     the two file-local typedefs InitEntry12/SourceEntry12 and upstream's
  *     declaration forms kept verbatim; the `extern int D_00139948[]` line
@@ -79,7 +85,7 @@ int func_L14_003606E8(char *obj) {
     *(int *)(obj + 0x40) = 0;
     *(unsigned int *)(obj + 0x30) |= 0x8000;
     for (i = 0, entry = list[0]; entry; entry = D_L14_001AA790[++i]) {
-        if (D_L14_001C9A60.selected == entry) {
+        if (g_mapVertexData.selected == entry) {
             *(int *)(obj + 0x40) = i;
             break;
         }
