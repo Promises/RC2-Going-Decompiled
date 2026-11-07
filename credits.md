@@ -646,7 +646,7 @@
     byte-exact on our ROM; its one inline `sync` is the hardware barrier
     RULING #12168 allows (task #2297).
 
-- **OpenRAC — `rac2-decomp`, commit `b2a35115`, Window X bodies (text/235FE8, text/1DFF80, text/1D54C0, text/250080, cod/015180 and level program 24)** (GPL-3.0)
+- **OpenRAC — `rac2-decomp`, commit `b2a35115`, Window X bodies (text/235FE8, text/1DFF80, text/1D54C0, text/250080, text/188858, cod/015180 and level program 24)** (GPL-3.0)
   <https://github.com/OpenRAC/rac2-decomp> at commit `b2a35115e0cf580a1fdab8dd1071b157799e590e`
   (the same history as `rac2-gc-decomp` above: `96927f87` is an ancestor)
 
@@ -807,6 +807,17 @@
     #12316 Q3) and `s32[3]` on native. Per-function
     `S136EXTRA=-fno-strict-aliasing` override (RULING #12178), task #2469.
 
+  - **`UpdateSubtitleStateMachine`** (`0x00289BB8`) in
+    `going-decompiled/src/usa/text/188858.c`, from `src/game/00289178.c`
+    (`func_00289178`, v1.01 address, author commit `6a0dbf0b`, bigbeno37,
+    2026-10-28). Task #2505; its switch table is bound to the ROM's
+    `jtbl_0026C7A0_text` by `tools/ee/jtbl_bind.sh`. Read at `5776dcc3`; the body
+    is identical at `b2a35115` and at head `fe6adf9b`. ADAPTED: our symbols per
+    the ROM's relocations, the audit's z2 addressing devices (RULINGs
+    #8620/#8036/#12316) minimised by removal probes, the state-8 latch
+    increment pinned to `$2` by an EE-only asm register local, and the
+    `RECORD_SUBTITLE_TIME` macro's opening brace moved off the `#define`
+    line for the ORPHAN_LATENT scanner.
 - **Newlib** (<https://sourceware.org/git/newlib-cygwin.git>, tag
   `newlib-2000-02-17`, commit `061afe83dc04a43321d69b5f04860e5de799665c`;
   Red Hat / Cygnus Solutions and contributors)
@@ -1057,29 +1068,6 @@
   - **`BuildCheatMenuItemList`** (`0x002CD510`) in
     `going-decompiled/src/usa/text/1CA080.cpp`, from `src/us2/game/002CD510.c`
     (`func_US2_002CD510`, author commit `c4928ea3`, Flavius).
-
-- **OpenRAC — `rac2-decomp`, commit `5776dcc3`, text/188858 Window X body** (GPL-3.0)
-  <https://github.com/OpenRAC/rac2-decomp> at commit `5776dcc35045fb2320610edd1d2db4fa7660ef37`
-
-  One C body, adopted with the authors' permission (held by the operator,
-  RULING #10405) and the operator's 2026-10-31 "adopt all" (RULING #12108),
-  byte-exact on our v2.00 ROM on the s136os arm (task #2505, #2482 row 6;
-  the body is unchanged at upstream head `fe6adf9b`). Contributor: bigbeno37
-  (author commit `6a0dbf0b`, 2026-10-28). The doc comment carries the
-  `Source:` line, which names every respelling. ADAPTED: our symbols per the
-  ROM's relocations (globals and callees respelled by address), the audit's
-  z2 addressing devices (RULINGs #8620/#8036/#12316) minimised by removal
-  probes, the state-8 latch increment pinned to `$2` by an EE-only asm
-  register local, and the `RECORD_SUBTITLE_TIME` macro's opening brace moved
-  off the `#define` line so the line-based ORPHAN_LATENT scanner's brace
-  count stays balanced.
-
-  Used so far:
-  - **`UpdateSubtitleStateMachine`** (`0x00289BB8`) in
-    `going-decompiled/src/usa/text/188858.c`, from `src/game/00289178.c`
-    (`func_00289178`, v1.01 address, author commit `6a0dbf0b`, bigbeno37,
-    2026-10-28). Task #2505; its switch table is bound to the ROM's
-    `jtbl_0026C7A0_text` by `tools/ee/jtbl_bind.sh`.
 
 - **OpenRAC — `rac2-decomp`, nonmatching draft, possible prior art** (GPL-3.0)
   <https://github.com/OpenRAC/rac2-decomp> at commit `3e72fa2d`

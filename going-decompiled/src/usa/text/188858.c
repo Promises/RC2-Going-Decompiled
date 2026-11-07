@@ -2138,6 +2138,13 @@ extern s32 g_playerProgress;
  * asm register local (SUBTITLES_LATCH_INC, EE arm only — host compilers reject
  * MIPS register names, so TARGET_NATIVE spells the plain increment) — cc1's
  * free-register scan hands out $3 there and three words differ without the pin.
+ * Also load-bearing (validator #2571): upstream's volatile reads (removed: 21
+ * of 586 words differ); and two of the unit's existing devices that the
+ * respellings below route through, the g_pActiveTextTableAbs view (removed:
+ * 579 words) and the g_discTocRow view (removed: 592 words). On native,
+ * g_subtitleHistory reads g_health+0x66C and D_1A7390 reads
+ * g_gsPixelOffsetY+0x3C: extent views over neighbouring globals, accepted
+ * until the native phase (RULING #13282).
  *
  * Source: ADAPTED from OpenRAC rac2-decomp @5776dcc3 src/game/00289178.c
  * func_00289178 (6a0dbf0b, bigbeno37, 2026-10-28, GPL-3.0). Adaptations: all
