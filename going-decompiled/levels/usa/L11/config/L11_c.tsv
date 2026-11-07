@@ -1,4 +1,4 @@
-# Functions of level program L11 built from C (RULING #13291, b3 level-C rows; task #2553 row L11-A, task #2555 row L11-C, task #2578 row L11-ASM, task #2554 row L11-B).
+# Functions of level program L11 built from C (RULING #13291, b3 level-C rows; task #2553 row L11-A, task #2555 row L11-C, task #2578 row L11-ASM, task #2554 row L11-B, task #2556 row L11-D).
 # One row per function, compiled ALONE as its own TU by tools/levels/level_build.sh
 # and linked at its one place in place of its split asm (gen_ld.py cuts the
 # function's block out of the .text asm). Single placement only (row L7 is the
@@ -86,11 +86,26 @@ func_L11_00449ED0	src/func_L11_00449ED0.c	s136	-G8	asm_unit	-
 func_L11_0044A270	src/func_L11_0044A270.c	s136	-G0
 func_L11_0044A330	src/func_L11_0044A330.c	s136	-G0
 func_L11_0044A4D0	src/func_L11_0044A4D0.c	s136	-G8	asm_unit	-
+func_L11_0044A708	src/func_L11_0044A708.c	sdk29	-G0	as	-
 func_L11_0044A750	src/func_L11_0044A750.c	s136	-G8
 func_L11_0044AAC0	src/func_L11_0044AAC0.c	s136	-G8	asm_unit	-
 func_L11_0044AD58	src/func_L11_0044AD58.c	s136	-G8	asm_unit	-
+func_L11_0044B0C8	src/func_L11_0044B0C8.c	s136	-G0	as	-
+func_L11_0044B2A0	src/func_L11_0044B2A0.c	s136	-G0	as	-
+func_L11_0044B398	src/func_L11_0044B398.c	s136	-G0	as	-
 func_L11_0044D7A0	src/func_L11_0044D7A0.c	s136	-G8	asm_unit	-
+func_L11_0044DB28	src/func_L11_0044DB28.c	s136	-G0	as	-
+func_L11_0044DCA0	src/func_L11_0044DCA0.c	s136	-G0	as	-
+func_L11_0044DD60	src/func_L11_0044DD60.c	s136	-G0	as	-
+func_L11_0044DF28	src/func_L11_0044DF28.c	s136	-G0	as	-
+func_L11_0044E250	src/func_L11_0044E250.c	s136	-G0	as	-
+func_L11_00452180	src/func_L11_00452180.c	s136	-G0	as	-
 func_L11_00453EA8	src/func_L11_00453EA8.c	s136	-G8	asm_unit	-
+func_L11_00454268	src/func_L11_00454268.c	s136	-G0	as	-
+func_L11_004542F8	src/func_L11_004542F8.c	s136	-G0	as	-
+func_L11_004546B0	src/func_L11_004546B0.c	s136	-G0	as	-
+func_L11_00454850	src/func_L11_00454850.c	s136	-G0	as	-
+func_L11_00454B18	src/func_L11_00454B18.c	s136	-G0	as	-
 func_L11_00455F60	src/func_L11_00455F60.c	s136	-G8	asm_unit	-
 func_L11_00456538	src/func_L11_00456538.c	s136	-G0
 func_L11_004565B8	src/func_L11_004565B8.c	s136	-G0
@@ -104,4 +119,9 @@ func_L11_0045A6F0	src/func_L11_0045A6F0.c	s136	-G8	asm_unit	-
 func_L11_0045A840	src/func_L11_0045A840.c	s136	-G0
 func_L11_0045AA10	src/func_L11_0045AA10.c	s136	-G0
 func_L11_0045B800	src/func_L11_0045B800.c	s136	-G8	asm_unit	-
+func_L11_0045B958	src/func_L11_0045B958.c	sdk29	-G0	as	-
 func_L11_00461AD8	src/func_L11_00461AD8.c	s136	-G0
+func_L11_00471C58	src/func_L11_00471C58.c	s136	-G0	as	-
+func_L11_004748A0	src/func_L11_004748A0.c	sdk29	-G0	as	-
+func_L11_0048A068	src/func_L11_0048A068.c	sdk29	-G0	as	-
+func_L11_0048A080	src/func_L11_0048A080.c	s136	-G0	as	-

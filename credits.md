@@ -2625,3 +2625,83 @@
     `src/levels/20_yeedil/L20_00447640-g8.c`
     (`func_L20_00447640`, author commit `8422a726`, Fromnowhere), task
     #2565. ADAPTED: our name, 3 data names and 2 callees renamed to the v2.00 disc's own targets; their `sda` as `section(".sdata")` (RULING #8620).
+  - **`func_L11_0044A708`** (`0x0044A708`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_0044A708.c`, from
+    `src/levels/11_joba/L11_004465F8.c` (`func_L11_00448CE0`, author commit `fa8d6672`, llesieur99),
+    task #2556. VERBATIM but for names: our name at the v2.00 place; no other symbol referenced (0 relocations).
+  - **`func_L11_0044B0C8`** (`0x0044B0C8`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_0044B0C8.c`, from
+    `src/levels/11_joba/L11_004465F8.c` (`func_L11_004496A0`, author commit `5acf9869`, Flavius),
+    task #2556. VERBATIM but for names: our name at the v2.00 place; nine names respelled: eight callees plus the sibling func_L11_0044ACC8 (defined in the same upstream TU, declared here as an extern).
+  - **`func_L11_0044B2A0`** (`0x0044B2A0`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_0044B2A0.c`, from
+    `src/levels/11_joba/L11_004465F8.c` (`func_L11_00449878`, author commit `fa8d6672`, llesieur99; two callee spellings later changed in `1d296136`, Louis-Philippe Le Sieur),
+    task #2556. VERBATIM but for names: our name at the v2.00 place; seven callees as L11’s v2.00 names; the file-scope `TI128` typedef written in the TU.
+  - **`func_L11_0044B398`** (`0x0044B398`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_0044B398.c`, from
+    `src/us2/levels/11_joba/L11_0044B398.c` (`func_US2_L11_0044B398`, author commit `ac7e1a2e`, bigbeno37, which carried the text from `func_L11_00449970` in `src/levels/11_joba/L11_004465F8.c`, renaming it and adding one line; that v1.01 body was written in `7119fabe`, Gianni, with seven callee spellings changed in `1d296136`, Louis-Philippe Le Sieur),
+    task #2556. VERBATIM but for names: our name at the v2.00 place; nine names respelled (callees plus func_L11_0044B2A0 of row L11-D); the file-scope `TI128` typedef written in the TU; the body’s `(char *)(long)` kept verbatim (EE `long` is 64-bit).
+  - **`func_L11_0044DB28`** (`0x0044DB28`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_0044DB28.c`, from
+    `src/levels/11_joba/L11_004465F8.c` (`func_L11_0044C0F0`, author commit `fa8d6672`, llesieur99),
+    task #2556. VERBATIM but for names: our name at the v2.00 place; two callees as L11’s v2.00 names.
+  - **`func_L11_0044DCA0`** (`0x0044DCA0`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_0044DCA0.c`, from
+    `src/levels/11_joba/L11_004465F8.c` (`func_L11_0044C268`, author commit `a2d495f1`, Flavius),
+    task #2556. VERBATIM but for names: our name at the v2.00 place; two callees as L11’s v2.00 names.
+  - **`func_L11_0044DD60`** (`0x0044DD60`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_0044DD60.c`, from
+    `src/levels/11_joba/L11_004465F8.c` (`func_L11_0044C328`, author commit `5acf9869`, Flavius),
+    task #2556. VERBATIM but for names: our name at the v2.00 place; seven callees as L11’s v2.00 names.
+  - **`func_L11_0044DF28`** (`0x0044DF28`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_0044DF28.c`, from
+    `src/levels/11_joba/L11_004465F8.c` (`func_L11_0044C4F0`, author commit `5acf9869`, Flavius),
+    task #2556. VERBATIM but for names: our name at the v2.00 place; nine callees as L11’s v2.00 names.
+  - **`func_L11_0044E250`** (`0x0044E250`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_0044E250.c`, from
+    `src/levels/11_joba/L11_004465F8.c` (`func_L11_0044C818`, author commit `431ac503`, llesieur99),
+    task #2556. VERBATIM but for names: our name at the v2.00 place; one callee as L11’s v2.00 name.
+  - **`func_L11_00452180`** (`0x00452180`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_00452180.c`, from
+    `src/levels/11_joba/L11_004465F8.c` (`func_L11_00450748`, author commit `7fccf735`, Flavius; upstream's root commit, which squashed the earlier RAC2 history),
+    task #2556. VERBATIM but for names: our name at the v2.00 place; the vector helper as L11’s func_L11_00301280.
+  - **`func_L11_00454268`** (`0x00454268`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_00454268.c`, from
+    `src/levels/11_joba/L11_004465F8.c` (`func_L11_00452810`, author commit `fa8d6672`, llesieur99),
+    task #2556. VERBATIM but for names: our name at the v2.00 place; two callees as L11’s v2.00 names.
+  - **`func_L11_004542F8`** (`0x004542F8`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_004542F8.c`, from
+    `src/levels/11_joba/L11_004465F8.c` (`func_L11_004528A0`, author commit `fa8d6672`, llesieur99),
+    task #2556. VERBATIM but for names: our name at the v2.00 place; the shared helper as L11’s func_L11_00454430.
+  - **`func_L11_004546B0`** (`0x004546B0`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_004546B0.c`, from
+    `src/levels/11_joba/L11_004465F8.c` (`func_L11_00452C58`, author commit `5acf9869`, Flavius),
+    task #2556. VERBATIM but for names: our name at the v2.00 place; seven callees as L11’s v2.00 names.
+  - **`func_L11_00454850`** (`0x00454850`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_00454850.c`, from
+    `src/levels/11_joba/L11_004465F8.c` (`func_L11_00452DF8`, author commit `5acf9869`, Flavius),
+    task #2556. VERBATIM but for names: our name at the v2.00 place; eight callees as L11’s v2.00 names.
+  - **`func_L11_00454B18`** (`0x00454B18`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_00454B18.c`, from
+    `src/levels/11_joba/L11_004465F8.c` (`func_L11_004530C0`, author commit `fa8d6672`, llesieur99),
+    task #2556. VERBATIM but for names: our name at the v2.00 place; one callee as L11’s v2.00 name.
+  - **`func_L11_0045B958`** (`0x0045B958`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_0045B958.c`, from
+    `src/levels/11_joba/L11_00453358.c` (`func_L11_00459EA0`, author commit `7fccf735`, Flavius; upstream's root commit, which squashed the earlier RAC2 history),
+    task #2556. VERBATIM but for names: our name at the v2.00 place; no other symbol referenced (0 relocations); the body’s `long long` stores kept verbatim (sdk29 arm).
+  - **`func_L11_00471C58`** (`0x00471C58`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_00471C58.c`, from
+    `src/levels/11_joba/L11_004618C0.c` (`func_L11_004701A0`, author commit `daf0e4a1`, Flavius),
+    task #2556. VERBATIM but for names: our name at the v2.00 place; three callees as L11’s v2.00 names.
+  - **`func_L11_004748A0`** (`0x004748A0`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_004748A0.c`, from
+    `src/levels/11_joba/L11_004618C0.c` (`func_L11_00472DE8`, author commit `ee3fee45`, llesieur99),
+    task #2556. VERBATIM but for names: our name at the v2.00 place; no other symbol referenced (0 relocations).
+  - **`func_L11_0048A068`** (`0x0048A068`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_0048A068.c`, from
+    `src/levels/11_joba/L11_004618C0.c` (`func_L11_004885A0`, author commit `76651091`, Flavius),
+    task #2556. VERBATIM but for names: our name at the v2.00 place; the datum as the address-named extern `D_L11_001BA990` (g_blobShadowQueue+0x3D0, a base+off target: RULING #13291 section 2).
+  - **`func_L11_0048A080`** (`0x0048A080`, level program 11) in
+    `going-decompiled/levels/usa/L11/src/func_L11_0048A080.c`, from
+    `src/levels/11_joba/L11_004618C0.c` (`func_L11_004885B8`, author commit `ee3fee45`, llesieur99),
+    task #2556. VERBATIM but for names: our name at the v2.00 place; three callees as L11’s v2.00 names.
