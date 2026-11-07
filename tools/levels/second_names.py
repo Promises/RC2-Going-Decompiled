@@ -18,8 +18,13 @@ other.
 Names checked: every UNDEFINED global symbol of each C object (the ELF symtab,
 so comments, unused declarations and macros do not count, and an asm-label view
 `__asm__("D_x")` is checked under the name it links against), that matches
-ADDR_NAME. A name that itself exists in the scope below is SAME (no second
-spelling). Otherwise it is valued at the address in its name and looked up:
+ADDR_NAME. It is valued at the address in its name and looked up in the scope
+below. It is SAME (no second spelling) only if it IS one of the scope's names AT
+THAT ADDRESS (task #2635, FACT #13438): being a name somewhere is not enough.
+The level splits spell some core addresses short (`D_13A148`, 47 `func_` short
+forms) where the boot's own name is `dlabel D_0013A148` / `glabel
+func_0011A930`; those spellings are level-only, not in scope at their address,
+and FAIL naming the boot's spelling.
 
   core (address < 0x1A7C80, every level's .lit dest), the boot's names:
     boot-label  going-decompiled/asm/usa/**/*.s glabel/dlabel/alabel/jlabel,
@@ -205,10 +210,9 @@ def main(argv):
         print("#### second_names %s: FAIL (no scope)" % lv)
         return 2
     scope = [e for e in boot if e[0] < CORE_TOP] + [e for e in lvl if e[0] >= CORE_TOP]
-    byaddr, names = {}, set()
+    byaddr = {}
     for addr, n, k, w in scope:
         byaddr.setdefault(addr, {}).setdefault(n, set()).add("%s %s" % (k, w))
-    names = {n for _, n, _, _ in scope} | {n for _, n, _, _ in lvl}
     print("second_names %s: scope %d boot .s + symbol_addrs.txt (%d entries below 0x%X), %d level .s (%d entries at/above); %d C objects"
           % (lv, nb, sum(1 for e in boot if e[0] < CORE_TOP), CORE_TOP, nl,
              sum(1 for e in lvl if e[0] >= CORE_TOP), len(objs)))
@@ -226,10 +230,12 @@ def main(argv):
             m = ADDR_NAME.match(n)
             if not m:
                 continue
-            if n in names:
+            addr = int(m.group(1), 16)
+            # SAME only when the scope itself spells this address this way: the
+            # boot's own name for a core address, the level's for level space
+            if n in byaddr.get(addr, {}):
                 cnt["same"] += 1
                 continue
-            addr = int(m.group(1), 16)
             others = {o: v for o, v in byaddr.get(addr, {}).items() if o != n}
             if not others:
                 cnt["free"] += 1

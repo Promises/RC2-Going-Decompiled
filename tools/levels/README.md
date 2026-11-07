@@ -314,8 +314,10 @@ The gate checks these rows, and any FAIL fails the gate:
   (`D_001395E3`, `D_L09_001B1578`; `level_elf.py`'s ADDR_NAME) may sit at an
   address that already has a DIFFERENT name. Below 0x1A7C80 that means a boot
   label, a boot operand name or a `symbol_addrs.txt` entry. At or above it,
-  a label or operand name of the level's own split. The FAIL line names the
-  existing name to spell instead. Base+off names (no name at the exact
+  a label or operand name of the level's own split. The name itself is the
+  same name only if that scope spells THAT address with it (task #2635): a
+  level split's short `D_13A148` at a core address the boot calls `D_0013A148`
+  FAILs. The FAIL line names the existing name to spell instead. Base+off names (no name at the exact
   address, RULING #13291 §2) pass. So do the per-site rows of
   `tools/levels/second_names_allow.tsv`: `ACCEPTED` second names, and
   `PENDING` members that were already on master when the check landed and are
@@ -351,13 +353,26 @@ there once per arm (4 arms, 6 for a level with C rows, 9 with boot rows too,
 plus arm 10's two builds wherever its fixture shape exists).
 It never edits the tracked tree.
 - The unseeded copy must PASS.
-- Arm 11 NAMES (task #2617) runs right after it. Four fixture TUs, compiled in
-  the scratch root by the C rows' route, go through `second_names.py`:
+- Arm 11 NAMES (task #2617) runs right after it. Seven fixture TUs, compiled
+  in the scratch root by the C rows' route, go through `second_names.py`:
   - `D_001395E3` must FAIL naming `D_1395E3`;
   - `D_1395E3` must PASS as the same name;
   - L09 `func_L09_0040C5B8`'s allowlisted `D_001B1578` must PASS, and the same
     object filed under another function must FAIL naming `D_L09_001B1578`;
-  - the base+off `D_0018CD60` must PASS.
+  - the base+off `D_0018CD60` must PASS;
+  - operand-only `D_001395B8` must FAIL naming `D_1395B8`, which has no dlabel
+    (it lies inside `dlabel D_139599`) and is the boot's spelling only as an
+    operand (task #2635);
+  - the level-split-only short spellings `D_13A148` and `func_11A930` must FAIL
+    naming `D_0013A148` / `func_0011A930` (task #2635, FACT #13438);
+  - the boot's own spellings `D_1395B8`, `D_0013A148` and `func_0011A930` must
+    PASS as 3 same-name.
+
+  A name is SAME only if it is the scope's own name AT the address in it (the
+  boot's for a core address, the level split's for level space). Being a name
+  elsewhere is not enough: the level splits spell 48 core addresses short
+  (`D_13A148` and 47 `func_` forms) where the boot says `D_0013A148` /
+  `func_0011A930`, and those FAIL naming the boot's spelling.
 
   For a level with C rows, the gate's own NAMES row then runs on arm 1's
   objects. It must be ok as committed. It must FAIL, naming each existing name,
