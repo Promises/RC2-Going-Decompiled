@@ -1890,3 +1890,108 @@
     `going-decompiled/levels/usa/L20/src/func_L20_0044C0B0.c`, from
     `src/levels/20_yeedil/L20_00449178.c`
     (`func_L20_0044AB68`, author commit `3b12a35b`, Louis-Philippe Le Sieur), task #2566. Verbatim but for names: our name, 4 callees renamed to the v2.00 disc's own relocation targets; `include_asm.h` dropped; plain `as`.
+  - **`func_L23_003C1278`** (`0x003C1278`, level program 23) in
+    `going-decompiled/levels/usa/L23/src/func_L23_003C1278.c`, from
+    `src/levels/23_damosel_orbit/L23_0035CE90.c`
+    (`func_L23_003BFE38`, author commit `91e04732`, llesieur99), task #2567.
+    VERBATIM but for names.
+  - **`func_L23_003C1400`** (`0x003C1400`, level program 23) in
+    `going-decompiled/levels/usa/L23/src/func_L23_003C1400.c`, from
+    `src/levels/23_damosel_orbit/L23_0035CE90.c`
+    (`func_L23_003BFFC0`, author commit `91e04732`, llesieur99), task #2567.
+    VERBATIM but for names.
+  - **`func_L23_003C1468`** (`0x003C1468`, level program 23) in
+    `going-decompiled/levels/usa/L23/src/func_L23_003C1468.c`, from
+    `src/levels/23_damosel_orbit/L23_0035CE90.c`
+    (`func_L23_003C0028`, author commit `91e04732`, llesieur99), task #2567.
+    VERBATIM but for names.
+  - **`func_L23_003C2238`** (`0x003C2238`, level program 23) in
+    `going-decompiled/levels/usa/L23/src/func_L23_003C2238.c`, from
+    `src/levels/23_damosel_orbit/L23_0035CE90.c`
+    (`func_L23_003C0DF8`, author commit `91e04732`, llesieur99), task #2567.
+    ADAPTED: our name; level data names and callees renamed to the v2.00 disc's targets, L23's own functions; `unsigned long long` written `u64` (RULING #13197).
+  - **`func_L23_003C22D8`** (`0x003C22D8`, level program 23) in
+    `going-decompiled/levels/usa/L23/src/func_L23_003C22D8.c`, from
+    `src/levels/23_damosel_orbit/L23_0035CE90.c`
+    (`func_L23_003C0E98`, author commit `ee3fee45`, llesieur99), task #2567.
+    ADAPTED: our name; level data names and callees renamed to the v2.00 disc's targets, L23's own functions; `sda` as `section(".sdata")` (RULING #8620); `long long` written `s64` (RULING #13197); three address-named externs (RULING #13291 section 2).
+  - **`func_L23_003C2388`** (`0x003C2388`, level program 23) in
+    `going-decompiled/levels/usa/L23/src/func_L23_003C2388.c`, from
+    `src/levels/23_damosel_orbit/L23_0035CE90.c`
+    (`func_L23_003C0F48`, author commit `91e04732`, llesieur99), task #2567.
+    VERBATIM but for names.
+  - **`func_L23_003C23C8`** (`0x003C23C8`, level program 23) in
+    `going-decompiled/levels/usa/L23/src/func_L23_003C23C8.c`, from
+    `src/levels/23_damosel_orbit/L23_0035CE90.c`
+    (`func_L23_003C0F88`, author commit `fa31bfc3`, bigmak94), task #2567.
+    ADAPTED: our name; level data names and callees renamed to the v2.00 disc's targets, L23's own functions; two `sda` as `section(".sdata")` (RULING #8620); `long long` written `s64`/`u64` (RULING #13197); three address-named externs (RULING #13291 section 2); the boot's `g_heroPos` for `D_00189EA0`.
+  - **`func_L23_003C2DA0`** (`0x003C2DA0`, level program 23) in
+    `going-decompiled/levels/usa/L23/src/func_L23_003C2DA0.c`, from
+    `src/levels/23_damosel_orbit/L23_0035CE90.c`
+    (`func_L23_003C1960`, author commit `91e04732`, llesieur99), task #2567.
+    ADAPTED: our name; level data names and callees renamed to the v2.00 disc's targets, L23's own functions; `sda` as `section(".sdata")` (RULING #8620); an address-named extern (RULING #13291 section 2).
+  - **`func_L23_003C2DC8`** (`0x003C2DC8`, level program 23) in
+    `going-decompiled/levels/usa/L23/src/func_L23_003C2DC8.c`, from
+    `src/levels/23_damosel_orbit/L23_0035CE90.c`
+    (`func_L23_003C1988`, author commit `91e04732`, llesieur99), task #2567.
+    VERBATIM but for names.
+  - **`func_L23_003C2EF0`** (`0x003C2EF0`, level program 23) in
+    `going-decompiled/levels/usa/L23/src/func_L23_003C2EF0.c`, from
+    `src/levels/23_damosel_orbit/L23_0035CE90.c`
+    (`func_L23_003C1AB0`, author commit `91e04732`, llesieur99), task #2567.
+    ADAPTED: our name; level data names and callees renamed to the v2.00 disc's targets, L23's own functions; `sda` as `section(".sdata")` (RULING #8620); an address-named extern (RULING #13291 section 2).
+  - **`func_L23_004174C8`** (`0x004174C8`, level program 23) in
+    `going-decompiled/levels/usa/L23/src/func_L23_004174C8.c`, from
+    `src/levels/23_damosel_orbit/L23_0035CE90-g8.c`
+    (`func_L23_00415FC8`, author commit `91e04732`, llesieur99), task #2567.
+    VERBATIM but for names (inert `sda` attributes dropped at -G8).
+  - **`func_L23_00417590`** (`0x00417590`, level program 23) in
+    `going-decompiled/levels/usa/L23/src/func_L23_00417590.c`, from
+    `src/levels/23_damosel_orbit/L23_0035CE90.c`
+    (`func_L23_00416090`, author commit `91e04732`, llesieur99), task #2567.
+    VERBATIM but for names.
+  - **`func_L23_004195F0`** (`0x004195F0`, level program 23) in
+    `going-decompiled/levels/usa/L23/src/func_L23_004195F0.c`, from
+    `src/levels/23_damosel_orbit/L23_00416388.c`
+    (`func_L23_004180F0`, author commit `773eafc2`, llesieur99), task #2567.
+    VERBATIM but for names.
+  - **`func_L23_0041A430`** (`0x0041A430`, level program 23) in
+    `going-decompiled/levels/usa/L23/src/func_L23_0041A430.c`, from
+    `src/levels/23_damosel_orbit/L23_00416388.c`
+    (`func_L23_00418F30`, author commit `adcbd51e`, llesieur99), task #2567.
+    ADAPTED: our name; level data names and callees renamed to the v2.00 disc's targets, L23's own functions; the file's `u64` typedef written `unsigned long` (RULING #13197).
+  - **`func_L23_0041A4D0`** (`0x0041A4D0`, level program 23) in
+    `going-decompiled/levels/usa/L23/src/func_L23_0041A4D0.c`, from
+    `src/levels/23_damosel_orbit/L23_00416388.c`
+    (`func_L23_00418FD0`, author commit `d2e11c19`, bigmak94), task #2567.
+    ADAPTED: our name; level data names and callees renamed to the v2.00 disc's targets, L23's own functions; the file's `u64` typedef written `unsigned long` (RULING #13197); two address-named externs (RULING #13291 section 2).
+  - **`func_L23_0041CDF8`** (`0x0041CDF8`, level program 23) in
+    `going-decompiled/levels/usa/L23/src/func_L23_0041CDF8.c`, from
+    `src/levels/23_damosel_orbit/L23_00416388-g8.c`
+    (`func_L23_0041B8F8`, author commit `773eafc2`, llesieur99), task #2567.
+    VERBATIM but for names (inert `sda` attributes dropped at -G8).
+  - **`func_L23_0041CE48`** (`0x0041CE48`, level program 23) in
+    `going-decompiled/levels/usa/L23/src/func_L23_0041CE48.c`, from
+    `src/levels/23_damosel_orbit/L23_00416388-g8.c`
+    (`func_L23_0041B948`, author commit `773eafc2`, llesieur99), task #2567.
+    VERBATIM but for names (inert `sda` attributes dropped at -G8).
+  - **`func_L23_0041CE60`** (`0x0041CE60`, level program 23) in
+    `going-decompiled/levels/usa/L23/src/func_L23_0041CE60.c`, from
+    `src/levels/23_damosel_orbit/L23_00416388-g8.c`
+    (`func_L23_0041B960`, author commit `adcbd51e`, llesieur99), task #2567.
+    VERBATIM but for names (inert `sda` attributes dropped at -G8).
+  - **`func_L23_0041D540`** (`0x0041D540`, level program 23) in
+    `going-decompiled/levels/usa/L23/src/func_L23_0041D540.c`, from
+    `src/levels/23_damosel_orbit/L23_00416388-g8.c`
+    (`func_L23_0041C040`, author commit `adcbd51e`, llesieur99), task #2567.
+    VERBATIM but for names (inert `sda` attributes dropped at -G8).
+  - **`func_L23_0041D5B0`** (`0x0041D5B0`, level program 23) in
+    `going-decompiled/levels/usa/L23/src/func_L23_0041D5B0.c`, from
+    `src/levels/23_damosel_orbit/L23_00416388-g8.c`
+    (`func_L23_0041C0B0`, author commit `ee3fee45`, llesieur99), task #2567.
+    VERBATIM but for names (inert `sda` attributes dropped at -G8).
+  - **`func_L23_0041DCD8`** (`0x0041DCD8`, level program 23) in
+    `going-decompiled/levels/usa/L23/src/func_L23_0041DCD8.c`, from
+    `src/levels/23_damosel_orbit/L23_00416388-g8.c`
+    (`func_L23_0041C7D8`, author commit `babfe411`, bigmak94), task #2567.
+    ADAPTED: our name; level data names and callees renamed to the v2.00 disc's targets, L23's own functions; `nosda` as `section(".data")` on the boot's `g_pHeroMoby` for `D_0018C0B0` (RULING #8620); an address-named extern (RULING #13291 section 2).
