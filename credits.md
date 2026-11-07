@@ -1742,3 +1742,75 @@
     the v2.00 disc's own relocation targets; no `long long` in this
     body, so no respelling (FACT #13321); `common.h` dropped, typedefs
     written; assembled through `tools/ee/asm_unit.sh`.
+  - **`func_L09_002B5E70`** (`0x002B5E70`, level program 09) in
+    `going-decompiled/levels/usa/L09/src/func_L09_002B5E70.c`, from
+    `src/levels/09_dobbo/L09_002AFC90.c` (`func_L09_002B5CE8`, author commit
+    `aac730b3`, Flavius), task #2580. ADAPTED: our name at the v2.00 place;
+    `D_00189E20` as the boot's `g_soundBankHandlesBlk`; three callees
+    renamed to their L09 places; built at -G8 against upstream's -G0;
+    `include_asm.h` dropped; assembled through `tools/ee/asm_unit.sh`.
+  - **`func_L09_003FCC18`** (`0x003FCC18`, level program 09) in
+    `going-decompiled/levels/usa/L09/src/func_L09_003FCC18.c`, from
+    `src/levels/09_dobbo/L09_003FB788.c` (`func_L09_003FB788`, author commit
+    `757a3e46`, bigbeno37), task #2580. ADAPTED: our name at the v2.00
+    place; four data names as address-named externs (RULING #13291 section
+    2); one callee renamed to its L09 place; built at -G8 against upstream's
+    -G0; upstream's `MACRO_ADDR` (`section(".sdata")`, RULING #8620) kept
+    and defined in the TU; `common.h` dropped; assembled through
+    `tools/ee/asm_unit.sh`.
+  - **`func_L09_003FCCF0`** (`0x003FCCF0`, level program 09) in
+    `going-decompiled/levels/usa/L09/src/func_L09_003FCCF0.c`, from
+    `src/levels/09_dobbo/L09_003FB860.c` (`func_L09_003FB860`, author commit
+    `88c5f521`, Flavius), task #2580. ADAPTED: our name at the v2.00 place;
+    four data names as address-named externs (RULING #13291 section 2); one
+    callee renamed to its L09 place; built at -G8 against upstream's -G0;
+    upstream's `MACRO_ADDR` (`section(".sdata")`, RULING #8620) kept and
+    defined in the TU; `include_asm.h`/`common.h` dropped; brace moved
+    (whitespace only); assembled through `tools/ee/asm_unit.sh`.
+  - **`func_L09_003FF768`** (`0x003FF768`, level program 09) in
+    `going-decompiled/levels/usa/L09/src/func_L09_003FF768.c`, from
+    `src/levels/09_dobbo/L09_002F8BA0-g8.c` (`func_L09_003FE2D8`, author
+    commit `ba383701`, bigbeno37), task #2580. VERBATIM but for names: our
+    name at the v2.00 place; one data label and one callee renamed to their
+    L09 targets (`sda` text kept, ignored by cc1); `common.h` dropped;
+    assembled through `tools/ee/asm_unit.sh`.
+  - **`func_L09_003FFF78`** (`0x003FFF78`, level program 09) in
+    `going-decompiled/levels/usa/L09/src/func_L09_003FFF78.c`, from
+    `src/levels/09_dobbo/L09_003FEAE8-g8.c` (`func_L09_003FEAE8`, author
+    commit `1794e699`, Louis-Philippe Le Sieur), task #2580. VERBATIM but
+    for names: our name at the v2.00 place; seven data labels and seven
+    callees renamed to their L09 targets (`sda` text kept, ignored by cc1);
+    `common.h` dropped, its typedefs written in the TU; assembled through
+    `tools/ee/asm_unit.sh`.
+  - **`func_L09_00406020`** (`0x00406020`, level program 09) in
+    `going-decompiled/levels/usa/L09/src/func_L09_00406020.c`, from
+    `src/levels/09_dobbo/L09_003FEA48-g8.c` (`func_L09_00404B90`, author
+    commit `264cb2be`, llesieur99), task #2580. VERBATIM but for names: our
+    name at the v2.00 place; one data label and one callee renamed to their
+    L09 targets (`sda` text kept, ignored by cc1); `common.h` dropped, its
+    typedefs written in the TU; assembled through `tools/ee/asm_unit.sh`.
+  - **`func_L09_00406080`** (`0x00406080`, level program 09) in
+    `going-decompiled/levels/usa/L09/src/func_L09_00406080.c`, from
+    `src/levels/09_dobbo/L09_003FEA48-g8.c` (`func_L09_00404BF0`, author
+    commit `264cb2be`, llesieur99), task #2580. VERBATIM but for names: our
+    name at the v2.00 place; one data label and one callee renamed to their
+    L09 targets (`sda` text kept, ignored by cc1); `common.h` dropped, its
+    typedefs written in the TU; assembled through `tools/ee/asm_unit.sh`.
+  - **`func_L09_0040C5B8`** (`0x0040C5B8`, level program 09) in
+    `going-decompiled/levels/usa/L09/src/func_L09_0040C5B8.c`, from
+    `src/levels/09_dobbo/L09_003FEA48-g8.c` (`func_L09_0040B0C8`, author
+    commit `27b929ce`, Lynder063), task #2580. VERBATIM but for names: our
+    name at the v2.00 place; five data labels and nine callees renamed to
+    their L09 targets (`sda` text kept, ignored by cc1; `func_L09_002EB958`
+    still undeclared, as upstream); upstream's second name
+    `D_L09_001B15B8_4` for 0x001B1578 as the unprefixed address name
+    `D_001B1578`, since `D_L09_001B1578` is the scalar's; `common.h`
+    dropped, its typedefs and `MACRO_ADDR` written in the TU; assembled
+    through `tools/ee/asm_unit.sh`.
+  - **`func_L09_0041EB58`** (`0x0041EB58`, level program 09) in
+    `going-decompiled/levels/usa/L09/src/func_L09_0041EB58.c`, from
+    `src/levels/09_dobbo/L09_0041D650-g8.c` (`func_L09_0041D650`, author
+    commit `913f6380`, bigbeno37), task #2580. VERBATIM but for names: our
+    name at the v2.00 place; four data labels and thirteen callees renamed
+    to their L09 targets (`sda` text kept, ignored by cc1); `common.h`
+    dropped; assembled through `tools/ee/asm_unit.sh`.
