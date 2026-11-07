@@ -1,4 +1,4 @@
-# Functions of level program L09 built from C (task #2580 row L09-ASM, created here; L24 header).
+# Functions of level program L09 built from C (RULING #13291, b3 level-C rows; task #2580 row L09-ASM, task #2562 row L09-B; L24 header).
 # One row per function, compiled ALONE as its own TU by tools/levels/level_build.sh
 # and linked at its one place in place of its split asm (gen_ld.py cuts the
 # function's block out of the .text asm). Single placement only (row L7 is the
@@ -12,11 +12,27 @@
 #   cc1flags: optional, with as: extra cc1 flags, comma-separated, or - for none
 # function	source	arm	gflag	[as	cc1flags]
 func_L09_002B5E70	src/func_L09_002B5E70.c	s136	-G8	asm_unit	-
+func_L09_003F17E8	src/func_L09_003F17E8.c	s136	-G0	as	-
 func_L09_003FCC18	src/func_L09_003FCC18.c	s136	-G8	asm_unit	-
 func_L09_003FCCF0	src/func_L09_003FCCF0.c	s136	-G8	asm_unit	-
 func_L09_003FF768	src/func_L09_003FF768.c	s136	-G8	asm_unit	-
+func_L09_003FFED8	src/func_L09_003FFED8.c	s136	-G8	as	-
 func_L09_003FFF78	src/func_L09_003FFF78.c	s136	-G8	asm_unit	-
+func_L09_00404668	src/func_L09_00404668.c	s136	-G8	as	-
+func_L09_00404808	src/func_L09_00404808.c	sdk29	-G0	as	-
+func_L09_00404B90	src/func_L09_00404B90.c	s136	-G0	as	-
 func_L09_00406020	src/func_L09_00406020.c	s136	-G8	asm_unit	-
 func_L09_00406080	src/func_L09_00406080.c	s136	-G8	asm_unit	-
+func_L09_00406420	src/func_L09_00406420.c	s136	-G0	as	-
+func_L09_00406458	src/func_L09_00406458.c	s136	-G0	as	-
+func_L09_00406570	src/func_L09_00406570.c	s136	-G0	as	-
+func_L09_00408088	src/func_L09_00408088.c	s136	-G0	as	-
+func_L09_004080F8	src/func_L09_004080F8.c	s136	-G0	as	-
+func_L09_004094E8	src/func_L09_004094E8.c	sdk29	-G0	as	-
+func_L09_004095C8	src/func_L09_004095C8.c	s136	-G0	as	-
+func_L09_004096E0	src/func_L09_004096E0.c	s136	-G0	as	-
+func_L09_0040A6B8	src/func_L09_0040A6B8.c	s136	-G0	as	-
+func_L09_0040C4F8	src/func_L09_0040C4F8.c	s136	-G0	as	-
 func_L09_0040C5B8	src/func_L09_0040C5B8.c	s136	-G8	asm_unit	-
 func_L09_0041EB58	src/func_L09_0041EB58.c	s136	-G8	asm_unit	-
+func_L09_00423260	src/func_L09_00423260.c	s136	-G0	as	-

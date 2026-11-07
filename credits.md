@@ -2786,3 +2786,67 @@
     `src/levels/02_maktar_nebula/L02_0040A4A8.c`
     (`func_L02_00456AC0`, author commit `91e04732`, llesieur99), task #2560.
     Verbatim but for names.
+  - **`func_L09_003F17E8`** (`0x003F17E8`, level program 9) in
+    `going-decompiled/levels/usa/L09/src/func_L09_003F17E8.c`, from
+    `src/levels/09_dobbo/L09_003F0378-rc2.c` (`func_L09_003F0378`, author commit `fe9859d7`, Sergio Rodmauser),
+    task #2562. VERBATIM but for names: our name at the v2.00 place; nine names respelled: upstream's ref_ cross-reference callees to our split names at the v2.00 places.
+  - **`func_L09_003FFED8`** (`0x003FFED8`, level program 9) in
+    `going-decompiled/levels/usa/L09/src/func_L09_003FFED8.c`, from
+    `src/levels/09_dobbo/L09_003FEA48-g8.c` (`func_L09_003FEA48`, author commit `09484b1f`, Louis-Philippe Le Sieur),
+    task #2562. VERBATIM but for names: our name at the v2.00 place; the boot's g_playerProgress; the record table as the address-named extern D_L09_001B27DC (D_001B2354+0x488, a base+off target: RULING #13291 section 2); three callees at their v2.00 places.
+  - **`func_L09_00404668`** (`0x00404668`, level program 9) in
+    `going-decompiled/levels/usa/L09/src/func_L09_00404668.c`, from
+    `src/levels/09_dobbo/L09_003FEA48-g8.c` (`func_L09_004031D8`, author commit `431ac503`, llesieur99),
+    task #2562. VERBATIM but for names: our name at the v2.00 place; the frame-counter union as D_L09_001B1370 (our label); func_2EA110 as L09's copy func_L09_002EAD98.
+  - **`func_L09_00404808`** (`0x00404808`, level program 9) in
+    `going-decompiled/levels/usa/L09/src/func_L09_00404808.c`, from
+    `src/levels/09_dobbo/L09_003FEA48.c` (`func_L09_00403378`, author commit `264cb2be`, llesieur99),
+    task #2562. VERBATIM but for names: our name at the v2.00 place; no other symbol referenced (0 relocations).
+  - **`func_L09_00404B90`** (`0x00404B90`, level program 9) in
+    `going-decompiled/levels/usa/L09/src/func_L09_00404B90.c`, from
+    `src/levels/09_dobbo/L09_00403700.c` (`func_L09_00403700`, author commit `3a4945e2`, Flavius, which finished the near-miss draft `nonmatching/levels/func_L09_00403700.c` by `96fa46bb`, Louis-Philippe Le Sieur, and `1d0b1d4c`, ReaperOfVeriod; 5 of the 9 definition lines are the draft's, RULING #13427),
+    task #2562. VERBATIM but for names: our name at the v2.00 place; one callee as L09's copy func_L09_003195F0.
+  - **`func_L09_00406420`** (`0x00406420`, level program 9) in
+    `going-decompiled/levels/usa/L09/src/func_L09_00406420.c`, from
+    `src/levels/09_dobbo/L09_003FEA48.c` (`func_L09_00404F90`, author commit `264cb2be`, llesieur99; later body changes `a541245e` and `3638916f`, Louis-Philippe Le Sieur),
+    task #2562. VERBATIM but for names: our name at the v2.00 place; two callees as L09's copies at their v2.00 places.
+  - **`func_L09_00406458`** (`0x00406458`, level program 9) in
+    `going-decompiled/levels/usa/L09/src/func_L09_00406458.c`, from
+    `src/levels/09_dobbo/L09_003FEA48.c` (`func_L09_00404FC8`, author commit `264cb2be`, llesieur99),
+    task #2562. VERBATIM but for names: our name at the v2.00 place; three callees as L09's copies at their v2.00 places.
+  - **`func_L09_00406570`** (`0x00406570`, level program 9) in
+    `going-decompiled/levels/usa/L09/src/func_L09_00406570.c`, from
+    `src/levels/09_dobbo/L09_004050E0.c` (`func_L09_004050E0`, author commit `3dc9b1fa`, Louis-Philippe Le Sieur),
+    task #2562. VERBATIM but for names: our name at the v2.00 place; the boot's g_heroPos; nine callees as L09's copies at their v2.00 places; include_asm.h dropped (unused).
+  - **`func_L09_00408088`** (`0x00408088`, level program 9) in
+    `going-decompiled/levels/usa/L09/src/func_L09_00408088.c`, from
+    `src/levels/09_dobbo/L09_00406BF8-rc2.c` (`func_L09_00406BF8`, author commit `fe9859d7`, Sergio Rodmauser),
+    task #2562. VERBATIM but for names: our name at the v2.00 place; the boot's g_heroPos; two names respelled: upstream's ref_ cross-reference callees to our split names.
+  - **`func_L09_004080F8`** (`0x004080F8`, level program 9) in
+    `going-decompiled/levels/usa/L09/src/func_L09_004080F8.c`, from
+    `src/levels/09_dobbo/L09_003FEA48.c` (`func_L09_00406C68`, author commit `264cb2be`, llesieur99),
+    task #2562. VERBATIM but for names: our name at the v2.00 place; the callee as L09's copy func_L09_00318D10 (upstream named it after level 08).
+  - **`func_L09_004094E8`** (`0x004094E8`, level program 9) in
+    `going-decompiled/levels/usa/L09/src/func_L09_004094E8.c`, from
+    `src/levels/09_dobbo/L09_00408058-rc2.c` (`func_L09_00408058`, author commit `fe9859d7`, Sergio Rodmauser),
+    task #2562. VERBATIM but for names: our name at the v2.00 place; no other symbol referenced (0 relocations).
+  - **`func_L09_004095C8`** (`0x004095C8`, level program 9) in
+    `going-decompiled/levels/usa/L09/src/func_L09_004095C8.c`, from
+    `src/levels/09_dobbo/L09_003FEA48.c` (`func_L09_00408138`, author commit `ee3fee45`, llesieur99),
+    task #2562. VERBATIM but for names: our name at the v2.00 place; the shared body as func_L09_004094E8 (adopted in this row).
+  - **`func_L09_004096E0`** (`0x004096E0`, level program 9) in
+    `going-decompiled/levels/usa/L09/src/func_L09_004096E0.c`, from
+    `src/levels/09_dobbo/L09_003FEA48.c` (`func_L09_00408250`, author commit `264cb2be`, llesieur99),
+    task #2562. VERBATIM but for names: our name at the v2.00 place; the group id-list table as the address-named extern D_L09_001FB4E0 (g_pTextTableLoadBuf+0x8C08, a base+off target: RULING #13291 section 2); one callee at its v2.00 place.
+  - **`func_L09_0040A6B8`** (`0x0040A6B8`, level program 9) in
+    `going-decompiled/levels/usa/L09/src/func_L09_0040A6B8.c`, from
+    `src/levels/09_dobbo/L09_003FEA48.c` (`func_L09_004091C8`, author commit `913f6380`, bigbeno37),
+    task #2562. VERBATIM but for names: our name at the v2.00 place; four callees as L09's copies at their v2.00 places.
+  - **`func_L09_0040C4F8`** (`0x0040C4F8`, level program 9) in
+    `going-decompiled/levels/usa/L09/src/func_L09_0040C4F8.c`, from
+    `src/levels/09_dobbo/L09_003FEA48.c` (`func_L09_0040B008`, author commit `431ac503`, llesieur99),
+    task #2562. VERBATIM but for names: our name at the v2.00 place; the scale datum as the address-named extern D_L09_001B9BB0 (g_uiTextureCache+0x4F0, a base+off target: RULING #13291 section 2); three callees as L09's copies.
+  - **`func_L09_00423260`** (`0x00423260`, level program 9) in
+    `going-decompiled/levels/usa/L09/src/func_L09_00423260.c`, from
+    `src/levels/09_dobbo/L09_003FEA48.c` (`func_L09_00421D60`, author commit `27b929ce`, Lynder063),
+    task #2562. VERBATIM but for names: our name at the v2.00 place; four callees as L09's copies at their v2.00 places.
