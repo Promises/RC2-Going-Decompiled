@@ -31,7 +31,7 @@ typedef struct {
     u8 gap[24];
     int field1c0, field1c4;
 } InputView;
-extern unsigned char D_00138180[];
+extern unsigned char D_138180[];
 extern unsigned char g_itemEquippedSlot[], D_1395B8[];
 typedef struct {
     u8 pad[4];
@@ -62,9 +62,12 @@ extern int D_L11_001B14D8 __attribute__((sda));
  * and starts the transition. Bit 0x80 requests state 5 (func_L11_0033F080).
  * Bit 0x10 goes back (func_L11_00443E18). An idle timeout on all four checks
  * of func_L11_00344038 sets animation 5. Otherwise the next handler
- * func_L11_004455E0 is installed (func_L11_002F9490). D_00138180 is the pad
- * block (InputView), named by address because no boot symbol starts there. H()
- * is upstream's state-halfword macro.
+ * func_L11_004455E0 is installed (func_L11_002F9490). D_138180 is the pad
+ * block (InputView), address-named with the spelling the boot asm already
+ * links for 0x138180 (a %hi/%lo operand in 48 boot asm files, e.g.
+ * asm/usa/nonmatchings/text/188858/func_0028C840.s:80, and in the L11 split
+ * asm/text/002BCF00.s; boot C declares it too, src/usa/text/188858.c:5254).
+ * H() is upstream's state-halfword macro.
  *
  * Source: OpenRAC rac2-decomp <https://github.com/OpenRAC/rac2-decomp> at
  * fe6adf9baddcd31323c35adf102d078aa250852d, GPL-3.0 (root LICENSE; the file
@@ -80,6 +83,9 @@ extern int D_L11_001B14D8 __attribute__((sda));
  *   - D_00139568 -> g_itemEquippedSlot (the boot's name, same address);
  *   - D_001395B8 -> D_1395B8: the same address, respelled to the boot's and
  *     the L11 split asm's existing name for it (task #2603, FACT #13369);
+ *   - D_00138180 -> D_138180: the same address, respelled to the boot's and
+ *     the L11 split asm's existing operand name for it (task #2621, census
+ *     NOTE #13409);
  *   - D_0018C0B4 -> g_heroState (the boot's name, same address);
  *   - D_L11_001B14F8 -> D_L11_001B14D8 (our label at that address);
  *   - D_L11_00200864 -> D_L11_002008E4 (address-named, inside D_L11_00200010;
@@ -125,7 +131,7 @@ void func_L11_00444CE8(u8 *object)
     if (func_L11_0033F288()==5) return;
     if (g_heroState[0]!=0x6f) func_L11_002D9208(0x6f,1);
     if (H(0x1ea)==0) {
-        if ((((InputView *)D_00138180)->field1c4&0x2000) && H(0x1e8)<12) {
+        if ((((InputView *)D_138180)->field1c4&0x2000) && H(0x1e8)<12) {
             for (i=H(0x1e8)+1;i<13;i++) {
                 if (!D_1395B8[func_L11_0043F948(TABLE[i][2])]) continue;
                 if (i>=11 && !func_L11_003075E8()) continue;
@@ -139,7 +145,7 @@ void func_L11_00444CE8(u8 *object)
                 func_L11_00375010(3,0,0);
                 break;
             }
-        } else if ((((InputView *)D_00138180)->field1c4&0x8000) && H(0x1e8)>0) {
+        } else if ((((InputView *)D_138180)->field1c4&0x8000) && H(0x1e8)>0) {
             found=0;
             if (H(0x1e8)==1) {
                 H(0x1e8)=0;
@@ -161,7 +167,7 @@ void func_L11_00444CE8(u8 *object)
             func_L11_00375010(3,0,0);
         }
     } else func_L11_00300E80((short *)(state+0x1ea));
-    input = (InputView *)D_00138180;
+    input = (InputView *)D_138180;
     if (input->field1c4&0x40) {
         if (H(0x1e8)==0) {
             H(0x1f0)=*(unsigned short *)(state+0x1e8);
