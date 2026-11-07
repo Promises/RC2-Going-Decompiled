@@ -1324,7 +1324,13 @@ void func_00299BF8(void) {
  * func_0029B628 func_0029C418, func_002B7B18 StartFileLoad; func_001158F8
  * kept); `(char *)' casts where a string buffer this unit declares u8[] is
  * passed as a char pointer; upstream's prototypes for DebugPrintStub and
- * func_00289398 kept through asm-label declarations (above); the
+ * func_00289398 kept through asm-label declarations (above, RULING #13287),
+ * except that DebugPrintStub's first parameter is `const char *` here
+ * (upstream `void *`); the ~21 other callees use this unit's own prototypes,
+ * whose types differ from upstream's in places (memset's return,
+ * CalcSaveSectionsSize / DeserializeSaveSections / FillSaveSlotInfo
+ * parameter types, sprintf's format), all byte-neutral by the gate
+ * (validator #2589); the
  * sda/nosda-free z2 respelling (NOTE #13181) reduced to the devices listed.
  * The body's statements are otherwise upstream's, comments included.
  */
@@ -1406,7 +1412,10 @@ typedef struct { u8 pad[0x32C]; s32 x32C; u8 pad330[0x10]; s32 x340; s32 x344; }
  * through g_areaTable (0x1393E0, also this unit's D_1393E0 SaveLoadContext),
  * the disc TOC through g_discToc, and McGetDir's 0x40-byte entry buffer as
  * g_mapTextureWidth + 0xA0 (0x1C5200; splat names the address after the
- * nearest symbol). Same symbols, no storage; native reads the real objects. */
+ * nearest symbol). Same symbols, no storage. Native reads the real objects
+ * for g_areaTable and g_discToc; the g_mapTextureWidth + 0xA0 / + 0xC0 views
+ * stay adjacency reads over a scalar on native too, an extent view accepted
+ * until the native phase (RULING #13282 item 2; validator #2589). */
 #ifndef TARGET_NATIVE
 extern McState_298F00 g_memCardState __asm__("g_areaTable");
 extern SaveLoadDiscTocView g_discTocView __asm__("g_discToc");
