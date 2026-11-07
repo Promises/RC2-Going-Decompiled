@@ -1,4 +1,4 @@
-# Functions of level program L20 built from C (task #2495, NOTE #13098 row L6).
+# Functions of level program L20 built from C (RULING #13291, b3 level-C rows; task #2566 row L20-B, task #2565 row L20-A).
 # One row per function, compiled ALONE as its own TU by tools/levels/level_build.sh
 # and linked at its one place in place of its split asm (gen_ld.py cuts the
 # function's block out of the .text asm). Single placement only (row L7 is the
@@ -11,19 +11,40 @@
 #             the boot's model of SN's assembler); a 4-column row is `as -`
 #   cc1flags: optional, with as: extra cc1 flags, comma-separated, or - for none
 # function	source	arm	gflag	[as	cc1flags]
+func_L20_002DC618	src/func_L20_002DC618.c	s136	-G0	as	-
+func_L20_00331CD8	src/func_L20_00331CD8.c	s136	-G0	as	-
+func_L20_0036BFB0	src/func_L20_0036BFB0.c	s136	-G8	as	-
+func_L20_0036F938	src/func_L20_0036F938.c	s136	-G0	as	-
+func_L20_0039BE60	src/func_L20_0039BE60.c	s136	-G0	as	-
+func_L20_0039DC90	src/func_L20_0039DC90.c	s136	-G0	as	-
+func_L20_0039EB78	src/func_L20_0039EB78.c	s136	-G0	as	-
+func_L20_0039EF18	src/func_L20_0039EF18.c	s136	-G0	as	-
+func_L20_0039F250	src/func_L20_0039F250.c	s136	-G0	as	-
+func_L20_0039F2E0	src/func_L20_0039F2E0.c	s136	-G0	as	-
+func_L20_0039F5B0	src/func_L20_0039F5B0.c	s136	-G0	as	-
+func_L20_003A05F8	src/func_L20_003A05F8.c	s136	-G0	as	-
+func_L20_003C12C0	src/func_L20_003C12C0.c	s136	-G8	as	-
+func_L20_003C16D8	src/func_L20_003C16D8.c	s136	-G0	as	-
+func_L20_003C1758	src/func_L20_003C1758.c	s136	-G0	as	-
+func_L20_00436710	src/func_L20_00436710.c	s136	-G0	as	-
+func_L20_00440AA8	src/func_L20_00440AA8.c	s136	-G8	as	-
 func_L20_00441690	src/func_L20_00441690.c	s136	-G8	as	-
+func_L20_004418D8	src/func_L20_004418D8.c	s136	-G0	as	-
 func_L20_004419A0	src/func_L20_004419A0.c	s136	-G0	as	-
 func_L20_004419F8	src/func_L20_004419F8.c	s136	-G0	as	-
 func_L20_00441AB0	src/func_L20_00441AB0.c	s136	-G0	as	-
 func_L20_00443D10	src/func_L20_00443D10.c	s136	-G0	as	-
 func_L20_00444158	src/func_L20_00444158.c	s136	-G0	as	-
+func_L20_004443B0	src/func_L20_004443B0.c	s136	-G8	as	-
 func_L20_00444478	src/func_L20_00444478.c	s136	-G0	as	-
+func_L20_00444870	src/func_L20_00444870.c	s136	-G0	as	-
 func_L20_00444A50	src/func_L20_00444A50.c	s136	-G0	as	-
 func_L20_00444E50	src/func_L20_00444E50.c	s136	-G0	as	-
 func_L20_004450A8	src/func_L20_004450A8.c	s136	-G0	as	-
 func_L20_00445238	src/func_L20_00445238.c	s136	-G0	as	-
 func_L20_004452A0	src/func_L20_004452A0.c	s136	-G0	as	-
 func_L20_004461B0	src/func_L20_004461B0.c	s136	-G0	as	-
+func_L20_00448B88	src/func_L20_00448B88.c	s136	-G8	as	-
 func_L20_00448E50	src/func_L20_00448E50.c	s136	-G0	as	-
 func_L20_0044AFC0	src/func_L20_0044AFC0.c	s136	-G0	as	-
 func_L20_0044B020	src/func_L20_0044B020.c	sdk29	-G0	as	-
