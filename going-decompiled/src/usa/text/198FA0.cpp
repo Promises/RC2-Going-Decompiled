@@ -1244,10 +1244,1349 @@ void func_00299BF8(void) {
 }
 #endif
 
-/* SaveLoadStateMachine: the 0x1EA0-byte memory-card transaction state machine
- * (the largest function in the unit). Multi callee-save + libmc call graph;
- * 8-byte-packed callee-save frame wall, see func_0029C678. Left as asm. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", SaveLoadStateMachine);
+/**
+ * SaveLoadStateMachine(): per-frame tick of the memory-card transaction state
+ * machine (0x1EA0 bytes, the largest function in the unit). No parameters, no
+ * return value.
+ *
+ * Works on the 0x188-byte card block at 0x1393E0 (two McCard records, then the
+ * request/command fields; the same object as this unit's D_1393E0
+ * SaveLoadContext). While a libmc command is in flight (busy) it only polls
+ * McSync(1, &cmd, &result) and returns; otherwise it sets busy and dispatches
+ * on `state` (0..27, six jump tables):
+ *   0-2   probe both ports with McGetInfo, record each card's result, then
+ *         start the queued request (next_state/next_card) or idle with a
+ *         retry counter (err 0x271A when the requested card is not usable);
+ *   3-6   two single-command operations on the current card (McChdir and
+ *         McGetEntSpace by our names — both names are REFUTED in
+ *         symbol_addrs; err 1 / 2 on failure);
+ *   7-8   McGetDir the save directory and classify it: 474 or 475 used blocks
+ *         with the three icon files present marks a game directory (USA v2.00
+ *         accepts blocks - 0x1DA < 2; v1.01 accepted 475/476), slot files are
+ *         matched by name and their header words read (McRead);
+ *   9-27  save, load, create (McMkDir + icon files streamed from the disc via
+ *         StartFileLoad) and delete paths: open, seek, read or write the
+ *         global image (g_saveImageGlobal, sized by CalcSaveSectionsSize of
+ *         g_saveSectionTableGlobal) and the per-area images (g_saveImageArea,
+ *         0x1C slots), verify (VerifySaveHeaderChecksum), deserialize, fill
+ *         the slot info (FillSaveSlotInfo), and close; a failure sets an
+ *         error code in `err` (1..0x2D, 0x2710..0x271A) for the caller.
+ * Case 27 also rebuilds the save-content flag word at 0x1A7A28 from the
+ * loaded global image's section records.
+ *
+ * MATCHED byte-exact in-unit on the s136os arm at the unit's -O2 default
+ * (S136EXTRA "", RULING #9910; task #2551; verify_match_unit 1960/1960 words,
+ * 317 relocs). Its six switch tables are bound to the ROM's
+ * jtbl_0026C900/970/990/9F0/A10/A40_text by tools/ee/jtbl_bind.sh (28, 6, 22,
+ * 5, 9 and 11 entries, each compared to its ROM word), which needs the
+ * per-table entry-counter reset of task #2550.
+ *
+ * Devices (NOTE #13181 row 8's z2 set re-derived in-unit and minimised; each
+ * removed alone with everything else held, s136os compile of this body vs the
+ * matching object): the typed views of g_areaTable / g_discToc /
+ * g_mapTextureWidth (RULING #13168; spelling them as casts of the unit's u8
+ * arrays instead: 1952 words, SHORTER); ROM_SPLIT on D_14B884 and on
+ * g_fileLoadState (removal: 1958 words each); the D_1A7A28Base equate above the
+ * guard and its .sdata attribute (a plain D_1A7A28 scalar with `.extern ,16':
+ * 1961 words; the view without .sdata: 1962); upstream's void prototype for
+ * DebugPrintStub (removal: 1962 words) and int prototype for func_00289398
+ * (removal: 4 words differ, $2 for $3 at 0x29A6C0 / 0x29B590). NOT shipped,
+ * inert: the audit's `.data' on the unsized arrays (adding it back to
+ * D_1A2BB0: 0 words differ).
+ *
+ * Source: ADAPTED from OpenRAC rac2-decomp @b2a35115 src/us2/game/00299CF0.c
+ * func_US2_00299CF0 (3b7195d7, Flavius, 2026-10-26, GPL-3.0; blob 8d870a57,
+ * identical at 5776dcc3, where NOTE #13181 measured it, and at the upstream
+ * head 71af8fdc). Adaptations: every global respelled by
+ * address to this repo's symbols as the ROM's relocations name them
+ * (D_001393E0 → g_memCardState, a typed view of g_areaTable; D_0014B540 →
+ * g_discTocView, a typed view of g_discToc; D_0014B884 → D_14B884;
+ * D_001A2BA8 → g_saveImageGlobal; D_001A2BB0 → D_1A2BB0; D_001A53A8 →
+ * g_saveImageArea; D_001A63AC → g_fileLoadState; D_001A7930 →
+ * g_saveDirTemplate; D_001A7948 → D_1A7950; D_001A7960 → g_saveIconSysPath;
+ * D_001A7975 → D_1A797D; D_001A7980 → g_saveStaticIcoPath; D_001A7995 →
+ * D_1A799D; D_001A79A0 → D_1A79A8; D_001A79B5 → D_1A79BD; D_001A79D0 →
+ * g_saveFileFmt; D_001A79F0 → g_playerProgress (through the unit's
+ * g_playerProgressAbs equate); D_001A7A00[8] → D_1A7A28 (through the
+ * D_1A7A28Base equate); D_001A9988/9990/9998/99A0/99B0/99C8/99E8/9A08 →
+ * D_1A99C0/99C8/99D0/99D8/99E8/9A00/9A20/9A40; D_001C5280 / D_001C52A0 →
+ * g_mapTextureWidth + 0xA0 / + 0xC0; D_00256138 / D_00256368 →
+ * g_saveSectionTableGlobal / g_saveSectionTableArea); callee auto-labels to
+ * our names (func_00115484 memset, func_00115544 strcmp, func_00115690
+ * strcpy, func_00115DA8 sprintf, func_00127508 McOpen, func_00127630
+ * McBeginCreateFile, func_00127668 McClose, func_00127720 McSeek,
+ * func_00127888 McRead, func_001279A0 McWrite, func_00127B88 McSync,
+ * func_00127CC0 McGetInfo, func_00127E48 McGetDir, func_00127F98 McChdir,
+ * func_00128068 McMkDir, func_00128180 McGetEntSpace, func_0026FEB8
+ * DebugPrintStub, func_00282A28 func_002833D8, func_00288970 func_00289398,
+ * func_0029AE78 CalcSaveSectionsSize, func_0029AF58 VerifySaveHeaderChecksum,
+ * func_0029B0B0 FillSaveSlotInfo, func_0029B168 DeserializeSaveSections,
+ * func_0029B628 func_0029C418, func_002B7B18 StartFileLoad; func_001158F8
+ * kept); `(char *)' casts where a string buffer this unit declares u8[] is
+ * passed as a char pointer; upstream's prototypes for DebugPrintStub and
+ * func_00289398 kept through asm-label declarations (above); the
+ * sda/nosda-free z2 respelling (NOTE #13181) reduced to the devices listed.
+ * The body's statements are otherwise upstream's, comments included.
+ */
+/* ADDRESSING-MODEL DEVICE (RULING #8620; FACT #8036's size-16 equate form, as
+ * g_playerProgressAbs above): SaveLoadStateMachine reads and writes the word at
+ * 0x1A7A28 in the assembler-macro shape (0x29B9EC `lui $5; lw $5,%lo($5)`,
+ * 0x29BB10 `lui $1; sw $5,%lo($1)`). Upstream spells it `D_001A7A00[8]`, an
+ * .sdata array plus a 0x20 offset; with the offset cc1 keeps the store out of
+ * the beql delay slot at 0x29BABC, as the ROM does, and a bare scalar does not
+ * (1961 words, LONGER). So the body indexes a second assembler symbol EQUATED
+ * 0x20 below the word and sized 16; the relocation still names D_1A7A28 with
+ * addend 0. Top level so the unit's 2.9 TU carries the same size. Nothing is
+ * moved or emitted; native indexes the word itself. */
+#ifndef TARGET_NATIVE
+__asm__(".extern D_1A7A28Base, 16\n\tD_1A7A28Base = D_1A7A28 - 0x20");
+#endif
+#if !defined(TARGET_NATIVE) && !defined(S136OS_SaveLoadStateMachine)
+S136OS_SLOT(SaveLoadStateMachine);
+#else
+/* Upstream's types for the 0x188-byte memory-card state block (verbatim). */
+typedef struct McSave_298F00 {
+    s32 x0;
+    u8 pad4[0x18];
+} McSave_298F00;
+
+typedef struct McCard_298F00 {
+    s32 port;           /* 0x00 */
+    s32 slot;           /* 0x04 */
+    s32 type;           /* 0x08 */
+    s32 free;           /* 0x0C */
+    s32 result;         /* 0x10 */
+    s32 format;         /* 0x14 */
+    s16 status;         /* 0x18 */
+    s16 tries;          /* 0x1A */
+    s32 x1C;            /* 0x1C */
+    s32 used_blocks;    /* 0x20 */
+    s32 x24;            /* 0x24 */
+    s32 x28;            /* 0x28 */
+    s32 x2C;            /* 0x2C */
+    McSave_298F00 save[4]; /* 0x30 */
+} McCard_298F00;
+
+typedef struct McState_298F00 {
+    McCard_298F00 card[2]; /* 0x000 */
+    s32 cmd;            /* 0x140 */
+    s32 result;         /* 0x144 */
+    s32 x148;
+    s32 cur;            /* 0x14C */
+    s32 index;          /* 0x150 */
+    s32 busy;           /* 0x154 */
+    s32 fd;             /* 0x158 */
+    s32 state;          /* 0x15C */
+    s32 sub;            /* 0x160 */
+    s32 next_state;     /* 0x164 */
+    s32 next_card;      /* 0x168 */
+    s32 err;            /* 0x16C */
+    s32 err_card;       /* 0x170 */
+    void *buf;          /* 0x174 */
+    s32 size;           /* 0x178 */
+    s32 x17C;
+    s32 probe;          /* 0x180 */
+    s32 retry;          /* 0x184 */
+} McState_298F00;
+
+typedef struct { u8 pad[0x10]; u32 size; u8 pad14[0xC]; char name[0x20]; } McDirEntry_298F00;
+
+typedef struct McChunk_298F00 {
+    s32 x0;
+    s32 x4;
+    s32 x8;
+    s32 xC;
+    s32 x10;
+} McChunk_298F00;
+
+/* Upstream's view of the three g_discToc words this body reads. */
+typedef struct { u8 pad[0x32C]; s32 x32C; u8 pad330[0x10]; s32 x340; s32 x344; } SaveLoadDiscTocView;
+
+/* TYPED VIEWS (RULING #13168, EE arm): the ROM addresses the card state block
+ * through g_areaTable (0x1393E0, also this unit's D_1393E0 SaveLoadContext),
+ * the disc TOC through g_discToc, and McGetDir's 0x40-byte entry buffer as
+ * g_mapTextureWidth + 0xA0 (0x1C5200; splat names the address after the
+ * nearest symbol). Same symbols, no storage; native reads the real objects. */
+#ifndef TARGET_NATIVE
+extern McState_298F00 g_memCardState __asm__("g_areaTable");
+extern SaveLoadDiscTocView g_discTocView __asm__("g_discToc");
+extern u8 g_mapTextureWidthBytes[] __asm__("g_mapTextureWidth");
+#else
+extern s32 g_mapTextureWidth;
+#define g_memCardState (*(McState_298F00 *)g_areaTable)
+#define g_discTocView (*(SaveLoadDiscTocView *)g_discToc)
+#define g_mapTextureWidthBytes ((u8 *)&g_mapTextureWidth)
+#endif
+#define g_memCardDirEntries ((McDirEntry_298F00 *)(g_mapTextureWidthBytes + 0xA0))
+#define g_memCardDirName ((char *)(g_mapTextureWidthBytes + 0xC0))
+
+/* Small scalars the ROM reads with an absolute %hi/%lo pair: ROM_SPLIT
+ * (RULING #8620 addressing device, defined above). */
+extern s32 D_14B884 ROM_SPLIT;          /* 0x14B884 save-file sector (g_discToc + 0x344) */
+extern s16 g_fileLoadState ROM_SPLIT;   /* 0x1A63AC CD file-load busy state */
+#ifndef TARGET_NATIVE
+extern s32 D_1A7A28Base[] __attribute__((section(".sdata"))); /* = D_1A7A28 - 0x20, see the equate above the guard */
+#else
+extern s32 D_1A7A28[];                  /* 0x1A7A28 save-content flag word */
+#define D_1A7A28Base (D_1A7A28 - 8)
+#endif
+
+extern s32 D_1A2BB0[];                  /* g_saveImageGlobal + 8: the global image's sections */
+extern u8  g_saveImageGlobal[];
+extern u8  g_saveImageArea[];
+extern u8  g_saveDirTemplate[];
+extern u8  D_1A7950[];
+extern u8  D_1A79A8[];
+extern u8  g_saveIconSysPath[];
+extern u8  g_saveStaticIcoPath[];
+extern u8  g_saveFileFmt[];
+extern char D_1A797D[];
+extern char D_1A799D[];
+extern char D_1A79BD[];
+extern char D_1A99C0[];
+extern char D_1A99C8[];
+extern char D_1A99D0[];
+extern char D_1A99D8[];
+extern char D_1A99E8[];
+extern char D_1A9A00[];
+extern char D_1A9A20[];
+extern char D_1A9A40[];
+
+#ifndef TARGET_NATIVE
+extern void *memset(void *s, int c, unsigned int n); /* native: <string.h> via common.h */
+extern int strcmp(const char *a, const char *b);
+extern char *strcpy(char *dst, const char *src);
+#endif
+extern int sprintf(char *buf, const char *fmt, ...);
+extern int func_001158F8(const char *a, const char *b, int n);
+extern int McSync(int mode, int *cmd, int *result);
+extern int McGetInfo(int port, int slot, int *type, int *free, int *format);
+extern int McChdir(int port, int slot);
+extern int McGetEntSpace(int port, int slot);
+extern int McGetDir(int port, int slot, char *name, int mode, int maxEnt, void *table);
+extern int McOpen(int port, int slot, char *name, int mode);
+extern int McRead(int fd, void *buf, int size);
+extern int McClose(int fd);
+extern int McBeginCreateFile(int port, int slot, char *name);
+extern int McWrite(int fd, void *buf, int size);
+extern int McMkDir(int port, int slot, char *name);
+extern int McSeek(int fd, int offset, int mode);
+extern int StartFileLoad(int dest, int lbn, int sectors);
+extern void func_002833D8(void);
+extern void FillSaveSlotInfo(u8 *image, s32 slot, s32 dir);
+extern s32 VerifySaveHeaderChecksum(void *image);
+/* CODEGEN DEVICE, upstream's own prototypes (EE arm): two callees are declared
+ * here as upstream declares them, bound by asm label to the same symbols,
+ * because the unit's declarations of those symbols (above) differ in return
+ * type and the return type steers cc1:
+ *  - DebugPrintStub: upstream `extern void func_0026FEB8(void *, ...)`, the
+ *    unit s32. With s32, cc1 cross-jumps the `state = 4` tail at 0x29AC44
+ *    differently (removal probe below);
+ *  - func_00289398: upstream `extern int func_00288970(int, void *)`, the unit
+ *    void. With void, $2 is free across the call and the g_discToc+0x340 load
+ *    at 0x29A6C0 / 0x29B590 takes $2 where the ROM has $3 (removal probe below).
+ * No instruction is emitted by either; native calls the unit's declarations. */
+#ifndef TARGET_NATIVE
+extern void SaveLoadDebugPrint(const char *fmt, ...) __asm__("DebugPrintStub");
+extern int SaveLoadReadSaveHeader(int sectorByteOffset, void *outBuf) __asm__("func_00289398");
+#else
+#define SaveLoadDebugPrint DebugPrintStub
+#define SaveLoadReadSaveHeader func_00289398
+#endif
+
+void SaveLoadStateMachine(void)
+{
+    union {
+        char name[0x40];
+        struct {
+            s32 seen[4];
+            char name[0x40];
+        } directory;
+    } workspace;
+    McState_298F00 *finished_card;
+
+    if (g_memCardState.busy) {
+        g_memCardState.busy = McSync(1, &g_memCardState.cmd, &g_memCardState.result) == 0;
+        return;
+    }
+    g_memCardState.busy = 1;
+
+    switch (g_memCardState.state) {
+    case 0:
+        if ((u32)g_memCardState.probe >= 2)
+            g_memCardState.probe = 0;
+        if (McGetInfo(g_memCardState.card[g_memCardState.probe].port, g_memCardState.card[g_memCardState.probe].slot,
+                          &g_memCardState.card[g_memCardState.probe].type, &g_memCardState.card[g_memCardState.probe].free,
+                          &g_memCardState.card[g_memCardState.probe].format) == 0)
+            g_memCardState.state = 1;
+        break;
+
+    case 1:
+        if (g_memCardState.result != 0) {
+            g_memCardState.card[g_memCardState.probe].status = -4;
+            g_memCardState.card[g_memCardState.probe].result = g_memCardState.result;
+            g_memCardState.card[g_memCardState.probe].x24 = -1;
+            g_memCardState.card[g_memCardState.probe].used_blocks = 0;
+            g_memCardState.card[g_memCardState.probe].save[0].x0 = -1;
+            g_memCardState.card[g_memCardState.probe].save[1].x0 = -1;
+            g_memCardState.card[g_memCardState.probe].save[2].x0 = -1;
+            g_memCardState.card[g_memCardState.probe].save[3].x0 = -1;
+            g_memCardState.card[g_memCardState.probe].x1C = 0;
+        }
+        if (g_memCardState.next_card < ++g_memCardState.probe && g_memCardState.next_state >= 0) {
+            g_memCardState.state = 2;
+            if (g_memCardState.next_card >= 0) {
+                if (g_memCardState.card[g_memCardState.next_card].result == 0 || g_memCardState.next_state == 0x18) {
+                    g_memCardState.cur = g_memCardState.next_card;
+                    g_memCardState.state = g_memCardState.next_state;
+                    g_memCardState.err = 0;
+                } else {
+                    g_memCardState.err = 0x271A;
+                }
+            } else {
+                g_memCardState.err = 0x271A;
+            }
+            g_memCardState.next_state = -1;
+            g_memCardState.next_card = -1;
+            break;
+        }
+        if (g_memCardState.probe < 2)
+            g_memCardState.state = 0;
+        else
+            g_memCardState.state = 2;
+        g_memCardState.busy = 0;
+        break;
+
+    case 2:
+        g_memCardState.retry++;
+        if (g_memCardState.next_state >= 0 || g_memCardState.retry >= 11) {
+            g_memCardState.retry = 0;
+            g_memCardState.probe = 0;
+            g_memCardState.state = 0;
+
+        }
+
+        g_memCardState.busy = 0;
+        break;
+
+    case 3:
+        if (g_memCardState.card[g_memCardState.cur].format == 0) {
+            if (McChdir(g_memCardState.card[g_memCardState.cur].port, g_memCardState.card[g_memCardState.cur].slot) == 0) {
+                g_memCardState.state = 4;
+            }
+            break;
+        }
+        g_memCardState.busy = 0;
+        g_memCardState.state = 2;
+        break;
+
+    case 4:
+        if (g_memCardState.result != 0) {
+            g_memCardState.err = 1;
+            g_memCardState.err_card = g_memCardState.cur;
+        }
+        g_memCardState.state = 0;
+        g_memCardState.cur = 0;
+        g_memCardState.busy = 0;
+        break;
+
+    case 5:
+        if (g_memCardState.card[g_memCardState.cur].format == 0) {
+            if (McGetEntSpace(g_memCardState.card[g_memCardState.cur].port, g_memCardState.card[g_memCardState.cur].slot) == 0) {
+                g_memCardState.state = 6;
+            }
+            break;
+        }
+        g_memCardState.busy = 0;
+        g_memCardState.state = 2;
+        break;
+
+    case 6:
+        if (g_memCardState.result != 0) {
+            g_memCardState.err = 2;
+            g_memCardState.err_card = g_memCardState.cur;
+        }
+        g_memCardState.state = 0;
+        g_memCardState.cur = 0;
+        g_memCardState.busy = 0;
+        break;
+
+    case 7:
+        if (McGetDir(g_memCardState.card[g_memCardState.cur].port, g_memCardState.card[g_memCardState.cur].slot,
+                          (char *)D_1A7950, 0, 11, g_memCardDirEntries) == 0) {
+            g_memCardState.sub = 0;
+            g_memCardState.state = 8;
+        }
+        break;
+
+    case 8:
+        switch (g_memCardState.sub) {
+        case 0:
+            if (g_memCardState.result > 0) {
+                s32 icon0;
+                s32 icon1;
+                s32 icon2;
+                s32 i;
+                s32 blocks;
+                icon0 = 0;
+                memset(workspace.directory.seen, 0, 16);
+                icon1 = 0;
+                icon2 = 0;
+                blocks = 0;
+                for (i = 0; i < g_memCardState.result; i++) {
+                    McDirEntry_298F00 *entry = &g_memCardDirEntries[i];
+                    char *filename = (char *)((s32)g_memCardDirEntries + i * 64 + 32);
+                    s32 slot;
+                    blocks += (entry->size + 1023U) >> 10;
+                    if (strcmp(filename, D_1A797D) == 0) icon0 = 1;
+                    if (strcmp(filename, D_1A799D) == 0) icon1 = 1;
+                    if (strcmp(filename, D_1A79BD) == 0) icon2 = 1;
+                    if (func_001158F8(filename, D_1A99C0, 4) == 0 &&
+                        func_001158F8(filename + 5, D_1A99C8, 4) == 0) {
+                        slot = (u8)entry->name[4] - '0';
+                        if (slot < 0) continue;
+                        if (slot < 4) workspace.directory.seen[slot] = 1;
+                    }
+                }
+                blocks += (g_memCardState.result + 2) / 2;
+                if ((u32)(blocks - 0x1DA) < 2 && g_memCardState.result == 9 && icon0 && icon1 && icon2 &&
+                    workspace.directory.seen[0] && workspace.directory.seen[1] && workspace.directory.seen[2] && workspace.directory.seen[3]) {
+                    g_memCardState.card[g_memCardState.cur].used_blocks = 0;
+                    g_memCardState.card[g_memCardState.cur].status = -1;
+                    g_memCardState.sub = 1;
+                    g_memCardState.busy = 0;
+                } else {
+                    g_memCardState.card[g_memCardState.cur].used_blocks = blocks;
+                    g_memCardState.card[g_memCardState.cur].status = -2;
+                    goto reset_request;
+                }
+            } else {
+                g_memCardState.card[g_memCardState.cur].status = -2;
+                if (g_memCardState.result == -2) {
+                    g_memCardState.err = 3;
+                    g_memCardState.err_card = g_memCardState.cur;
+                } else if (g_memCardState.result >= 0) {
+                    g_memCardState.card[g_memCardState.cur].status = -2;
+                } else if (g_memCardState.result != -4) {
+                    g_memCardState.err = 4;
+                    g_memCardState.err_card = g_memCardState.cur;
+                }
+                g_memCardState.state = 0;
+                g_memCardState.cur = 0;
+                g_memCardState.busy = 0;
+            }
+            break;
+        case 1:
+            sprintf(workspace.directory.name, (char *)g_saveFileFmt, 0);
+            if (McOpen(g_memCardState.card[g_memCardState.cur].port, g_memCardState.card[g_memCardState.cur].slot, workspace.directory.name, 1) == 0) {
+                g_memCardState.sub++;
+            }
+            break;
+        case 2:
+            if (g_memCardState.result >= 0) {
+                g_memCardState.fd = g_memCardState.result;
+                g_memCardState.sub = 3;
+            } else {
+                g_memCardState.card[g_memCardState.cur].status = -2;
+                g_memCardState.err_card = g_memCardState.cur;
+                if (g_memCardState.result == -7) {
+                    g_memCardState.err = 0x2710;
+                } else if (g_memCardState.result == -5) {
+                    g_memCardState.err = 0x2711;
+                } else if (g_memCardState.result == -4) {
+                    g_memCardState.err = 0x2712;
+                } else if (g_memCardState.result == -3) {
+                    g_memCardState.err = 0x2713;
+                } else if (g_memCardState.result == -2) {
+                    g_memCardState.err = 3;
+                } else {
+                    g_memCardState.err = 4;
+                }
+                g_memCardState.state = 0;
+                g_memCardState.cur = 0;
+            }
+            g_memCardState.busy = 0;
+            break;
+        case 3:
+            g_memCardState.size = 8;
+            if (McRead(g_memCardState.fd, &g_memCardState.card[g_memCardState.cur].x28, 8) == 0) {
+                g_memCardState.sub = 4;
+            }
+            break;
+        case 4:
+            if (g_memCardState.result == g_memCardState.size) {
+                g_memCardState.card[g_memCardState.cur].x24 = 0;
+                if (g_memCardState.card[g_memCardState.cur].x28 != CalcSaveSectionsSize(g_saveSectionTableGlobal)) {
+                    g_memCardState.card[g_memCardState.cur].x24++;
+                }
+                if (g_memCardState.card[g_memCardState.cur].x2C != CalcSaveSectionsSize(g_saveSectionTableArea)) {
+                    g_memCardState.card[g_memCardState.cur].x24++;
+                }
+                g_memCardState.busy = 0;
+                g_memCardState.sub = 5;
+            } else {
+                g_memCardState.card[g_memCardState.cur].status = -2;
+                g_memCardState.err_card = g_memCardState.cur;
+                if (g_memCardState.result >= 0) {
+                    g_memCardState.err = 0x2716;
+                    if (McClose(g_memCardState.fd) == 0) {
+                        g_memCardState.state = 0;
+                        g_memCardState.cur = 0;
+                        g_memCardState.busy = 0;
+                    }
+                    break;
+                }
+                if (g_memCardState.result == -5) {
+                    g_memCardState.err = 0x2711;
+                } else if (g_memCardState.result == -4) {
+                    g_memCardState.err = 0x2714;
+                } else if (g_memCardState.result == -3) {
+                    g_memCardState.err = 0x2715;
+                } else if (g_memCardState.result == -2) {
+                    g_memCardState.err = 3;
+                } else {
+                    g_memCardState.err = 4;
+                }
+                g_memCardState.state = 0;
+                g_memCardState.cur = 0;
+                g_memCardState.busy = 0;
+            }
+            break;
+        case 5:
+            if (McClose(g_memCardState.fd) == 0) {
+                g_memCardState.busy = 0;
+                g_memCardState.state = 21;
+            }
+            break;
+        }
+        break;
+
+    case 9:
+        g_memCardState.state = 10;
+        g_memCardState.sub = 0;
+        g_memCardState.card[g_memCardState.cur].status = 0;
+    case 10:
+        switch (g_memCardState.sub) {
+        case 0:
+            if (g_memCardState.card[g_memCardState.cur].free + g_memCardState.card[g_memCardState.cur].used_blocks >= 0x1DB) {
+                g_memCardState.sub = 1;
+            } else {
+                g_memCardState.err = 7;
+                g_memCardState.err_card = g_memCardState.cur;
+                g_memCardState.state = 0;
+                g_memCardState.cur = 0;
+            }
+            g_memCardState.busy = 0;
+            break;
+        case 1:
+            if (McBeginCreateFile(g_memCardState.card[g_memCardState.cur].port, g_memCardState.card[g_memCardState.cur].slot, (char *)g_saveDirTemplate) == 0) {
+                g_memCardState.sub = 2;
+            }
+            break;
+        case 2:
+            if (g_memCardState.result == 0 || g_memCardState.result == -4) {
+                g_memCardState.sub = 3;
+                break;
+            }
+            g_memCardState.err_card = g_memCardState.cur;
+            if (g_memCardState.result == -3) {
+                g_memCardState.err = 7;
+            } else if (g_memCardState.result == -2) {
+                g_memCardState.err = 6;
+            } else {
+                g_memCardState.err = 0xD;
+            }
+            g_memCardState.state = 0;
+            g_memCardState.cur = 0;
+            g_memCardState.busy = 0;
+            break;
+        case 3: {
+            McChunk_298F00 *chunk;
+
+            SaveLoadReadSaveHeader(g_discTocView.x344 << 11, &chunk);
+            StartFileLoad((s32)chunk, g_discTocView.x340 + g_discTocView.x32C, g_discTocView.x344);
+            g_memCardState.sub = 4;
+            g_memCardState.busy = 0;
+            break;
+        }
+        case 4:
+            if (g_fileLoadState == 0) {
+                g_memCardState.sub = 5;
+            }
+            g_memCardState.busy = 0;
+            break;
+        case 5:
+        case 9:
+        case 13:
+        case 18:
+            switch (g_memCardState.sub) {
+            case 5:
+                strcpy(workspace.name, (char *)g_saveIconSysPath);
+                break;
+            case 9:
+                strcpy(workspace.name, (char *)g_saveStaticIcoPath);
+                break;
+            case 18:
+                strcpy(workspace.name, (char *)D_1A79A8);
+                break;
+            case 13:
+                sprintf(workspace.name, (char *)g_saveFileFmt, g_memCardState.card[g_memCardState.cur].status);
+                break;
+            }
+            if (McOpen(g_memCardState.card[g_memCardState.cur].port, g_memCardState.card[g_memCardState.cur].slot, workspace.name, 0x203) == 0) {
+                g_memCardState.fd = -1;
+                g_memCardState.sub++;
+            }
+            break;
+        case 6:
+        case 10:
+        case 14:
+        case 19: {
+            McChunk_298F00 *chunk;
+
+            if (g_memCardState.result >= 0) {
+                if (g_memCardState.fd < 0) {
+                    g_memCardState.fd = g_memCardState.result;
+                }
+                SaveLoadReadSaveHeader(D_14B884 << 11, &chunk);
+                switch (g_memCardState.sub) {
+                case 6:
+                    g_memCardState.size = 0x3C4;
+                    g_memCardState.buf = (u8 *)chunk + chunk->x0;
+                    break;
+                case 10:
+                    g_memCardState.size = chunk->xC;
+                    g_memCardState.buf = (u8 *)chunk + chunk->x8;
+                    break;
+                case 19:
+                    g_memCardState.size = 0xD804;
+                    g_memCardState.buf = &g_playerProgressAbs;
+                    break;
+                case 14: {
+                    s32 n = CalcSaveSectionsSize(g_saveSectionTableGlobal);
+                    g_memCardState.size = n + CalcSaveSectionsSize(g_saveSectionTableArea) * 0x1C + 8;
+                    g_memCardState.buf = (u8 *)chunk + chunk->x10;
+                    break;
+                }
+                }
+                if (McWrite(g_memCardState.fd, g_memCardState.buf, g_memCardState.size) == 0) {
+                    g_memCardState.sub++;
+                }
+            } else {
+                g_memCardState.err = 0xA;
+                g_memCardState.err_card = g_memCardState.cur;
+                g_memCardState.state = 0;
+                g_memCardState.cur = 0;
+                g_memCardState.busy = 0;
+            }
+            break;
+        }
+        case 7:
+        case 11:
+        case 15:
+        case 20:
+            if (g_memCardState.result == g_memCardState.size) {
+                if (McClose(g_memCardState.fd) == 0) {
+                    g_memCardState.sub++;
+                }
+                break;
+            }
+            g_memCardState.err_card = g_memCardState.cur;
+            if (g_memCardState.result >= 0) {
+                finished_card = &g_memCardState;
+                finished_card->err = 0xB;
+                if (McClose(finished_card->fd) == 0) {
+                    finished_card->busy = 0;
+                    goto reset_state;
+                }
+                break;
+            }
+            if (g_memCardState.result == -4) {
+                g_memCardState.err = 8;
+            } else if (g_memCardState.result == -3) {
+                g_memCardState.err = 7;
+            } else if (g_memCardState.result == -2) {
+                g_memCardState.err = 6;
+            } else {
+                g_memCardState.err = 0xD;
+            }
+            g_memCardState.state = 0;
+            g_memCardState.cur = 0;
+            g_memCardState.busy = 0;
+            break;
+        case 8:
+        case 12:
+        case 16:
+            if (g_memCardState.result == 0) {
+                g_memCardState.sub++;
+            } else {
+                g_memCardState.err = 0xC;
+                g_memCardState.err_card = g_memCardState.cur;
+                g_memCardState.state = 0;
+                g_memCardState.cur = 0;
+            }
+            g_memCardState.busy = 0;
+            break;
+        case 17:
+            if (++g_memCardState.card[g_memCardState.cur].status < 4) {
+                g_memCardState.sub = 13;
+            } else {
+                g_memCardState.sub++;
+            }
+            g_memCardState.busy = 0;
+            break;
+        case 21:
+            g_memCardState.card[g_memCardState.cur].x28 = CalcSaveSectionsSize(g_saveSectionTableGlobal);
+            g_memCardState.card[g_memCardState.cur].x2C = CalcSaveSectionsSize(g_saveSectionTableArea);
+            g_memCardState.card[g_memCardState.cur].status = -1;
+            g_memCardState.card[g_memCardState.cur].x24 = 0;
+            g_memCardState.state = 0;
+            g_memCardState.cur = 0;
+            break;
+        }
+        break;
+
+    case 11:
+        g_memCardState.state = 12;
+        g_memCardState.sub = 0;
+        g_memCardState.card[g_memCardState.cur].status = -2;
+    case 12:
+        switch (g_memCardState.sub) {
+        case 0:
+            if (McGetDir(g_memCardState.card[g_memCardState.cur].port, g_memCardState.card[g_memCardState.cur].slot, (char *)D_1A7950, 0, 1, g_memCardDirEntries) == 0) {
+                g_memCardState.sub = 1;
+            }
+            break;
+        case 1:
+            if (g_memCardState.result == 1) {
+                sprintf(workspace.name, D_1A99D0, (char *)g_saveDirTemplate, g_memCardDirName);
+                SaveLoadDebugPrint(D_1A99D8, workspace.name);
+                if (McMkDir(g_memCardState.card[g_memCardState.cur].port, g_memCardState.card[g_memCardState.cur].slot, workspace.name) == 0) {
+                    g_memCardState.sub = 2;
+                }
+            } else {
+                if (g_memCardState.result == 0) {
+                    g_memCardState.sub = 3;
+                } else {
+                    g_memCardState.err_card = g_memCardState.cur;
+                    if (g_memCardState.result == -5) {
+                        g_memCardState.err = 0x10;
+                    } else if (g_memCardState.result == -4) {
+                        g_memCardState.err = 0xF;
+                    } else if (g_memCardState.result == -2) {
+                        g_memCardState.err = 0xE;
+                    } else {
+                        g_memCardState.err = 0x12;
+                    }
+                    g_memCardState.state = 0;
+                    g_memCardState.cur = 0;
+                }
+                g_memCardState.busy = 0;
+            }
+            break;
+        case 2:
+            if (McGetDir(g_memCardState.card[g_memCardState.cur].port, g_memCardState.card[g_memCardState.cur].slot, (char *)D_1A7950, 1, 1, g_memCardDirEntries) == 0) {
+                g_memCardState.sub = 1;
+            }
+            break;
+        case 3:
+            if (McMkDir(g_memCardState.card[g_memCardState.cur].port, g_memCardState.card[g_memCardState.cur].slot, (char *)g_saveDirTemplate) == 0) {
+                SaveLoadDebugPrint(D_1A99E8, (char *)g_saveDirTemplate);
+                g_memCardState.sub = 4;
+            }
+            break;
+        case 4:
+            if (g_memCardState.result != 0) {
+                g_memCardState.err_card = g_memCardState.cur;
+                if (g_memCardState.result == -6) {
+                    g_memCardState.err = 0x11;
+                } else if (g_memCardState.result == -5) {
+                    g_memCardState.err = 0x10;
+                } else if (g_memCardState.result == -4) {
+                    g_memCardState.err = 0xF;
+                } else if (g_memCardState.result == -2) {
+                    g_memCardState.err = 0xE;
+                } else {
+                    g_memCardState.err = 0x12;
+                }
+            }
+            g_memCardState.state = 0;
+            g_memCardState.cur = 0;
+            g_memCardState.busy = 0;
+            break;
+        }
+        break;
+
+    case 21:
+        g_memCardState.state = 22;
+        g_memCardState.card[g_memCardState.cur].tries = -1;
+        g_memCardState.index = 0;
+        break;
+
+    case 22:
+        g_memCardState.card[g_memCardState.cur].tries++;
+        if (g_memCardState.card[g_memCardState.cur].tries < 4) {
+            g_memCardState.sub = 0;
+            g_memCardState.state = 23;
+        } else {
+            g_memCardState.state = 0;
+            g_memCardState.cur = 0;
+            g_memCardState.busy = 0;
+        }
+        break;
+    case 13:
+        if (g_memCardState.card[g_memCardState.cur].status < 0) {
+            g_memCardState.err = 0x13;
+            g_memCardState.state = 0;
+            g_memCardState.cur = 0;
+            g_memCardState.busy = 0;
+            break;
+        }
+        g_memCardState.index = 0;
+        g_memCardState.sub = 0;
+        g_memCardState.state = 14;
+    case 14:
+    case 23:
+        switch (g_memCardState.sub) {
+        case 0:
+            if (g_memCardState.state == 23) {
+                sprintf(workspace.name, (char *)g_saveFileFmt, g_memCardState.card[g_memCardState.cur].tries);
+            } else {
+                sprintf(workspace.name, (char *)g_saveFileFmt, g_memCardState.card[g_memCardState.cur].status);
+            }
+            if (McOpen(g_memCardState.card[g_memCardState.cur].port, g_memCardState.card[g_memCardState.cur].slot, workspace.name, 1) == 0) {
+                g_memCardState.sub++;
+            }
+            break;
+        case 1:
+            if (g_memCardState.result >= 0) {
+                g_memCardState.fd = g_memCardState.result;
+                g_memCardState.sub = 2;
+            } else {
+                g_memCardState.err_card = g_memCardState.cur;
+                if (g_memCardState.result == -7) {
+                    g_memCardState.err = 0x14;
+                } else if (g_memCardState.result == -5) {
+                    g_memCardState.err = 0x15;
+                } else if (g_memCardState.result == -4) {
+                    g_memCardState.err = 0x16;
+                } else if (g_memCardState.result == -3) {
+                    g_memCardState.err = 0x17;
+                } else if (g_memCardState.result == -2) {
+                    g_memCardState.err = 0x18;
+                } else {
+                    g_memCardState.err = 0x1C;
+                }
+                g_memCardState.state = 0;
+                g_memCardState.cur = 0;
+            }
+            g_memCardState.busy = 0;
+            break;
+        case 2:
+            g_memCardState.size = 8;
+            if (McRead(g_memCardState.fd, &g_memCardState.card[g_memCardState.cur].x28, 8) == 0) {
+                g_memCardState.sub = 3;
+            }
+            break;
+        case 3:
+            if (g_memCardState.result == g_memCardState.size) {
+                g_memCardState.busy = 0;
+                g_memCardState.sub = 4;
+                break;
+            }
+            g_memCardState.err_card = g_memCardState.cur;
+            if (g_memCardState.result >= 0) {
+                g_memCardState.err = 0x1B;
+                if (McClose(g_memCardState.fd) == 0) {
+                    g_memCardState.state = 0;
+                    g_memCardState.cur = 0;
+                    g_memCardState.busy = 0;
+                }
+                break;
+            }
+            if (g_memCardState.result == -5) {
+                g_memCardState.err = 0x15;
+            } else if (g_memCardState.result == -4) {
+                g_memCardState.err = 0x19;
+            } else if (g_memCardState.result == -3) {
+                g_memCardState.err = 0x1A;
+            } else if (g_memCardState.result == -2) {
+                g_memCardState.err = 0x18;
+            } else {
+                g_memCardState.err = 0x1C;
+            }
+            g_memCardState.state = 0;
+            g_memCardState.cur = 0;
+            g_memCardState.busy = 0;
+            break;
+        case 4:
+            g_memCardState.size = g_memCardState.card[g_memCardState.cur].x28;
+            if (g_memCardState.size > 0x2800) {
+                func_002833D8();
+            }
+            if (McRead(g_memCardState.fd, g_saveImageGlobal, g_memCardState.size) == 0) {
+                g_memCardState.sub = 5;
+            }
+            break;
+        case 5:
+            if (g_memCardState.result == g_memCardState.size) {
+                if (g_memCardState.state == 23) {
+                    FillSaveSlotInfo(g_saveImageGlobal, g_memCardState.cur, g_memCardState.card[g_memCardState.cur].tries);
+                    g_memCardState.sub = 8;
+                } else {
+                    g_memCardState.card[g_memCardState.cur].x24 = DeserializeSaveSections(g_saveImageGlobal, 0, g_saveSectionTableGlobal);
+                    g_memCardState.sub = 6;
+                }
+                g_memCardState.busy = 0;
+                break;
+            }
+            g_memCardState.err_card = g_memCardState.cur;
+            if (g_memCardState.result >= 0) {
+                g_memCardState.err = 0x1B;
+                if (McClose(g_memCardState.fd) == 0) {
+                    g_memCardState.state = 0;
+                    g_memCardState.cur = 0;
+                    g_memCardState.busy = 0;
+                }
+                break;
+            }
+            if (g_memCardState.result == -5) {
+                g_memCardState.err = 0x15;
+            } else if (g_memCardState.result == -4) {
+                g_memCardState.err = 0x19;
+            } else if (g_memCardState.result == -3) {
+                g_memCardState.err = 0x1A;
+            } else if (g_memCardState.result == -2) {
+                g_memCardState.err = 0x18;
+            } else {
+                g_memCardState.err = 0x1C;
+            }
+            g_memCardState.state = 0;
+            g_memCardState.cur = 0;
+            g_memCardState.busy = 0;
+            break;
+        case 6:
+            g_memCardState.size = g_memCardState.card[g_memCardState.cur].x2C;
+            if (g_memCardState.size > 0x1000) {
+                func_002833D8();
+            }
+            if (McRead(g_memCardState.fd, g_saveImageArea, g_memCardState.size) == 0) {
+                g_memCardState.sub = 7;
+            }
+            break;
+        case 7:
+            if (g_memCardState.result == g_memCardState.size) {
+                g_memCardState.card[g_memCardState.cur].x24 += DeserializeSaveSections(g_saveImageArea, g_memCardState.index, g_saveSectionTableArea);
+                if (++g_memCardState.index < 0x1C) {
+                    g_memCardState.sub = 6;
+                } else {
+                    g_memCardState.sub = 8;
+                }
+                g_memCardState.busy = 0;
+                break;
+            }
+            g_memCardState.err_card = g_memCardState.cur;
+            if (g_memCardState.result >= 0) {
+                g_memCardState.err = 0x1B;
+                if (McClose(g_memCardState.fd) == 0) {
+                    g_memCardState.state = 0;
+                    g_memCardState.cur = 0;
+                    g_memCardState.busy = 0;
+                }
+                break;
+            }
+            if (g_memCardState.result == -5) {
+                g_memCardState.err = 0x15;
+            } else if (g_memCardState.result == -4) {
+                g_memCardState.err = 0x19;
+            } else if (g_memCardState.result == -3) {
+                g_memCardState.err = 0x1A;
+            } else if (g_memCardState.result == -2) {
+                g_memCardState.err = 0x18;
+            } else {
+                g_memCardState.err = 0x1C;
+            }
+        reset_request:
+            g_memCardState.state = 0;
+            g_memCardState.cur = 0;
+            g_memCardState.busy = 0;
+            break;
+        case 8:
+            if (McClose(g_memCardState.fd) == 0) {
+                if (g_memCardState.state == 23) {
+                    g_memCardState.busy = 0;
+                    g_memCardState.state = 22;
+                } else {
+                    finished_card = &g_memCardState;
+                    func_0029C418();
+                    finished_card->state = 0;
+                    finished_card->cur = 0;
+                }
+            }
+            break;
+        }
+        break;
+
+    case 15:
+        if (g_memCardState.card[g_memCardState.cur].x24 != 0) {
+            g_memCardState.busy = 0;
+            g_memCardState.state = 0;
+            g_memCardState.cur = 0;
+            g_memCardState.err = 0x2717;
+            break;
+        }
+        if (g_memCardState.card[g_memCardState.cur].status < 0) {
+            g_memCardState.busy = 0;
+            g_memCardState.state = 0;
+            g_memCardState.cur = 0;
+            g_memCardState.err = 0x1D;
+            break;
+        }
+        g_memCardState.sub = 0;
+        g_memCardState.state = 16;
+    case 16:
+        switch (g_memCardState.sub) {
+        case 0:
+            sprintf(workspace.name, (char *)g_saveFileFmt, g_memCardState.card[g_memCardState.cur].status);
+            if (McOpen(g_memCardState.card[g_memCardState.cur].port, g_memCardState.card[g_memCardState.cur].slot, workspace.name, 2) == 0) {
+                g_memCardState.sub = 1;
+            }
+            break;
+        case 1:
+            if (g_memCardState.result >= 0) {
+                g_memCardState.fd = g_memCardState.result;
+                g_memCardState.sub = 2;
+            } else {
+                g_memCardState.err_card = g_memCardState.cur;
+                if (g_memCardState.result == -7) {
+                    g_memCardState.err = 0x1E;
+                } else if (g_memCardState.result == -5) {
+                    g_memCardState.err = 0x1F;
+                } else if (g_memCardState.result == -4) {
+                    g_memCardState.err = 0x20;
+                } else if (g_memCardState.result == -3) {
+                    g_memCardState.err = 0x21;
+                } else if (g_memCardState.result == -2) {
+                    g_memCardState.err = 0x22;
+                } else {
+                    g_memCardState.err = 0x26;
+                }
+                g_memCardState.state = 0;
+                g_memCardState.cur = 0;
+            }
+            g_memCardState.busy = 0;
+            break;
+        case 2:
+            if (McSeek(g_memCardState.fd, 8, 0) == 0) {
+                g_memCardState.sub = 3;
+            }
+            break;
+        case 3:
+            if (g_memCardState.result >= 0) {
+                g_memCardState.sub = 4;
+            } else if (McClose(g_memCardState.fd) == 0) {
+                g_memCardState.err = 0x26;
+                g_memCardState.state = 0;
+                g_memCardState.cur = 0;
+                g_memCardState.busy = 0;
+            }
+            break;
+        case 4:
+            if (McWrite(g_memCardState.fd, g_saveImageGlobal, CalcSaveSectionsSize(g_saveSectionTableGlobal)) == 0) {
+                g_memCardState.sub = 5;
+            }
+            break;
+        case 5:
+            if (g_memCardState.result == CalcSaveSectionsSize(g_saveSectionTableGlobal)) {
+                g_memCardState.sub = 6;
+                break;
+            }
+            g_memCardState.err_card = g_memCardState.cur;
+            if (g_memCardState.result >= 0) {
+                finished_card = &g_memCardState;
+                finished_card->err = 0x25;
+                if (McClose(finished_card->fd) == 0) {
+                    finished_card->busy = 0;
+                    goto reset_state;
+                }
+                break;
+            }
+            if (g_memCardState.result == -5) {
+                g_memCardState.err = 0x1F;
+            } else if (g_memCardState.result == -4) {
+                g_memCardState.err = 0x23;
+            } else if (g_memCardState.result == -3) {
+                g_memCardState.err = 0x24;
+            } else if (g_memCardState.result == -2) {
+                g_memCardState.err = 0x22;
+            } else {
+                g_memCardState.err = 0x26;
+            }
+            g_memCardState.state = 0;
+            g_memCardState.cur = 0;
+            g_memCardState.busy = 0;
+            break;
+        case 6:
+            if (McSeek(g_memCardState.fd, g_memCardState.card[0].x28 + 8 + g_memCardState.index * g_memCardState.card[0].x2C, 0) == 0) {
+                g_memCardState.sub = 7;
+            }
+            break;
+        case 7:
+            finished_card = &g_memCardState;
+            if (g_memCardState.result == g_memCardState.card[0].x28 + 8 + g_memCardState.index * g_memCardState.card[0].x2C) {
+                g_memCardState.sub = 8;
+            } else {
+                if (McClose(finished_card->fd) == 0) {
+                    finished_card->busy = 0;
+                    goto reset_state;
+                }
+            }
+            break;
+        case 8:
+            if (McWrite(g_memCardState.fd, g_saveImageArea, CalcSaveSectionsSize(g_saveSectionTableArea)) == 0) {
+                g_memCardState.sub = 9;
+            }
+            break;
+        case 9:
+            if (g_memCardState.result == CalcSaveSectionsSize(g_saveSectionTableArea)) {
+                g_memCardState.sub = 10;
+                break;
+            }
+            g_memCardState.err_card = g_memCardState.cur;
+            if (g_memCardState.result >= 0) {
+                finished_card = &g_memCardState;
+                finished_card->err = 0x25;
+                if (McClose(finished_card->fd) == 0) {
+                    finished_card->busy = 0;
+                reset_state:
+                    finished_card->cur = 0;
+                    finished_card->state = 0;
+                }
+                break;
+            }
+            if (g_memCardState.result == -5) {
+                g_memCardState.err = 0x1F;
+            } else if (g_memCardState.result == -4) {
+                g_memCardState.err = 0x23;
+            } else if (g_memCardState.result == -3) {
+                g_memCardState.err = 0x24;
+            } else if (g_memCardState.result == -2) {
+                g_memCardState.err = 0x18;
+            } else {
+                g_memCardState.err = 0x1C;
+            }
+            g_memCardState.state = 0;
+            g_memCardState.cur = 0;
+            g_memCardState.busy = 0;
+            break;
+        case 10:
+            finished_card = &g_memCardState;
+            if (McClose(finished_card->fd) == 0) {
+                finished_card->state = 0;
+                finished_card->cur = 0;
+            }
+            break;
+        }
+        break;
+
+    case 17: {
+        McChunk_298F00 *chunk;
+        SaveLoadReadSaveHeader(g_discTocView.x344 << 11, &chunk);
+        StartFileLoad((s32)chunk, g_discTocView.x340 + g_discTocView.x32C,
+                      g_discTocView.x344);
+        g_memCardState.sub = 18;
+        g_memCardState.busy = 0;
+        break;
+    }
+
+    case 18:
+        if (g_fileLoadState == 0) {
+            McChunk_298F00 *chunk;
+            SaveLoadReadSaveHeader(D_14B884 << 11, &chunk);
+            g_memCardState.sub = 19;
+            g_memCardState.buf = (u8 *)chunk + chunk->x10;
+        }
+        g_memCardState.busy = 0;
+        break;
+
+    case 19:
+        if (g_memCardState.card[g_memCardState.cur].x24 != 0) {
+            g_memCardState.busy = 0;
+            g_memCardState.state = 0;
+            g_memCardState.cur = 0;
+            g_memCardState.err = 0x2718;
+            break;
+        }
+        if (g_memCardState.card[g_memCardState.cur].status < 0) {
+            g_memCardState.busy = 0;
+            g_memCardState.state = 0;
+            g_memCardState.cur = 0;
+            g_memCardState.err = 0x27;
+            break;
+        }
+        g_memCardState.index = 0;
+        g_memCardState.sub = 0;
+        g_memCardState.state = 20;
+    case 20:
+        switch (g_memCardState.sub) {
+        case 0:
+            sprintf(workspace.name, (char *)g_saveFileFmt, g_memCardState.card[g_memCardState.cur].status);
+            if (McOpen(g_memCardState.card[g_memCardState.cur].port, g_memCardState.card[g_memCardState.cur].slot, workspace.name, 2) == 0) {
+                g_memCardState.sub = 1;
+            }
+            break;
+        case 1:
+            if (g_memCardState.result >= 0) {
+                s32 n;
+
+                g_memCardState.fd = g_memCardState.result;
+                n = CalcSaveSectionsSize(g_saveSectionTableGlobal);
+                g_memCardState.size = n + CalcSaveSectionsSize(g_saveSectionTableArea) * 0x1C + 8;
+                if (McWrite(g_memCardState.fd, g_memCardState.buf, g_memCardState.size) == 0) {
+                    g_memCardState.sub = 2;
+                }
+                break;
+            }
+            g_memCardState.err = 0x2B;
+            g_memCardState.err_card = g_memCardState.cur;
+            g_memCardState.state = 0;
+            g_memCardState.cur = 0;
+            g_memCardState.busy = 0;
+            break;
+        case 2:
+            if (g_memCardState.result == g_memCardState.size) {
+                if (McClose(g_memCardState.fd) == 0) {
+                    g_memCardState.sub = 3;
+                }
+                break;
+            }
+            g_memCardState.err_card = g_memCardState.cur;
+            if (g_memCardState.result >= 0) {
+                g_memCardState.err = 0xB;
+                if (McClose(g_memCardState.fd) == 0) {
+                    g_memCardState.state = 0;
+                    g_memCardState.cur = 0;
+                    g_memCardState.busy = 0;
+                }
+                break;
+            }
+            if (g_memCardState.result == -4) {
+                g_memCardState.err = 0x28;
+            } else if (g_memCardState.result == -3) {
+                g_memCardState.err = 0x29;
+            } else if (g_memCardState.result == -2) {
+                g_memCardState.err = 0x2A;
+            } else {
+                g_memCardState.err = 0x2D;
+            }
+            g_memCardState.state = 0;
+            g_memCardState.cur = 0;
+            g_memCardState.busy = 0;
+            break;
+        case 3:
+            if (g_memCardState.result != 0) {
+                g_memCardState.err = 0x2C;
+                g_memCardState.err_card = g_memCardState.cur;
+            }
+            g_memCardState.state = 0;
+            g_memCardState.cur = 0;
+            g_memCardState.busy = 0;
+            break;
+        }
+        break;
+    case 24:
+        g_memCardState.state = 25;
+        g_memCardState.sub = 0;
+        g_memCardState.card[g_memCardState.cur].x1C = 1;
+    case 25:
+        switch (g_memCardState.sub / 5) {
+        case 0:
+            sprintf(workspace.name, D_1A9A00, g_memCardState.sub % 5);
+            break;
+        case 1:
+            sprintf(workspace.name, D_1A9A20, g_memCardState.sub % 5);
+            break;
+        case 2:
+            sprintf(workspace.name, D_1A9A40, g_memCardState.sub % 5);
+            break;
+        case 3:
+            workspace.name[0] = 0;
+            break;
+        }
+        if ((u8)workspace.name[0] == 0) {
+            g_memCardState.state = 0;
+            g_memCardState.cur = 0;
+            g_memCardState.busy = 0;
+            break;
+        }
+
+        if (McOpen(g_memCardState.card[g_memCardState.cur].port, g_memCardState.card[g_memCardState.cur].slot,
+                          workspace.name, 1) == 0)
+            g_memCardState.state = 26;
+        break;
+
+    case 26:
+        if (g_memCardState.result >= 0) {
+            g_memCardState.fd = g_memCardState.result;
+            if (McRead(g_memCardState.result, g_saveImageGlobal, 0x2800) == 0)
+                g_memCardState.state = 27;
+        } else {
+            g_memCardState.state = 25;
+            g_memCardState.sub = (g_memCardState.sub / 5 + 1) * 5;
+            g_memCardState.busy = 0;
+        }
+        break;
+
+    case 27:
+        if (g_memCardState.result >= 0x2800) {
+            if (McClose(g_memCardState.fd) != 0)
+                break;
+            if (VerifySaveHeaderChecksum(D_1A2BB0) != 0) {
+                s32 *p = D_1A2BB0 + 2;
+                if (*p != -1) {
+                    s32 flags = D_1A7A28Base[8];
+                    do {
+                        if (p[0] == 0xA) {
+                            u8 *b = (u8 *)(p + 2);
+                            s32 prev = flags;
+                            flags = prev | 0x80;
+                            if (b[0xA] != 0) {
+                                flags = prev | 0x81;
+                                g_memCardState.card[g_memCardState.cur].x1C++;
+                            }
+                            if (b[0x12] != 0) {
+                                flags |= 2;
+                                g_memCardState.card[g_memCardState.cur].x1C++;
+                            }
+                            if (b[0x19] != 0) {
+                                flags |= 4;
+                                g_memCardState.card[g_memCardState.cur].x1C++;
+                            }
+                            if (b[0xD] != 0) {
+                                flags |= 8;
+                                g_memCardState.card[g_memCardState.cur].x1C++;
+                            }
+                            if (b[0x13] != 0) {
+                                flags |= 0x10;
+                                g_memCardState.card[g_memCardState.cur].x1C++;
+                            }
+                            break;
+                        }
+                        p = (s32 *)((u8 *)p + (((p[1] + 3) / 4) * 4 + 8));
+                    } while (*p != -1);
+                    D_1A7A28Base[8] = flags;
+                }
+            }
+            g_memCardState.sub++;
+        } else {
+            g_memCardState.sub = (g_memCardState.sub / 5 + 1) * 5;
+        }
+        g_memCardState.state = 25;
+        g_memCardState.busy = 0;
+        break;
+    }
+}
+#endif
 
 /* BuildSaveImage(out): assemble the in-RAM save image from the two section
  * tables. Writes the serialized sizes of the global and area tables as the two

@@ -777,3 +777,4 @@ usa text/188858 func_0028E680
 usa text/235FE8 func_00339740 S136EXTRA=-fno-strict-aliasing
 usa text/1D54C0 MenuScreenDoAction
 usa text/1D54C0 SoundOptionsMenuInput
+usa text/198FA0 SaveLoadStateMachine

@@ -646,7 +646,7 @@
     byte-exact on our ROM; its one inline `sync` is the hardware barrier
     RULING #12168 allows (task #2297).
 
-- **OpenRAC — `rac2-decomp`, commit `b2a35115`, Window X bodies (text/235FE8, text/1DFF80, text/1D54C0, text/250080, text/188858, text/191238, cod/015180 and level program 24)** (GPL-3.0)
+- **OpenRAC — `rac2-decomp`, commit `b2a35115`, Window X bodies (text/235FE8, text/1DFF80, text/1D54C0, text/250080, text/188858, text/191238, text/198FA0, cod/015180 and level program 24)** (GPL-3.0)
   <https://github.com/OpenRAC/rac2-decomp> at commit `b2a35115e0cf580a1fdab8dd1071b157799e590e`
   (the same history as `rac2-gc-decomp` above: `96927f87` is an ancestor)
 
@@ -826,6 +826,20 @@
     native), their `sda` cursor as an EE-only `.sdata` asm-label view
     (RULINGs #8620/#13168), `s32`/`u32` spellings. Unit s136os arm
     (S136EXTRA "", task #2507).
+  - **`SaveLoadStateMachine`** (`0x00299CF0`, the memory-card transaction
+    state machine) in `going-decompiled/src/usa/text/198FA0.cpp`, from
+    `src/us2/game/00299CF0.c` (`func_US2_00299CF0`, author commit
+    `3b7195d7`, Flavius; the blob is identical at `b2a35115`, `5776dcc3`,
+    where the sda re-screen NOTE #13181 found it, and the head `71af8fdc`;
+    the file carries no notice of its own). ADAPTED: our symbols per the
+    ROM's relocations, their state block, disc-TOC record and directory
+    buffer as EE-only typed views (RULING #13168), two `section(".data")`
+    scalars (RULING #8620), their `D_001A7A00[8]` as an EE-only size-16
+    equate view of `D_1A7A28`, their `void`/`int` prototypes for two callees
+    kept through EE-only asm-label declarations, `(char *)` casts on the
+    unit's `u8[]` string buffers. s136os arm as the unit is (S136EXTRA "");
+    its six switch tables are bound to the ROM's by `tools/ee/jtbl_bind.sh`.
+    Task #2551.
 
   - **`UpdateSubtitleStateMachine`** (`0x00289BB8`) in
     `going-decompiled/src/usa/text/188858.c`, from `src/game/00289178.c`
