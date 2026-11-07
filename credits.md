@@ -512,26 +512,6 @@
     and prototyped as our `func_00336678`, so the call passes `(p, flag)` on
     explicitly; name and signature ours.
 
-- **OpenRAC — `rac2-decomp` (formerly `rac2-gc-decomp`), commit `b2a35115`, boundary-split body** (GPL-3.0)
-  <https://github.com/OpenRAC/rac2-decomp> at commit `b2a35115e0cf580a1fdab8dd1071b157799e590e`
-
-  One body at a real entry that our split had fused onto 16 words of the
-  previous function's debris. Task #2473 split it off (symbol_addrs pins) and
-  adopted this body, re-checked byte-exact against our v2.00 ROM (from audit
-  NOTE #13123 row E-1, FACT #13121). The doc comment carries the `Source:`
-  line, which names every change.
-
-  Used so far:
-  - **`func_0028E680`** (`0x0028E680`, the Giant Clank health bar's draw
-    callback) in `going-decompiled/src/usa/text/188858.c`, from
-    `src/game/0028BDB0.c` (`func_0028DDD8`, v1.01 address, author commit
-    `6a0dbf0b`, bigbeno37; the body is identical at `96927f87`), on the
-    s136os arm, with the authors' permission (RULING #10405). ADAPTED: our
-    callee and data spellings by address, a RULING #8620 `section(".data")`
-    device on the `D_18B69A` declaration (EE arm only), `char *` written
-    `u8 *` with `HudElement *` casts, and this unit's prototypes for their
-    extern block.
-
 - **OpenRAC — `rac2-gc-decomp`, commit `96927f87`, text/1CA080 menu-input bodies** (GPL-3.0)
   <https://github.com/OpenRAC/rac2-gc-decomp> at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`
 
@@ -848,6 +828,15 @@
     increment pinned to `$2` by an EE-only asm register local, and the
     `RECORD_SUBTITLE_TIME` macro's opening brace moved off the `#define`
     line for the ORPHAN_LATENT scanner.
+  - **`func_0028E680`** (`0x0028E680`, the Giant Clank health bar's draw
+    callback) in `going-decompiled/src/usa/text/188858.c`, from
+    `src/game/0028BDB0.c` (`func_0028DDD8`, v1.01 address, author commit
+    `6a0dbf0b`, bigbeno37; the body is identical at `96927f87`), on the
+    s136os arm, with the authors' permission (RULING #10405). ADAPTED: our
+    callee and data spellings by address, a RULING #8620 `section(".data")`
+    device on the `D_18B69A` declaration (EE arm only), `char *` written
+    `u8 *` with `HudElement *` casts, and this unit's prototypes for their
+    extern block.
 - **Newlib** (<https://sourceware.org/git/newlib-cygwin.git>, tag
   `newlib-2000-02-17`, commit `061afe83dc04a43321d69b5f04860e5de799665c`;
   Red Hat / Cygnus Solutions and contributors)
