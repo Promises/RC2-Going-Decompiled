@@ -2282,3 +2282,114 @@
     `src/levels/23_damosel_orbit/L23_0041E418.c`
     (`func_L23_0043F930`, author commit `264cb2be`, llesieur99), task
     #2568. VERBATIM but for names: our name and 2 callees renamed to the v2.00 disc's own targets.
+  - **`func_L02_003D2BF0`** (`0x003D2BF0`, level program 02, Maktar Nebula:
+    starts a close-range attack on a near target in front) in
+    `going-decompiled/levels/usa/L02/src/func_L02_003D2BF0.c`, from
+    `src/levels/02_maktar_nebula/L02_002ED7B0.c` (`func_L02_003D1698`, v1.01
+    address, author commit `24d977dd`, bigmak94), task #2579. ADAPTED: our
+    name at the v2.00 place; one callee to its v2.00 split name and six to
+    L02's copies of boot code, each the v2.00 disc's own target; built at
+    -G8 against upstream's -G0; `common.h` dropped (its `u8` typedef copied)
+    and unused declarations not carried; assembled through
+    `tools/ee/asm_unit.sh`.
+  - **`func_L02_003D3190`** (`0x003D3190`, level program 02, Maktar Nebula:
+    the hit window of a swing between two joints) in
+    `going-decompiled/levels/usa/L02/src/func_L02_003D3190.c`, from
+    `src/levels/02_maktar_nebula/L02_002ED7B0.c` (`func_L02_003D1C38`, v1.01
+    address, author commit `455cde53`, Flavius), task #2579. ADAPTED: our
+    name at the v2.00 place; seven callees to L02's copies of boot code, the
+    v2.00 disc's own targets; built at -G8 against upstream's -G0;
+    `common.h` and unused declarations dropped; assembled through
+    `tools/ee/asm_unit.sh`.
+  - **`func_L02_003D3428`** (`0x003D3428`, level program 02, Maktar Nebula:
+    lets go of the held object with a burst effect) in
+    `going-decompiled/levels/usa/L02/src/func_L02_003D3428.c`, from
+    `src/levels/02_maktar_nebula/L02_002ED7B0.c` (`func_L02_003D1ED0`, v1.01
+    address, author commit `ac1ee013`, bigmak94), task #2579. ADAPTED: our
+    name at the v2.00 place; four callees to L02's copies of boot code;
+    `sda` -> `section(".sdata")` on the `D_L02_001A8F20` extern declaration
+    (RULING #8620); built at -G8 against upstream's -G0; `common.h` and
+    unused declarations dropped; assembled through `tools/ee/asm_unit.sh`.
+  - **`func_L02_003D8E68`** (`0x003D8E68`, level program 02, Maktar Nebula:
+    places three spawned actors and starts their behaviours) in
+    `going-decompiled/levels/usa/L02/src/func_L02_003D8E68.c`, from
+    `src/levels/02_maktar_nebula/L02_003D26B0.c` (`func_L02_003D7900`, v1.01
+    address, author commit `9980854e`, Flavius), task #2579. ADAPTED: our
+    name at the v2.00 place; the boot's `g_soundBankHandlesBlk` for
+    `D_00189E20`; four callees to their v2.00 split names and four to L02's
+    copies of boot code; built at -G8 against upstream's -G0; `common.h` and
+    unused declarations dropped; assembled through `tools/ee/asm_unit.sh`.
+  - **`func_L02_003FE5A0`** (`0x003FE5A0`, level program 02, Maktar Nebula:
+    is joint 0 far from the hero) in
+    `going-decompiled/levels/usa/L02/src/func_L02_003FE5A0.c`, from
+    `src/levels/02_maktar_nebula/L02_003F5430.c` (`func_L02_003FD000`, v1.01
+    address, author commit `773eafc2`, llesieur99), task #2579. ADAPTED: our
+    name at the v2.00 place; the boot's `g_heroPos` for `D_00189EA0`; two
+    callees to L02's copies of boot code; built at -G8 against upstream's
+    -G0; `common.h` and unused declarations dropped; assembled through
+    `tools/ee/asm_unit.sh`.
+  - **`func_L02_0040C840`** (`0x0040C840`, level program 02, Maktar Nebula:
+    per-frame update of an enemy) in
+    `going-decompiled/levels/usa/L02/src/func_L02_0040C840.c`, from
+    `src/levels/02_maktar_nebula/L02_0040A4A8.c` (`func_L02_0040B0F8`, v1.01
+    address, author commit `11c21414`, bigmak94), task #2579. ADAPTED: our
+    name at the v2.00 place; one callee to its v2.00 split name and fourteen
+    to L02's copies of boot code; `D_L02_001BA500` kept as an address-named
+    extern (RULING #13291 section 2); built at -G8 against upstream's -G0;
+    `common.h` and unused declarations dropped; assembled through
+    `tools/ee/asm_unit.sh`.
+  - **`func_L02_00446A48`** (`0x00446A48`, level program 02, Maktar Nebula:
+    a collectible with a 3-bit per-planet counter) in
+    `going-decompiled/levels/usa/L02/src/func_L02_00446A48.c`, from
+    `src/levels/02_maktar_nebula/L02_0040A4A8.c` (`func_L02_00445200`, v1.01
+    address, author commit `ce9897f7`, bigmak94), task #2579. ADAPTED: our
+    name at the v2.00 place; the boot's `g_playerProgress` for `D_001A79F0`
+    (the disc-implied 0x001A79F8); `D_0019B4A8` as the L02 split's existing
+    `D_19B4A8`; `D_L02_0021F4F0` as the address-named `D_L02_0021F520`
+    (RULING #13291 section 2); seven callees to L02's copies of boot code;
+    `sda` -> `section(".sdata")` on two extern declarations (RULING #8620);
+    built at -G8 against upstream's -G0; `common.h`, unused declarations and
+    one duplicate declaration dropped; assembled through
+    `tools/ee/asm_unit.sh`.
+  - **`func_L02_003D62D0`** (`0x003D62D0`, level program 02, Maktar Nebula:
+    has the actor waited long enough to act) in
+    `going-decompiled/levels/usa/L02/src/func_L02_003D62D0.c`, from
+    `src/levels/02_maktar_nebula/L02_003D26B0-g8.c` (`func_L02_003D4D68`,
+    v1.01 address, author commit `773eafc2`, llesieur99), task #2579.
+    BYTE-IDENTICAL, verbatim but for names: our name at the v2.00 place; one
+    level data name to our label at the v2.00 address; two callees to L02's
+    copies of boot code; upstream's inert `sda` kept; `common.h` and unused
+    declarations dropped; assembled through `tools/ee/asm_unit.sh`.
+  - **`func_L02_003D7F58`** (`0x003D7F58`, level program 02, Maktar Nebula:
+    resets three small-data globals) in
+    `going-decompiled/levels/usa/L02/src/func_L02_003D7F58.c`, from
+    `src/levels/02_maktar_nebula/L02_003D26B0-g8.c` (`func_L02_003D69F0`,
+    v1.01 address, author commit `431ac503`, llesieur99), task #2579.
+    BYTE-IDENTICAL, verbatim but for names: our name at the v2.00 place;
+    three level data names to our labels at the v2.00 addresses; one callee
+    to L02's copy of boot code; upstream's inert `sda` kept; `common.h` and
+    unused declarations dropped; assembled through `tools/ee/asm_unit.sh`.
+  - **`func_L02_003D5870`** (`0x003D5870`, level program 02, Maktar Nebula:
+    per-frame update of an enemy with damage bookkeeping) in
+    `going-decompiled/levels/usa/L02/src/func_L02_003D5870.c`, from
+    `src/levels/02_maktar_nebula/L02_003D4308-g8.c` (`func_L02_003D4308`,
+    v1.01 address, author commit `13442ffb`, bigbeno37), task #2579.
+    BYTE-IDENTICAL, verbatim but for names: our name at the v2.00 place; one
+    level data name to our label; `D_L02_001FF6B8` and `D_L02_001BA500` kept
+    as address-named externs (RULING #13291 section 2); three callees to
+    their v2.00 split names and seven to L02's copies of boot code;
+    upstream's inert `sda` kept; `common.h` dropped; assembled through
+    `tools/ee/asm_unit.sh`.
+  - **`func_L02_003FEE58`** (`0x003FEE58`, level program 02, Maktar Nebula:
+    input handler of the level's selection menu) in
+    `going-decompiled/levels/usa/L02/src/func_L02_003FEE58.c`, from
+    `src/levels/02_maktar_nebula/L02_003FD8B8-g8.c` (`func_L02_003FD8B8`,
+    v1.01 address, author commit `9bbea36d`, Flavius), task #2579.
+    BYTE-IDENTICAL, verbatim but for names: our name at the v2.00 place; the
+    boot's `g_itemEquippedSlot`/`g_heroState` for `D_00139568`/`D_0018C0B4`;
+    `D_00138180`/`D_001395B8` as the L02 split's existing
+    `D_138180`/`D_1395B8` (FACT #13369); one level data name to our label,
+    `D_L02_002004A4` kept address-named; three callees to their v2.00 split
+    names and twelve to L02's copies of boot and L00 code; upstream's inert
+    `sda` kept; `common.h` dropped (its `u8` typedef copied); assembled
+    through `tools/ee/asm_unit.sh`.
