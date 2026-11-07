@@ -1578,7 +1578,123 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00126288);
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012646C);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00126470);
+/* libgraph StoreImage packet: 112 bytes, four VIF codes then a GIFtag A+D
+ * stream of (value, register-address) pairs. Types as upstream's, with
+ * `long`/`unsigned long` written `s64`/`u64` (RULING #13197; identical on
+ * EE, where common.h's u64 IS unsigned long). */
+typedef struct {
+    u64 NLOOP:15; u64 EOP:1; u64 pad16:30; u64 PRE:1;
+    u64 PRIM:11; u64 FLG:2; u64 NREG:4;
+    u64 REGS0:4; u64 REGS1:4; u64 REGS2:4; u64 REGS3:4;
+    u64 REGS4:4; u64 REGS5:4; u64 REGS6:4; u64 REGS7:4;
+    u64 REGS8:4; u64 REGS9:4; u64 REGS10:4; u64 REGS11:4;
+    u64 REGS12:4; u64 REGS13:4; u64 REGS14:4; u64 REGS15:4;
+} SdGifTag __attribute__((aligned(16)));
+typedef struct {
+    u64 SBP:14; u64 pad14:2; u64 SBW:6; u64 pad22:2;
+    u64 SPSM:6; u64 pad30:2; u64 DBP:14; u64 pad46:2;
+    u64 DBW:6; u64 pad54:2; u64 DPSM:6; u64 pad62:2;
+} SdBitbltbuf;
+typedef struct {
+    u64 SSAX:11; u64 pad11:5; u64 SSAY:11; u64 pad27:5;
+    u64 DSAX:11; u64 pad43:5; u64 DSAY:11; u64 DIR:2;
+    u64 pad61:3;
+} SdTrxpos;
+typedef struct {
+    u64 RRW:12; u64 pad12:20; u64 RRH:12; u64 pad44:20;
+} SdTrxreg;
+typedef struct { u64 pad00; } SdFinish;
+typedef struct { u64 XDR:2; u64 pad02:62; } SdTrxdir;
+#ifdef TARGET_NATIVE
+/* gcc -m32 cannot emulate mode(TI); copy-only here, so a 16-byte aligned
+ * struct is an exact portable stand-in (same form as IpuQword below). Inert
+ * to the matching build. */
+typedef struct { unsigned long long _q[2]; } __attribute__((aligned(16))) u128_sd;
+#else
+typedef int u128_sd __attribute__((mode(TI)));
+#endif
+typedef struct {
+    unsigned int vifcode[4];
+    SdGifTag giftag;
+    SdBitbltbuf bitbltbuf; s64 bitbltbufaddr;
+    SdTrxpos trxpos; s64 trxposaddr;
+    SdTrxreg trxreg; s64 trxregaddr;
+    SdFinish finish; s64 finishaddr;
+    SdTrxdir trxdir; s64 trxdiraddr;
+} SdStoreImage __attribute__((aligned(16)));
+
+/**
+ * libgraph's sceGsSetDefStoreImage (FACT #5541 names it
+ * BuildGsStoreImagePacket): fill `sp` with the 112-byte store-image setup
+ * packet. Qword 0 is four VIF1 codes (NOP, MSKPATH3 0x8000, FLUSHA, DIRECT
+ * 6); then a GIFtag (NLOOP 5, EOP, A+D, NREG 1, REGS 0xE); then five
+ * (value, address) pairs: BITBLTBUF sbp|sbw<<16|spsm<<24 @0x50, TRXPOS
+ * x|y<<16 @0x51, TRXREG w|h<<32 @0x52, FINISH 0 @0x61, TRXDIR 1 (local to
+ * host) @0x53. Returns 7, the qword count after the DIRECT header.
+ *
+ * Every dimension/position argument is a signed short; the ROM sign-extends
+ * each by sll/sra 0x10. The GIFtag is built by zeroing it with one 128-bit
+ * store (the mode(TI) store; the ROM's `sq $0`) and masking the fields on —
+ * which is why its words are not plain immediates.
+ *
+ * Source: OpenRAC/rac2-decomp @b2a35115e0cf580a1fdab8dd1071b157799e590e
+ * (GPL-3.0, adopted with the authors' permission per RULING #10405/#12108),
+ * src/core/0012646C-store.c, func_0012646C (author commit a96d3126,
+ * Louis-Philippe Le Sieur, 2026-11-03; upstream credits the layout to
+ * rac1-decomp src/core/00122818.c, revision bbb526cb). ADAPTED: their
+ * `func_0012646C` named `func_00126470` at our address (the 4-byte 0xCD fill
+ * FRAG at 0x12646C owns the name func_0012646C and stays
+ * INCLUDE_ASM_FRAGMENT above; the split is FACT #7390's); `int` spelled
+ * `s32`; `long`/`unsigned long` written `s64`/`u64` (RULING #13197); the
+ * unused `u_long_sd` typedef dropped; `u128_sd` carries the unit's
+ * TARGET_NATIVE mode(TI) stand-in (the IpuQword form), so the 128-bit zero
+ * store spells `(u128_sd){0}` there (1FFBA0.cpp's portable form) while the
+ * EE arm keeps upstream's `(u128_sd)0`; their `CpuSync()`
+ * written as the HARDWARE BARRIER inline asm below. ADAPTED (caller unit):
+ * the declaration at text/1CA080.cpp:945 now returns `s32` (was `void`):
+ * register-identical under EABI (all eight arguments take the same slots),
+ * the caller discards the return in $2, and it linked byte-identically while
+ * the body was the .s; landing_gate's decl-def lint otherwise keys
+ * RETURN-DISCARDED. Byte-exact on our ROM:
+ * audit NOTE #13124/FACT #13125 measured 0/80 standalone on sdk29 -O2 -G0
+ * (also 0/80 on sdk29 -fno-gcse, s136 and s136 -fno-gcse) and 0/80 in-unit,
+ * fnsig-equal in bytes and reloc targets to the base INCLUDE_ASM build.
+ */
+s32 func_00126470(SdStoreImage *sp, short sbp, short sbw, short spsm, short x, short y, short w, short h)
+{
+    sp->vifcode[0] = 0;
+    *(u64 *)&sp->finish = 0;
+    sp->vifcode[1] = 0x06008000;
+    sp->vifcode[2] = 0x13000000;
+    sp->vifcode[3] = 0x50000006;
+#ifdef TARGET_NATIVE
+    /* native: u128_sd is the 16-byte struct stand-in, which no scalar casts
+     * to; the (T){0} form is 1FFBA0.cpp's u_long128 zero (portable). */
+    *(u128_sd *)&sp->giftag = (u128_sd){0};
+#else
+    *(u128_sd *)&sp->giftag = (u128_sd)0;
+#endif
+    sp->giftag.NLOOP = 5;
+    sp->giftag.EOP = 1;
+    sp->giftag.NREG = 1;
+    sp->giftag.REGS0 = 0xE;
+    *(u64 *)&sp->bitbltbuf = (u64)sbp | ((u64)sbw << 16) | ((u64)spsm << 24);
+    sp->bitbltbufaddr = 0x50;
+    *(u64 *)&sp->trxpos = (u64)x | ((u64)y << 16);
+    sp->trxposaddr = 0x51;
+    *(u64 *)&sp->trxreg = (u64)w | ((u64)h << 32);
+    sp->trxregaddr = 0x52;
+    sp->finishaddr = 0x61;
+    *(u64 *)&sp->trxdir = 1;
+    sp->trxdiraddr = 0x53;
+#ifndef TARGET_NATIVE
+    /* HARDWARE BARRIER (RULING #12168): the ROM's `sync` at 0x12659C, after
+     * the last store; ee-gcc has no C spelling for it. (Upstream writes
+     * CpuSync(), the SDK's own spelling of the same instruction.) */
+    __asm__ __volatile__("sync");
+#endif
+    return 7;
+}
 
 extern char D_0013B4E0[];
 

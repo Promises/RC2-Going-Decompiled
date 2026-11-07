@@ -942,7 +942,7 @@ extern s32  g_screenHeight;
 extern s32  g_vramDynamicBase;
 extern void WaitFrameDmaFence(s32 mask);
 extern s32  WaitVblankGetField(s32 arg);
-extern void func_00126470(void *packet, s32 tbp, s32 a, s32 b, s32 c, s32 d, s32 w, s32 h);
+extern s32 func_00126470(void *packet, s32 tbp, s32 a, s32 b, s32 c, s32 d, s32 w, s32 h);
 extern void func_0011AEA0(s32 mode);
 extern void func_00126730(void *packet, s32 addr);
 extern void WaitGsPathsIdle(s32 a, s32 b);

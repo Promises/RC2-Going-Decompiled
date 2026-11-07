@@ -1141,6 +1141,28 @@
     #13197), `int`/`float`/`unsigned char` written `s32`/`f32`/`u8`; the
     parameter order and statements are upstream's (task #2541).
 
+- **OpenRAC — `rac2-decomp`, commit `b2a35115`, cod/022FA8 Window X body** (GPL-3.0)
+  <https://github.com/OpenRAC/rac2-decomp> at commit `b2a35115e0cf580a1fdab8dd1071b157799e590e`
+
+  One C body, adopted with the authors' permission (held by the operator,
+  RULING #10405) and the operator's 2026-10-31 "adopt all" (RULING #12108),
+  byte-exact on our v2.00 ROM on the unit's plain sdk29 `-O2 -G0` arm
+  (task #2474). Contributor: Louis-Philippe Le Sieur (author commit
+  `a96d3126e`), whose file credits the packet layout to OpenRAC `rac1-decomp`
+  `src/core/00122818.c`, revision `bbb526cb`. The doc comment carries the
+  `Source:` line, which names every respelling.
+
+  Used so far:
+  - **`func_00126470`** (`0x00126470`, libgraph's `sceGsSetDefStoreImage`;
+    FACT #5541 names it BuildGsStoreImagePacket) in
+    `going-decompiled/src/usa/cod/022FA8.c`, from `src/core/0012646C-store.c`
+    (`func_0012646C` — their name at our address; our 0xCD fill FRAG at
+    `0x0012646C` owns that name). ADAPTED: name at our address, `int` spelled
+    `s32`, `long`/`unsigned long` written `s64`/`u64` (RULING #13197), the
+    unused `u_long_sd` typedef dropped, `u128_sd` with the unit's
+    TARGET_NATIVE mode(TI) stand-in, their `CpuSync()` as the RULING #12168
+    HARDWARE BARRIER inline asm (ROM `0x12659C`) (task #2474).
+
 - **Forja contributors** (MIT, © 2026 Forja contributors), via OpenRAC
   `rac2-gc-decomp` at commit `96927f872c709e13aaa0f32265bb81a5531bf7ed`
 
