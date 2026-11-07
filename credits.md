@@ -1322,3 +1322,72 @@
     `going-decompiled/levels/usa/L02/src/func_L02_00402410.c`, from
     `src/levels/02_maktar_nebula/L02_003F5430.c` (`func_L02_00400CC8`, author commit `597e1ea6`, ReaperOfVeriod),
     task #2559. VERBATIM but for names: our name at the v2.00 place; `D_0017A80` as the v2.00 relocation target `D_L02_001CAA80`, address-named (RULING #13291 §2).
+  - **`func_L11_0043A758`** (level program 11, Joba, at `0x0043A758`) in
+    `going-decompiled/levels/usa/L11/src/func_L11_0043A758.c`, from `src/levels/11_joba/L11_00432628.c`
+    (`func_L11_00438F18`, v1.01 address, author commit `b4b0fe9b`, bigbeno37). VERBATIM but for names: our name, `D_L11_001FF580` as the address-named `D_L11_001FF600`, two boot-copy callees by their L11 places, `common.h` dropped, its u8/u16/s16 typedefs written in the TU. Task #2555.
+  - **`func_L11_0043B5A0`** (level program 11, Joba, at `0x0043B5A0`) in
+    `going-decompiled/levels/usa/L11/src/func_L11_0043B5A0.c`, from `src/levels/11_joba/L11_00432628.c`
+    (`func_L11_00439D60`, v1.01 address, author commit `fa8d6672`, llesieur99). VERBATIM but for names: our name, `common.h` dropped. Task #2555.
+  - **`func_L11_0043BE60`** (level program 11, Joba, at `0x0043BE60`) in
+    `going-decompiled/levels/usa/L11/src/func_L11_0043BE60.c`, from `src/levels/11_joba/L11_00432628.c`
+    (`func_L11_0043A620`, v1.01 address, author commit `fa8d6672`, llesieur99). VERBATIM but for names: our name, `func_32E480` as `func_L11_0032F698`, `common.h` dropped. Task #2555.
+  - **`func_L11_0043C040`** (level program 11, Joba, at `0x0043C040`) in
+    `going-decompiled/levels/usa/L11/src/func_L11_0043C040.c`, from `src/levels/11_joba/L11_00432628.c`
+    (`func_L11_0043A800`, v1.01 address, author commit `fa8d6672`, llesieur99). VERBATIM but for names: our name, `common.h` dropped. Task #2555.
+  - **`func_L11_0043C368`** (level program 11, Joba, at `0x0043C368`) in
+    `going-decompiled/levels/usa/L11/src/func_L11_0043C368.c`, from `src/levels/11_joba/L11_00432628.c`
+    (`func_L11_0043AB28`, v1.01 address, author commit `5acf9869`, Flavius). VERBATIM but for names: our name, ten boot-copy callees by their L11 places, `common.h` dropped. Task #2555.
+  - **`func_L11_004419B0`** (level program 11, Joba, at `0x004419B0`) in
+    `going-decompiled/levels/usa/L11/src/func_L11_004419B0.c`, from `src/levels/11_joba/L11_0043E1A0.c`
+    (`func_L11_00440160`, v1.01 address, author commit `264cb2be`, llesieur99). VERBATIM but for names: our name, `D_L11_004465F8` as our label `func_L11_00448020` (type kept), three boot-copy callees by their L11 places, `include_asm.h`/`common.h` dropped, typedefs written in the TU. Task #2555.
+  - **`func_L11_004420B8`** (level program 11, Joba, at `0x004420B8`) in
+    `going-decompiled/levels/usa/L11/src/func_L11_004420B8.c`, from `src/levels/11_joba/L11_0043E1A0.c`
+    (`func_L11_00440868`, v1.01 address, author commit `96f56db3`, bigbeno37). VERBATIM but for names: our name, `D_L11_001FC420`/`D_L11_001B359C` as the address-named `D_L11_001FC4A0`/`D_L11_001B361C` (upstream's own `section(".sdata")` kept), two level callees by their v2.00 places, `include_asm.h`/`common.h` dropped, typedefs written in the TU. Task #2555.
+  - **`func_L11_004424D0`** (level program 11, Joba, at `0x004424D0`) in
+    `going-decompiled/levels/usa/L11/src/func_L11_004424D0.c`, from `src/levels/11_joba/L11_0043E1A0.c`
+    (`func_L11_00440C80`, v1.01 address, author commit `431ac503`, llesieur99). VERBATIM but for names: our name, `include_asm.h`/`common.h` dropped, typedefs written in the TU. Task #2555.
+  - **`func_L11_004424E0`** (level program 11, Joba, at `0x004424E0`) in
+    `going-decompiled/levels/usa/L11/src/func_L11_004424E0.c`, from `src/levels/11_joba/L11_0043E1A0.c`
+    (`func_L11_00440C90`, v1.01 address, author commit `c7d9e30a`, bigbeno37). VERBATIM but for names: our name, their three `func_L02_…` callees as L11's own copies at the v2.00 places, `include_asm.h`/`common.h` dropped, typedefs written in the TU. Task #2555.
+  - **`func_L11_004428E0`** (level program 11, Joba, at `0x004428E0`) in
+    `going-decompiled/levels/usa/L11/src/func_L11_004428E0.c`, from `src/levels/11_joba/L11_0043E1A0.c`
+    (`func_L11_00441090`, v1.01 address, author commit `ee3fee45`, llesieur99). VERBATIM but for names: our name, two callees by their L11 places, `include_asm.h`/`common.h` dropped, typedefs written in the TU. Task #2555.
+  - **`func_L11_00442FF8`** (level program 11, Joba, at `0x00442FF8`) in
+    `going-decompiled/levels/usa/L11/src/func_L11_00442FF8.c`, from `src/levels/11_joba/L11_0043E1A0.c`
+    (`func_L11_004417A8`, v1.01 address, author commit `264cb2be`, llesieur99). VERBATIM but for names: our name, `D_L11_001BA780` as the address-named `D_L11_001BA800`, `include_asm.h`/`common.h` dropped, typedefs written in the TU. Task #2555.
+  - **`func_L11_00443058`** (level program 11, Joba, at `0x00443058`) in
+    `going-decompiled/levels/usa/L11/src/func_L11_00443058.c`, from `src/levels/11_joba/L11_0043E1A0.c`
+    (`func_L11_00441808`, v1.01 address, author commit `7fccf735`, Flavius). VERBATIM but for names: our name, `D_L11_001FF580` as the address-named `D_L11_001FF600`, `func_002A8AF0` as `func_L11_0032F328`, `include_asm.h`/`common.h` dropped, typedefs written in the TU. Task #2555.
+  - **`func_L11_004430A8`** (level program 11, Joba, at `0x004430A8`) in
+    `going-decompiled/levels/usa/L11/src/func_L11_004430A8.c`, from `src/levels/11_joba/L11_0043E1A0.c`
+    (`func_L11_00441858`, v1.01 address, author commit `431ac503`, llesieur99). VERBATIM but for names: our name, `include_asm.h`/`common.h` dropped, typedefs written in the TU. Task #2555.
+  - **`func_L11_004430B8`** (level program 11, Joba, at `0x004430B8`) in
+    `going-decompiled/levels/usa/L11/src/func_L11_004430B8.c`, from `src/levels/11_joba/L11_0043E1A0.c`
+    (`func_L11_00441868`, v1.01 address, author commit `7fccf735`, Flavius). VERBATIM but for names: our name, `include_asm.h`/`common.h` dropped, typedefs written in the TU. Task #2555.
+  - **`func_L11_004431C8`** (level program 11, Joba, at `0x004431C8`) in
+    `going-decompiled/levels/usa/L11/src/func_L11_004431C8.c`, from `src/levels/11_joba/L11_0043E1A0.c`
+    (`func_L11_00441978`, v1.01 address, author commit `7fccf735`, Flavius). VERBATIM but for names: our name, `include_asm.h`/`common.h` dropped, typedefs written in the TU. Task #2555.
+  - **`func_L11_00447750`** (level program 11, Joba, at `0x00447750`) in
+    `going-decompiled/levels/usa/L11/src/func_L11_00447750.c`, from `src/levels/11_joba/L11_0043E1A0.c`
+    (`func_L11_00445D28`, v1.01 address, author commit `4541c4ce`, ReaperOfVeriod). VERBATIM but for names: our name, `D_001A63A8` as the boot's `g_fileLoadVoiceState`, `include_asm.h`/`common.h` dropped, typedefs written in the TU. Task #2555.
+  - **`func_L11_00447BE8`** (level program 11, Joba, at `0x00447BE8`) in
+    `going-decompiled/levels/usa/L11/src/func_L11_00447BE8.c`, from `src/levels/11_joba/L11_0043E1A0.c`
+    (`func_L11_004461C0`, v1.01 address, author commit `6b943916`, Louis-Philippe Le Sieur). VERBATIM but for names: our name, `func_L00_003206B8` as L11's own copy `func_L11_00333F00`, `include_asm.h`/`common.h` dropped, typedef written in the TU. Task #2555.
+  - **`func_L11_00441A88`** (level program 11, Joba, at `0x00441A88`) in
+    `going-decompiled/levels/usa/L11/src/func_L11_00441A88.c`, from `src/levels/11_joba/L11_00440238-g8.c`
+    (`func_L11_00440238`, v1.01 address, author commit `68795b5b`, Gianni). VERBATIM but for names: our name, `D_L11_001B359C`/`D_L11_001FC420` as the address-named `D_L11_001B361C`/`D_L11_001FC4A0`, `D_00189E20` as the boot's `g_soundBankHandlesBlk` (upstream's `sda`/`nosda` text kept, ignored by cc1), `include_asm.h` dropped. Task #2555.
+  - **`func_L11_00441FE0`** (level program 11, Joba, at `0x00441FE0`) in
+    `going-decompiled/levels/usa/L11/src/func_L11_00441FE0.c`, from `src/levels/11_joba/L11_00440238-g8.c`
+    (`func_L11_00440790`, v1.01 address, author commit `68795b5b`, Gianni). VERBATIM but for names: our name, the two address-named bank externs as above, two level callees by their v2.00 places (one is our C `func_L11_004424E0`), `include_asm.h` dropped. Task #2555.
+  - **`func_L11_00447A48`** (level program 11, Joba, at `0x00447A48`) in
+    `going-decompiled/levels/usa/L11/src/func_L11_00447A48.c`, from `src/levels/11_joba/L11_00446020-g8.c`
+    (`func_L11_00446020`, v1.01 address, author commit `3cd8af2d`, bigbeno37). VERBATIM but for names: our name, `D_00189E20` as `g_soundBankHandlesBlk`, `D_L11_001B1870` as our label `D_L11_001B18C8`, two callees by their v2.00 places (one is our C `func_L11_00447750`), `common.h` dropped. Task #2555.
+  - **`func_L11_0044A750`** (level program 11, Joba, at `0x0044A750`) in
+    `going-decompiled/levels/usa/L11/src/func_L11_0044A750.c`, from `src/levels/11_joba/L11_004465F8-g8.c`
+    (`func_L11_00448D28`, v1.01 address, author commit `352d5dad`, Louis-Philippe Le Sieur). VERBATIM but for names: our name, the two address-named bank externs `D_L11_001FC4A0`/`D_L11_001B361C`, `common.h` dropped, typedefs written in the TU. Task #2555.
+  - **`func_L11_0044A270`** (level program 11, Joba, at `0x0044A270`) in
+    `going-decompiled/levels/usa/L11/src/func_L11_0044A270.c`, from `src/levels/11_joba/L11_004465F8.c`
+    (`func_L11_00448848`, v1.01 address, author commit `fa8d6672`, llesieur99). ADAPTED: our name, four boot-copy callees by their L11 places, the `(long)` pointer cast written `(s64)` with `typedef long s64` (RULING #13197; the same type), `common.h`/`include_asm.h` dropped, typedefs written in the TU. Task #2555.
+  - **`func_L11_0044A330`** (level program 11, Joba, at `0x0044A330`) in
+    `going-decompiled/levels/usa/L11/src/func_L11_0044A330.c`, from `src/levels/11_joba/L11_004465F8.c`
+    (`func_L11_00448908`, v1.01 address, author commit `fa8d6672`, llesieur99). VERBATIM but for names: our name, `func_32C9E0`/`func_32C700` as `func_L11_0032DBF8`/`func_L11_0032D918`, `common.h`/`include_asm.h` dropped, typedefs written in the TU. Task #2555.
