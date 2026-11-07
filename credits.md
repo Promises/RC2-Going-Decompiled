@@ -3185,3 +3185,68 @@
     `src/levels/09_dobbo/L09_003FEA48.c`
     (`func_L09_004081F0`, author commit `96fa46bb`, Louis-Philippe Le Sieur (validator #2585: at `264cb2be` it was still INCLUDE_ASM)), task #2561.
     Adapted: our name at the v2.00 place, `D_L09_001B285C` as `g_mobyTableBase` (was `D_L09_001B27DC`, task #2646), `sda` respelled `section(".sdata")` (RULING #8620), `func_L09_00408138` as `func_L09_004095C8`, `common.h` dropped, typedefs written in the TU.
+  - **`func_L10_00318158`** (`0x00318158`, level program 10) in
+    `going-decompiled/levels/usa/L10/src/func_L10_00318158.c`, from
+    `src/us2/levels/10_hrugis_cloud/L10_00318158.c`
+    (`func_US2_L10_00318158`, author commit `6e87b85c`, bigbeno37, carrying bigbeno37's own Feltzin text: `func_L05_00314E28` (`b0fdd1fc`, `src/levels/05_feltzin_system/L05_00314E28.c`, 31 lines) and `func_US2_L05_00315A58` (`cb63d202`, `src/us2/levels/05_feltzin_system/L05_00315A58.c`, 9 lines)), task #2657.
+    Adapted: our name at the same place; `D_001A79F0` as `g_playerProgress` with `sda` respelled `section(".sdata")` (RULING #8620); `D_L10_00296F00` as our split label `D_L10_00296E80`; `D_L10_001BD380` as the address-named `D_L10_001BD300` (RULING #13291 §2); twelve boot-copy callees by their L10 places; `include_asm.h`/`common.h` dropped.
+  - **`func_L10_0037DE90`** (`0x0037DE90`, level program 10) in
+    `going-decompiled/levels/usa/L10/src/func_L10_0037DE90.c`, from
+    `src/levels/10_hrugis_cloud/L10_003170D0.c`
+    (`func_L10_0037CC20`, author commit `76651091`, Flavius; carried from rac1-decomp's `func_001138A8` per its file comment, one trivial `return` line), task #2657.
+    Verbatim but for names: our name at the v2.00 place; `r1_D_0012F86C_0037CC20` as the address-named `D_L10_00221D08` (RULING #13291 §2); upstream's `NOT_SDA` macro written in the TU; `common.h` dropped.
+  - **`func_L10_003F7630`** (`0x003F7630`, level program 10) in
+    `going-decompiled/levels/usa/L10/src/func_L10_003F7630.c`, from
+    `src/levels/10_hrugis_cloud/L10_003170D0.c`
+    (`func_L10_003F6110`, author commit `431ac503`, llesieur99), task #2657.
+    Verbatim but for names: our name at the v2.00 place, two boot-copy callees by their L10 places, `common.h` dropped.
+  - **`func_L10_004185E0`** (`0x004185E0`, level program 10) in
+    `going-decompiled/levels/usa/L10/src/func_L10_004185E0.c`, from
+    `src/levels/10_hrugis_cloud/L10_003170D0.c`
+    (`func_L10_00417040`, author commit `431ac503`, llesieur99), task #2657.
+    Verbatim but for names: our name at the v2.00 place, three boot-copy callees by their L10 places, `common.h` dropped.
+  - **`func_L10_00418C40`** (`0x00418C40`, level program 10) in
+    `going-decompiled/levels/usa/L10/src/func_L10_00418C40.c`, from
+    `src/levels/10_hrugis_cloud/L10_003170D0-g8.c`
+    (`func_L10_004176A0`, author commit `431ac503`, llesieur99), task #2657.
+    Verbatim but for names: our name at the v2.00 place, `D_L10_001B0F44` as our split label `D_L10_001B0EE4` (`sda` text kept, ignored by cc1), `include_asm.h`/`common.h` dropped.
+  - **`func_L10_00418C50`** (`0x00418C50`, level program 10) in
+    `going-decompiled/levels/usa/L10/src/func_L10_00418C50.c`, from
+    `src/levels/10_hrugis_cloud/L10_003170D0-g8.c`
+    (`func_L10_004176B0`, author commit `431ac503`, llesieur99), task #2657.
+    Verbatim but for names: our name at the v2.00 place, `D_L10_001B0F48` as our split label `D_L10_001B0EE8` (`sda` text kept, ignored by cc1), `include_asm.h`/`common.h` dropped.
+  - **`func_L10_004191E0`** (`0x004191E0`, level program 10) in
+    `going-decompiled/levels/usa/L10/src/func_L10_004191E0.c`, from
+    `src/levels/10_hrugis_cloud/L10_003170D0.c`
+    (`func_L10_00417C40`, author commit `431ac503`, llesieur99), task #2657.
+    Verbatim but for names: our name at the v2.00 place, three boot-copy callees and two level callees by their L10 places, `common.h` dropped.
+  - **`func_L10_00419F78`** (`0x00419F78`, level program 10) in
+    `going-decompiled/levels/usa/L10/src/func_L10_00419F78.c`, from
+    `src/levels/10_hrugis_cloud/L10_003170D0.c`
+    (`func_L10_004189D8`, author commit `d38f046c`, Flavius), task #2657.
+    Adapted: our name at the v2.00 place; `D_001B2614` and `D_L10_00221CD0` as the address-named `D_L10_001B2594`/`D_L10_00221C80` (RULING #13291 §2), `sda` respelled `section(".sdata")` (RULING #8620); six boot-copy callees by their L10 places; `common.h` dropped.
+  - **`func_L10_0041A728`** (`0x0041A728`, level program 10) in
+    `going-decompiled/levels/usa/L10/src/func_L10_0041A728.c`, from
+    `src/levels/10_hrugis_cloud/L10_003170D0.c`
+    (`func_L10_00419188`, author commit `6c919b91`, Lynder063, carrying Louis-Philippe Le Sieur's nonmatching draft `nonmatching/levels/func_L10_00419188.c` (`b9973721`)), task #2657.
+    Adapted: our name at the v2.00 place; `D_L10_001FB1E0` as `g_mobyGroupLists`; upstream's asm-label view `D_001B251C_base[] __asm__("D_001B251C")` written directly as `g_mobyTableBase[]` (no asm label), `sda` respelled `section(".sdata")` (RULING #8620); `common.h` dropped.
+  - **`func_L10_004201B0`** (`0x004201B0`, level program 10) in
+    `going-decompiled/levels/usa/L10/src/func_L10_004201B0.c`, from
+    `src/levels/10_hrugis_cloud/L10_003170D0.c`
+    (`func_L10_0041EC10`, author commit `27b929ce`, Lynder063), task #2657.
+    Adapted: our name at the v2.00 place; `D_001A79F0` as `g_playerProgress`, `sda` respelled `section(".sdata")` (RULING #8620); eleven boot-copy and level callees by their L10 places (our C `func_L10_004203A0` among them); `common.h` dropped.
+  - **`func_L10_004203A0`** (`0x004203A0`, level program 10) in
+    `going-decompiled/levels/usa/L10/src/func_L10_004203A0.c`, from
+    `src/levels/10_hrugis_cloud/L10_0041EE00.c`
+    (`func_L10_0041EE00`, author commit `5e61bf0b`, Flavius), task #2657.
+    Adapted: our name at the v2.00 place; `D_L10_001FB1E0`/`D_L10_001B251C` as `g_mobyGroupLists`/`g_mobyTableBase`, `sda` respelled `section(".sdata")` (RULING #8620); seven boot-copy callees by their L10 places; `common.h` dropped.
+  - **`func_L10_00425068`** (`0x00425068`, level program 10) in
+    `going-decompiled/levels/usa/L10/src/func_L10_00425068.c`, from
+    `src/levels/10_hrugis_cloud/L10_003170D0-g8.c`
+    (`func_L10_00423500`, author commit `ba383701`, bigbeno37; its last three call lines from Louis-Philippe Le Sieur's earlier nonmatching draft `nonmatching/levels/func_L10_00423698.c` (`c34a2b3e`)), task #2657.
+    Verbatim but for names: our name at the v2.00 place; four data names as our split labels (`sda` text kept on three, ignored by cc1); `D_L10_00221CD0` as the address-named `D_L10_00221C80` (RULING #13291 §2); five boot-copy callees by their L10 places; `include_asm.h`/`common.h` dropped.
+  - **`func_L10_0044B8A0`** (`0x0044B8A0`, level program 10) in
+    `going-decompiled/levels/usa/L10/src/func_L10_0044B8A0.c`, from
+    `src/levels/10_hrugis_cloud/L10_00424028.c`
+    (`func_L10_00449AD0`, author commit `ee3fee45`, llesieur99), task #2657.
+    Adapted: built at -G8 against upstream's -G0; our name at the v2.00 place; `D_L10_001ADE90` as our split label `D_L10_001ADE70` (`sda` text kept, ignored by cc1); `include_asm.h`/`common.h` dropped.

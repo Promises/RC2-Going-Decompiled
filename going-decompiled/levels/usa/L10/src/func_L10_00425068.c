@@ -62,7 +62,10 @@ extern void func_L10_0037CFC0(void);
  * carries no notice of its own; `grep -ic lombyte` on it = 0, so not
  * Lombyte-origin), file src/levels/10_hrugis_cloud/L10_003170D0-g8.c,
  * function func_L10_00423500 (v1.01 address), author commit ba383701
- * (bigbeno37). Adopted with the authors' permission (RULINGs #10405,
+ * (bigbeno37); its last three call lines are Louis-Philippe Le Sieur's,
+ * from the earlier nonmatching draft nonmatching/levels/func_L10_00423698.c
+ * (c34a2b3e; `git blame -M -C -C -C` at the pin, RULINGs #13427 rev 3 and
+ * #13541 rev 2). Adopted with the authors' permission (RULINGs #10405,
  * #12108, #13082, #13291). BYTE-IDENTICAL: VERBATIM but for names; the
  * respellings, each to the target of the v2.00 disc's own relocation at this
  * place (task #2657 relverify):

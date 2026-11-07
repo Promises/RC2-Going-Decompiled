@@ -62,9 +62,14 @@ extern int g_playerProgress __attribute__((section(".sdata")));
  * carries no notice of its own; `grep -ic lombyte` on it = 0, so not
  * Lombyte-origin), file src/us2/levels/10_hrugis_cloud/L10_00318158.c,
  * function func_US2_L10_00318158 (v2.00 address), author commit 6e87b85c
- * (bigbeno37). Upstream's file comment calls it the v2.00 copy of
- * func_L10_00317528 written as its Feltzin sibling func_US2_L05_00315A58 with
- * a new test of the level number against 0x33. Adopted with the authors'
+ * (bigbeno37), carrying bigbeno37's own Feltzin text (`git blame -M -C -C
+ * -C` at the pin, RULING #13427 rev 3): 31 lines are func_L05_00314E28's
+ * (b0fdd1fc, src/levels/05_feltzin_system/L05_00314E28.c), 9 are
+ * func_US2_L05_00315A58's, including the new test of the level number
+ * against 0x33 (cb63d202, src/us2/levels/05_feltzin_system/L05_00315A58.c),
+ * and 8 are 6e87b85c's own (the L10 names). Upstream's file comment calls it
+ * the v2.00 copy of func_L10_00317528 written as its Feltzin sibling.
+ * Adopted with the authors'
  * permission (RULINGs #10405, #12108, #13082, #13291). ADAPTED; the body's
  * statements unchanged, the edits, each name to the target of the v2.00
  * disc's own relocation at this place (task #2657 relverify):
