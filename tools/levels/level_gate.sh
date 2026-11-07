@@ -499,7 +499,7 @@ selftest() {
   local ln=${seedline%%:*} bytes
   bytes=$(printf '%s' "$seedline" | sed -E 's/^[0-9]+: +\/\* [0-9A-F]+ [0-9A-F]+ ([0-9A-F]{8}) \*\/.*/\1/')
   word=$(python3 -I -c 'import sys;print("0x%08X"%(int.from_bytes(bytes.fromhex(sys.argv[1]),"little")^1))' "$bytes")
-  sed -i "${ln}s|\\*/.*|*/  .word $word|" "$file"
+  sed -i.bak "${ln}s|\\*/.*|*/  .word $word|" "$file" && rm -f "$file.bak"
   echo "-- arm 2 SEEDED: ${file#$S/}:$ln (0x$addr, bytes $bytes) -> '$(sed -n "${ln}p" "$file" | sed 's/^ *//')' (must FAIL)"
   out=$(gate_core "$S" "$NN" 0); rc=$?
   printf '%s\n' "$out" | sed 's/^/  [seeded] /'
@@ -587,7 +587,8 @@ for i in range(s+1,len(L)):
 
   # arm 10 (task #2552): the assembler column changes bytes on la-class code
   local fx fxfn fxd fxf fxaddr fxend fxsrc=$S/going-decompiled/levels/usa/$TAG/src/selftest_la_fixture.c asr
-  local -A fxrc fxfirst fxoth fxsha
+  # one scalar per assembler (fxrc_as, fxrc_asm_unit, ...): macOS /bin/bash 3.2 has no `local -A`
+  local fxrc_as= fxrc_asm_unit= fxfirst_as= fxfirst_asm_unit= fxoth_as= fxoth_asm_unit=
   fx=$(python3 -I - "$S/going-decompiled/levels/usa/$TAG/asm/text" <<'PYEOF'
 import os, re, sys
 pat = [r"addiu \$sp, \$sp, -0x10", r"addiu \$v0, \$gp, %gp_rel\((D_\w+)\)", r"sd \$ra, 0x0\(\$sp\)",
@@ -629,11 +630,11 @@ CEOF
         printf '%s\tsrc/selftest_la_fixture.c\ts136\t-G8\t%s\t-\n' "$fxfn" "$asr"; } > "$ctsv"
       (cd "$S" && python3 -I tools/levels/gen_ld.py "going-decompiled/levels/usa/$TAG/config/$TAG.yaml" > /dev/null)
       echo "-- arm 10 ASSEMBLER COLUMN ($asr): fixture row '$fxfn src/selftest_la_fixture.c s136 -G8 $asr -' (*obj = &$fxd; $fxf(obj)) added, $TAG.ld regenerated"
-      out=$(gate_core "$S" "$NN" 0); fxrc[$asr]=$?
+      out=$(gate_core "$S" "$NN" 0); printf -v "fxrc_$asr" '%s' "$?"
       printf '%s\n' "$out" | /usr/bin/grep -a -v -E '^ +PLACED ok ' | sed "s/^/  [la $asr] /"
       tl=$(printf '%s\n' "$out" | /usr/bin/grep -a -E '^ +check: cmp text +\.text ' || true)
-      fxfirst[$asr]=$(printf '%s' "$tl" | sed -n -E 's/.* first at 0x([0-9A-F]{8}).*/\1/p')
-      fxoth[$asr]=$(printf '%s\n' "$out" | /usr/bin/grep -a -E '^ +check: cmp ' | /usr/bin/grep -a -v -E 'cmp text ' | /usr/bin/grep -a -c ' 0 differing bytes ' || true)
+      printf -v "fxfirst_$asr" '%s' "$(printf '%s' "$tl" | sed -n -E 's/.* first at 0x([0-9A-F]{8}).*/\1/p')"
+      printf -v "fxoth_$asr" '%s' "$(printf '%s\n' "$out" | /usr/bin/grep -a -E '^ +check: cmp ' | /usr/bin/grep -a -v -E 'cmp text ' | /usr/bin/grep -a -c ' 0 differing bytes ' || true)"
       cp -a "$SB/obj/c/$fxfn.o" "$S/arm10_$asr.o" 2>/dev/null || rm -f "$S/arm10_$asr.o"
     done
     # verdict <obj as> <obj asm_unit> <rc as> <rc asm_unit>: echoes PASS or FAIL: <why>
@@ -641,18 +642,18 @@ CEOF
       local ta tu
       ta=$(textsha "$1"); tu=$(textsha "$2")
       if [ "$4" != 0 ]; then echo "FAIL: the asm_unit build rc $4 (want 0: the ROM's bytes)"
-      elif [ "$3" != 1 ] || [ -z "${fxfirst[as]}" ] || [ "$((0x${fxfirst[as]:-0} >= 0x$fxaddr && 0x${fxfirst[as]:-0} < 0x$fxend))" != 1 ] || [ "${fxoth[as]:-0}" != 6 ]; then
-        echo "FAIL: the as build rc $3, .text first difference '${fxfirst[as]:-none}' (want rc 1 inside [0x$fxaddr, 0x$fxend)), other sections cmp 0: ${fxoth[as]:-0} of 6"
+      elif [ "$3" != 1 ] || [ -z "$fxfirst_as" ] || [ "$((0x${fxfirst_as:-0} >= 0x$fxaddr && 0x${fxfirst_as:-0} < 0x$fxend))" != 1 ] || [ "${fxoth_as:-0}" != 6 ]; then
+        echo "FAIL: the as build rc $3, .text first difference '${fxfirst_as:-none}' (want rc 1 inside [0x$fxaddr, 0x$fxend)), other sections cmp 0: ${fxoth_as:-0} of 6"
       elif [ -z "$ta" ] || [ -z "$tu" ] || [ "$ta" = "$tu" ]; then echo "FAIL: the two objects' .text sha1 '${ta:-none}' and '${tu:-none}' (want two different values)"
       else echo "PASS: .text sha1 as $ta != asm_unit $tu"; fi
     }
     local v vs
-    v=$(la_verdict "$S/arm10_as.o" "$S/arm10_asm_unit.o" "${fxrc[as]}" "${fxrc[asm_unit]}")
-    case "$v" in PASS*) echo "  ok    arm 10: asm_unit build rc 0 PASS; as build rc ${fxrc[as]}, FAIL on .text first at 0x${fxfirst[as]} inside $fxfn [0x$fxaddr, 0x$fxend), the other 6 sections cmp 0; ${v#PASS: }";;
+    v=$(la_verdict "$S/arm10_as.o" "$S/arm10_asm_unit.o" "$fxrc_as" "$fxrc_asm_unit")
+    case "$v" in PASS*) echo "  ok    arm 10: asm_unit build rc 0 PASS; as build rc $fxrc_as, FAIL on .text first at 0x$fxfirst_as inside $fxfn [0x$fxaddr, 0x$fxend), the other 6 sections cmp 0; ${v#PASS: }";;
                     *) echo "  FAIL  arm 10: $v"; ok=0;; esac
     # seeded: the same verdict, the same two builds' outcomes, but the asm_unit
     # object in place of the as one, so only the object comparison can fail it
-    vs=$(la_verdict "$S/arm10_asm_unit.o" "$S/arm10_asm_unit.o" "${fxrc[as]}" "${fxrc[asm_unit]}")
+    vs=$(la_verdict "$S/arm10_asm_unit.o" "$S/arm10_asm_unit.o" "$fxrc_as" "$fxrc_asm_unit")
     case "$vs" in "FAIL: the two objects' .text sha1 "*) echo "  ok    arm 10 seeded: the asm_unit object compared with itself -> verdict '$vs'";;
                   *) echo "  FAIL  arm 10 seeded: the asm_unit object compared with itself -> '$vs' (the arm cannot fail)"; ok=0;; esac
     rm -f "$fxsrc" "$S/arm10_as.o" "$S/arm10_asm_unit.o"
