@@ -3395,3 +3395,68 @@
     `src/levels/18_damosel/L18_00433460.c`
     (`func_L18_00441438`, v1.01 address, author commit `132104a3`, Louis-Philippe Le Sieur), task #2662.
     Verbatim but for names: our name; `D_00188660`/`D_00189EA0` as the boot's `g_listenerPosHistory`/`g_heroPos`; sixteen callees as L18's copies; includes dropped and eleven repeated extern lines collapsed; no `long long` in the function, so none respelled.
+  - **`func_L07_0037A290`** (`0x0037A290`, level program 07) in
+    `going-decompiled/levels/usa/L07/src/func_L07_0037A290.c`, from
+    `src/levels/07_siberius/L07_00379020.c`
+    (`func_L07_00379020`, author commit `5e61bf0b`, Flavius), task #2656.
+    Verbatim but for names: our name at the v2.00 place; D_L07_001B9200 as `g_cameraPos` (the name L07_boot_names.txt gives at the v2.00 target 0x1B9180); five callees as L07's copies at their v2.00 places; the file's other declarations dropped, common.h's typedefs written in the TU.
+  - **`func_L07_0037A3F0`** (`0x0037A3F0`, level program 07) in
+    `going-decompiled/levels/usa/L07/src/func_L07_0037A3F0.c`, from
+    `src/levels/07_siberius/L07_002BE770-g8.c`
+    (`func_L07_00379180`, author commit `ee3fee45`, llesieur99), task #2656.
+    Verbatim but for names: our name at the v2.00 place; D_L07_001AEC08 as our split label D_L07_001AEBC0 (upstream's `sda` text kept, inert at -G8); three callees as L07's copies at their v2.00 places; the file's other declarations dropped.
+  - **`func_L07_0037A460`** (`0x0037A460`, level program 07) in
+    `going-decompiled/levels/usa/L07/src/func_L07_0037A460.c`, from
+    `src/levels/07_siberius/L07_003791E8-rc2.c`
+    (`func_L07_003791E8`, author commit `fe9859d7`, Sergio Rodmauser), task #2656. MIT (the file's own notice, Forja contributors).
+    Verbatim but for names: our name at the v2.00 place; upstream's ref_ cross-reference callee as L07's split name func_L07_003078E8; compiled without the file's upstream -fno-builtin, as the audit measured it.
+  - **`func_L07_003E6DB0`** (`0x003E6DB0`, level program 07) in
+    `going-decompiled/levels/usa/L07/src/func_L07_003E6DB0.c`, from
+    `src/levels/07_siberius/L07_00389EB8.c`
+    (`func_L07_003E5A70`, author commit `91e04732`, llesieur99), task #2656.
+    Verbatim but for names: our name at the v2.00 place; one callee as L07's copy at its v2.00 place; the file's other declarations dropped.
+  - **`func_L07_003E7488`** (`0x003E7488`, level program 07) in
+    `going-decompiled/levels/usa/L07/src/func_L07_003E7488.c`, from
+    `src/levels/07_siberius/L07_00389EB8.c`
+    (`func_L07_003E6148`, author commit `91e04732`, llesieur99), task #2656.
+    Verbatim but for names: our name at the v2.00 place; one callee as L07's copy at its v2.00 place; the file's other declarations dropped.
+  - **`func_L07_003E74F8`** (`0x003E74F8`, level program 07) in
+    `going-decompiled/levels/usa/L07/src/func_L07_003E74F8.c`, from
+    `src/levels/07_siberius/L07_00389EB8-g8.c`
+    (`func_L07_003E61B8`, author commit `91e04732`, llesieur99), task #2656.
+    Verbatim but for names: our name at the v2.00 place; D_L07_001B0AE0 as our split label D_L07_001B0A90 (upstream's `sda` text kept, inert at -G8); one callee as L07's copy at its v2.00 place; the file's other declarations dropped.
+  - **`func_L07_003E8580`** (`0x003E8580`, level program 07) in
+    `going-decompiled/levels/usa/L07/src/func_L07_003E8580.c`, from
+    `src/levels/07_siberius/L07_00389EB8.c`
+    (`func_L07_003E7240`, author commit `b32a5088`, Gianni), task #2656.
+    Verbatim but for names: our name at the v2.00 place; eight callees as L07's copies at their v2.00 places; the file's other declarations dropped.
+  - **`func_L07_003E86C0`** (`0x003E86C0`, level program 07) in
+    `going-decompiled/levels/usa/L07/src/func_L07_003E86C0.c`, from
+    `src/levels/07_siberius/L07_00389EB8.c`
+    (`func_L07_003E7380`, author commit `91e04732`, llesieur99), task #2656.
+    Verbatim but for names: our name at the v2.00 place; three callees as L07's copies at their v2.00 places; the file's other declarations dropped.
+  - **`func_L07_003ECA40`** (`0x003ECA40`, level program 07) in
+    `going-decompiled/levels/usa/L07/src/func_L07_003ECA40.c`, from
+    `src/levels/07_siberius/L07_00389EB8.c`
+    (`func_L07_003EB700`, author commit `91e04732`, llesieur99), task #2656.
+    Verbatim but for names: our name at the v2.00 place; D_L07_001C9780 kept address-named as D_L07_001C9700 (g_modelTexRegs+0x180, RULING #13291 section 2); three callees as L07's copies at their v2.00 places; the file's other declarations dropped.
+  - **`func_L07_003ECDF8`** (`0x003ECDF8`, level program 07) in
+    `going-decompiled/levels/usa/L07/src/func_L07_003ECDF8.c`, from
+    `src/levels/07_siberius/L07_00389EB8.c`
+    (`func_L07_003EBAB8`, author commit `753ae275`, bigbeno37, completing Louis-Philippe Le Sieur's draft `3ba5ed46` (nonmatching/levels/func_L07_003EBAB8.c), whose lines survive), task #2656.
+    Verbatim but for names: our name at the v2.00 place; seven callees as L07's copies at their v2.00 places; the file's other declarations dropped.
+  - **`func_L07_003ECF28`** (`0x003ECF28`, level program 07) in
+    `going-decompiled/levels/usa/L07/src/func_L07_003ECF28.c`, from
+    `src/levels/07_siberius/L07_00389EB8.c`
+    (`func_L07_003EBBE8`, author commit `91e04732`, llesieur99), task #2656.
+    Verbatim but for names: our name at the v2.00 place; three callees as L07's copies at their v2.00 places; the file's other declarations dropped.
+  - **`func_L07_004009A8`** (`0x004009A8`, level program 07) in
+    `going-decompiled/levels/usa/L07/src/func_L07_004009A8.c`, from
+    `src/levels/07_siberius/L07_003F4578.c`
+    (`func_L07_003FF618`, author commit `adcbd51e`, llesieur99), task #2656.
+    Adapted: our name at the v2.00 place; D_001A7BD0 as D_001A7BD8, address-named at the v2.00 target (D_1A7BD6+0x2, no name at that address); one callee as L07's copy at its v2.00 place; `sda` respelled `section(".sdata")` (RULING #8620); the file's other declarations dropped, common.h's typedefs written in the TU.
+  - **`func_L07_004096D8`** (`0x004096D8`, level program 07) in
+    `going-decompiled/levels/usa/L07/src/func_L07_004096D8.c`, from
+    `src/levels/07_siberius/L07_003F4578.c`
+    (`func_L07_00408338`, author commit `913bd1bc`, Gianni), task #2656.
+    Adapted: our name at the v2.00 place; D_L07_001AA698 as our split label D_L07_001AA6B8; D_L07_001B3198 kept address-named as D_L07_001B3118 (D_001B2354+0x624, RULING #13291 section 2); five callees as L07's copies at their v2.00 places; `sda` respelled `section(".sdata")` (RULING #8620) on both floats; the file's other declarations dropped, common.h's typedefs written in the TU.
