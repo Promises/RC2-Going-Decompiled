@@ -3234,7 +3234,7 @@
     `going-decompiled/levels/usa/L10/src/func_L10_004201B0.c`, from
     `src/levels/10_hrugis_cloud/L10_003170D0.c`
     (`func_L10_0041EC10`, author commit `27b929ce`, Lynder063), task #2657.
-    Adapted: our name at the v2.00 place; `D_001A79F0` as `g_playerProgress`, `sda` respelled `section(".sdata")` (RULING #8620); eleven boot-copy and level callees by their L10 places (our C `func_L10_004203A0` among them); `common.h` dropped.
+    Adapted: our name at the v2.00 place; `D_001A79F0` as `g_playerProgress`, `sda` respelled `section(".sdata")` (RULING #8620); twelve boot-copy and level callees by their L10 places (our C `func_L10_004203A0` among them); `common.h` dropped.
   - **`func_L10_004203A0`** (`0x004203A0`, level program 10) in
     `going-decompiled/levels/usa/L10/src/func_L10_004203A0.c`, from
     `src/levels/10_hrugis_cloud/L10_0041EE00.c`
