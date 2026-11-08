@@ -3772,3 +3772,75 @@
     `src/levels/06_notak/L06_00458138.c`
     (`func_L06_00458138`, author commit `9b1a6e8d`, bigbeno37), task #2653.
     Adapted: our name at the v2.00 place; `sda` -> `section(".sdata")` on two extern declarations (RULING #8620); `D_L06_001B234C`/`D_001B2350` kept address-named (RULING #13291 §2; no name in L06's scope at either address); `D_L06_001B18E0` as our split .lit label `D_L06_001B1890`; eight callees as L06's own copies at their v2.00 places; the boot's `func_001234F0` kept; includes and the file's other declarations dropped.
+  - **`func_L30_00356780`** (`0x00356780`, level program 30) in
+    `going-decompiled/levels/usa/L30/src/func_L30_00356780.c`, from
+    `src/levels/30_insomniac_museum/L30_003557F0-init-g8.c` (`func_L30_003557F0`, author commit `a96d3126`, Louis-Philippe Le Sieur; a rename-copy of bigbeno37's `func_L00_00354DF8` in `src/levels/00_aranos_tutorial/L00_002FC7A8-g8.c` (author commit `6001495a`), token-identical but for symbol names, RULING #13427 rev 4, validator #2680),
+    task #2673. VERBATIM but for names: our name at the v2.00 place; the boot's `g_anAvailableLevelOrder`; `D_L30_001CA3A0` as `g_mapVertexData`, L30's boot-name map name there; three data names as our split labels and one as the address-named `D_L30_0021DDA0` (RULING #13291 §2); `sda` kept as written (ignored by cc1); `include_asm.h` dropped; s136 -G8.
+  - **`func_L30_00384100`** (`0x00384100`, level program 30) in
+    `going-decompiled/levels/usa/L30/src/func_L30_00384100.c`, from
+    `src/levels/30_insomniac_museum/L30_0032AAF0.c` (`func_L30_00382EF0`, author commit `91e04732`, llesieur99),
+    task #2673. VERBATIM but for names: our name at the v2.00 place; no other symbol referenced (0 relocations); `include`s dropped; sdk29 -G0 (every arm tried closes; NOTE #13281's tie-break).
+  - **`func_L30_00384120`** (`0x00384120`, level program 30) in
+    `going-decompiled/levels/usa/L30/src/func_L30_00384120.c`, from
+    `src/levels/30_insomniac_museum/L30_0032AAF0.c` (`func_L30_00382F10`, author commit `6b21de6b`, Louis-Philippe Le Sieur),
+    task #2673. VERBATIM but for names: our name at the v2.00 place; `func_00115484` as the boot's `memset`; two blocks as the address-named `D_002338E0`/`D_L30_002353E0` (RULING #13291 §2); `include`s dropped; s136 -G0.
+  - **`func_L30_003854F0`** (`0x003854F0`, level program 30) in
+    `going-decompiled/levels/usa/L30/src/func_L30_003854F0.c`, from
+    `src/levels/30_insomniac_museum/L30_0032AAF0.c` (`func_L30_003842E0`, author commit `431ac503`, llesieur99),
+    task #2673. VERBATIM but for names: our name at the v2.00 place; `D_001B9DC0` as `g_cameraPos`, L30's boot-name map name there; `D_0018C0DC` kept address-named; three callees by their L30 places; `include`s dropped; s136 -G0.
+  - **`func_L30_00385978`** (`0x00385978`, level program 30) in
+    `going-decompiled/levels/usa/L30/src/func_L30_00385978.c`, from
+    `src/levels/30_insomniac_museum/L30_0032AAF0.c` (`func_L30_00384768`, author commit `6b21de6b`, Louis-Philippe Le Sieur),
+    task #2673. VERBATIM but for names: our name at the v2.00 place; the boot's `g_heroPos`; one callee by its L30 place; `include`s dropped; s136 -G0.
+  - **`func_L30_00385A08`** (`0x00385A08`, level program 30) in
+    `going-decompiled/levels/usa/L30/src/func_L30_00385A08.c`, from
+    `src/us2/levels/30_insomniac_museum/L30_00385A08.c` (`func_US2_L30_00385A08`, author commit `cde7e4dd`, Flavius; a copy of llesieur99's `func_L30_003847F8`, the same function at its v1.01 place (author commit `431ac503`), token-identical, RULING #13427 rev 4, validator #2680),
+    task #2673. VERBATIM but for names: our name; the boot's `g_soundBankHandlesBlk`; two data names as our split labels; two callees by their L30 places; `include_asm.h` dropped; s136 -G0.
+  - **`func_L30_00385AC8`** (`0x00385AC8`, level program 30) in
+    `going-decompiled/levels/usa/L30/src/func_L30_00385AC8.c`, from
+    `src/levels/30_insomniac_museum/L30_003848B8-rc2.c` (`func_L30_003848B8`, author commit `fe9859d7`, Sergio Rodmauser),
+    task #2673. VERBATIM but for names: our name at the v2.00 place; the boot's `g_fileLoadVoiceState`; upstream's two ref_ cross-reference names as our split labels; `sda` kept as written (ignored by cc1); `common.h` dropped, s8/s32 written out; s136 -G8, the file's cflags -G (the task table's stem-derived -G0 leaves 35 of 50 words differing).
+  - **`func_L30_00385B90`** (`0x00385B90`, level program 30) in
+    `going-decompiled/levels/usa/L30/src/func_L30_00385B90.c`, from
+    `src/levels/30_insomniac_museum/L30_0032AAF0.c` (`func_L30_00384980`, author commit `431ac503`, llesieur99),
+    task #2673. VERBATIM but for names: our name at the v2.00 place; the boot's `g_fileLoadVoiceState`; `include`s dropped; sdk29 -G0 (every arm tried closes; NOTE #13281's tie-break).
+  - **`func_L30_003BEBF8`** (`0x003BEBF8`, level program 30) in
+    `going-decompiled/levels/usa/L30/src/func_L30_003BEBF8.c`, from
+    `src/levels/30_insomniac_museum/L30_0032AAF0.c` (`func_L30_003BE678`, author commit `91e04732`, llesieur99),
+    task #2673. VERBATIM but for names: our name at the v2.00 place; two callees by their L30 places; `include`s dropped; s136 -G0.
+  - **`func_L30_00404C50`** (`0x00404C50`, level program 30) in
+    `going-decompiled/levels/usa/L30/src/func_L30_00404C50.c`, from
+    `src/levels/30_insomniac_museum/L30_0032AAF0-g8.c` (`func_L30_00404608`, author commit `93d2ec41`, bigbeno37),
+    task #2673. VERBATIM but for names: our name at the v2.00 place; six `.sdata` words as our split labels (`sda` text kept, ignored by cc1); three callees by their L30 places; `include`s dropped; s136 -G8.
+  - **`func_L30_0040ECE0`** (`0x0040ECE0`, level program 30) in
+    `going-decompiled/levels/usa/L30/src/func_L30_0040ECE0.c`, from
+    `src/levels/30_insomniac_museum/L30_0040E660-g8.c` (`func_L30_0040E660`, author commit `27b929ce`, Lynder063),
+    task #2673. VERBATIM but for names: our name at the v2.00 place; six `.sdata` words as our split labels (`sda` text kept, ignored by cc1); three callees by their L30 places; s136 -G8.
+  - **`func_L30_00413760`** (`0x00413760`, level program 30) in
+    `going-decompiled/levels/usa/L30/src/func_L30_00413760.c`, from
+    `src/levels/30_insomniac_museum/L30_0040E660.c` (`func_L30_004130E8`, author commit `93d2ec41`, bigbeno37),
+    task #2673. ADAPTED: our name at the v2.00 place; `unsigned long long` as `u64` = EE `unsigned long` (RULING #13197); `sda` respelled `section(".sdata")` (RULING #8620); four data names as the address-named v2.00 targets (RULING #13291 §2); `D_00138180`/`D_0018A000` as the boot's operand spellings `D_138180`/`D_18A000`; four callees by their L30 places; `include_asm.h` dropped; s136 -G0.
+  - **`func_L30_00418BF0`** (`0x00418BF0`, level program 30) in
+    `going-decompiled/levels/usa/L30/src/func_L30_00418BF0.c`, from
+    `src/levels/30_insomniac_museum/L30_0040E660.c` (`func_L30_00418570`, author commit `ee3fee45`, llesieur99),
+    task #2673. VERBATIM but for names: our name at the v2.00 place; three callees by their L30 places; no `long long` respelling needed (NOTE #13281's `l` is file-level); `include_asm.h` dropped; s136 -G0.
+  - **`func_L30_00418C60`** (`0x00418C60`, level program 30) in
+    `going-decompiled/levels/usa/L30/src/func_L30_00418C60.c`, from
+    `src/levels/30_insomniac_museum/L30_004185E0-rc2.c` (`func_L30_004185E0`, author commit `fe9859d7`, Sergio Rodmauser),
+    task #2673. VERBATIM but for names: our name at the v2.00 place; upstream's five ref_ cross-reference names as our split label, `g_cameraMatrix` (L30's boot-name map name there) and three L30 callees; `sda` kept as written (ignored by cc1); `common.h` dropped, s8/s32/f32 written out; s136 -G8, the file's cflags -G (the task table's stem-derived -G0 leaves 25 of 36 words differing).
+  - **`func_L30_00418CF0`** (`0x00418CF0`, level program 30) in
+    `going-decompiled/levels/usa/L30/src/func_L30_00418CF0.c`, from
+    `src/levels/30_insomniac_museum/L30_0040E660.c` (`func_L30_00418670`, author commit `ee3fee45`, llesieur99),
+    task #2673. VERBATIM but for names: our name at the v2.00 place; `D_0018C0E8` as the boot's `g_activeGadgetItem`; two callees by their L30 places; no `long long` respelling needed (NOTE #13281's `l` is file-level); `include_asm.h` dropped; s136 -G0.
+  - **`func_L30_00418D30`** (`0x00418D30`, level program 30) in
+    `going-decompiled/levels/usa/L30/src/func_L30_00418D30.c`, from
+    `src/us2/levels/30_insomniac_museum/L30_00418D30-cc.c` (`func_US2_L30_00418D30`, author commit `cb63d202`, bigbeno37; a copy, one constant changed, of bigbeno37's `func_L30_004186B0` (`96f56db3`)),
+    task #2673. VERBATIM but for names: our name; `D_00138320` as the boot's operand spelling `D_138320`; the boot's `g_heroPos`; seventeen strings as our split labels; the glow table as the address-named `D_L30_001FF7C0` (RULING #13291 §2); eight callees by their L30 places; s136 -G0.
+  - **`func_L30_00419860`** (`0x00419860`, level program 30) in
+    `going-decompiled/levels/usa/L30/src/func_L30_00419860.c`, from
+    `src/levels/30_insomniac_museum/L30_0040E660.c` (`func_L30_004191E0`, author commit `8741cd07`, bigbeno37),
+    task #2673. VERBATIM but for names: our name at the v2.00 place; `D_001A6480` as the boot's `g_gsScreenContext`; three callees by their L30 places; no `long long` respelling needed (NOTE #13281's `l` is file-level); `include_asm.h` dropped; s136 -G0.
+  - **`func_L30_0041AEC8`** (`0x0041AEC8`, level program 30) in
+    `going-decompiled/levels/usa/L30/src/func_L30_0041AEC8.c`, from
+    `src/levels/30_insomniac_museum/L30_0040E660.c` (`func_L30_0041A848`, author commit `ee3fee45`, llesieur99),
+    task #2673. VERBATIM but for names: our name at the v2.00 place; four callees by their L30 places; no `long long` respelling needed (NOTE #13281's `l` is file-level); `include_asm.h` dropped; s136 -G0.

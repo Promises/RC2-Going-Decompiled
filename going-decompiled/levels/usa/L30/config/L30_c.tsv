@@ -1,0 +1,32 @@
+# Functions of level program L30 built from C (NOTE #13098 row L6 shape;
+# created by row L30-A, task #2673).
+# One row per function, compiled ALONE as its own TU by tools/levels/level_build.sh
+# and linked at its one place in place of its split asm (gen_ld.py cuts the
+# function's block out of the .text asm). Single placement only (row L7 is the
+# multi-placement design).
+#   function: the glabel in the split .text asm (its address is in its name)
+#   source:   path under going-decompiled/levels/usa/L30/
+#   arm:      tools/ee/ee_cc1.sh arm (sdk29 | s136 | sn2952); s136 adds -fopt-stack
+#   gflag:    -G0 | -G8, used by cc1 AND the assembler
+#   as:       optional (task #2552): as (plain GNU as) | asm_unit (tools/ee/asm_unit.sh,
+#             the boot's model of SN's assembler); a 4-column row is `as -`
+#   cc1flags: optional, with as: extra cc1 flags, comma-separated, or - for none
+# function	source	arm	gflag	[as	cc1flags]
+func_L30_00356780	src/func_L30_00356780.c	s136	-G8	as	-
+func_L30_00384100	src/func_L30_00384100.c	sdk29	-G0	as	-
+func_L30_00384120	src/func_L30_00384120.c	s136	-G0	as	-
+func_L30_003854F0	src/func_L30_003854F0.c	s136	-G0	as	-
+func_L30_00385978	src/func_L30_00385978.c	s136	-G0	as	-
+func_L30_00385A08	src/func_L30_00385A08.c	s136	-G0	as	-
+func_L30_00385AC8	src/func_L30_00385AC8.c	s136	-G8	as	-
+func_L30_00385B90	src/func_L30_00385B90.c	sdk29	-G0	as	-
+func_L30_003BEBF8	src/func_L30_003BEBF8.c	s136	-G0	as	-
+func_L30_00404C50	src/func_L30_00404C50.c	s136	-G8	as	-
+func_L30_0040ECE0	src/func_L30_0040ECE0.c	s136	-G8	as	-
+func_L30_00413760	src/func_L30_00413760.c	s136	-G0	as	-
+func_L30_00418BF0	src/func_L30_00418BF0.c	s136	-G0	as	-
+func_L30_00418C60	src/func_L30_00418C60.c	s136	-G8	as	-
+func_L30_00418CF0	src/func_L30_00418CF0.c	s136	-G0	as	-
+func_L30_00418D30	src/func_L30_00418D30.c	s136	-G0	as	-
+func_L30_00419860	src/func_L30_00419860.c	s136	-G0	as	-
+func_L30_0041AEC8	src/func_L30_0041AEC8.c	s136	-G0	as	-
