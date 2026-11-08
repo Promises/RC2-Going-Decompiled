@@ -3460,3 +3460,83 @@
     `src/levels/07_siberius/L07_003F4578.c`
     (`func_L07_00408338`, author commit `913bd1bc`, Gianni), task #2656.
     Adapted: our name at the v2.00 place; D_L07_001AA698 as our split label D_L07_001AA6B8; D_L07_001B3198 kept address-named as D_L07_001B3118 (D_001B2354+0x624, RULING #13291 section 2); five callees as L07's copies at their v2.00 places; `sda` respelled `section(".sdata")` (RULING #8620) on both floats; the file's other declarations dropped, common.h's typedefs written in the TU.
+  - **`func_L17_00342250`** (`0x00342250`, level program 17) in
+    `going-decompiled/levels/usa/L17/src/func_L17_00342250.c`, from
+    `src/levels/17_smolg/L17_0032C070.c`
+    (`func_L17_00340EA0`, author commit `91e04732`, llesieur99), task #2667.
+    VERBATIM but for names: Our name at the v2.00 place; six callees as L17's copies at their v2.00 targets; `#include` lines dropped.
+  - **`func_L17_003595C8`** (`0x003595C8`, level program 17) in
+    `going-decompiled/levels/usa/L17/src/func_L17_003595C8.c`, from
+    `src/levels/17_smolg/L17_003583F8-init-g8.c`
+    (`func_L17_003583F8`, author commit `a96d3126`, Louis-Philippe Le Sieur; a rename-copy of bigbeno37's `func_L00_00354DF8` in `src/levels/00_aranos_tutorial/L00_002FC7A8-g8.c` (author commit `6001495a`), token-identical but for symbol names and the struct field `callback` -> `payload`, RULING #13427 rev 4), task #2667.
+    VERBATIM but for names: Our name at the v2.00 place; the boot's `g_anAvailableLevelOrder`; `D_L17_001CA1A0` as `g_mapVertexData` (the level's boot-name map name there); `D_L17_0021DCF0` to the address-named `D_L17_0021DD20` (RULING #13291 §2); three level symbols to our split labels; `volatile` and `sda` kept; `include_asm.h` dropped.
+  - **`func_L17_003C47D0`** (`0x003C47D0`, level program 17) in
+    `going-decompiled/levels/usa/L17/src/func_L17_003C47D0.c`, from
+    `src/levels/17_smolg/L17_0032C070.c`
+    (`func_L17_003C3250`, author commit `91e04732`, llesieur99), task #2667.
+    VERBATIM but for names: Our name at the v2.00 place; the boot's `g_soundBankHandlesBlk`; `D_L17_00296F80` as our split label `D_L17_00297000`; address-named `D_L17_001FE880` kept (RULING #13291 §2); two callees as L17's copies; `#include` lines dropped.
+  - **`func_L17_003C7080`** (`0x003C7080`, level program 17) in
+    `going-decompiled/levels/usa/L17/src/func_L17_003C7080.c`, from
+    `src/levels/17_smolg/L17_0032C070.c`
+    (`func_L17_003C5AF8`, author commit `91e04732`, llesieur99), task #2667.
+    VERBATIM but for names: Our name at the v2.00 place; two callees at their v2.00 targets; `#include` lines dropped.
+  - **`func_L17_003C70F0`** (`0x003C70F0`, level program 17) in
+    `going-decompiled/levels/usa/L17/src/func_L17_003C70F0.c`, from
+    `src/levels/17_smolg/L17_003C5B68-rc2.c`
+    (`func_L17_003C5B68`, author commit `fe9859d7`, Sergio Rodmauser), task #2667; MIT notice (RULING #12108).
+    VERBATIM but for names: Our name at the v2.00 place; `ref_L17_003C5B68_00` as `g_mobyTableBase` (the level's boot-name map name there); address-named `D_0018A160` kept (RULING #13291 §2); `sda` kept; built at -G8 as upstream's cflags row has it; `common.h` dropped, typedefs written in the TU.
+  - **`func_L17_003C7378`** (`0x003C7378`, level program 17) in
+    `going-decompiled/levels/usa/L17/src/func_L17_003C7378.c`, from
+    `src/levels/17_smolg/L17_0032C070.c`
+    (`func_L17_003C5DF0`, author commit `91e04732`, llesieur99), task #2667.
+    VERBATIM but for names: Our name at the v2.00 place; `#include` lines dropped.
+  - **`func_L17_003C73A8`** (`0x003C73A8`, level program 17) in
+    `going-decompiled/levels/usa/L17/src/func_L17_003C73A8.c`, from
+    `src/levels/17_smolg/L17_0032C070.c`
+    (`func_L17_003C5E20`, author commit `d078020b`, Louis-Philippe Le Sieur), task #2667.
+    VERBATIM but for names: Our name at the v2.00 place; the boot's `g_soundBankHandlesBlk`; `#include` lines dropped.
+  - **`func_L17_003C7400`** (`0x003C7400`, level program 17) in
+    `going-decompiled/levels/usa/L17/src/func_L17_003C7400.c`, from
+    `src/levels/17_smolg/L17_0032C070.c`
+    (`func_L17_003C5E78`, author commit `91e04732`, llesieur99), task #2667.
+    VERBATIM but for names: Our name at the v2.00 place; the boot's `g_soundBankHandlesBlk`; `D_L17_00296FF0` as our split label `D_L17_00297070`; address-named `D_L17_001FE880` kept (RULING #13291 §2); two callees as L17's copies; `#include` lines dropped.
+  - **`func_L17_003C87D8`** (`0x003C87D8`, level program 17) in
+    `going-decompiled/levels/usa/L17/src/func_L17_003C87D8.c`, from
+    `src/levels/17_smolg/L17_0032C070.c`
+    (`func_L17_003C7250`, author commit `ee3fee45`, llesieur99), task #2667.
+    VERBATIM but for names: Our name at the v2.00 place; `#include` lines dropped.
+  - **`func_L17_003C91E0`** (`0x003C91E0`, level program 17) in
+    `going-decompiled/levels/usa/L17/src/func_L17_003C91E0.c`, from
+    `src/levels/17_smolg/L17_0032C070.c`
+    (`func_L17_003C7C58`, author commit `91e04732`, llesieur99), task #2667.
+    VERBATIM but for names: Our name at the v2.00 place; `#include` lines dropped.
+  - **`func_L17_003CDD20`** (`0x003CDD20`, level program 17) in
+    `going-decompiled/levels/usa/L17/src/func_L17_003CDD20.c`, from
+    `src/levels/17_smolg/L17_003C7C70.c`
+    (`func_L17_003CC798`, author commit `4541c4ce`, ReaperOfVeriod), task #2667.
+    VERBATIM but for names: Our name at the v2.00 place; four callees as L17's copies; `#include` lines dropped.
+  - **`func_L17_003E5DF0`** (`0x003E5DF0`, level program 17) in
+    `going-decompiled/levels/usa/L17/src/func_L17_003E5DF0.c`, from
+    `src/levels/17_smolg/L17_003C7C70.c`
+    (`func_L17_003E47E8`, author commit `91e04732`, llesieur99), task #2667.
+    VERBATIM but for names: Our name at the v2.00 place; four callees as L17's copies; `#include` lines dropped.
+  - **`func_L17_003E83F0`** (`0x003E83F0`, level program 17) in
+    `going-decompiled/levels/usa/L17/src/func_L17_003E83F0.c`, from
+    `src/levels/17_smolg/L17_003C7C70.c`
+    (`func_L17_003E6DE8`, author commit `e4fd2fe8`, bigbeno37), task #2667.
+    ADAPTED: Our name at the v2.00 place; `D_L17_001B2C1C` as `g_mobyTableBase` (the level's boot-name map name there); `sda` respelled `section(".sdata")` (RULING #8620; ablation 76 of 77 words differ without it); one callee as L17's copy; `#include` lines dropped.
+  - **`func_L17_003E8528`** (`0x003E8528`, level program 17) in
+    `going-decompiled/levels/usa/L17/src/func_L17_003E8528.c`, from
+    `src/levels/17_smolg/L17_003C7C70.c`
+    (`func_L17_003E6F20`, author commit `ee3fee45`, llesieur99), task #2667.
+    ADAPTED: Our name at the v2.00 place; `D_L17_001B2C1C` as `g_mobyTableBase` (the level's boot-name map name there); `sda` respelled `section(".sdata")` (RULING #8620; ablation 7 of 14 words differ without it); `#include` lines dropped.
+  - **`func_L17_003E8560`** (`0x003E8560`, level program 17) in
+    `going-decompiled/levels/usa/L17/src/func_L17_003E8560.c`, from
+    `src/levels/17_smolg/L17_003C7C70.c`
+    (`func_L17_003E6F58`, author commit `91e04732`, llesieur99), task #2667.
+    VERBATIM but for names: Our name at the v2.00 place; address-named `D_L17_001FE880` kept (RULING #13291 §2); two callees as L17's copies; `#include` lines dropped.
+  - **`func_L17_003E8618`** (`0x003E8618`, level program 17) in
+    `going-decompiled/levels/usa/L17/src/func_L17_003E8618.c`, from
+    `src/levels/17_smolg/L17_003C7C70.c`
+    (`func_L17_003E7010`, author commit `8d0b9987`, lvl6-12), task #2667.
+    VERBATIM but for names: Our name at the v2.00 place; address-named `D_L17_001C0018` kept (RULING #13291 §2); one callee as L17's copy; `#include` lines dropped.

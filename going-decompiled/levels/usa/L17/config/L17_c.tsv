@@ -1,0 +1,29 @@
+# Functions of level program L17 built from C (task #2667, RULING #13291 row L17-A).
+# One row per function, compiled ALONE as its own TU by tools/levels/level_build.sh
+# and linked at its one place in place of its split asm (gen_ld.py cuts the
+# function's block out of the .text asm). Single placement only (row L7 is the
+# multi-placement design).
+#   function: the glabel in the split .text asm (its address is in its name)
+#   source:   path under going-decompiled/levels/usa/L17/
+#   arm:      tools/ee/ee_cc1.sh arm (sdk29 | s136 | sn2952); s136 adds -fopt-stack
+#   gflag:    -G0 | -G8, used by cc1 AND the assembler
+#   as:       optional (task #2552): as (plain GNU as) | asm_unit (tools/ee/asm_unit.sh,
+#             the boot's model of SN's assembler); a 4-column row is `as -`
+#   cc1flags: optional, with as: extra cc1 flags, comma-separated, or - for none
+# function	source	arm	gflag	[as	cc1flags]
+func_L17_00342250	src/func_L17_00342250.c	s136	-G0	as	-
+func_L17_003595C8	src/func_L17_003595C8.c	s136	-G8	as	-
+func_L17_003C47D0	src/func_L17_003C47D0.c	s136	-G0	as	-
+func_L17_003C7080	src/func_L17_003C7080.c	s136	-G0	as	-
+func_L17_003C70F0	src/func_L17_003C70F0.c	sdk29	-G8	as	-
+func_L17_003C7378	src/func_L17_003C7378.c	s136	-G0	as	-
+func_L17_003C73A8	src/func_L17_003C73A8.c	sdk29	-G0	as	-
+func_L17_003C7400	src/func_L17_003C7400.c	s136	-G0	as	-
+func_L17_003C87D8	src/func_L17_003C87D8.c	sdk29	-G0	as	-
+func_L17_003C91E0	src/func_L17_003C91E0.c	sdk29	-G0	as	-
+func_L17_003CDD20	src/func_L17_003CDD20.c	s136	-G0	as	-
+func_L17_003E5DF0	src/func_L17_003E5DF0.c	s136	-G0	as	-
+func_L17_003E83F0	src/func_L17_003E83F0.c	s136	-G0	as	-
+func_L17_003E8528	src/func_L17_003E8528.c	sdk29	-G0	as	-
+func_L17_003E8560	src/func_L17_003E8560.c	s136	-G0	as	-
+func_L17_003E8618	src/func_L17_003E8618.c	s136	-G0	as	-
