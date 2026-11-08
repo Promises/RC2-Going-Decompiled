@@ -1,0 +1,54 @@
+/* Level 12 (Todano), USA v2.00: a level-only function built from C (task #2670,
+ * row L12-A, RULING #13291). Compiled ALONE as its own TU and linked at its one
+ * place, 0x003DF858, in place of its split asm; the row is
+ * going-decompiled/levels/usa/L12/config/L12_c.tsv, the arm ee-gcc
+ * 2.9-ee-991111 cc1 (tools/ee/ee_cc1.sh sdk29) at -O2 -G8, assembled by plain
+ * GNU as (the row's `as` column).
+ */
+
+typedef unsigned char u8;
+typedef signed char s8;
+typedef signed int s32;
+
+/* The tracked object, read through $gp at -G8 (upstream's `sda` text is
+   ignored by this cc1). */
+extern u8 *D_L12_001B08BC __attribute__((sda));
+
+/**
+ * func_L12_003DF858 - whether the tracked object is in a state that still
+ * counts as open.
+ *
+ * Return: 0 when there is no tracked object (D_L12_001B08BC is null) or its
+ * state byte (+0x20) is 6, 8 or negative (bit 7 set); otherwise 1.
+ *
+ * Non-obvious: the twin func_L12_00405BC0 tests another object and adds
+ * state 5 to the closed set.
+ *
+ * Source: OpenRAC rac2-decomp <https://github.com/OpenRAC/rac2-decomp> at
+ * fe6adf9baddcd31323c35adf102d078aa250852d, GPL-3.0 (root LICENSE; the file
+ * carries no notice of its own; `grep -ic lombyte` on it = 0, so not
+ * Lombyte-origin), file src/levels/12_todano/L12_00398E50-g8.c, function
+ * func_L12_003DE4B0 (v1.01 address), author commit ee3fee45 (llesieur99).
+ * Adopted with the authors' permission (RULINGs #10405, #12108, #13082,
+ * #13291). BYTE-IDENTICAL: VERBATIM but for names; the respellings, each to
+ * the target of the v2.00 disc's own relocation at this place (task #2670
+ * relverify):
+ *   - func_L12_003DE4B0 -> func_L12_003DF858 (our split name at the v2.00 place);
+ *   - D_L12_001B090C -> D_L12_001B08BC (our split label);
+ *   - `#include "common.h"` dropped: the typedefs used are written here and
+ *     only this function's declaration kept; upstream's one-line comment
+ *     folded into this one.
+ */
+s32 func_L12_003DF858(void) {
+    u8 *object = D_L12_001B08BC;
+    s32 result = 1;
+
+    if (object == 0) {
+        result = 0;
+    } else {
+        if (*(u8 *)(object + 0x20) == 6 || *(s8 *)(object + 0x20) < 0
+            || *(u8 *)(object + 0x20) == 8)
+            result = 0;
+    }
+    return result;
+}

@@ -1,0 +1,25 @@
+# Functions of level program L12 built from C (RULING #13291, b3 level-C rows; task #2670 row L12-A; L24 header).
+# One row per function, compiled ALONE as its own TU by tools/levels/level_build.sh
+# and linked at its one place in place of its split asm (gen_ld.py cuts the
+# function's block out of the .text asm). Single placement only (row L7 is the
+# multi-placement design).
+#   function: the glabel in the split .text asm (its address is in its name)
+#   source:   path under going-decompiled/levels/usa/L12/
+#   arm:      tools/ee/ee_cc1.sh arm (sdk29 | s136 | sn2952); s136 adds -fopt-stack
+#   gflag:    -G0 | -G8, used by cc1 AND the assembler
+#   as:       optional (task #2552): as (plain GNU as) | asm_unit (tools/ee/asm_unit.sh,
+#             the boot's model of SN's assembler); a 4-column row is `as -`
+#   cc1flags: optional, with as: extra cc1 flags, comma-separated, or - for none
+# function	source	arm	gflag	[as	cc1flags]
+func_L12_0035B820	src/func_L12_0035B820.c	s136	-G8	as	-
+func_L12_003A80E0	src/func_L12_003A80E0.c	s136	-G0	as	-
+func_L12_003C0AA8	src/func_L12_003C0AA8.c	s136	-G0	as	-
+func_L12_003DF858	src/func_L12_003DF858.c	sdk29	-G8	as	-
+func_L12_003E1B88	src/func_L12_003E1B88.c	s136	-G0	as	-
+func_L12_003E1DA0	src/func_L12_003E1DA0.c	sdk29	-G8	as	-
+func_L12_003E1F40	src/func_L12_003E1F40.c	s136	-G0	as	-
+func_L12_003E2E80	src/func_L12_003E2E80.c	s136	-G8	as	-
+func_L12_003E2F00	src/func_L12_003E2F00.c	s136	-G0	as	-
+func_L12_003EC848	src/func_L12_003EC848.c	s136	-G8	as	-
+func_L12_00405BC0	src/func_L12_00405BC0.c	sdk29	-G8	as	-
+func_L12_004153C0	src/func_L12_004153C0.c	s136	-G8	as	-

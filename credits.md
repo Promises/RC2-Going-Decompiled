@@ -3540,3 +3540,63 @@
     `src/levels/17_smolg/L17_003C7C70.c`
     (`func_L17_003E7010`, author commit `8d0b9987`, lvl6-12), task #2667.
     VERBATIM but for names: Our name at the v2.00 place; address-named `D_L17_001C0018` kept (RULING #13291 §2); one callee as L17's copy; `#include` lines dropped.
+  - **`func_L12_0035B820`** (`0x0035B820`, level program 12) in
+    `going-decompiled/levels/usa/L12/src/func_L12_0035B820.c`, from
+    `src/levels/12_todano/L12_0035A838-g8.c`
+    (`func_L12_0035A838`, author commit `7c3ea917`, Fromnowhere; a rename-copy of bigbeno37's `func_L00_00354DF8` in `src/levels/00_aranos_tutorial/L00_002FC7A8-g8.c` (author commit `6001495a`, the earliest of its 17 token-identical twins), token-identical but for symbol names, RULING #13427 rev 4), task #2670.
+    Verbatim but for names: our name at the v2.00 place; the boot's `g_anAvailableLevelOrder`; `D_L12_001AA7F0`/`D_L12_002881D0` as our split labels `D_L12_001AA810`/`D_L12_002881B0`, `D_L12_0028C720` unchanged; `D_L12_001CA3E0` as `g_mapVertexData` (L12 boot-name map); `D_L12_0021DF30` as the address-named `D_L12_0021DEE0` (RULING #13291 §2); `sda` text kept, ignored by cc1; `include_asm.h` dropped; s136 -G8, plain as.
+  - **`func_L12_003A80E0`** (`0x003A80E0`, level program 12) in
+    `going-decompiled/levels/usa/L12/src/func_L12_003A80E0.c`, from
+    `src/levels/12_todano/L12_00398E50.c`
+    (`func_L12_003A6E18`, author commit `daf0e4a1`, Flavius), task #2670.
+    Adapted: our name at the v2.00 place; `D_001A79F0` as `g_playerProgress` with `sda` respelled `section(".sdata")` (RULING #8620); two boot-copy callees and one level callee (`func_L12_0032A400`, upstream's `func_L00_00325AE8`) by their L12 places; `common.h` dropped; s136 -G0, plain as.
+  - **`func_L12_003C0AA8`** (`0x003C0AA8`, level program 12) in
+    `going-decompiled/levels/usa/L12/src/func_L12_003C0AA8.c`, from
+    `src/levels/12_todano/L12_00398E50.c`
+    (`func_L12_003BF7D0`, author commit `91e04732`, llesieur99), task #2670.
+    Verbatim but for names: our name at the v2.00 place; `D_L12_00188660` as the boot's `g_listenerPosHistory`; four boot-copy callees by their L12 places; `common.h` dropped; s136 -G0, plain as.
+  - **`func_L12_003DF858`** (`0x003DF858`, level program 12) in
+    `going-decompiled/levels/usa/L12/src/func_L12_003DF858.c`, from
+    `src/levels/12_todano/L12_00398E50-g8.c`
+    (`func_L12_003DE4B0`, author commit `ee3fee45`, llesieur99), task #2670.
+    Verbatim but for names: our name at the v2.00 place; `D_L12_001B090C` as our split label `D_L12_001B08BC` (`sda` text kept, ignored by cc1); `common.h` dropped; sdk29 -G8, plain as.
+  - **`func_L12_003E1B88`** (`0x003E1B88`, level program 12) in
+    `going-decompiled/levels/usa/L12/src/func_L12_003E1B88.c`, from
+    `src/levels/12_todano/L12_00398E50.c`
+    (`func_L12_003E07B0`, author commit `91e04732`, llesieur99), task #2670.
+    Verbatim but for names: our name at the v2.00 place; two boot-copy callees by their L12 places; `common.h` dropped; s136 -G0, plain as.
+  - **`func_L12_003E1DA0`** (`0x003E1DA0`, level program 12) in
+    `going-decompiled/levels/usa/L12/src/func_L12_003E1DA0.c`, from
+    `src/levels/12_todano/L12_00398E50-g8.c`
+    (`func_L12_003E09C8`, author commit `91e04732`, llesieur99), task #2670.
+    Verbatim but for names: our name at the v2.00 place; `D_L12_001B2E9C`/`D_L12_001FB960` as `g_mobyTableBase`/`g_mobyGroupLists` (L12 boot-name map; `sda` text kept, ignored by cc1); `common.h` dropped; sdk29 -G8, plain as.
+  - **`func_L12_003E1F40`** (`0x003E1F40`, level program 12) in
+    `going-decompiled/levels/usa/L12/src/func_L12_003E1F40.c`, from
+    `src/levels/12_todano/L12_00398E50.c`
+    (`func_L12_003E0B68`, author commit `91e04732`, llesieur99), task #2670.
+    Verbatim but for names: our name at the v2.00 place; two boot-copy callees by their L12 places; `common.h` dropped; s136 -G0, plain as.
+  - **`func_L12_003E2E80`** (`0x003E2E80`, level program 12) in
+    `going-decompiled/levels/usa/L12/src/func_L12_003E2E80.c`, from
+    `src/levels/12_todano/L12_00398E50.c`
+    (`func_L12_003E1AA8`, author commit `ee3fee45`, llesieur99, carrying 15 of its 21 lines from llesieur99's own near-twin `func_L12_00427D50` in `src/levels/shared/L12_003E1CB0.c` (`91e04732`)), task #2670.
+    Adapted: our name at the v2.00 place; `D_L12_001B2E9C`/`D_L12_001FB960` as `g_mobyTableBase`/`g_mobyGroupLists` (L12 boot-name map; `sda` text kept, ignored by cc1); built at -G8 against upstream's -G0; `common.h` dropped; s136 -G8, plain as.
+  - **`func_L12_003E2F00`** (`0x003E2F00`, level program 12) in
+    `going-decompiled/levels/usa/L12/src/func_L12_003E2F00.c`, from
+    `src/levels/12_todano/L12_00398E50.c`
+    (`func_L12_003E1B28`, author commit `8f02ea08`, Flavius), task #2670.
+    Adapted: our name at the v2.00 place; `D_L12_001B2E9C` as `g_mobyTableBase` with `sda` respelled `section(".sdata")` (RULING #8620); `D_L12_001FB960` as `g_mobyGroupLists`; `D_L12_001FEAC0` as the address-named `D_L12_001FEA40` (RULING #13291 §2); three boot-copy callees by their L12 places; `common.h` dropped; s136 -G0, plain as.
+  - **`func_L12_003EC848`** (`0x003EC848`, level program 12) in
+    `going-decompiled/levels/usa/L12/src/func_L12_003EC848.c`, from
+    `src/levels/12_todano/L12_00398E50-g8.c`
+    (`func_L12_003EB470`, author commit `b9d9d0d4`, bigbeno37; the earlier nonmatching drafts `eb4ef01f` (DrLegitamate) and `526dab78` (Louis-Philippe Le Sieur) leave no line in it), task #2670.
+    Adapted: our name at the v2.00 place; the boot's `g_heroPos`, `g_heroState`, `g_playerProgress`, `g_inventoryOwned` and the boot asm's `D_18C958`/`D_1A7390` for the core data; `D_L12_001B2E9C` as `g_mobyTableBase` (L12 boot-name map); `sda` respelled `section(".sdata")` on three declarations (RULING #8620); upstream's `NOT_SDA` macro written in the TU; four boot-copy callees by their L12 places; `common.h` dropped; s136 -G8, plain as.
+  - **`func_L12_00405BC0`** (`0x00405BC0`, level program 12) in
+    `going-decompiled/levels/usa/L12/src/func_L12_00405BC0.c`, from
+    `src/levels/12_todano/L12_00398E50-g8.c`
+    (`func_L12_00404778`, author commit `448f05b9`, Louis-Philippe Le Sieur, from his nonmatching draft `45fddeea` (`nonmatching/levels/func_L12_00404778.c`, 2 lines), with 5 lines shaped like `func_L12_003DE4B0` by llesieur99 (`ee3fee45`)), task #2670.
+    Verbatim but for names: our name at the v2.00 place; `D_L12_001B1360` as our split label `D_L12_001B1320` (`sda` text kept, ignored by cc1); `common.h` dropped; sdk29 -G8, plain as.
+  - **`func_L12_004153C0`** (`0x004153C0`, level program 12) in
+    `going-decompiled/levels/usa/L12/src/func_L12_004153C0.c`, from
+    `src/levels/12_todano/L12_00398E50-g8.c`
+    (`func_L12_00413F68`, author commit `91e04732`, llesieur99), task #2670.
+    Verbatim but for names: our name at the v2.00 place; five level data names as our split labels `D_L12_001B17E4`..`D_L12_001B1808` (`sda` text kept, ignored by cc1); three boot-copy callees by their L12 places; `common.h` dropped; s136 -G8, plain as.
