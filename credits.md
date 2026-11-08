@@ -3903,3 +3903,78 @@
     `going-decompiled/levels/usa/L30/src/func_L30_0041AEC8.c`, from
     `src/levels/30_insomniac_museum/L30_0040E660.c` (`func_L30_0041A848`, author commit `ee3fee45`, llesieur99),
     task #2673. VERBATIM but for names: our name at the v2.00 place; four callees by their L30 places; no `long long` respelling needed (NOTE #13281's `l` is file-level); `include_asm.h` dropped; s136 -G0.
+  - **`func_L15_00381730`** (`0x00381730`, level program 15, Gorn: stores a value into the record func_L15_00381760 returns) in
+    `going-decompiled/levels/usa/L15/src/func_L15_00381730.c`, from
+    `src/levels/15_gorn/L15_00315428.c`
+    (`func_L15_003804B8`, v1.01 address, author commit `ee3fee45`, llesieur99), task #2677.
+    Verbatim but for names: our name; one callee as L15's copy; includes dropped.
+  - **`func_L15_00382F68`** (`0x00382F68`, level program 15, Gorn: counts the live members of an object's moby group) in
+    `going-decompiled/levels/usa/L15/src/func_L15_00382F68.c`, from
+    `src/levels/15_gorn/L15_00315428.c`
+    (`func_L15_00381CF0`, v1.01 address, author commit `b7357856`, bigbeno37, carrying Louis-Philippe Le Sieur's nonmatching draft from `d91dba61` (17 of 28 lines; RULING #13427 rev 2)), task #2677.
+    Adapted: our name; `D_L15_001FB320` as `g_mobyGroupLists` and the asm label `D_L15_001B261C` as `g_mobyTableBase`, the level's boot-name map names at those v2.00 addresses (NAMES rule, task #2646 class); `sda` respelled `section(".sdata")` (RULING #8620; ablation 49 of 54 words differ without it); one callee as L15's copy; includes dropped.
+  - **`func_L15_004318A0`** (`0x004318A0`, level program 15, Gorn: resets the stage counters and restores the selected record's value) in
+    `going-decompiled/levels/usa/L15/src/func_L15_004318A0.c`, from
+    `src/levels/15_gorn/L15_0042FD40-g8.c`
+    (`func_L15_0042FD40`, v1.01 address, author commit `b7357856`, bigbeno37), task #2677.
+    Verbatim but for names: our name; three `sda` scalars as our split labels (`sda` kept verbatim, byte-inert at -G8); `D_L15_00221E10` as the address-named extern `D_L15_00221DC0` (inside `D_L15_00220000`, RULING #13291 §2); `D_L15_0029FD80` as our label `D_L15_0029FD60`; four callees as L15's copies; includes dropped.
+  - **`func_L15_00431AD8`** (`0x00431AD8`, level program 15, Gorn: a moby's death timer) in
+    `going-decompiled/levels/usa/L15/src/func_L15_00431AD8.c`, from
+    `src/levels/15_gorn/L15_00315428-g8.c`
+    (`func_L15_0042FFB8`, v1.01 address, author commit `7ac08f9b`, Flavius), task #2677.
+    Verbatim but for names: our name; `D_L15_001B1520` as our label `D_L15_001B14D0` (`sda` kept verbatim, byte-inert at -G8); nine callees as L15's copies; includes dropped.
+  - **`func_L15_004329F0`** (`0x004329F0`, level program 15, Gorn: one-time stage start-up, then the end-of-stage check) in
+    `going-decompiled/levels/usa/L15/src/func_L15_004329F0.c`, from
+    `src/us2/levels/15_gorn/L15_004329F0-g8.c`
+    (`func_US2_L15_004329F0`, v2.00 address, author commit `5e9cfe7c`, bigbeno37 (the two Marker blocks), carrying Flavius's `func_L15_00430C80` from `a0ffc4d1` (`src/levels/shared/L15_00430C80-g8.c`, earlier; RULING #13427 rev 2, #13541 rev 2)), task #2677.
+    Adapted: our name; `D_L15_001B2148` as `g_gameTime`, the level's boot-name map name there (NAMES rule); `D_L15_001B2714`/`D_L15_00221E10` as the address-named externs `D_L15_001B2694`/`D_L15_00221DC0` (RULING #13291 §2); three `sda` scalars as our split labels; `sda` respelled `section(".sdata")` (RULING #8620; ablation 54 of 111 words differ without it); fifteen callees as L15's copies; includes dropped.
+  - **`func_L15_00433F68`** (`0x00433F68`, level program 15, Gorn: per-frame step of an armed object) in
+    `going-decompiled/levels/usa/L15/src/func_L15_00433F68.c`, from
+    `src/levels/15_gorn/L15_00315428.c`
+    (`func_L15_004321A8`, v1.01 address, author commit `ee3fee45`, llesieur99), task #2677.
+    Verbatim but for names: our name; `D_L15_004328E8` as `func_L15_004346A8` (its v2.00 target); four callees as L15's copies; includes dropped.
+  - **`func_L15_004346A8`** (`0x004346A8`, level program 15, Gorn: screen context and the four effect blocks) in
+    `going-decompiled/levels/usa/L15/src/func_L15_004346A8.c`, from
+    `src/levels/15_gorn/L15_004328E8.c`
+    (`func_L15_004328E8`, v1.01 address, author commit `daf0e4a1`, Flavius), task #2677.
+    Adapted: our name; `D_001A6480` as the boot's `g_gsScreenContext`; `D_L15_00269FE0` as the address-named extern `D_L15_00269F60` (RULING #13291 §2); four callees as L15's copies; the prototype's `long` written `s64` (RULING #13197, object .text/.rel.text unchanged); includes dropped.
+  - **`func_L15_00436FA0`** (`0x00436FA0`, level program 15, Gorn: spawns one particle at an object's joint) in
+    `going-decompiled/levels/usa/L15/src/func_L15_00436FA0.c`, from
+    `src/levels/15_gorn/L15_004328E8.c`
+    (`func_L15_004351E0`, v1.01 address, author commit `5acf9869`, Flavius; signature changed later by DrLegitamate in `bde5ccd6` (the `int unused` parameter)), task #2677.
+    Verbatim but for names: our name; `D_L15_001B9680` as `g_cameraState`, the level's boot-name map name there (NAMES rule); `D_L15_001FF4AC` as the address-named extern `D_L15_001FF42C` (RULING #13291 §2); ten callees as L15's copies; includes dropped and seven repeated extern lines collapsed.
+  - **`func_L15_004371A8`** (`0x004371A8`, level program 15, Gorn: initialises a Gorn object and its joint records) in
+    `going-decompiled/levels/usa/L15/src/func_L15_004371A8.c`, from
+    `src/levels/15_gorn/L15_004328E8.c`
+    (`func_L15_004353E8`, v1.01 address, author commit `4912fc03`, bigbeno37, bringing Louis-Philippe Le Sieur's nonmatching draft from `4ba068b1` into src (91 of 98 lines) with bigbeno37's edits from `54dba8e9` and `4d6e47bb`; RULING #13427 rev 2), task #2677.
+    Verbatim but for names: our name; nine callees as L15's copies; includes dropped and two repeated extern lines collapsed.
+  - **`func_L15_00437E50`** (`0x00437E50`, level program 15, Gorn: puts an object into state 2 with a timer) in
+    `going-decompiled/levels/usa/L15/src/func_L15_00437E50.c`, from
+    `src/levels/15_gorn/L15_004328E8.c`
+    (`func_L15_00436090`, v1.01 address, author commit `ee3fee45`, llesieur99), task #2677.
+    Verbatim but for names: our name; includes dropped.
+  - **`func_L15_00438058`** (`0x00438058`, level program 15, Gorn: fires an object's two shots) in
+    `going-decompiled/levels/usa/L15/src/func_L15_00438058.c`, from
+    `src/levels/15_gorn/L15_004328E8.c`
+    (`func_L15_00436298`, v1.01 address, author commit `daf0e4a1`, Flavius), task #2677.
+    Verbatim but for names: our name; four callees as L15's copies; includes dropped and one repeated extern line collapsed.
+  - **`func_L15_00438750`** (`0x00438750`, level program 15, Gorn: path mover update) in
+    `going-decompiled/levels/usa/L15/src/func_L15_00438750.c`, from
+    `src/levels/15_gorn/L15_004328E8.c`
+    (`func_L15_00436990`, v1.01 address, author commit `b7357856`, bigbeno37), task #2677.
+    Verbatim but for names: our name; `D_L15_001FE480` as the address-named extern `D_L15_001FE400` (RULING #13291 §2); thirteen callees as L15's copies; includes dropped and two repeated extern lines collapsed.
+  - **`func_L15_00438968`** (`0x00438968`, level program 15, Gorn: path mover initialisation) in
+    `going-decompiled/levels/usa/L15/src/func_L15_00438968.c`, from
+    `src/levels/15_gorn/L15_004328E8.c`
+    (`func_L15_00436BA8`, v1.01 address, author commit `ee3fee45`, llesieur99), task #2677.
+    Verbatim but for names: our name; three callees as L15's copies; includes dropped.
+  - **`func_L15_004398D8`** (`0x004398D8`, level program 15, Gorn: registers an object's three hooks) in
+    `going-decompiled/levels/usa/L15/src/func_L15_004398D8.c`, from
+    `src/levels/15_gorn/L15_004328E8.c`
+    (`func_L15_00437B18`, v1.01 address, author commit `ee3fee45`, llesieur99), task #2677.
+    Verbatim but for names: our name; six callees/hooks as L15's copies; includes dropped.
+  - **`func_L15_00439FF8`** (`0x00439FF8`, level program 15, Gorn: flag-gated call of func_L15_00439928) in
+    `going-decompiled/levels/usa/L15/src/func_L15_00439FF8.c`, from
+    `src/levels/15_gorn/L15_004328E8-g8.c`
+    (`func_L15_00438238`, v1.01 address, author commit `ee3fee45`, llesieur99), task #2677.
+    Verbatim but for names: our name; `D_L15_001B187C` as our label `D_L15_001B182C` (`sda` kept verbatim, byte-inert at -G8); one callee as L15's copy; includes dropped.

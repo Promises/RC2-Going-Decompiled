@@ -1,0 +1,28 @@
+# Functions of level program L15 built from C (task #2677, RULING #13291 row L15-A).
+# One row per function, compiled ALONE as its own TU by tools/levels/level_build.sh
+# and linked at its one place in place of its split asm (gen_ld.py cuts the
+# function's block out of the .text asm). Single placement only (row L7 is the
+# multi-placement design).
+#   function: the glabel in the split .text asm (its address is in its name)
+#   source:   path under going-decompiled/levels/usa/L15/
+#   arm:      tools/ee/ee_cc1.sh arm (sdk29 | s136 | sn2952); s136 adds -fopt-stack
+#   gflag:    -G0 | -G8, used by cc1 AND the assembler
+#   as:       optional (task #2552): as (plain GNU as) | asm_unit (tools/ee/asm_unit.sh,
+#             the boot's model of SN's assembler); a 4-column row is `as -`
+#   cc1flags: optional, with as: extra cc1 flags, comma-separated, or - for none
+# function	source	arm	gflag	[as	cc1flags]
+func_L15_00381730	src/func_L15_00381730.c	s136	-G0	as	-
+func_L15_00382F68	src/func_L15_00382F68.c	s136	-G0	as	-
+func_L15_004318A0	src/func_L15_004318A0.c	s136	-G8	as	-
+func_L15_00431AD8	src/func_L15_00431AD8.c	s136	-G8	as	-
+func_L15_004329F0	src/func_L15_004329F0.c	s136	-G8	as	-
+func_L15_00433F68	src/func_L15_00433F68.c	s136	-G0	as	-
+func_L15_004346A8	src/func_L15_004346A8.c	s136	-G0	as	-
+func_L15_00436FA0	src/func_L15_00436FA0.c	s136	-G0	as	-
+func_L15_004371A8	src/func_L15_004371A8.c	s136	-G0	as	-
+func_L15_00437E50	src/func_L15_00437E50.c	s136	-G0	as	-
+func_L15_00438058	src/func_L15_00438058.c	s136	-G0	as	-
+func_L15_00438750	src/func_L15_00438750.c	s136	-G0	as	-
+func_L15_00438968	src/func_L15_00438968.c	s136	-G0	as	-
+func_L15_004398D8	src/func_L15_004398D8.c	s136	-G0	as	-
+func_L15_00439FF8	src/func_L15_00439FF8.c	s136	-G8	as	-
