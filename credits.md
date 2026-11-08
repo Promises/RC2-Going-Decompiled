@@ -3600,3 +3600,88 @@
     `src/levels/12_todano/L12_00398E50-g8.c`
     (`func_L12_00413F68`, author commit `91e04732`, llesieur99), task #2670.
     Verbatim but for names: our name at the v2.00 place; five level data names as our split labels `D_L12_001B17E4`..`D_L12_001B1808` (`sda` text kept, ignored by cc1); three boot-copy callees by their L12 places; `common.h` dropped; s136 -G8, plain as.
+  - **`func_L13_0038D770`** (`0x0038D770`, level program 13) in
+    `going-decompiled/levels/usa/L13/src/func_L13_0038D770.c`, from
+    `src/levels/13_boldan/L13_00306F38-g8.c`
+    (`func_L13_0038C328`, author commit `09afaadd`, Louis-Philippe Le Sieur), task #2672.
+    ADAPTED: Our name at the v2.00 place; `D_001BD5F0` and `D_L13_001B2928` to the address-named `D_L13_001BD570` and `D_L13_001B28A8` (RULING #13291 §2); `D_L13_001A8F00` kept (our split label there); `sda`/`nosda` respelled `section(".sdata")`/`section(".data")` (RULING #8620; ablation 26 of 42 words differ without it); built at -G8 as upstream builds its file; `include_asm.h` dropped.
+  - **`func_L13_0038D8B8`** (`0x0038D8B8`, level program 13) in
+    `going-decompiled/levels/usa/L13/src/func_L13_0038D8B8.c`, from
+    `src/levels/13_boldan/L13_00306F38.c`
+    (`func_L13_0038C470`, author commit `91e04732`, llesieur99), task #2672.
+    VERBATIM but for names: Our name at the v2.00 place; the boot's `g_heroPos`; three callees as L13's copies at their v2.00 targets; `include_asm.h` dropped.
+  - **`func_L13_003E2710`** (`0x003E2710`, level program 13) in
+    `going-decompiled/levels/usa/L13/src/func_L13_003E2710.c`, from
+    `src/us2/levels/13_boldan/L13_003E2710.c`
+    (`func_US2_L13_003E2710`, author commit `c4928ea3`, Flavius), task #2672.
+    VERBATIM but for names: Our name at the v2.00 place; one callee as L13's copy; `include_asm.h` dropped.
+  - **`func_L13_003E2748`** (`0x003E2748`, level program 13) in
+    `going-decompiled/levels/usa/L13/src/func_L13_003E2748.c`, from
+    `src/us2/levels/13_boldan/L13_003E2710.c`
+    (`func_US2_L13_003E2748`, author commit `c4928ea3`, Flavius), task #2672.
+    VERBATIM but for names: Our name at the v2.00 place; one callee as L13's copy; `include_asm.h` dropped.
+  - **`func_L13_003E2780`** (`0x003E2780`, level program 13) in
+    `going-decompiled/levels/usa/L13/src/func_L13_003E2780.c`, from
+    `src/levels/13_boldan/L13_00306F38.c`
+    (`func_L13_003E1288`, author commit `91e04732`, llesieur99), task #2672.
+    VERBATIM but for names: Our name at the v2.00 place; one callee as L13's copy; `include_asm.h` dropped.
+  - **`func_L13_003E27B8`** (`0x003E27B8`, level program 13) in
+    `going-decompiled/levels/usa/L13/src/func_L13_003E27B8.c`, from
+    `src/levels/13_boldan/L13_00306F38.c`
+    (`func_L13_003E12C0`, author commit `91e04732`, llesieur99), task #2672.
+    VERBATIM but for names: Our name at the v2.00 place; one callee as L13's copy; `include_asm.h` dropped.
+  - **`func_L13_003E27F0`** (`0x003E27F0`, level program 13) in
+    `going-decompiled/levels/usa/L13/src/func_L13_003E27F0.c`, from
+    `src/levels/13_boldan/L13_00306F38.c`
+    (`func_L13_003E12F8`, author commit `91e04732`, llesieur99), task #2672.
+    VERBATIM but for names: Our name at the v2.00 place; one callee as L13's copy; `include_asm.h` dropped.
+  - **`func_L13_003E9D48`** (`0x003E9D48`, level program 13) in
+    `going-decompiled/levels/usa/L13/src/func_L13_003E9D48.c`, from
+    `src/us2/levels/13_boldan/L13_003E9D48.c`
+    (`func_US2_L13_003E9D48`, author commit `c4928ea3`, Flavius; a rename-copy of `func_L13_003E8850` in `src/levels/13_boldan/L13_003E8850.c`, the same function at its v1.01 address, whose text is Lynder063's nonmatching draft (author commits `42b4c94e`, `8058f251`) carried into src by bigbeno37 with lines of their own (author commit `202aee5a`), all earlier, RULING #13427 rev 2/rev 4, #13541 rev 2), task #2672.
+    ADAPTED: Our name at the v2.00 place; the boot's `g_soundBankHandlesBlk`, `g_heroPos` and `g_skillPointFlags`; `D_001395B8`, `D_0018C750`, `D_001A7390` as the boot-name map's `D_1395B8`, `D_18C750`, `D_1A7390`; `D_001A903C` as our split label `D_L13_001A903C`; address-named `D_0018CC18` kept (RULING #13291 §2); four callees as L13's copies; `sda` respelled `section(".sdata")` (RULING #8620; ablation 65 of 109 words differ without it); `#include` lines dropped, typedefs written in the TU.
+  - **`func_L13_0041C6F0`** (`0x0041C6F0`, level program 13) in
+    `going-decompiled/levels/usa/L13/src/func_L13_0041C6F0.c`, from
+    `src/levels/13_boldan/L13_00306F38.c`
+    (`func_L13_0041B260`, author commit `91e04732`, llesieur99), task #2672.
+    ADAPTED: Our name at the v2.00 place; the boot's `g_heroPos`; `D_L13_001B2568` to the address-named `D_L13_001B24E8` (RULING #13291 §2); one callee as L13's copy; `sda` respelled `section(".sdata")` (RULING #8620; ablation 16 of 28 words differ without it); `include_asm.h` dropped.
+  - **`func_L13_0041D270`** (`0x0041D270`, level program 13) in
+    `going-decompiled/levels/usa/L13/src/func_L13_0041D270.c`, from
+    `src/levels/13_boldan/L13_0041BDA8.c`
+    (`func_L13_0041BDA8`, author commit `202aee5a`, bigbeno37; keeping five non-brace lines of Louis-Philippe Le Sieur's earlier nonmatching draft `34b3d626`, credited as surviving text, RULING #13427 rev 2, validator #2678), task #2672.
+    ADAPTED: Our name at the v2.00 place; the boot's `g_soundBankHandlesBlk`; `D_L13_001B2A0C` to the address-named `D_L13_001B298C` (RULING #13291 §2); two callees as L13's copies; `sda` respelled `section(".sdata")` (RULING #8620; ablation 50 of 57 words differ without it); `common.h` dropped, typedefs written in the TU.
+  - **`func_L13_00425C00`** (`0x00425C00`, level program 13) in
+    `going-decompiled/levels/usa/L13/src/func_L13_00425C00.c`, from
+    `src/levels/13_boldan/L13_00306F38.c`
+    (`func_L13_00424728`, author commit `daf0e4a1`, Flavius), task #2672.
+    ADAPTED: Our name at the v2.00 place; the boot's `g_heroPos`; `D_001395B8` as the boot-name map's `D_1395B8`; `D_L13_001B291C` as `g_mobyTableBase` (the level's boot-name map name there); one callee as L13's copy; `sda` respelled `section(".sdata")` (RULING #8620; ablation 10 of 72 words differ without it); a repeated prototype dropped; `include_asm.h` dropped.
+  - **`func_L13_0042D340`** (`0x0042D340`, level program 13) in
+    `going-decompiled/levels/usa/L13/src/func_L13_0042D340.c`, from
+    `src/levels/13_boldan/L13_0042BE60-rc2.c`
+    (`func_L13_0042BE60`, author commit `fe9859d7`, Sergio Rodmauser), task #2672.
+    VERBATIM but for names: Our name at the v2.00 place; `common.h` dropped, typedefs written in the TU.
+  - **`func_L13_0042D3B8`** (`0x0042D3B8`, level program 13) in
+    `going-decompiled/levels/usa/L13/src/func_L13_0042D3B8.c`, from
+    `src/levels/13_boldan/L13_00306F38.c`
+    (`func_L13_0042BEE0`, author commit `daf0e4a1`, Flavius; 10 of its 20 lines are llesieur99's text from `func_L13_0042BFD8` in the same file (author commit `91e04732`, earlier; git blame -M -C), RULING #13427 rev 2, #13541 rev 2), task #2672.
+    ADAPTED: Our name at the v2.00 place; `D_L13_001B291C` as `g_mobyTableBase` (the level's boot-name map name there); two callees as L13's copies; `sda` respelled `section(".sdata")` (RULING #8620; ablation 5 of 60 words differ without it); `include_asm.h` dropped.
+  - **`func_L13_0042D4B0`** (`0x0042D4B0`, level program 13) in
+    `going-decompiled/levels/usa/L13/src/func_L13_0042D4B0.c`, from
+    `src/levels/13_boldan/L13_00306F38.c`
+    (`func_L13_0042BFD8`, author commit `91e04732`, llesieur99), task #2672.
+    ADAPTED: Our name at the v2.00 place; `D_L13_001B1E60` as our split label `D_L13_001B1E10`; `D_L13_001B291C` as `g_mobyTableBase` (the level's boot-name map name there); two callees as L13's copies; `sda` respelled `section(".sdata")` (RULING #8620; ablation 5 of 57 words differ without it); a repeated declaration block dropped; `include_asm.h` dropped.
+  - **`func_L13_0043FD88`** (`0x0043FD88`, level program 13) in
+    `going-decompiled/levels/usa/L13/src/func_L13_0043FD88.c`, from
+    `src/levels/13_boldan/L13_00306F38.c`
+    (`func_L13_0043E8C0`, author commit `42e0babe`, Louis-Philippe Le Sieur), task #2672.
+    VERBATIM but for names: Our name at the v2.00 place; `include_asm.h` dropped.
+  - **`func_L13_0043FD90`** (`0x0043FD90`, level program 13) in
+    `going-decompiled/levels/usa/L13/src/func_L13_0043FD90.c`, from
+    `src/levels/13_boldan/L13_00306F38.c`
+    (`func_L13_0043E8C8`, author commit `42e0babe`, Louis-Philippe Le Sieur), task #2672.
+    VERBATIM but for names: Our name at the v2.00 place; `include_asm.h` dropped.
+  - **`func_L13_0043FD98`** (`0x0043FD98`, level program 13) in
+    `going-decompiled/levels/usa/L13/src/func_L13_0043FD98.c`, from
+    `src/levels/13_boldan/L13_00306F38.c`
+    (`func_L13_0043E8D0`, author commit `42e0babe`, Louis-Philippe Le Sieur), task #2672.
+    VERBATIM but for names: Our name at the v2.00 place; `include_asm.h` dropped.
