@@ -1,0 +1,29 @@
+# Functions of level program L06 built from C (NOTE #13098 row L6 shape;
+# created by row L06-A, task #2653).
+# One row per function, compiled ALONE as its own TU by tools/levels/level_build.sh
+# and linked at its one place in place of its split asm (gen_ld.py cuts the
+# function's block out of the .text asm). Single placement only (row L7 is the
+# multi-placement design).
+#   function: the glabel in the split .text asm (its address is in its name)
+#   source:   path under going-decompiled/levels/usa/L06/
+#   arm:      tools/ee/ee_cc1.sh arm (sdk29 | s136 | sn2952); s136 adds -fopt-stack
+#   gflag:    -G0 | -G8, used by cc1 AND the assembler
+#   as:       optional (task #2552): as (plain GNU as) | asm_unit (tools/ee/asm_unit.sh,
+#             the boot's model of SN's assembler); a 4-column row is `as -`
+#   cc1flags: optional, with as: extra cc1 flags, comma-separated, or - for none
+# function	source	arm	gflag	[as	cc1flags]
+func_L06_003F4BD8	src/func_L06_003F4BD8.c	s136	-G0	as	-
+func_L06_003F4CA8	src/func_L06_003F4CA8.c	s136	-G0	as	-
+func_L06_003F5568	src/func_L06_003F5568.c	s136	-G0	as	-
+func_L06_0041E038	src/func_L06_0041E038.c	s136	-G0	as	-
+func_L06_00420D20	src/func_L06_00420D20.c	s136	-G8	as	-
+func_L06_00421080	src/func_L06_00421080.c	s136	-G0	as	-
+func_L06_004212E8	src/func_L06_004212E8.c	s136	-G0	as	-
+func_L06_00445388	src/func_L06_00445388.c	s136	-G0	as	-
+func_L06_004453C0	src/func_L06_004453C0.c	s136	-G0	as	-
+func_L06_00445430	src/func_L06_00445430.c	s136	-G8	as	-
+func_L06_0044C848	src/func_L06_0044C848.c	s136	-G0	as	-
+func_L06_0044C8D0	src/func_L06_0044C8D0.c	s136	-G0	as	-
+func_L06_0044C948	src/func_L06_0044C948.c	s136	-G0	as	-
+func_L06_00458FE0	src/func_L06_00458FE0.c	s136	-G0	as	-
+func_L06_00459750	src/func_L06_00459750.c	s136	-G0	as	-

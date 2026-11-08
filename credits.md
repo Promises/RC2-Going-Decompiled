@@ -3685,3 +3685,78 @@
     `src/levels/13_boldan/L13_00306F38.c`
     (`func_L13_0043E8D0`, author commit `42e0babe`, Louis-Philippe Le Sieur), task #2672.
     VERBATIM but for names: Our name at the v2.00 place; `include_asm.h` dropped.
+  - **`func_L06_003F4BD8`** (`0x003F4BD8`, level program 06) in
+    `going-decompiled/levels/usa/L06/src/func_L06_003F4BD8.c`, from
+    `src/levels/06_notak/L06_0033BDC0.c`
+    (`func_L06_003F3690`, author commit `52e801be`, llesieur99), task #2653.
+    VERBATIM but for names: our name at the v2.00 place; five callees as L06's own copies at their v2.00 places; includes and the file's other declarations dropped.
+  - **`func_L06_003F4CA8`** (`0x003F4CA8`, level program 06) in
+    `going-decompiled/levels/usa/L06/src/func_L06_003F4CA8.c`, from
+    `src/levels/06_notak/L06_0033BDC0.c`
+    (`func_L06_003F3760`, author commit `52e801be`, llesieur99), task #2653.
+    VERBATIM but for names: our name at the v2.00 place; one callee as L06's own copy at its v2.00 place; includes and the file's other declarations dropped.
+  - **`func_L06_003F5568`** (`0x003F5568`, level program 06) in
+    `going-decompiled/levels/usa/L06/src/func_L06_003F5568.c`, from
+    `src/levels/06_notak/L06_0033BDC0.c`
+    (`func_L06_003F4020`, author commit `52e801be`, llesieur99), task #2653.
+    VERBATIM but for names: our name at the v2.00 place; one callee as L06's own copy at its v2.00 place; includes and the file's other declarations dropped.
+  - **`func_L06_0041E038`** (`0x0041E038`, level program 06) in
+    `going-decompiled/levels/usa/L06/src/func_L06_0041E038.c`, from
+    `src/levels/06_notak/L06_0033BDC0.c`
+    (`func_L06_0041CAB0`, author commit `52e801be`, llesieur99), task #2653.
+    VERBATIM but for names: our name at the v2.00 place; one callee as L06's own copy at its v2.00 place; includes and the file's other declarations dropped.
+  - **`func_L06_00420D20`** (`0x00420D20`, level program 06) in
+    `going-decompiled/levels/usa/L06/src/func_L06_00420D20.c`, from
+    `src/levels/06_notak/L06_0041DED8-g8.c`
+    (`func_L06_0041F798`, author commit `431ac503`, llesieur99; its loop text first stands in llesieur99's `func_L01_003B5290` (`91e04732`), copied with the class constant and store changed, RULING #13427 rev 2/4), task #2653.
+    VERBATIM but for names: our name at the v2.00 place; `D_L06_001B281C`/`D_L06_001FB3A0` as the level's boot-name map names `g_mobyTableBase`/`g_mobyGroupLists` (task #2646 A2 rule; upstream's `sda` text kept, ignored by cc1); includes and the file's other declarations dropped.
+  - **`func_L06_00421080`** (`0x00421080`, level program 06) in
+    `going-decompiled/levels/usa/L06/src/func_L06_00421080.c`, from
+    `src/levels/06_notak/L06_0041DED8.c`
+    (`func_L06_0041FAF8`, author commit `d5ffe9fb`, bigbeno37; lines of Gianni's nonmatching draft `2235d994` survive, RULING #13427 rev 2), task #2653.
+    VERBATIM but for names: our name at the v2.00 place; five callees as L06's own copies at their v2.00 places; includes and the file's other declarations dropped.
+  - **`func_L06_004212E8`** (`0x004212E8`, level program 06) in
+    `going-decompiled/levels/usa/L06/src/func_L06_004212E8.c`, from
+    `src/levels/06_notak/L06_0041DED8.c`
+    (`func_L06_0041FD60`, author commit `431ac503`, llesieur99; its signature line survives from llesieur99's nonmatching draft `6aa8c748`), task #2653.
+    VERBATIM but for names: our name at the v2.00 place; one callee as L06's own copy at its v2.00 place; includes and the file's other declarations dropped.
+  - **`func_L06_00445388`** (`0x00445388`, level program 06) in
+    `going-decompiled/levels/usa/L06/src/func_L06_00445388.c`, from
+    `src/levels/06_notak/L06_0041DED8.c`
+    (`func_L06_00443DE0`, author commit `fa8d6672`, llesieur99), task #2653.
+    VERBATIM but for names: our name at the v2.00 place; two callees as L06's own copies at their v2.00 places; includes and the file's other declarations dropped.
+  - **`func_L06_004453C0`** (`0x004453C0`, level program 06) in
+    `going-decompiled/levels/usa/L06/src/func_L06_004453C0.c`, from
+    `src/levels/06_notak/L06_0041DED8.c`
+    (`func_L06_00443E18`, author commit `fa8d6672`, llesieur99), task #2653.
+    VERBATIM but for names: our name at the v2.00 place; two callees as L06's own copies at their v2.00 places; includes and the file's other declarations dropped.
+  - **`func_L06_00445430`** (`0x00445430`, level program 06) in
+    `going-decompiled/levels/usa/L06/src/func_L06_00445430.c`, from
+    `src/levels/06_notak/L06_0041DED8-g8.c`
+    (`func_L06_00443E88`, author commit `431ac503`, llesieur99; its loop text first stands in llesieur99's `func_L01_003B5290` (`91e04732`), copied with the class constants and stores changed, RULING #13427 rev 2/4), task #2653.
+    VERBATIM but for names: our name at the v2.00 place; `D_L06_001B281C`/`D_L06_001FB3A0` as the level's boot-name map names `g_mobyTableBase`/`g_mobyGroupLists` (task #2646 A2 rule; upstream's `sda` text kept, ignored by cc1); includes and the file's other declarations dropped.
+  - **`func_L06_0044C848`** (`0x0044C848`, level program 06) in
+    `going-decompiled/levels/usa/L06/src/func_L06_0044C848.c`, from
+    `src/levels/06_notak/L06_0041DED8.c`
+    (`func_L06_0044B250`, author commit `a2622a00`, Louis-Philippe Le Sieur; lines of llesieur99's nonmatching draft `6aa8c748` survive, RULING #13427 rev 2), task #2653.
+    VERBATIM but for names: our name at the v2.00 place; `D_L06_001395B8` as the boot's `D_1395B8` and `D_L06_00189EA0` as `g_heroPos` (task #2646 A2 rule); two level strings as our split .lit labels `D_L06_001B12D8`/`D_L06_001B1318`; three callees as L06's own copies at their v2.00 places; includes and the file's other declarations dropped.
+  - **`func_L06_0044C8D0`** (`0x0044C8D0`, level program 06) in
+    `going-decompiled/levels/usa/L06/src/func_L06_0044C8D0.c`, from
+    `src/levels/06_notak/L06_0041DED8.c`
+    (`func_L06_0044B2D8`, author commit `a2622a00`, Louis-Philippe Le Sieur; lines of llesieur99's nonmatching draft `6aa8c748` survive, RULING #13427 rev 2), task #2653.
+    VERBATIM but for names: our name at the v2.00 place; `D_L06_00189EA0` as `g_heroPos` (task #2646 A2 rule); `D_L06_001395CE` kept address-named (RULING #13291 §2); the level string as our split .lit label `D_L06_001B1358`; three callees as L06's own copies at their v2.00 places; includes and the file's other declarations dropped.
+  - **`func_L06_0044C948`** (`0x0044C948`, level program 06) in
+    `going-decompiled/levels/usa/L06/src/func_L06_0044C948.c`, from
+    `src/levels/06_notak/L06_0041DED8.c`
+    (`func_L06_0044B350`, author commit `a2622a00`, Louis-Philippe Le Sieur; lines of llesieur99's nonmatching draft `6aa8c748` survive, RULING #13427 rev 2), task #2653.
+    VERBATIM but for names: our name at the v2.00 place; `D_L06_00189EA0` as `g_heroPos` (task #2646 A2 rule); `D_L06_001395CF` kept address-named (RULING #13291 §2); the level string as our split .lit label `D_L06_001B1398`; three callees as L06's own copies at their v2.00 places; includes and the file's other declarations dropped.
+  - **`func_L06_00458FE0`** (`0x00458FE0`, level program 06) in
+    `going-decompiled/levels/usa/L06/src/func_L06_00458FE0.c`, from
+    `src/levels/06_notak/L06_0041DED8.c`
+    (`func_L06_004579C8`, author commit `ee3fee45`, llesieur99), task #2653.
+    Adapted: our name at the v2.00 place; `sda` -> `section(".sdata")` on two extern declarations (RULING #8620); `D_L06_001B375C`/`D_L06_001B3758` kept address-named inside L06's split label `D_L06_001B2BB0` (RULING #13291 §2); five callees as L06's own copies at their v2.00 places; includes and the file's other declarations dropped.
+  - **`func_L06_00459750`** (`0x00459750`, level program 06) in
+    `going-decompiled/levels/usa/L06/src/func_L06_00459750.c`, from
+    `src/levels/06_notak/L06_00458138.c`
+    (`func_L06_00458138`, author commit `9b1a6e8d`, bigbeno37), task #2653.
+    Adapted: our name at the v2.00 place; `sda` -> `section(".sdata")` on two extern declarations (RULING #8620); `D_L06_001B234C`/`D_001B2350` kept address-named (RULING #13291 §2; no name in L06's scope at either address); `D_L06_001B18E0` as our split .lit label `D_L06_001B1890`; eight callees as L06's own copies at their v2.00 places; the boot's `func_001234F0` kept; includes and the file's other declarations dropped.
